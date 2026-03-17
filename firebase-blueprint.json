@@ -1,0 +1,121 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a member or admin in the networking ecosystem.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "chapter_admin", "member", "guest"] },
+        "chapterId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "category": { "type": "string" },
+        "phone": { "type": "string" },
+        "website": { "type": "string" },
+        "bio": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
+        "subscriptionExpiry": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "A local business networking group.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "meetingDay": { "type": "string" },
+        "meetingTime": { "type": "string" },
+        "meetingVenue": { "type": "string" },
+        "adminIds": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "status"]
+    },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "A weekly chapter meeting.",
+      "type": "object",
+      "properties": {
+        "chapterId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "attendance": {
+          "type": "object",
+          "description": "Map of userId to attendance status"
+        }
+      },
+      "required": ["chapterId", "date"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "A business referral passed between members.",
+      "type": "object",
+      "properties": {
+        "fromUserId": { "type": "string" },
+        "toUserId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "requirement": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "contacted", "converted", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUserId", "toUserId", "status"]
+    },
+    "ThankYouSlip": {
+      "title": "ThankYouSlip",
+      "description": "A record of business generated from a referral.",
+      "type": "object",
+      "properties": {
+        "referralId": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "toUserId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "businessValue": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["referralId", "fromUserId", "toUserId", "businessValue"]
+    },
+    "GuestInvitation": {
+      "title": "GuestInvitation",
+      "description": "An invitation sent to a guest.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "guestName": { "type": "string" },
+        "guestPhone": { "type": "string" },
+        "guestBusiness": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberId", "guestName"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Business categories available for members.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/chapters/{chapterId}": { "schema": "Chapter", "description": "Chapter details" },
+    "/meetings/{meetingId}": { "schema": "Meeting", "description": "Weekly meeting records" },
+    "/referrals/{referralId}": { "schema": "Referral", "description": "Referral tracking" },
+    "/thank_you_slips/{slipId}": { "schema": "ThankYouSlip", "description": "Business conversion records" },
+    "/guest_invitations/{invitationId}": { "schema": "GuestInvitation", "description": "Guest invites" },
+    "/categories/{categoryId}": { "schema": "Category", "description": "Global business categories" }
+  }
+}
