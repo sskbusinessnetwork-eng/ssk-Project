@@ -1,15 +1,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Users, Building2, TrendingUp, ShieldCheck, ArrowRight, Calendar, Clock, MapPin } from 'lucide-react';
-import { AuthButton } from '../components/AuthButton';
+import { Users, Building2, TrendingUp, ShieldCheck, ArrowRight, Calendar, Clock, MapPin, LogIn } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { firestoreService } from '../services/firestoreService';
 import { Chapter } from '../types';
+import { RegistrationModal } from '../components/RegistrationModal';
 
 export function LandingPage() {
   const { user, loading } = useAuth();
   const [chapters, setChapters] = React.useState<Chapter[]>([]);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = React.useState(false);
 
   React.useEffect(() => {
     firestoreService.list<Chapter>('chapters').then(setChapters);
@@ -20,6 +21,11 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
+      <RegistrationModal 
+        isOpen={isRegisterModalOpen} 
+        onClose={() => setIsRegisterModalOpen(false)} 
+      />
+      
       {/* Hero Section */}
       <header className="relative h-screen flex items-center justify-center overflow-hidden bg-slate-950">
         <div className="absolute inset-0 z-0 opacity-20">
@@ -47,10 +53,18 @@ export function LandingPage() {
               SSK Business Network connects entrepreneurs across chapters to generate business opportunities, track performance, and build lasting professional relationships.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <AuthButton />
-              <a href="#chapters" className="flex items-center gap-2 px-6 py-3 text-white font-semibold hover:text-emerald-400 transition-colors group">
-                View Chapters <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </a>
+              <button
+                onClick={() => setIsRegisterModalOpen(true)}
+                className="flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-full font-bold hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 active:scale-95"
+              >
+                Join the Network
+              </button>
+              <Link
+                to="/register"
+                className="flex items-center gap-2 px-8 py-4 bg-white/10 text-white font-bold rounded-full hover:bg-white/20 transition-all border border-white/20 active:scale-95"
+              >
+                Login
+              </Link>
             </div>
           </motion.div>
         </div>

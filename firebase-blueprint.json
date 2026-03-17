@@ -107,6 +107,24 @@
         "name": { "type": "string" }
       },
       "required": ["name"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "A registration request from a potential member.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "mobile": { "type": "string" },
+        "companyName": { "type": "string" },
+        "businessCategory": { "type": "string" },
+        "address": { "type": "string" },
+        "meetingSlot": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "adminId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "mobile", "businessCategory", "chapterId", "status"]
     }
   },
   "firestore": {
@@ -116,6 +134,7 @@
     "/referrals/{referralId}": { "schema": "Referral", "description": "Referral tracking" },
     "/thank_you_slips/{slipId}": { "schema": "ThankYouSlip", "description": "Business conversion records" },
     "/guest_invitations/{invitationId}": { "schema": "GuestInvitation", "description": "Guest invites" },
-    "/categories/{categoryId}": { "schema": "Category", "description": "Global business categories" }
+    "/categories/{categoryId}": { "schema": "Category", "description": "Global business categories" },
+    "/applications/{applicationId}": { "schema": "Application", "description": "Registration requests" }
   }
 }

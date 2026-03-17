@@ -41,14 +41,17 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
          (request.auth.token.email == "sskbusinessnetwork@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isChapterAdmin(chapterId) {
       return isAuthenticated() && 
-        (isAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'chapter_admin' && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.chapterId == chapterId);
+        (isAdmin() || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'chapter_admin' && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.chapterId == chapterId));
     }
 
     function isValidUser(data) {
@@ -101,6 +104,12 @@ service cloud.firestore {
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAdmin();
+      allow create: if true; // Public registration
+      allow update, delete: if isAdmin();
     }
   }
 }

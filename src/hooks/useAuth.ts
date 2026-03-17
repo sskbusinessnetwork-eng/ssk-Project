@@ -21,9 +21,9 @@ export function useAuth() {
           // Create new guest profile
           const newProfile: UserProfile = {
             uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            displayName: firebaseUser.displayName || '',
-            photoURL: firebaseUser.photoURL || '',
+            email: firebaseUser.email || firebaseUser.phoneNumber || '',
+            displayName: firebaseUser.displayName || firebaseUser.phoneNumber || 'New Member',
+            photoURL: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.phoneNumber || 'User')}&background=random`,
             role: 'guest',
             status: 'pending',
             createdAt: new Date().toISOString(),
@@ -37,6 +37,8 @@ export function useAuth() {
           if (doc.exists()) {
             setProfile(doc.data() as UserProfile);
           }
+        }, (error) => {
+          console.error('Profile snapshot error:', error);
         });
 
         setLoading(false);
