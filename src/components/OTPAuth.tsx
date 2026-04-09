@@ -3,6 +3,7 @@ import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../firebase';
 import { ConfirmationResult } from 'firebase/auth';
 import { Phone, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { normalizePhoneNumber } from '../utils/phoneUtils';
 
 export function OTPAuth() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -14,13 +15,31 @@ export function OTPAuth() {
 
   useEffect(() => {
     if (!(window as any).recaptchaVerifier) {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber.
-        }
-      });
+      try {
+        const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+          callback: () => {
+            // reCAPTCHA solved, allow signInWithPhoneNumber.
+          }
+        });
+        verifier.render().then(() => {
+          (window as any).recaptchaVerifier = verifier;
+        });
+      } catch (err: any) {
+        console.error("reCAPTCHA initialization failed:", err.message || err);
+      }
     }
+
+    return () => {
+      if ((window as any).recaptchaVerifier) {
+        try {
+          (window as any).recaptchaVerifier.clear();
+          (window as any).recaptchaVerifier = null;
+        } catch (e: any) {
+          console.error("Error clearing reCAPTCHA:", e.message || e);
+        }
+      }
+    };
   }, []);
 
   const handleSendOTP = async (e: React.FormEvent) => {
@@ -29,12 +48,13 @@ export function OTPAuth() {
     setError(null);
 
     try {
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
       const appVerifier = (window as any).recaptchaVerifier;
-      const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+      const result = await signInWithPhoneNumber(auth, normalizedPhone, appVerifier);
       setConfirmationResult(result);
       setStep('otp');
     } catch (err: any) {
-      console.error(err);
+      console.error("OTP send error:", err.message || err);
       setError(err.message || 'Failed to send OTP. Please check the phone number.');
       if (err.code === 'auth/invalid-phone-number') {
         setError('Invalid phone number format. Please use international format (e.g., +919876543210).');
@@ -54,7 +74,7 @@ export function OTPAuth() {
       await confirmationResult.confirm(otp);
       // Auth state will be handled by useAuth hook
     } catch (err: any) {
-      console.error(err);
+      console.error("OTP verification error:", err.message || err);
       setError('Invalid OTP. Please try again.');
     } finally {
       setLoading(false);

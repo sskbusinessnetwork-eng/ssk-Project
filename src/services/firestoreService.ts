@@ -71,7 +71,15 @@ export const firestoreService = {
     try {
       const docRef = doc(db, path, id);
       const docSnap = await getDoc(docRef);
-      return docSnap.exists() ? (docSnap.data() as T) : null;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const obj = { id: docSnap.id, ...data } as T;
+        if (path === 'users' && !(obj as any).uid) {
+          (obj as any).uid = docSnap.id;
+        }
+        return obj;
+      }
+      return null;
     } catch (error) {
       handleFirestoreError(error, OperationType.GET, `${path}/${id}`);
       return null;
@@ -82,7 +90,14 @@ export const firestoreService = {
     try {
       const q = query(collection(db, path), ...constraints);
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+      return querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const obj = { id: doc.id, ...data } as T;
+        if (path === 'users' && !(obj as any).uid) {
+          (obj as any).uid = doc.id;
+        }
+        return obj;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
@@ -122,12 +137,20 @@ export const firestoreService = {
     }
   },
 
-  subscribe<T>(path: string, constraints: any[], callback: (data: T[]) => void) {
+  subscribe<T>(path: string, constraints: any[], callback: (data: T[]) => void, onError?: (error: any) => void) {
     const q = query(collection(db, path), ...constraints);
     return onSnapshot(q, (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T)));
+      callback(snapshot.docs.map(doc => {
+        const data = doc.data();
+        const obj = { id: doc.id, ...data } as T;
+        if (path === 'users' && !(obj as any).uid) {
+          (obj as any).uid = doc.id;
+        }
+        return obj;
+      }));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
+      if (onError) onError(error);
     });
   }
 };

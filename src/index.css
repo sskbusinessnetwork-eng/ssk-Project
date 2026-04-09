@@ -1,1 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;900&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --color-primary: #D32F2F;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: #444444;
+  --color-secondary-foreground: #FFFFFF;
+  --color-background: #F5F5F5;
+  --color-foreground: #111111;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #111111;
+  --color-muted: #F0F0F0;
+  --color-muted-foreground: #444444;
+  --color-border: #E0E0E0;
+  --color-navy: #0F172A;
+  --color-text-primary: #111111;
+  --color-text-secondary: #444444;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground antialiased text-[14px] leading-relaxed;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    overscroll-behavior-y: contain;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-bold;
+  }
+}
+
+@layer utilities {
+  .card-shadow {
+    @apply shadow-card;
+  }
+  .soft-shadow {
+    @apply shadow-soft;
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .analytics-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+  @media (max-width: 640px) {
+    .analytics-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+  .analytics-card {
+    @apply bg-card rounded-[14px] p-4 shadow-card border border-border;
+  }
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(0.99); }
+  }
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}

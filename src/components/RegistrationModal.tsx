@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Phone, User, Briefcase, Calendar, Building2, MapPin } from 'lucide-react';
 import { firestoreService } from '../services/firestoreService';
-import { Chapter, UserProfile } from '../types';
+import { UserProfile } from '../types';
 
 interface RegistrationModalProps {
   isOpen: boolean;
@@ -25,42 +25,21 @@ const CATEGORIES = [
 export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
   const [step, setStep] = React.useState<'form' | 'success'>('form');
   const [loading, setLoading] = React.useState(false);
-  const [chapters, setChapters] = React.useState<Chapter[]>([]);
-  const [admins, setAdmins] = React.useState<UserProfile[]>([]);
   const [formData, setFormData] = React.useState({
     fullName: '',
     mobile: '',
     companyName: '',
     businessCategory: '',
     address: '',
-    meetingSlot: '',
-    chapterId: ''
+    meetingSlot: ''
   });
-
-  React.useEffect(() => {
-    if (isOpen) {
-      const fetchData = async () => {
-        const [chaptersData, usersData] = await Promise.all([
-          firestoreService.list<Chapter>('chapters'),
-          firestoreService.list<UserProfile>('users')
-        ]);
-        setChapters(chaptersData);
-        setAdmins(usersData.filter(u => u.role === 'chapter_admin'));
-      };
-      fetchData();
-    }
-  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const selectedChapter = chapters.find(c => c.id === formData.chapterId);
-      const adminId = selectedChapter?.adminIds?.[0] || '';
-
       await firestoreService.create('applications', {
         ...formData,
-        adminId,
         status: 'pending',
         createdAt: new Date().toISOString()
       });
@@ -192,30 +171,7 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Chapter Selection */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Building2 size={14} /> Select Chapter
-                    </label>
-                    <select
-                      required
-                      value={formData.chapterId}
-                      onChange={(e) => setFormData({ ...formData, chapterId: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                    >
-                      <option value="">Select Chapter</option>
-                      {chapters.map(chapter => {
-                        const admin = admins.find(a => chapter.adminIds.includes(a.uid));
-                        return (
-                          <option key={chapter.id} value={chapter.id}>
-                            {chapter.name} {admin ? `(${admin.displayName})` : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
+                <div className="grid grid-cols-1 gap-6">
                   {/* Meeting Slot */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -262,7 +218,7 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
               </div>
               <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Application Submitted!</h2>
               <p className="text-slate-500 max-w-sm mx-auto mb-8">
-                Thank you for your interest. Your application has been sent to the Chapter Admin for review. You will be contacted shortly.
+                Thank you for your interest. Your application has been sent to the network administrators for review. You will be contacted shortly.
               </p>
               <button
                 onClick={onClose}

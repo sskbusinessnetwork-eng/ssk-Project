@@ -1,95 +1,73 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Phone, ArrowLeft, ShieldCheck, Users, Building2 } from 'lucide-react';
-import { signIn } from '../firebase';
-import { OTPAuth } from '../components/OTPAuth';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useNavigate } from 'react-router-dom';
+import { getDashboardPath } from '../utils/authUtils';
+import { RegisterForm } from '../components/RegisterForm';
 
 export function Register() {
-  const { user, loading } = useAuth();
-  const [method, setMethod] = React.useState<'select' | 'google' | 'phone'>('select');
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
 
-  if (loading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+      </div>
+    );
+  }
+
+  if (user && profile) {
+    if (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN') {
+      return <Navigate to="/network" replace />;
+    }
+    const dashboardPath = getDashboardPath(profile.role);
+    return <Navigate to={dashboardPath} replace />;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+      {/* Background decorative elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[120px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/10 rounded-full blur-[120px]" />
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md relative z-10"
       >
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-emerald-600 transition-colors mb-6 group">
-            <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> Back to Home
+        <div className="text-center mb-12">
+          <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-navy transition-colors mb-10 group text-[10px] font-black uppercase tracking-[0.2em]">
+            Back to Home
           </Link>
-          <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-emerald-500/20">
-            <ShieldCheck size={32} />
+          <div className="w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500 overflow-hidden bg-white p-1">
+            <img 
+              src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+              className="w-full h-full object-cover rounded-[2.2rem]"
+              referrerPolicy="no-referrer"
+            />
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Join the Network</h1>
-          <p className="text-slate-500">Choose your preferred registration method to get started.</p>
+          <h1 className="text-4xl md:text-5xl font-black text-navy mb-4 tracking-tighter uppercase">Join the Business Network</h1>
+          <p className="text-muted-foreground font-medium px-4 text-sm leading-relaxed">Create your account to start networking and growing your business network.</p>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
-          {method === 'select' && (
-            <div className="space-y-4">
-              <button
-                onClick={signIn}
-                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-700 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all group"
-              >
-                <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-                Continue with Google
-              </button>
-
-              <button
-                onClick={() => setMethod('phone')}
-                className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
-              >
-                <Phone size={20} />
-                Register with Phone OTP
-              </button>
-
-              <div className="pt-6 border-t border-slate-100">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="space-y-1">
-                    <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 mx-auto">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Secure</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 mx-auto">
-                      <Users size={20} />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Verified</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 mx-auto">
-                      <Building2 size={20} />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Professional</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {method === 'phone' && (
-            <div>
-              <button
-                onClick={() => setMethod('select')}
-                className="mb-6 text-sm font-bold text-emerald-600 flex items-center gap-1 hover:underline"
-              >
-                <ArrowLeft size={14} /> Other methods
-              </button>
-              <OTPAuth />
-            </div>
-          )}
+        <div className="bg-white rounded-[3rem] md:rounded-[4rem] soft-shadow border border-white/60 p-10 md:p-12">
+          <RegisterForm onSuccess={(role) => {
+            const dashboardPath = getDashboardPath(role);
+            navigate(dashboardPath, { replace: true });
+          }} />
         </div>
 
-        <p className="text-center mt-8 text-sm text-slate-500">
-          By joining, you agree to our <span className="text-slate-900 font-semibold underline cursor-pointer">Terms of Service</span> and <span className="text-slate-900 font-semibold underline cursor-pointer">Privacy Policy</span>.
+        <p className="text-center mt-12 text-sm font-bold text-muted-foreground">
+          Already have an account?{' '}
+          <Link to="/login" className="text-primary font-black hover:underline uppercase tracking-widest text-xs ml-2">
+            Login here
+          </Link>
+        </p>
+
+        <p className="text-center mt-8 text-[10px] text-slate-300 font-black uppercase tracking-[0.3em] leading-relaxed px-8">
+          By joining, you agree to our <span className="text-navy underline cursor-pointer">Terms</span> and <span className="text-navy underline cursor-pointer">Privacy Policy</span>.
         </p>
       </motion.div>
     </div>

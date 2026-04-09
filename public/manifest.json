@@ -1,0 +1,22 @@
+{
+  "name": "SSK Business Network",
+  "short_name": "SSK Business",
+  "description": "A professional business networking platform for SSK members.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FF6321",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

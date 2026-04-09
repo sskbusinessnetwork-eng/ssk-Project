@@ -8,7 +8,8 @@ import { Modal } from '../components/Modal';
 export function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newCategory, setNewCategory] = useState('');
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryName, setCategoryName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -16,19 +17,32 @@ export function Categories() {
     return () => unsubscribe();
   }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCategory.trim()) return;
+  const handleOpenModal = (cat?: Category) => {
+    if (cat) {
+      setEditingCategory(cat);
+      setCategoryName(cat.name);
+    } else {
+      setEditingCategory(null);
+      setCategoryName('');
+    }
+    setIsModalOpen(true);
+  };
 
-    await firestoreService.create('categories', { name: newCategory.trim() });
-    setNewCategory('');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryName.trim()) return;
+
+    if (editingCategory) {
+      await firestoreService.update('categories', editingCategory.id, { name: categoryName.trim() });
+    } else {
+      await firestoreService.create('categories', { name: categoryName.trim() });
+    }
+    setCategoryName('');
     setIsModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this category?')) {
-      await firestoreService.delete('categories', id);
-    }
+    await firestoreService.delete('categories', id);
   };
 
   const filteredCategories = categories.filter(c => 
@@ -43,7 +57,7 @@ export function Categories() {
           <p className="text-slate-500 mt-1">Manage the global list of business categories.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => handleOpenModal()}
           className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
         >
           <Plus size={20} />
@@ -77,6 +91,12 @@ export function Categories() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => handleOpenModal(cat)}
+                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                  >
+                    <Edit2 size={18} />
+                  </button>
+                  <button
                     onClick={() => handleDelete(cat.id)}
                     className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                   >
@@ -96,17 +116,17 @@ export function Categories() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Add New Category"
+        title={editingCategory ? "Edit Category" : "Add New Category"}
       >
-        <form onSubmit={handleAdd} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Category Name</label>
             <input
               autoFocus
               required
               type="text"
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
               placeholder="e.g. Real Estate, Digital Marketing"
               className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
             />
@@ -115,7 +135,7 @@ export function Categories() {
             type="submit"
             className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
           >
-            Create Category
+            {editingCategory ? "Update Category" : "Create Category"}
           </button>
         </form>
       </Modal>

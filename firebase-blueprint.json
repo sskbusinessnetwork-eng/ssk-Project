@@ -6,51 +6,69 @@
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
+        "name": { "type": "string" },
         "email": { "type": "string" },
-        "displayName": { "type": "string" },
-        "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "chapter_admin", "member", "guest"] },
-        "chapterId": { "type": "string" },
+        "phone": { "type": "string" },
         "businessName": { "type": "string" },
         "category": { "type": "string" },
-        "phone": { "type": "string" },
-        "website": { "type": "string" },
+        "role": { "type": "string", "enum": ["MASTER_ADMIN", "CHAPTER_ADMIN", "MEMBER"] },
+        "membershipStatus": { "type": "string", "enum": ["ACTIVE", "SUSPENDED", "PENDING"] },
+        "subscriptionStart": { "type": "string", "format": "date-time" },
+        "subscriptionEnd": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "website": { "type": "string", "format": "uri" },
         "bio": { "type": "string" },
-        "status": { "type": "string", "enum": ["active", "suspended", "pending"] },
-        "subscriptionExpiry": { "type": "string", "format": "date-time" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "state": { "type": "string" },
+        "city": { "type": "string" },
+        "area": { "type": "string" },
+        "address": { "type": "string" },
+        "adminId": { "type": "string", "description": "The ID of the admin who created this user." }
       },
-      "required": ["uid", "email", "role"]
+      "required": ["uid", "name", "email", "role", "membershipStatus"]
     },
-    "Chapter": {
-      "title": "Chapter",
-      "description": "A local business networking group.",
+    "Position": {
+      "title": "Position",
+      "description": "Represents a leadership position held by a user in a chapter.",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "location": { "type": "string" },
-        "meetingDay": { "type": "string" },
-        "meetingTime": { "type": "string" },
-        "meetingVenue": { "type": "string" },
-        "adminIds": { "type": "array", "items": { "type": "string" } },
-        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "chapterAdminId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "position": { "type": "string", "enum": ["President", "Vice President", "Treasurer"] }
+      },
+      "required": ["chapterAdminId", "userId", "position"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification sent to a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["MASTER_ADMIN", "CHAPTER_ADMIN", "MEMBER"] },
+        "type": { "type": "string", "enum": ["REFERRAL", "THANKYOU", "MEMBER_ADD", "SUBSCRIPTION", "UPGRADE"] },
+        "message": { "type": "string" },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "status"]
+      "required": ["userId", "role", "type", "message", "createdAt"]
     },
     "Meeting": {
       "title": "Meeting",
-      "description": "A weekly chapter meeting.",
+      "description": "A weekly networking meeting.",
       "type": "object",
       "properties": {
-        "chapterId": { "type": "string" },
         "date": { "type": "string", "format": "date-time" },
         "attendance": {
           "type": "object",
           "description": "Map of userId to attendance status"
-        }
+        },
+        "amountCollected": {
+          "type": "object",
+          "description": "Map of userId to amount collected"
+        },
+        "notes": { "type": "string" }
       },
-      "required": ["chapterId", "date"]
+      "required": ["date"]
     },
     "Referral": {
       "title": "Referral",
@@ -58,14 +76,17 @@
       "type": "object",
       "properties": {
         "fromUserId": { "type": "string" },
+        "fromUserName": { "type": "string" },
+        "fromUserRole": { "type": "string", "enum": ["MASTER_ADMIN", "CHAPTER_ADMIN", "MEMBER"] },
         "toUserId": { "type": "string" },
-        "chapterId": { "type": "string" },
         "contactName": { "type": "string" },
         "contactPhone": { "type": "string" },
         "requirement": { "type": "string" },
         "notes": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "contacted", "converted", "closed"] },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "status": { "type": "string", "enum": ["PENDING", "CONTACTED", "CONVERTED", "CLOSED", "COMPLETED", "NOT_CONVERTED"] },
+        "notConvertedReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["fromUserId", "toUserId", "status"]
     },
@@ -77,7 +98,6 @@
         "referralId": { "type": "string" },
         "fromUserId": { "type": "string" },
         "toUserId": { "type": "string" },
-        "chapterId": { "type": "string" },
         "customerName": { "type": "string" },
         "businessValue": { "type": "number" },
         "notes": { "type": "string" },
@@ -91,7 +111,6 @@
       "type": "object",
       "properties": {
         "memberId": { "type": "string" },
-        "chapterId": { "type": "string" },
         "guestName": { "type": "string" },
         "guestPhone": { "type": "string" },
         "guestBusiness": { "type": "string" },
@@ -119,22 +138,51 @@
         "businessCategory": { "type": "string" },
         "address": { "type": "string" },
         "meetingSlot": { "type": "string" },
-        "chapterId": { "type": "string" },
         "adminId": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["fullName", "mobile", "businessCategory", "chapterId", "status"]
+      "required": ["fullName", "mobile", "businessCategory", "status"]
+    },
+    "SMSMessage": {
+      "title": "SMSMessage",
+      "description": "A message to be sent via SMS extension.",
+      "type": "object",
+      "properties": {
+        "to": { "type": "string", "description": "The recipient's phone number in E.164 format." },
+        "body": { "type": "string", "description": "The content of the SMS message." },
+        "status": { "type": "object", "description": "Status of the delivery, updated by the extension." }
+      },
+      "required": ["to", "body"]
+    },
+    "OneToOneMeeting": {
+      "title": "OneToOneMeeting",
+      "description": "A personal networking session between members.",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string" },
+        "participantIds": { "type": "array", "items": { "type": "string" } },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "venue": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["UPCOMING", "COMPLETED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["creatorId", "participantIds", "date", "time", "status", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": { "schema": "User", "description": "User profiles" },
-    "/chapters/{chapterId}": { "schema": "Chapter", "description": "Chapter details" },
     "/meetings/{meetingId}": { "schema": "Meeting", "description": "Weekly meeting records" },
     "/referrals/{referralId}": { "schema": "Referral", "description": "Referral tracking" },
     "/thank_you_slips/{slipId}": { "schema": "ThankYouSlip", "description": "Business conversion records" },
     "/guest_invitations/{invitationId}": { "schema": "GuestInvitation", "description": "Guest invites" },
     "/categories/{categoryId}": { "schema": "Category", "description": "Global business categories" },
-    "/applications/{applicationId}": { "schema": "Application", "description": "Registration requests" }
+    "/applications/{applicationId}": { "schema": "Application", "description": "Registration requests" },
+    "/notifications/{notificationId}": { "schema": "Notification", "description": "User notifications" },
+    "/messages/{messageId}": { "schema": "SMSMessage", "description": "Collection monitored by the Trigger SMS extension" },
+    "/one_to_one_meetings/{meetingId}": { "schema": "OneToOneMeeting", "description": "Member-initiated networking sessions" },
+    "/positions/{positionId}": { "schema": "Position", "description": "Chapter leadership positions" }
   }
 }
