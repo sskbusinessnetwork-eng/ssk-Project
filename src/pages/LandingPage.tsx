@@ -119,49 +119,40 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-[#0F2040] overflow-x-hidden font-sans selection:bg-[#F97316] selection:text-[#0F2040]">
       
-      {/* Top Announcement Banner */}
-      <div className="bg-gradient-to-r from-[#F97316] via-[#FB923C] to-[#F97316] text-white py-2.5 px-4 text-center text-[10px] md:text-sm font-black relative z-[60] flex items-center justify-center gap-2 shadow-md">
-        <motion.span 
-          animate={{ scale: [1, 1.2, 1] }} 
-          transition={{ repeat: Infinity, duration: 2 }}
-        >✨</motion.span>
-        <span>SSK Business Network is expanding! Join our upcoming chapter launch.</span>
-        <button onClick={scrollToForm} className="ml-2 underline decoration-white/50 hover:decoration-white transition-all">
-          Reserve &rarr;
-        </button>
-      </div>
-
-      {/* Sticky Navbar */}
-      <nav className={`fixed top-[40px] left-0 right-0 z-50 px-6 py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-lg border-b border-white/10' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <motion.img 
-              whileHover={{ scale: 1.05, rotate: 5 }}
-              src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
-              alt="Logo" 
-              className="w-10 h-10 rounded-lg object-cover shadow-lg"
-              referrerPolicy="no-referrer"
-            />
-            <div>
-              <h1 className={`font-black leading-none tracking-tight transition-colors text-sm md:text-base ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>SSK BUSINESS NETWORK</h1>
+      {/* Fixed Header Wrapper */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        {/* Navbar */}
+        <nav className={`px-6 py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-lg border-b border-white/10' : 'bg-transparent'}`}>
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <motion.img 
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+                alt="Logo" 
+                className="w-10 h-10 rounded-lg object-cover shadow-lg"
+                referrerPolicy="no-referrer"
+              />
+              <div>
+                <h1 className={`font-black leading-none tracking-tight transition-colors text-sm md:text-base ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>SSK BUSINESS NETWORK</h1>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <Link to="/login" className={`text-sm font-bold transition-colors hover:text-[#F97316] ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>
+                Login
+              </Link>
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={scrollToForm} 
+                className="px-4 md:px-6 py-2 md:py-2.5 bg-[#F97316] text-white text-[10px] md:text-sm font-black uppercase tracking-widest rounded-full hover:bg-[#EA580C] transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)]"
+              >
+                Join Meeting
+              </motion.button>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <Link to="/login" className={`text-sm font-bold transition-colors hover:text-[#F97316] ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>
-              Login
-            </Link>
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={scrollToForm} 
-              className="px-4 md:px-6 py-2 md:py-2.5 bg-[#F97316] text-white text-[10px] md:text-sm font-black uppercase tracking-widest rounded-full hover:bg-[#EA580C] transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)]"
-            >
-              Join Meeting
-            </motion.button>
-          </div>
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* Hero Section */}
       <header className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-[#0F2040]">
@@ -198,7 +189,7 @@ export function LandingPage() {
           ))}
         </div>
 
-        <div className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-20">
+        <div className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-20 md:mt-24">
           <motion.div
             initial="hidden"
             animate="visible"
@@ -798,9 +789,12 @@ export function LandingPage() {
             <div className="flex items-center gap-3 mb-6 md:mb-0">
               <Shield size={16} md:size={18} className="text-[#F97316]" /> SSK Business Network
             </div>
-            <div className="flex gap-6 md:gap-8">
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+              <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+                <a href="mailto:sskbusinessnetwork@gmail.com" className="hover:text-[#0F2040] transition-colors">sskbusinessnetwork@gmail.com</a>
+                <a href="tel:+918884449689" className="hover:text-[#0F2040] transition-colors">+91 88844 49689</a>
+              </div>
               <a href="#" className="hover:text-[#0F2040] transition-colors">Contact</a>
-              <a href="#" className="hover:text-[#0F2040] transition-colors">Privacy Policy</a>
             </div>
           </div>
         </div>
