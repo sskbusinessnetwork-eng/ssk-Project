@@ -368,15 +368,6 @@ export function Meetings() {
     <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-3">
-          <div className="w-1.5 h-6 bg-primary rounded-full" />
-          <div>
-            <h1 className="text-xl md:text-2xl font-black text-navy tracking-tight font-display uppercase">
-              Weekly Meetings
-            </h1>
-            <p className="text-xs text-muted-foreground font-medium">
-              Track attendance and performance.
-            </p>
-          </div>
         </div>
 
         {profile?.role === 'MASTER_ADMIN' && (

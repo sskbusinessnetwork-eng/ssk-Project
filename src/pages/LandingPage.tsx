@@ -40,7 +40,10 @@ export function LandingPage() {
     businessName: '',
     businessCategory: '',
     city: '',
-    adminId: ''
+    adminId: '',
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: ''
   });
   const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
 
@@ -95,7 +98,10 @@ export function LandingPage() {
         businessName: '',
         businessCategory: '',
         city: '',
-        adminId: ''
+        adminId: '',
+        meetingDate: '',
+        meetingTime: '',
+        meetingVenue: ''
       });
     } catch (error) {
       console.error('Error submitting guest registration:', error);
@@ -754,6 +760,18 @@ export function LandingPage() {
                         <option key={admin.uid} value={admin.uid}>{admin.name || admin.displayName}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="space-y-2 md:space-y-3">
+                    <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Date</label>
+                    <input required type="date" value={formData.meetingDate} onChange={e => setFormData({...formData, meetingDate: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]" />
+                  </div>
+                  <div className="space-y-2 md:space-y-3">
+                    <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Time</label>
+                    <input required type="time" value={formData.meetingTime} onChange={e => setFormData({...formData, meetingTime: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]" />
+                  </div>
+                  <div className="space-y-2 md:space-y-3 md:col-span-2">
+                    <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Venue</label>
+                    <input required type="text" placeholder="e.g. Hotel Grand, Bangalore" value={formData.meetingVenue} onChange={e => setFormData({...formData, meetingVenue: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040] placeholder:text-slate-400" />
                   </div>
                 </div>
                 <motion.button 

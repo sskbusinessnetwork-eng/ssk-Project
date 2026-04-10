@@ -32,12 +32,19 @@ export function Layout() {
 
   const getPageTitle = () => {
     const path = location.pathname;
-    if (path === '/analytics' || path === '/dashboard') return 'HOME';
+    if (path === '/analytics' || path === '/dashboard' || path.includes('/analytics')) return 'HOME';
     if (path === '/network') return 'NETWORK';
-    if (path === '/refer') return 'REFER';
+    if (path === '/refer') return 'REFERRALS';
     if (path === '/profile') return 'PROFILE';
     if (path === '/one-to-one') return 'ONE-TO-ONE';
     if (path === '/activity') return 'ACTIVITY FEED';
+    if (path === '/meetings') return 'WEEKLY MEETINGS';
+    if (path === '/thank-you-slips') return 'THANK YOU SLIPS';
+    if (path === '/guests') return 'GUEST INVITATIONS';
+    if (path === '/admins') return 'CHAPTER ADMINS';
+    if (path === '/members') return 'MEMBERS';
+    if (path === '/categories') return 'CATEGORIES';
+    if (path === '/notifications') return 'NOTIFICATIONS';
     return 'SSK BUSINESS NETWORK';
   };
 

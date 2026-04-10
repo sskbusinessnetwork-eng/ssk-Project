@@ -274,9 +274,7 @@ export function Profile() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
           <div className="relative z-10 flex items-center justify-between max-w-2xl mx-auto">
             <div className="w-10" />
-            <h1 className="text-lg font-bold text-white uppercase tracking-widest">
-              Profile
-            </h1>
+            <div className="flex-1" />
             <button className="p-2 text-white hover:bg-white/10 rounded-full transition-colors">
               <Share2 size={24} />
             </button>
@@ -553,9 +551,7 @@ export function Profile() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
         <div className="relative z-10 flex items-center justify-between max-w-2xl mx-auto">
           <div className="w-10" />
-          <h1 className="text-lg font-bold text-white uppercase tracking-widest">
-            My Profile
-          </h1>
+          <div className="flex-1" />
           <button 
             onClick={handleSubmit}
             disabled={isSaving}

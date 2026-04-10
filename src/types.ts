@@ -86,6 +86,8 @@ export interface GuestInvitation {
   status?: 'Invited' | 'Attended' | 'Not Attended';
   notes?: string;
   meetingDate?: string;
+  meetingTime?: string;
+  meetingVenue?: string;
   isWhatsAppShared?: boolean;
   isCalled?: boolean;
 }
@@ -136,6 +138,9 @@ export interface GuestRegistration {
   businessCategory: string;
   city: string;
   adminId: string;
+  meetingDate?: string;
+  meetingTime?: string;
+  meetingVenue?: string;
   status: 'PENDING' | 'CONTACTED' | 'CONVERTED';
   createdAt: string;
   isWhatsAppShared?: boolean;

@@ -210,11 +210,6 @@ export function Analytics() {
 
   return (
     <div className="max-w-2xl mx-auto pb-24 space-y-6 px-1 sm:px-0">
-      {/* Centered Title */}
-      <div className="text-center py-2">
-        <h1 className="text-sm font-bold text-text-secondary tracking-[0.2em] uppercase">Home</h1>
-      </div>
-
       {/* Profile Card */}
       <div className="bg-white p-4 rounded-[14px] card-shadow border border-border flex items-center gap-4 group cursor-pointer hover:bg-muted/30 transition-colors">
         <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/10">

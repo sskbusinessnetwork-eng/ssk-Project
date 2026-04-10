@@ -323,15 +323,6 @@ export function Referrals() {
 
     return (
       <div className="space-y-6 max-w-7xl mx-auto pb-24 px-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-navy uppercase tracking-tight">Referral History</h1>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
-              {isAdmin ? 'Unified view of all referrals across chapters' : 'Referrals of members in your chapter'}
-            </p>
-          </div>
-        </div>
-
         <div className="bg-white rounded-[20px] card-shadow border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">

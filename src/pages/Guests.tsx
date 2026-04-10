@@ -43,6 +43,34 @@ export function Guests() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [editMeetingData, setEditMeetingData] = useState({
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: ''
+  });
+
+  useEffect(() => {
+    if (selectedGuest) {
+      setEditMeetingData({
+        meetingDate: selectedGuest.meetingDate || '',
+        meetingTime: selectedGuest.meetingTime || '',
+        meetingVenue: selectedGuest.meetingVenue || ''
+      });
+    }
+  }, [selectedGuest]);
+
+  const handleUpdateMeetingDetails = async () => {
+    if (!selectedGuest) return;
+    try {
+      const collectionName = selectedGuest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
+      await firestoreService.update(collectionName, selectedGuest.id, editMeetingData);
+      setSelectedGuest({ ...selectedGuest, ...editMeetingData });
+      alert("Meeting details updated successfully");
+    } catch (error) {
+      console.error("Error updating meeting details:", error);
+      alert("Failed to update meeting details");
+    }
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -53,7 +81,10 @@ export function Guests() {
     address: '',
     state: '',
     city: '',
-    fullAddress: ''
+    fullAddress: '',
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: ''
   });
   const [regFormData, setRegFormData] = useState({
     fullName: '',
@@ -61,7 +92,10 @@ export function Guests() {
     businessName: '',
     businessCategory: '',
     city: '',
-    adminId: ''
+    adminId: '',
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: ''
   });
   const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -145,6 +179,9 @@ export function Guests() {
         state: formData.state,
         city: formData.city,
         fullAddress: formData.fullAddress,
+        meetingDate: formData.meetingDate,
+        meetingTime: formData.meetingTime,
+        meetingVenue: formData.meetingVenue,
         memberId: profile.uid,
         createdBy: profile.uid,
         createdByRole: profile.role,
@@ -175,7 +212,7 @@ export function Guests() {
       setLastCreatedInvitation(createdInvitation);
 
       // Send SMS via Firebase Trigger SMS Extension
-      const inviteText = generateInviteText(formData.guestName);
+      const inviteText = generateInviteText(createdInvitation);
       try {
         await firestoreService.create('messages', {
           to: normalizedPhone,
@@ -196,7 +233,10 @@ export function Guests() {
         address: '',
         state: '',
         city: '',
-        fullAddress: ''
+        fullAddress: '',
+        meetingDate: '',
+        meetingTime: '',
+        meetingVenue: ''
       });
       
     } catch (error) {
@@ -230,7 +270,10 @@ export function Guests() {
         businessName: '',
         businessCategory: '',
         city: '',
-        adminId: ''
+        adminId: '',
+        meetingDate: '',
+        meetingTime: '',
+        meetingVenue: ''
       });
     } catch (error) {
       console.error("Error creating guest registration:", error);
@@ -239,11 +282,26 @@ export function Guests() {
     }
   };
 
-  const generateInviteText = (guestName: string) => {
-    const registerUrl = `${window.location.origin}/register`;
-    return `Hi ${guestName}! You're invited to SSK Business Network Weekly Business Meeting.
-Join as a guest entrepreneur and expand your network!
-Register here to join the platform: ${registerUrl}`;
+  const generateInviteText = (guest: any) => {
+    const name = guest.displayName || guest.guestName || guest.fullName;
+    let text = `Hi ${name}! You're invited to SSK Business Network Weekly Business Meeting.\n\n`;
+    
+    if (guest.meetingDate || guest.meetingTime || guest.meetingVenue) {
+      text += `Meeting Details:\n`;
+      if (guest.meetingDate) {
+        try {
+          text += `Date: ${format(new Date(guest.meetingDate), 'dd MMM yyyy')}\n`;
+        } catch (e) {
+          text += `Date: ${guest.meetingDate}\n`;
+        }
+      }
+      if (guest.meetingTime) text += `Time: ${guest.meetingTime}\n`;
+      if (guest.meetingVenue) text += `Venue: ${guest.meetingVenue}\n`;
+      text += `\n`;
+    }
+    
+    text += `Join as a guest entrepreneur and expand your network!`;
+    return text;
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -318,14 +376,6 @@ Register here to join the platform: ${registerUrl}`;
     <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Guest Invitations</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {profile?.role === 'MASTER_ADMIN' 
-              ? 'Manage all guest invitations across the platform.' 
-              : profile?.role === 'CHAPTER_ADMIN'
-              ? 'Guests assigned to you for follow-up.'
-              : 'Invite entrepreneurs to visit and expand the network.'}
-          </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -369,7 +419,7 @@ Register here to join the platform: ${registerUrl}`;
           </div>
         ) : filteredInvitations.length > 0 ? (
           filteredInvitations.map((inv: any) => {
-            const inviteText = generateInviteText(inv.displayName);
+            const inviteText = generateInviteText(inv);
             const needsAttention = !inv.isWhatsAppShared && !inv.isCalled;
             const isHighlighted = highlightId === inv.id;
 
@@ -525,7 +575,7 @@ Register here to join the platform: ${registerUrl}`;
 
             <div className="flex flex-col gap-3 max-w-xs mx-auto">
               <button
-                onClick={() => handleWhatsApp(generateInviteText(lastCreatedInvitation.guestName), lastCreatedInvitation.guestPhone, { ...lastCreatedInvitation, source: 'Created by Admin' })}
+                onClick={() => handleWhatsApp(generateInviteText(lastCreatedInvitation), lastCreatedInvitation.guestPhone, { ...lastCreatedInvitation, source: 'Created by Admin' })}
                 className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
                 <MessageSquare size={20} />
@@ -640,6 +690,41 @@ Register here to join the platform: ${registerUrl}`;
                 onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
                 placeholder="Complete address details"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Date</label>
+                <input
+                  required
+                  type="date"
+                  value={formData.meetingDate}
+                  onChange={(e) => setFormData({ ...formData, meetingDate: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Time</label>
+                <input
+                  required
+                  type="time"
+                  value={formData.meetingTime}
+                  onChange={(e) => setFormData({ ...formData, meetingTime: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Venue</label>
+              <input
+                required
+                type="text"
+                value={formData.meetingVenue}
+                onChange={(e) => setFormData({ ...formData, meetingVenue: e.target.value })}
+                placeholder="Meeting venue"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
@@ -842,6 +927,52 @@ Register here to join the platform: ${registerUrl}`;
                   <p className="text-sm font-bold text-navy">{selectedGuest.city || 'N/A'}</p>
                 </div>
               </div>
+              
+              { (profile?.role === 'CHAPTER_ADMIN' || profile?.role === 'MASTER_ADMIN') && (
+                <div className="col-span-full border-t border-slate-100 pt-6 mt-2">
+                  <h4 className="text-xs font-black text-navy uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Calendar size={14} className="text-primary" />
+                    Meeting Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting Date</label>
+                      <input
+                        type="date"
+                        value={editMeetingData.meetingDate}
+                        onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingDate: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting Time</label>
+                      <input
+                        type="time"
+                        value={editMeetingData.meetingTime}
+                        onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingTime: e.target.value })}
+                        className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting Venue</label>
+                      <input
+                        type="text"
+                        value={editMeetingData.meetingVenue}
+                        onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingVenue: e.target.value })}
+                        placeholder="Enter meeting venue"
+                        className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
+                      />
+                    </div>
+                    <button
+                      onClick={handleUpdateMeetingDetails}
+                      className="md:col-span-2 py-3 bg-navy text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-navy/90 transition-all shadow-lg shadow-navy/20"
+                    >
+                      Update Meeting Details
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {selectedGuest.fullAddress && (
                 <div className="col-span-full space-y-1">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Address</p>
@@ -866,7 +997,7 @@ Register here to join the platform: ${registerUrl}`;
 
             <div className="flex gap-3 pt-4 border-t border-slate-100">
               <button
-                onClick={() => handleWhatsApp(generateInviteText(selectedGuest.displayName), selectedGuest.displayPhone, selectedGuest)}
+                onClick={() => handleWhatsApp(generateInviteText(selectedGuest), selectedGuest.displayPhone, selectedGuest)}
                 className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
                 <MessageSquare size={18} />

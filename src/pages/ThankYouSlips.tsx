@@ -227,12 +227,6 @@ export function ThankYouSlips() {
                 <Award size={32} strokeWidth={1.5} />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight font-display uppercase">
-                  Thank You <span className="text-primary">Slips</span>
-                </h1>
-                <p className="text-sm text-slate-300 font-medium tracking-wide">
-                  {isMasterAdmin ? 'Unified view of all business activity across the network.' : 'Business activity of members in your chapter.'}
-                </p>
               </div>
             </div>
             
@@ -439,12 +433,6 @@ export function ThankYouSlips() {
               <Award size={32} strokeWidth={1.5} />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight font-display uppercase">
-                Thank You <span className="text-primary">Slips</span>
-              </h1>
-              <p className="text-sm text-slate-300 font-medium tracking-wide">
-                Track business generated and received through referrals.
-              </p>
             </div>
           </div>
           

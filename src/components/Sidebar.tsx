@@ -75,7 +75,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         profile.uid
       );
       
-      alert("Upgrade request sent to your Chapter Admin.");
+      alert("Upgrade request sent successfully");
       
     } catch (error) {
       console.error('Error requesting subscription upgrade:', error);
@@ -83,6 +83,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     } finally {
       setIsUpgrading(false);
     }
+  };
+
+  const canUpgrade = () => {
+    if (!profile?.subscriptionEnd) return false;
+    const expiryDate = new Date(profile.subscriptionEnd);
+    const now = new Date();
+    const daysLeft = differenceInDays(expiryDate, now);
+    return daysLeft <= 30;
   };
 
   const handleLogout = async () => {
@@ -182,7 +190,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 </div>
                 
                 <button
-                  disabled={isUpgrading}
+                  disabled={isUpgrading || !canUpgrade()}
                   onClick={handleUpgradeSubscription}
                   className="w-full mt-2 py-2 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

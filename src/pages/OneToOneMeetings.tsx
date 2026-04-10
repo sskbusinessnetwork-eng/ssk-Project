@@ -283,10 +283,6 @@ export function OneToOneMeetings() {
     <div className="space-y-8 max-w-7xl mx-auto px-4 py-6 md:py-10">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black text-navy tracking-tight font-display uppercase">One-to-One Meetings</h1>
-          <p className="text-sm text-muted-foreground font-medium max-w-2xl">
-            {(isAdmin || isChapterAdmin) ? 'Monitor and analyze personal networking sessions across all chapters.' : 'Schedule and manage your personal networking sessions.'}
-          </p>
         </div>
         {!isAdmin && !isChapterAdmin && (
           <button
