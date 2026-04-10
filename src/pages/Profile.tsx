@@ -67,6 +67,7 @@ export function Profile() {
   const [formData, setFormData] = useState({
     name: '',
     businessName: '',
+    chapterName: '',
     category: '',
     phone: '',
     website: '',
@@ -97,6 +98,7 @@ export function Profile() {
           setFormData({
             name: currentUserProfile.name || currentUserProfile.displayName || '',
             businessName: currentUserProfile.businessName || '',
+            chapterName: currentUserProfile.chapterName || '',
             category: currentUserProfile.category || '',
             phone: currentUserProfile.phone || '',
             website: currentUserProfile.website || '',
@@ -270,7 +272,7 @@ export function Profile() {
         {/* Red Header */}
         <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
-          <div className="relative z-10 flex items-center justify-between max-w-xl mx-auto">
+          <div className="relative z-10 flex items-center justify-between max-w-2xl mx-auto">
             <div className="w-10" />
             <h1 className="text-lg font-bold text-white uppercase tracking-widest">
               Profile
@@ -281,7 +283,7 @@ export function Profile() {
           </div>
         </div>
 
-        <div className="max-w-xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
+        <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
           {/* Profile Card */}
           <div className="bg-white p-6 rounded-[20px] card-shadow border border-border text-center space-y-4">
             <div className="w-24 h-24 rounded-full bg-muted mx-auto border-4 border-white shadow-md overflow-hidden">
@@ -292,14 +294,17 @@ export function Profile() {
               />
             </div>
             <div>
-              <div className="flex items-center justify-center gap-2">
-                <h2 className="text-xl font-bold text-text-primary">{targetProfile.name}</h2>
+              <div className="flex items-center justify-center gap-2 flex-wrap px-2">
+                <h2 className="text-lg sm:text-xl font-bold text-text-primary break-words">{targetProfile.name}</h2>
                 {getPositionText(targetProfile.uid)}
               </div>
-              <p className="text-sm font-bold text-primary uppercase tracking-wider">
+              <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
                 {targetProfile.role === 'MASTER_ADMIN' ? 'Master Admin' : targetProfile.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (targetProfile.category || 'Member')}
               </p>
-              <p className="text-xs font-medium text-text-secondary mt-1">{targetProfile.businessName || 'SSK Business Network'}</p>
+              {targetProfile.role === 'CHAPTER_ADMIN' && targetProfile.chapterName && (
+                <p className="text-[10px] sm:text-xs font-black text-navy uppercase tracking-widest mt-1">{targetProfile.chapterName}</p>
+              )}
+              <p className="text-[10px] sm:text-xs font-medium text-text-secondary mt-1 break-words px-4">{targetProfile.businessName || 'SSK Business Network'}</p>
             </div>
 
             {/* Action Buttons */}
@@ -401,9 +406,9 @@ export function Profile() {
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
                 <Globe size={20} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Website</p>
-                <p className="text-sm font-bold text-text-primary truncate max-w-[200px]">
+                <p className="text-sm font-bold text-text-primary truncate">
                   {targetProfile.website || 'Not specified'}
                 </p>
               </div>
@@ -546,7 +551,7 @@ export function Profile() {
       {/* Red Header */}
       <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="relative z-10 flex items-center justify-between max-w-xl mx-auto">
+        <div className="relative z-10 flex items-center justify-between max-w-2xl mx-auto">
           <div className="w-10" />
           <h1 className="text-lg font-bold text-white uppercase tracking-widest">
             My Profile
@@ -561,7 +566,7 @@ export function Profile() {
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
         {/* Profile Card */}
         <div className="bg-white p-6 rounded-[20px] card-shadow border border-border text-center space-y-4">
           <div className="relative w-24 h-24 mx-auto">
@@ -584,13 +589,16 @@ export function Profile() {
             </label>
           </div>
           <div>
-            <div className="flex items-center justify-center gap-2">
-              <h2 className="text-xl font-bold text-text-primary">{formData.name || 'Your Name'}</h2>
+            <div className="flex items-center justify-center gap-2 flex-wrap px-2">
+              <h2 className="text-lg sm:text-xl font-bold text-text-primary break-words">{formData.name || 'Your Name'}</h2>
               {currentUserProfile && getPositionText(currentUserProfile.uid)}
             </div>
-            <p className="text-sm font-bold text-primary uppercase tracking-wider">
+            <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
               {formData.role === 'MASTER_ADMIN' ? 'Master Admin' : formData.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (formData.category || 'Member')}
             </p>
+            {formData.role === 'CHAPTER_ADMIN' && formData.chapterName && (
+              <p className="text-[10px] sm:text-xs font-black text-navy uppercase tracking-widest mt-1">{formData.chapterName}</p>
+            )}
           </div>
         </div>
 
@@ -616,10 +624,24 @@ export function Profile() {
                 className="w-full h-11 px-4 bg-muted/50 border border-transparent rounded-xl outline-none font-bold text-sm text-text-secondary cursor-not-allowed"
               />
             </div>
+
+            {formData.role === 'CHAPTER_ADMIN' && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Chapter Name <span className="text-rose-500">*</span></label>
+                <input
+                  required
+                  type="text"
+                  value={formData.chapterName}
+                  onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
+                  className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Business Name</label>
+              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : ''}</label>
               <input
-                required
+                required={formData.role !== 'CHAPTER_ADMIN'}
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}

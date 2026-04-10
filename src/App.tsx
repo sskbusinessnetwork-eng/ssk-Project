@@ -25,7 +25,7 @@ import { AuthProvider } from './contexts/AuthContext';
 
 export default function App() {
   useEffect(() => {
-    checkDatabaseConnection();
+    // checkDatabaseConnection();
   }, []);
 
   return (

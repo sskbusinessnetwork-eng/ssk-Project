@@ -11,7 +11,11 @@ import {
   User,
   Plus,
   AlertTriangle,
-  HelpCircle
+  HelpCircle,
+  Search,
+  UserPlus,
+  FileText,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -56,6 +60,7 @@ export function Layout() {
     { icon: LayoutDashboard, label: 'Home', path: '/analytics' },
     { icon: Users, label: 'Network', path: '/network' },
     { icon: Share2, label: 'Refer', path: '/refer' },
+    { icon: Calendar, label: 'Meeting', path: '/meetings' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
@@ -84,7 +89,7 @@ export function Layout() {
           </div>
 
           {/* Center: Page Title */}
-          <h1 className="text-sm md:text-base font-bold text-text-primary tracking-tight uppercase whitespace-nowrap">
+          <h1 className="text-xs sm:text-sm md:text-base font-bold text-text-primary tracking-tight uppercase whitespace-nowrap px-2 truncate max-w-[120px] sm:max-w-none">
             {getPageTitle()}
           </h1>
 
@@ -116,42 +121,44 @@ export function Layout() {
             <p className="text-xs font-bold uppercase tracking-widest leading-none">{warningMessage}</p>
           </div>
         )}
-        <div className="max-w-7xl mx-auto p-4 md:p-12">
+        <div className="max-w-7xl mx-auto p-2 sm:p-4 md:p-12">
           <Outlet />
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-primary rounded-t-[24px] px-4 pb-6 pt-3 flex items-center justify-around z-50 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-primary px-2 pb-6 pt-3 flex items-center justify-around z-50 shadow-lg border-t border-white/10">
         {mobileNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
               key={item.path}
               to={item.path}
-              className="relative flex flex-col items-center justify-center min-w-[64px] transition-all active:scale-90 group"
+              className="outline-none"
             >
-              <item.icon 
-                size={24} 
-                className={cn(
-                  "transition-all duration-300 mb-1",
-                  isActive ? "text-white scale-110" : "text-white/60 group-hover:text-white"
-                )}
-                strokeWidth={isActive ? 2.5 : 2}
-              />
-              <span className={cn(
-                "text-[10px] font-bold tracking-tight transition-all duration-300",
-                isActive ? "text-white" : "text-white/60"
-              )}>
-                {item.label}
-              </span>
-              {isActive && (
-                <motion.div
-                  layoutId="active-underline"
-                  className="absolute -bottom-1 w-6 h-0.5 bg-white rounded-full"
-                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+              <div className="relative flex flex-col items-center justify-center min-w-[60px] transition-all active:scale-90 group">
+                <item.icon 
+                  size={22} 
+                  className={cn(
+                    "transition-all duration-300 mb-1",
+                    isActive ? "text-white scale-110" : "text-white/70 group-hover:text-white"
+                  )}
+                  strokeWidth={isActive ? 2.5 : 2}
                 />
-              )}
+                <span className={cn(
+                  "text-[9px] font-bold tracking-tight transition-all duration-300 uppercase",
+                  isActive ? "text-white" : "text-white/70"
+                )}>
+                  {item.label}
+                </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="active-underline"
+                    className="absolute -bottom-1 w-6 h-0.5 bg-white rounded-full"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+              </div>
             </Link>
           );
         })}

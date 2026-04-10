@@ -157,23 +157,38 @@ export function Meetings() {
     // but usually we want to filter by the chapter of the meeting being viewed.
     const chapterId = isMasterAdmin ? selectedAdminId : (isChapterAdmin ? profile?.uid : profile?.adminId);
     
-    const constraints = [
-      where('membershipStatus', '==', 'ACTIVE'),
-      where('role', '==', 'MEMBER')
-    ];
+    const fetchMembers = async () => {
+      const constraints: any[] = [
+        where('membershipStatus', '==', 'ACTIVE')
+      ];
 
-    if (chapterId) {
-      constraints.push(where('adminId', '==', chapterId));
-    }
-
-    firestoreService.list<UserProfile>('users', constraints).then(data => {
-      let activeMembers = data;
-      // Ensure Chapter Admin is included in the list if they are the one viewing
-      if (isChapterAdmin && profile && !activeMembers.find(m => m.uid === profile.uid)) {
-        activeMembers = [profile, ...activeMembers];
+      if (chapterId) {
+        // If we have a chapterId, we want members of that chapter
+        constraints.push(where('adminId', '==', chapterId));
+      } else {
+        // If no chapterId (Master Admin "All Chapters"), we want all members and admins
+        constraints.push(where('role', 'in', ['MEMBER', 'CHAPTER_ADMIN']));
       }
-      setMembers(activeMembers);
-    });
+
+      try {
+        const data = await firestoreService.list<UserProfile>('users', constraints);
+        let activeMembers = data;
+        
+        // If chapterId is set, we also need to fetch the Chapter Admin themselves
+        if (chapterId) {
+          const admin = await firestoreService.get<UserProfile>('users', chapterId);
+          if (admin && !activeMembers.find(m => m.uid === admin.uid)) {
+            activeMembers = [admin, ...activeMembers];
+          }
+        }
+        
+        setMembers(activeMembers);
+      } catch (err) {
+        console.error("Error fetching members:", err);
+      }
+    };
+
+    fetchMembers();
 
     if (selectedMeeting?.id) {
       setNotes(selectedMeeting.notes || '');
@@ -255,25 +270,18 @@ export function Meetings() {
     if (!selectedMeeting) return;
     setIsSubmitting(true);
     try {
-      const isPending = isMeetingPending({
-        ...selectedMeeting,
-        attendance: tempAttendance,
-        amountCollected: tempAmount,
-        memberNotes: tempMemberNotes
-      });
-
       await firestoreService.update('meetings', selectedMeeting.id, { 
         attendance: tempAttendance,
         amountCollected: tempAmount,
         memberNotes: tempMemberNotes,
-        isCompleted: !isPending,
+        isCompleted: true,
         updatedAt: new Date().toISOString()
       });
-      setSuccess(isPending ? 'Meeting data updated!' : 'Meeting data updated and moved to history!');
+      setSuccess('Meeting data updated and moved to history!');
       setTimeout(() => {
         setIsUpdateModalOpen(false);
         setSuccess(null);
-        if (!isPending) setSelectedMeeting(null);
+        setSelectedMeeting(null);
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to update meeting data.');
@@ -286,21 +294,20 @@ export function Meetings() {
     if (!selectedMeeting) return;
     setIsSubmitting(true);
     try {
-      const isPending = isMeetingPending({
-        ...selectedMeeting,
-        notes: tempNotes
-      });
+      const meetingDate = new Date(selectedMeeting.date);
+      const now = new Date();
+      const shouldComplete = meetingDate < now;
 
       await firestoreService.update('meetings', selectedMeeting.id, { 
         notes: tempNotes,
-        isCompleted: !isPending,
+        isCompleted: shouldComplete || selectedMeeting.isCompleted,
         updatedAt: new Date().toISOString()
       });
-      setSuccess(isPending ? 'Meeting notes updated!' : 'Meeting notes updated and moved to history!');
+      setSuccess(shouldComplete ? 'Meeting notes updated and moved to history!' : 'Meeting notes updated!');
       setTimeout(() => {
         setIsNotesModalOpen(false);
         setSuccess(null);
-        if (!isPending) setSelectedMeeting(null);
+        if (shouldComplete) setSelectedMeeting(null);
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to update meeting notes.');
@@ -322,15 +329,11 @@ export function Meetings() {
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
     : 0;
 
-  const isMeetingPending = (meeting: Meeting) => {
-    const attendanceCount = Object.keys(meeting.attendance || {}).length;
-    const hasNotes = !!meeting.notes && meeting.notes.trim().length > 0;
-    // A meeting is pending only if neither attendance nor notes have been recorded
-    return attendanceCount === 0 && !hasNotes;
-  };
-
-  const getMeetingStatus = (date: string) => {
-    const meetingDate = new Date(date);
+  const getMeetingStatus = (meeting: Meeting) => {
+    if (meeting.isCompleted) {
+      return { label: 'Completed', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+    }
+    const meetingDate = new Date(meeting.date);
     const now = new Date();
     
     if (isSameDay(meetingDate, now)) {
@@ -338,7 +341,7 @@ export function Meetings() {
     }
     
     if (meetingDate < now) {
-      return { label: 'Completed', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+      return { label: 'Past Due', color: 'bg-amber-100 text-amber-700 border-amber-200' };
     }
     
     return { label: 'Scheduled', color: 'bg-blue-100 text-blue-700 border-blue-200' };
@@ -349,22 +352,14 @@ export function Meetings() {
     : meetings;
 
   const now = new Date();
-  const today = startOfDay(now);
   
-  // Pending: Past meetings that are not completed
-  const pendingMeetings = filteredMeetings.filter(m => !m.isCompleted && new Date(m.date) < today);
+  // Upcoming: Non-completed meetings that are in the future
+  const scheduledMeetings = [...filteredMeetings.filter(m => !m.isCompleted && new Date(m.date) >= now)]
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  // Upcoming: Non-completed meetings
-  const upcomingMeetings = filteredMeetings.filter(m => !m.isCompleted);
-  
-  // Sort upcoming by date asc to find the nearest
-  const scheduledMeetings = [...upcomingMeetings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  
-  // History: Completed meetings
-  const completedMeetings = filteredMeetings.filter(m => m.isCompleted)
+  // History: Completed meetings OR past meetings
+  const completedMeetings = [...filteredMeetings.filter(m => m.isCompleted || new Date(m.date) < now)]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const recentMeetings = completedMeetings.slice(0, 1);
 
   // For Master Admin, find the single latest/upcoming meeting
   const masterAdminUpcoming = scheduledMeetings[0];
@@ -460,17 +455,22 @@ export function Meetings() {
                     <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
                       <Calendar size={18} />
                     </div>
-                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[8px] font-black uppercase tracking-widest border border-blue-200 shrink-0">
-                      Scheduled
-                    </span>
+                    {(() => {
+                      const status = getMeetingStatus(meeting);
+                      return (
+                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border shrink-0", status.color)}>
+                          {status.label}
+                        </span>
+                      );
+                    })()}
                   </div>
-                  <div className="space-y-1.5 mb-3 flex-grow">
+                  <div className="space-y-1.5 mb-3 flex-grow min-w-0">
                     <h3 className="text-sm font-black text-navy uppercase tracking-tight leading-none truncate" title={format(new Date(meeting.date), 'EEEE, MMM do')}>
                       {format(new Date(meeting.date), 'EEEE, MMM do')}
                     </h3>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                       <Clock size={12} className="text-primary shrink-0" />
-                      <span>{meeting.time || '07:30 AM'}</span>
+                      <span className="truncate">{meeting.time || '07:30 AM'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                       <MapPin size={12} className="text-primary shrink-0" />
@@ -568,6 +568,74 @@ export function Meetings() {
               </div>
             </div>
           </div>
+
+          {/* Meeting History List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {completedMeetings.map((meeting) => (
+              <div 
+                key={meeting.id} 
+                onClick={() => {
+                  setDetailsMeeting(meeting);
+                  setIsMeetingDetailsModalOpen(true);
+                }}
+                className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col cursor-pointer group"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                    <Calendar size={16} />
+                  </div>
+                  {(() => {
+                    const status = getMeetingStatus(meeting);
+                    return (
+                      <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border shrink-0", status.color)}>
+                        {status.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="space-y-1 mb-3">
+                  <h3 className="text-xs font-black text-navy uppercase tracking-tight truncate">
+                    {format(new Date(meeting.date), 'EEEE, MMM do yyyy')}
+                  </h3>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                    <Clock size={10} className="text-primary shrink-0" />
+                    <span>{meeting.time || '07:30 AM'}</span>
+                  </div>
+                </div>
+                
+                {(isChapterAdmin || isMasterAdmin) && (
+                  <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-slate-50">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMeeting(meeting);
+                        setTempAttendance(meeting.attendance || {});
+                        setTempAmount(meeting.amountCollected || {});
+                        setTempMemberNotes(meeting.memberNotes || {});
+                        setIsUpdateModalOpen(true);
+                      }}
+                      className="py-1 bg-slate-50 text-slate-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-emerald-50 hover:text-emerald-600 transition-all flex items-center justify-center gap-1"
+                    >
+                      <Settings size={10} />
+                      Edit
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMeeting(meeting);
+                        setTempNotes(meeting.notes || '');
+                        setIsNotesModalOpen(true);
+                      }}
+                      className="py-1 bg-slate-50 text-slate-600 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-indigo-50 hover:text-indigo-600 transition-all flex items-center justify-center gap-1"
+                    >
+                      <FileText size={10} />
+                      Notes
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -583,80 +651,82 @@ export function Meetings() {
             <p className="text-sm font-bold text-slate-900">Update attendance and amounts</p>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Member</th>
-                  <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Attendance</th>
-                  <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Amount (₹)</th>
-                  <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Note</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {members.filter(m => m.adminId === selectedMeeting?.adminId || m.uid === selectedMeeting?.adminId).map((member) => {
-                  const status = tempAttendance[member.uid];
-                  const amount = tempAmount[member.uid] || 0;
-                  const note = tempMemberNotes[member.uid] || '';
-                  return (
-                    <tr key={member.uid} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <img 
-                            src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
-                            className="w-8 h-8 rounded-lg"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{member.name || member.displayName}</p>
-                            <p className="text-[10px] text-slate-500">{member.businessName}</p>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="min-w-[600px] px-4 sm:px-0">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Member</th>
+                    <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Attendance</th>
+                    <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Amount (₹)</th>
+                    <th className="py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Note</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {members.filter(m => m.adminId === selectedMeeting?.adminId || m.uid === selectedMeeting?.adminId).map((member) => {
+                    const status = tempAttendance[member.uid];
+                    const amount = tempAmount[member.uid] || 0;
+                    const note = tempMemberNotes[member.uid] || '';
+                    return (
+                      <tr key={member.uid} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4">
+                          <div className="flex items-center gap-3">
+                            <img 
+                              src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
+                              className="w-8 h-8 rounded-lg shrink-0"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-900 truncate">{member.name || member.displayName}</p>
+                              <p className="text-[10px] text-slate-500 truncate">{member.businessName}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'PRESENT' }))}
-                            className={cn(
-                              "p-1.5 rounded-lg transition-all",
-                              status === 'PRESENT' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                            )}
-                          >
-                            <CheckCircle2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'ABSENT' }))}
-                            className={cn(
-                              "p-1.5 rounded-lg transition-all",
-                              status === 'ABSENT' ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                            )}
-                          >
-                            <XCircle size={16} />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-4">
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
-                          className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-slate-700"
-                        />
-                      </td>
-                      <td className="py-4 pl-4">
-                        <input
-                          type="text"
-                          value={note}
-                          onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
-                          placeholder="Private note..."
-                          className="w-full px-2 py-1.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-slate-600"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="py-4">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'PRESENT' }))}
+                              className={cn(
+                                "p-1.5 rounded-lg transition-all",
+                                status === 'PRESENT' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                              )}
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'ABSENT' }))}
+                              className={cn(
+                                "p-1.5 rounded-lg transition-all",
+                                status === 'ABSENT' ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                              )}
+                            >
+                              <XCircle size={16} />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-4">
+                          <input
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
+                            className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-slate-700"
+                          />
+                        </td>
+                        <td className="py-4 pl-4">
+                          <input
+                            type="text"
+                            value={note}
+                            onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
+                            placeholder="Private note..."
+                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-slate-600"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -716,7 +786,7 @@ export function Meetings() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {members.filter(m => m.adminId === detailsMeeting?.adminId).map((member) => {
+                {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
                   const status = detailsMeeting?.attendance[member.uid];
                   const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
                   return (
@@ -724,11 +794,11 @@ export function Meetings() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <img 
-                            src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
+                            src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
                             className="w-6 h-6 rounded-lg"
                             referrerPolicy="no-referrer"
                           />
-                          <p className="text-xs font-bold text-slate-900">{member.name || member.displayName}</p>
+                          <p className="text-xs font-bold text-slate-900">{member.name || member.displayName || 'Unnamed Member'}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -768,17 +838,17 @@ export function Meetings() {
       >
         <div className="space-y-4">
           <div className="divide-y divide-slate-100">
-            {members.map((member) => {
+            {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
               const status = detailsMeeting?.attendance[member.uid];
               return (
                 <div key={member.uid} className="py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img 
-                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
+                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
                       className="w-8 h-8 rounded-lg"
                       referrerPolicy="no-referrer"
                     />
-                    <p className="text-sm font-bold text-slate-900">{member.name || member.displayName}</p>
+                    <p className="text-sm font-bold text-slate-900">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
                   <span className={cn(
                     "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
@@ -801,17 +871,17 @@ export function Meetings() {
       >
         <div className="space-y-4">
           <div className="divide-y divide-slate-100">
-            {members.map((member) => {
+            {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
               const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
               return (
                 <div key={member.uid} className="py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <img 
-                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
+                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
                       className="w-8 h-8 rounded-lg"
                       referrerPolicy="no-referrer"
                     />
-                    <p className="text-sm font-bold text-slate-900">{member.name || member.displayName}</p>
+                    <p className="text-sm font-bold text-slate-900">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
                   <span className="text-sm font-bold text-slate-700">₹{amount.toLocaleString()}</span>
                 </div>

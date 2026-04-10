@@ -20,6 +20,8 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
     confirmPassword: '',
     displayName: '',
     role: 'MEMBER' as UserRole,
+    chapterName: '',
+    businessName: '',
     state: '',
     city: '',
     address: '',
@@ -91,6 +93,9 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       }
 
       if (formData.role === 'MEMBER' || formData.role === 'CHAPTER_ADMIN') {
+        if (formData.role === 'CHAPTER_ADMIN' && !formData.chapterName.trim()) {
+          throw new Error('Chapter Name is required.');
+        }
         if (!formData.state.trim()) throw new Error('State is required.');
         if (!formData.city.trim()) throw new Error('City is required.');
         if (!formData.area.trim()) throw new Error('Area is required.');
@@ -113,6 +118,8 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           password,
           name: displayName,
           role: formData.role,
+          chapterName: formData.role === 'CHAPTER_ADMIN' ? formData.chapterName : undefined,
+          businessName: formData.role === 'CHAPTER_ADMIN' ? formData.businessName : undefined,
           state: formData.state,
           city: formData.city,
           area: formData.area,
@@ -294,6 +301,39 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         </select>
         <p className="text-[10px] text-slate-500 italic font-medium ml-2 leading-relaxed">Admin roles require verification before full access is granted.</p>
       </div>
+
+      {formData.role === 'CHAPTER_ADMIN' && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8 p-8 bg-slate-50 rounded-[3rem] border-2 border-slate-100"
+        >
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4 ml-2">Chapter Details</p>
+          
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Chapter Name <span className="text-rose-500">*</span></label>
+            <input
+              required
+              type="text"
+              value={formData.chapterName}
+              onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
+              placeholder="Enter chapter name"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Business Name (Optional)</label>
+            <input
+              type="text"
+              value={formData.businessName}
+              onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+              placeholder="Enter business name"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+            />
+          </div>
+        </motion.div>
+      )}
 
       {(formData.role === 'MEMBER' || formData.role === 'CHAPTER_ADMIN') && (
         <motion.div 

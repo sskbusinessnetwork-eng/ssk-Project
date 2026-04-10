@@ -448,7 +448,7 @@ export function Login() {
                 </button>
 
                 {/* Divider */}
-                <div className="relative flex items-center gap-4">
+                <div id="demo-divider" className="hidden relative flex items-center gap-4">
                   <div className="flex-1 h-[1px] bg-slate-100" />
                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Or</span>
                   <div className="flex-1 h-[1px] bg-slate-100" />
@@ -456,9 +456,10 @@ export function Login() {
 
                 {/* Demo Button */}
                 <button
+                  id="demo-account-button"
                   type="button"
                   onClick={useDemoAccount}
-                  className="w-full py-4 bg-white text-slate-600 rounded-full font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-slate-50 transition-all border border-slate-200 active:scale-[0.98]"
+                  className="hidden w-full py-4 bg-white text-slate-600 rounded-full font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-slate-50 transition-all border border-slate-200 active:scale-[0.98]"
                 >
                   Use Demo Account
                 </button>
@@ -624,7 +625,7 @@ export function Login() {
           transition={{ delay: 0.5 }}
           className="mt-10 text-center space-y-4"
         >
-          <p className="text-white/60 text-xs font-medium">
+          <p id="registration-prompt" className="hidden text-white/60 text-xs font-medium">
             Don't have an account?{' '}
             <Link to="/register" className="text-white font-black hover:underline uppercase tracking-widest ml-1">
               Join the Business Network

@@ -6,7 +6,8 @@ import {
   Award,
   AlertTriangle,
   CheckCircle2,
-  Trash2
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
@@ -129,6 +130,10 @@ export function Notifications() {
                 if (!notif.read) markAsRead(notif.id);
                 if (notif.type === 'UPGRADE_REQUEST' && notif.relatedUserId) {
                   navigate(`/profile?id=${notif.relatedUserId}`);
+                } else if (notif.type === 'GUEST_REGISTRATION' && notif.relatedUserId) {
+                  navigate(`/guests?highlight=${notif.relatedUserId}`);
+                } else if (notif.type === 'ASSOCIATE_MEMBER_INVITE') {
+                  navigate(`/members?tab=invites`);
                 }
               }}
               className={cn(
@@ -144,12 +149,14 @@ export function Notifications() {
                 (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-50 text-emerald-600" :
                 notif.type === 'SUBSCRIPTION' ? "bg-rose-50 text-rose-600" :
                 notif.type === 'REFERRAL' ? "bg-blue-50 text-blue-600" :
+                notif.type === 'GUEST_REGISTRATION' ? "bg-purple-50 text-purple-600" :
                 notif.type === 'THANKYOU' ? "bg-amber-50 text-amber-600" :
                 "bg-primary/5 text-primary"
               )}>
                 {(notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? <Award size={20} /> :
                  notif.type === 'SUBSCRIPTION' ? <AlertTriangle size={20} /> :
                  notif.type === 'REFERRAL' ? <CheckCircle2 size={20} /> :
+                 notif.type === 'GUEST_REGISTRATION' ? <UserPlus size={20} /> :
                  notif.type === 'THANKYOU' ? <Award size={20} /> :
                  <Info size={20} />}
               </div>

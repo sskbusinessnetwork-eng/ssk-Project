@@ -2,7 +2,7 @@ import { firestoreService } from './firestoreService';
 import { UserRole } from '../types';
 import { where } from 'firebase/firestore';
 
-export type NotificationType = 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST';
+export type NotificationType = 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE';
 
 export const notificationService = {
   async createNotification(userId: string, role: UserRole, type: NotificationType, message: string, relatedUserId?: string) {

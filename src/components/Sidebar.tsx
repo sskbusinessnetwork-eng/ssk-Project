@@ -210,7 +210,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     "flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-500 group relative overflow-hidden",
                     isActive 
                       ? "text-white shadow-xl shadow-primary/20" 
-                      : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                   )}
                 >
                   {isActive && (
@@ -224,7 +224,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     "transition-all duration-500 relative z-10",
                     isActive ? "drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] scale-110" : "group-hover:scale-110 group-hover:text-primary"
                   )} />
-                  <span className="font-black text-[10px] uppercase tracking-[0.15em] relative z-10 flex-1">{item.label}</span>
+                  <span className="font-black text-[12px] uppercase tracking-[0.15em] relative z-10 flex-1">{item.label}</span>
                   {item.label === 'Notifications' && unreadCount > 0 && (
                     <span className="relative z-10 bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-rose-500/20">
                       {unreadCount}

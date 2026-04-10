@@ -235,7 +235,7 @@ export function Connections() {
   };
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto pb-24">
+    <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
       {/* Search Header */}
       <div className="bg-white p-4 rounded-[14px] card-shadow border border-border space-y-4">
         {/* Tabs - Hidden for Master Admin to show unified list */}
@@ -393,13 +393,13 @@ export function Connections() {
                 </div>
                 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-text-primary truncate">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-text-primary truncate max-w-[150px] sm:max-w-none">
                       {member.name}
                     </h3>
                     {getPositionText(member.uid)}
                   </div>
-                  <p className="text-[11px] font-medium text-text-secondary truncate">
+                  <p className="text-[10px] sm:text-[11px] font-medium text-text-secondary truncate">
                     {member.role === 'CHAPTER_ADMIN' 
                       ? 'Chapter Admin' 
                       : `${member.category || 'Member'} | Admin ${adminNames[member.associatedChapterAdminId || member.adminId || ''] || 'SSK'}`}

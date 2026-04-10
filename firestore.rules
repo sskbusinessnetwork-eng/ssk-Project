@@ -34,6 +34,8 @@ service cloud.firestore {
     //   - associatedChapterAdminId: string (optional) - UID of associated Chapter Admin
     //   - memberId: string (required) - Legacy field for UID
     //   - createdAt: string (required) - ISO date
+    //   - isWhatsAppShared: bool (optional)
+    //   - isCalled: bool (optional)
     //
     // Collection: guest_registrations
     // Document ID: auto-generated
@@ -46,6 +48,8 @@ service cloud.firestore {
     //   - adminId: string (required) - UID of Chapter Admin
     //   - status: string (required) - PENDING, CONTACTED, CONVERTED
     //   - createdAt: string (required) - ISO date
+    //   - isWhatsAppShared: bool (optional)
+    //   - isCalled: bool (optional)
     //
     // ===============================================================
 
@@ -133,7 +137,7 @@ service cloud.firestore {
       return hasRequiredFields(['userId', 'role', 'type', 'message', 'createdAt']) &&
              data.userId is string &&
              data.role in ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] &&
-             data.type in ['REFERRAL', 'THANKYOU', 'MEMBER_ADD', 'SUBSCRIPTION', 'UPGRADE', 'UPGRADE_REQUEST'] &&
+             data.type in ['REFERRAL', 'THANKYOU', 'MEMBER_ADD', 'SUBSCRIPTION', 'UPGRADE', 'UPGRADE_REQUEST', 'GUEST_REGISTRATION', 'ASSOCIATE_MEMBER_INVITE'] &&
              data.message is string && data.message.size() > 0 && data.message.size() < 1000 &&
              isValidDateString(data.createdAt);
     }
@@ -160,7 +164,9 @@ service cloud.firestore {
              data.city is string &&
              data.adminId is string &&
              data.status in ['PENDING', 'CONTACTED', 'CONVERTED'] &&
-             isValidDateString(data.createdAt);
+             isValidDateString(data.createdAt) &&
+             (!('isWhatsAppShared' in data) || data.isWhatsAppShared is bool) &&
+             (!('isCalled' in data) || data.isCalled is bool);
     }
 
     // ===============================================================
@@ -248,7 +254,10 @@ service cloud.firestore {
         request.resource.data.memberId == request.auth.uid
       );
       
-      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.createdBy);
+      allow update: if isAdmin() || (isAuthenticated() && (
+        request.auth.uid == resource.data.createdBy ||
+        (isChapterAdmin() && request.auth.uid == resource.data.associatedChapterAdminId)
+      ));
       allow delete: if isAdmin();
     }
 

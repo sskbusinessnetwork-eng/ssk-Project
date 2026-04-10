@@ -64,11 +64,30 @@ export function LandingPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await firestoreService.create('guest_registrations', {
+      const guestId = await firestoreService.create('guest_registrations', {
         ...formData,
         createdAt: new Date().toISOString(),
-        status: 'PENDING'
+        status: 'PENDING',
+        isWhatsAppShared: false,
+        isCalled: false
       });
+
+      // Send notification to the selected Chapter Admin
+      if (formData.adminId) {
+        const selectedAdmin = chapterAdmins.find(a => a.uid === formData.adminId);
+        const chapterName = selectedAdmin?.chapterName || 'your chapter';
+        
+        await firestoreService.create('notifications', {
+          userId: formData.adminId,
+          role: 'CHAPTER_ADMIN',
+          type: 'GUEST_REGISTRATION',
+          message: `New Guest Registration received. Guest: ${formData.fullName}, Contact: ${formData.phone}, Chapter: ${chapterName}`,
+          read: false,
+          relatedUserId: guestId, // Store guest ID to highlight it
+          createdAt: new Date().toISOString()
+        });
+      }
+
       setFormSuccess(true);
       setFormData({
         fullName: '',

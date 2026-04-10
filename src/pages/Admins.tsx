@@ -28,6 +28,7 @@ export function Admins() {
     name: '',
     phone: '',
     email: '',
+    chapterName: '',
     businessName: '',
     password: '',
     membershipStatus: 'ACTIVE' as UserProfile['membershipStatus']
@@ -59,6 +60,7 @@ export function Admins() {
         name: admin.name,
         phone: admin.phone || '',
         email: admin.email || '',
+        chapterName: admin.chapterName || '',
         businessName: admin.businessName || '',
         password: '', // Don't show password
         membershipStatus: admin.membershipStatus
@@ -69,6 +71,7 @@ export function Admins() {
         name: '',
         phone: '',
         email: '',
+        chapterName: '',
         businessName: '',
         password: '',
         membershipStatus: 'ACTIVE'
@@ -113,6 +116,7 @@ export function Admins() {
           name: formData.name,
           phone: normalizedPhone,
           email: formData.email,
+          chapterName: formData.chapterName,
           businessName: formData.businessName,
           membershipStatus: formData.membershipStatus
         });
@@ -144,6 +148,7 @@ export function Admins() {
           name: formData.name,
           phone: normalizedPhone,
           email: formData.email,
+          chapterName: formData.chapterName,
           businessName: formData.businessName,
           role: 'CHAPTER_ADMIN',
           membershipStatus: formData.membershipStatus,
@@ -295,9 +300,16 @@ export function Admins() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-xs text-slate-600">
-                            <Building2 size={12} className="text-slate-500" />
-                            <span>{admin.businessName || 'N/A'}</span>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-xs text-slate-900 font-bold">
+                              <Building2 size={12} className="text-primary" />
+                              <span>{admin.chapterName || 'N/A'}</span>
+                            </div>
+                            {admin.businessName && (
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                                <span className="ml-5 italic">{admin.businessName}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -464,12 +476,24 @@ export function Admins() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Chapter Name (Business Name)</label>
+              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Chapter Name <span className="text-rose-500">*</span></label>
+              <input
+                required
+                type="text"
+                value={formData.chapterName}
+                onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
+                placeholder="e.g. SSK Mumbai Central"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Business Name (Optional)</label>
               <input
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                placeholder="e.g. SSK Mumbai Central"
+                placeholder="Enter business name"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>

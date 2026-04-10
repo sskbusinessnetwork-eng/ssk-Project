@@ -9,6 +9,7 @@ export interface UserProfile {
   email?: string;
   phone?: string;
   businessName?: string;
+  chapterName?: string;
   category?: string;
   state?: string;
   city?: string;
@@ -85,6 +86,8 @@ export interface GuestInvitation {
   status?: 'Invited' | 'Attended' | 'Not Attended';
   notes?: string;
   meetingDate?: string;
+  isWhatsAppShared?: boolean;
+  isCalled?: boolean;
 }
 
 export interface OneToOneMeeting {
@@ -113,7 +116,7 @@ export interface Notification {
   id: string;
   userId: string;
   role: UserRole;
-  type: 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST';
+  type: 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE';
   message: string;
   read?: boolean;
   relatedUserId?: string;
@@ -135,4 +138,6 @@ export interface GuestRegistration {
   adminId: string;
   status: 'PENDING' | 'CONTACTED' | 'CONVERTED';
   createdAt: string;
+  isWhatsAppShared?: boolean;
+  isCalled?: boolean;
 }

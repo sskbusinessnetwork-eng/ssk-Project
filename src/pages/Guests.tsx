@@ -11,28 +11,37 @@ import {
   Clock, 
   MapPin,
   ExternalLink,
-  Database
+  Database,
+  Phone,
+  Eye,
+  Mail,
+  Building2
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
-import { GuestInvitation, Category, UserProfile } from '../types';
+import { notificationService } from '../services/notificationService';
+import { GuestInvitation, GuestRegistration, Category, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
 import { where, orderBy, collection, getDocs, query, or } from 'firebase/firestore';
 import { db } from '../firebase';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
+import { useLocation } from 'react-router-dom';
 
 export function Guests() {
   const { profile } = useAuth();
+  const location = useLocation();
+  const highlightId = new URLSearchParams(location.search).get('highlight');
   const [invitations, setInvitations] = useState<GuestInvitation[]>([]);
+  const [registrations, setRegistrations] = useState<GuestRegistration[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRegModalOpen, setIsRegModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [selectedInvitation, setSelectedInvitation] = useState<GuestInvitation | null>(null);
+  const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
   // Form state
@@ -77,9 +86,31 @@ export function Guests() {
       constraints.push(where('createdBy', '==', profile.uid));
     }
 
-    const unsubscribe = firestoreService.subscribe<GuestInvitation>('guest_invitations', constraints, (data) => {
+    const unsubInvitations = firestoreService.subscribe<GuestInvitation>('guest_invitations', constraints, (data) => {
       setInvitations(data);
       setLoading(false);
+    });
+
+    // Fetch Guest Registrations (Created by Guest)
+    let regConstraints: any[] = [orderBy('createdAt', 'desc')];
+    if (profile.role === 'CHAPTER_ADMIN') {
+      regConstraints.push(where('adminId', '==', profile.uid));
+    } else if (profile.role === 'MEMBER') {
+      // Members might not see registrations unless they are assigned? 
+      // Usually registrations are for Chapter Admins.
+      // If a member is looking at guests, they probably only see what they invited.
+      // But the requirement says "Show this data in Guest Section".
+      // I'll assume Chapter Admin and Master Admin see registrations.
+      if (profile.role !== 'MASTER_ADMIN') {
+        // If not master admin, and we already handled chapter admin above, 
+        // then for MEMBER we might want to show nothing or only if they are somehow related.
+        // For now, let's keep it consistent with invitations if possible, 
+        // but registrations only have adminId.
+      }
+    }
+
+    const unsubRegistrations = firestoreService.subscribe<GuestRegistration>('guest_registrations', regConstraints, (data) => {
+      setRegistrations(data);
     });
 
     // Fetch all users to resolve member names
@@ -91,7 +122,10 @@ export function Guests() {
     // Fetch Chapter Admins
     firestoreService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setChapterAdmins);
 
-    return () => unsubscribe();
+    return () => {
+      unsubInvitations();
+      unsubRegistrations();
+    };
   }, [profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,10 +149,23 @@ export function Guests() {
         createdBy: profile.uid,
         createdByRole: profile.role,
         associatedChapterAdminId: profile.adminId || null,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        isWhatsAppShared: false,
+        isCalled: false
       };
 
       const id = await firestoreService.create('guest_invitations', newInvitationData);
+      
+      // Send notification to Chapter Admin if created by a Member
+      if (profile.role === 'MEMBER' && profile.adminId) {
+        await notificationService.createNotification(
+          profile.adminId,
+          'CHAPTER_ADMIN',
+          'ASSOCIATE_MEMBER_INVITE',
+          `New Associate Member Invite. Member: ${profile.name || profile.displayName}, Guest: ${formData.guestName}`,
+          id
+        );
+      }
       
       const createdInvitation: GuestInvitation = {
         id,
@@ -171,7 +218,9 @@ export function Guests() {
         ...regFormData,
         adminId,
         createdAt: new Date().toISOString(),
-        status: 'PENDING'
+        status: 'PENDING',
+        isWhatsAppShared: false,
+        isCalled: false
       });
 
       setShowSuccess(true);
@@ -203,34 +252,61 @@ Register here to join the platform: ${registerUrl}`;
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleWhatsApp = (text: string, phone: string) => {
+  const handleWhatsApp = async (text: string, phone: string, guest: any) => {
     const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
-  };
-
-  const handleResendSMS = async (inv: GuestInvitation) => {
-    if (!profile) return;
-    const inviteText = generateInviteText(inv.guestName);
-    try {
-      await firestoreService.create('messages', {
-        to: inv.guestPhone,
-        body: inviteText,
-        uid: profile.uid,
-        createdAt: new Date().toISOString()
-      });
-      alert(`SMS invitation queued in Firestore for ${inv.guestPhone}`);
-    } catch (smsError) {
-      console.error("Error queuing SMS in Firestore:", smsError);
-      alert("Error queuing SMS in Firestore. Check console for details.");
+    
+    // Mark as WhatsApp shared (Read)
+    if (!guest.isWhatsAppShared) {
+      try {
+        const collectionName = guest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
+        await firestoreService.update(collectionName, guest.id, { isWhatsAppShared: true });
+      } catch (error) {
+        console.error("Error updating WhatsApp status:", error);
+      }
     }
   };
 
-  const filteredInvitations = invitations.filter(inv => {
-    const inviter = allUsers.find(u => u.uid === inv.memberId);
+  const handleCall = async (guest: any) => {
+    const phone = guest.displayPhone || guest.phone;
+    if (!phone) return;
+    
+    window.location.href = `tel:${phone.replace(/\D/g, '')}`;
+    
+    // Mark as Called (Read)
+    if (!guest.isCalled) {
+      try {
+        const collectionName = guest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
+        await firestoreService.update(collectionName, guest.id, { isCalled: true });
+      } catch (error) {
+        console.error("Error updating call status:", error);
+      }
+    }
+  };
+
+  const allGuests = [
+    ...invitations.map(inv => ({ 
+      ...inv, 
+      source: 'Created by Admin', 
+      displayName: inv.guestName, 
+      displayPhone: inv.guestPhone, 
+      displayBusiness: inv.guestBusiness 
+    })),
+    ...registrations.map(reg => ({ 
+      ...reg, 
+      source: 'Created by Guest', 
+      displayName: reg.fullName, 
+      displayPhone: reg.phone, 
+      displayBusiness: reg.businessName 
+    }))
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const filteredInvitations = allGuests.filter(inv => {
+    const inviter = allUsers.find(u => u.uid === (inv as any).memberId);
     const matchesSearch = 
-      inv.guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.guestEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.guestBusiness.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (inv as any).guestEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.displayBusiness.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (inviter?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesSearch;
@@ -254,7 +330,7 @@ Register here to join the platform: ${registerUrl}`;
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => setIsRegModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 text-sm md:text-base"
+            className="hidden items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 text-sm md:text-base"
           >
             <Calendar size={18} />
             <span>Register for Meeting</span>
@@ -292,58 +368,85 @@ Register here to join the platform: ${registerUrl}`;
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mx-auto"></div>
           </div>
         ) : filteredInvitations.length > 0 ? (
-          filteredInvitations.map((inv) => {
-            const inviteText = generateInviteText(inv.guestName);
+          filteredInvitations.map((inv: any) => {
+            const inviteText = generateInviteText(inv.displayName);
+            const needsAttention = !inv.isWhatsAppShared && !inv.isCalled;
+            const isHighlighted = highlightId === inv.id;
+
             return (
               <motion.div
                 layout
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 key={inv.id}
-                className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all"
+                className={cn(
+                  "bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border transition-all relative overflow-hidden",
+                  isHighlighted ? "ring-2 ring-primary ring-offset-2 border-primary shadow-lg" :
+                  needsAttention ? "border-rose-200 shadow-rose-100 shadow-lg" : "border-slate-200 shadow-sm hover:shadow-md"
+                )}
               >
+                {needsAttention && (
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-bl-xl">
+                    Needs Action
+                  </div>
+                )}
+                
                 <div className="flex items-start justify-between mb-4 md:mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 rounded-xl md:rounded-2xl flex items-center justify-center text-emerald-600">
+                    <div className={cn(
+                      "w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center",
+                      needsAttention ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
+                    )}>
                       <UserPlus size={20} className="md:w-6 md:h-6" />
                     </div>
                     <div>
-                      <h3 className="text-base md:text-lg font-bold text-slate-900">{inv.guestName}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base md:text-lg font-bold text-slate-900">{inv.displayName}</h3>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                          inv.source === 'Created by Admin' ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-purple-50 text-purple-600 border border-purple-100"
+                        )}>
+                          {inv.source}
+                        </span>
+                      </div>
                       <div className="flex flex-col gap-0.5">
-                        <p className="text-xs md:text-sm text-slate-500">{inv.guestBusiness}</p>
-                        {isMasterAdmin && (
-                          <div className="space-y-1 mt-1">
-                            <p className="text-[10px] md:text-xs text-slate-400 font-medium">
-                              Invited By: <span className="text-emerald-600">{allUsers.find(u => u.uid === (inv.createdBy || inv.memberId))?.name || '...'}</span>
-                            </p>
-                            <p className="text-[10px] md:text-xs text-slate-400 font-medium">
-                              Role: <span className="text-blue-600 font-bold uppercase">{inv.createdByRole || allUsers.find(u => u.uid === (inv.createdBy || inv.memberId))?.role || 'MEMBER'}</span>
-                            </p>
-                            <div className="inline-block px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-[9px] font-bold uppercase tracking-wider">
-                              Visible only for Master Admin
-                            </div>
+                        <p className="text-xs md:text-sm text-slate-500">{inv.displayBusiness}</p>
+                        <div className="space-y-1 mt-1">
+                          <p className="text-[10px] md:text-xs text-slate-400 font-medium">
+                            Invited By: <span className="text-emerald-600">{allUsers.find(u => u.uid === (inv.createdBy || inv.memberId || inv.adminId))?.name || '...'}</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className={cn(
+                            "flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider",
+                            inv.isWhatsAppShared ? "text-emerald-600" : "text-slate-300"
+                          )}>
+                            <MessageSquare size={10} />
+                            <span>WhatsApp {inv.isWhatsAppShared ? 'Sent' : 'Pending'}</span>
                           </div>
-                        )}
-                        <div className="flex items-center gap-1 text-[9px] md:text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-1">
-                          <Database size={10} />
-                          <span>Synced</span>
+                          <div className={cn(
+                            "flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider",
+                            inv.isCalled ? "text-blue-600" : "text-slate-300"
+                          )}>
+                            <Phone size={10} />
+                            <span>Call {inv.isCalled ? 'Done' : 'Pending'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] md:text-xs text-slate-400 block">{format(new Date(inv.createdAt), 'MMM d, yyyy')}</span>
-                    {isMasterAdmin && (
-                      <button
-                        onClick={() => {
-                          setSelectedInvitation(inv);
-                          setIsDetailsModalOpen(true);
-                        }}
-                        className="text-[10px] font-black text-primary uppercase tracking-widest mt-2 hover:underline"
-                      >
-                        View Details
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedGuest(inv);
+                        setIsDetailsModalOpen(true);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-black text-primary uppercase tracking-widest mt-2 hover:underline ml-auto"
+                    >
+                      <Eye size={12} />
+                      View Details
+                    </button>
                   </div>
                 </div>
 
@@ -354,18 +457,21 @@ Register here to join the platform: ${registerUrl}`;
 
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
-                    onClick={() => handleWhatsApp(inviteText, inv.guestPhone)}
+                    onClick={() => handleWhatsApp(inviteText, inv.displayPhone, inv)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all text-xs md:text-sm"
                   >
                     <MessageSquare size={16} className="md:w-[18px] md:h-[18px]" />
                     WhatsApp
                   </button>
                   <button
-                    onClick={() => handleResendSMS(inv)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-all text-xs md:text-sm"
+                    onClick={() => handleCall(inv)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 rounded-xl font-bold transition-all text-xs md:text-sm",
+                      inv.isCalled ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-blue-500 text-white hover:bg-blue-600"
+                    )}
                   >
-                    <Share2 size={16} className="md:w-[18px] md:h-[18px]" />
-                    Resend SMS
+                    <Phone size={16} className="md:w-[18px] md:h-[18px]" />
+                    {inv.isCalled ? 'Call Done' : 'Call'}
                   </button>
                   <button
                     onClick={() => handleCopy(inviteText, inv.id)}
@@ -419,7 +525,7 @@ Register here to join the platform: ${registerUrl}`;
 
             <div className="flex flex-col gap-3 max-w-xs mx-auto">
               <button
-                onClick={() => handleWhatsApp(generateInviteText(lastCreatedInvitation.guestName), lastCreatedInvitation.guestPhone)}
+                onClick={() => handleWhatsApp(generateInviteText(lastCreatedInvitation.guestName), lastCreatedInvitation.guestPhone, { ...lastCreatedInvitation, source: 'Created by Admin' })}
                 className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
                 <MessageSquare size={20} />
@@ -679,90 +785,99 @@ Register here to join the platform: ${registerUrl}`;
         )}
       </Modal>
 
-      {/* Guest Details Modal for Master Admin */}
+      {/* Guest Details Modal */}
       <Modal
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
-        title="Guest Invitation Details"
+        title="Guest Details"
       >
-        {selectedInvitation && (
+        {selectedGuest && (
           <div className="space-y-8">
             <div className="flex items-center gap-4 p-6 bg-slate-50 rounded-3xl border border-slate-100">
               <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
                 <UserPlus size={32} />
               </div>
               <div>
-                <h3 className="text-xl font-black text-navy uppercase tracking-tight">{selectedInvitation.guestName}</h3>
-                <p className="text-sm text-slate-500 font-medium">{selectedInvitation.guestBusiness}</p>
+                <h3 className="text-xl font-black text-navy uppercase tracking-tight">{selectedGuest.displayName}</h3>
+                <p className="text-sm text-slate-500 font-medium">{selectedGuest.displayBusiness}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={cn(
+                    "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                    selectedGuest.source === 'Created by Admin' ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-purple-50 text-purple-600 border border-purple-100"
+                  )}>
+                    {selectedGuest.source}
+                  </span>
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Phone Number</p>
+                <div className="flex items-center gap-2">
+                  <Phone size={14} className="text-primary" />
+                  <p className="text-sm font-bold text-navy">{selectedGuest.displayPhone}</p>
+                </div>
+              </div>
+              {selectedGuest.guestEmail && (
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Email Address</p>
+                  <div className="flex items-center gap-2">
+                    <Mail size={14} className="text-primary" />
+                    <p className="text-sm font-bold text-navy">{selectedGuest.guestEmail}</p>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Business Category</p>
+                <div className="flex items-center gap-2">
+                  <Building2 size={14} className="text-primary" />
+                  <p className="text-sm font-bold text-navy">{selectedGuest.displayBusiness || selectedGuest.businessCategory}</p>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">City</p>
+                <div className="flex items-center gap-2">
+                  <MapPin size={14} className="text-primary" />
+                  <p className="text-sm font-bold text-navy">{selectedGuest.city || 'N/A'}</p>
+                </div>
+              </div>
+              {selectedGuest.fullAddress && (
+                <div className="col-span-full space-y-1">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Address</p>
+                  <p className="text-sm font-bold text-navy bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    {selectedGuest.fullAddress}
+                  </p>
+                </div>
+              )}
+              <div className="space-y-1">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Invited By</p>
                 <p className="text-sm font-bold text-navy">
-                  {allUsers.find(u => u.uid === selectedInvitation.memberId)?.name || 'Unknown Member'}
+                  {allUsers.find(u => u.uid === (selectedGuest.createdBy || selectedGuest.memberId || selectedGuest.adminId))?.name || 'Unknown'}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Invitation Date</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Date</p>
                 <p className="text-sm font-bold text-navy">
-                  {format(new Date(selectedInvitation.createdAt), 'dd MMMM yyyy, hh:mm a')}
+                  {format(new Date(selectedGuest.createdAt), 'dd MMMM yyyy, hh:mm a')}
                 </p>
               </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Date</p>
-                <p className="text-sm font-bold text-navy">
-                  {selectedInvitation.meetingDate ? format(new Date(selectedInvitation.meetingDate), 'dd MMMM yyyy') : 'Not Scheduled'}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</p>
-                <span className={cn(
-                  "inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                  selectedInvitation.status === 'Attended' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
-                  selectedInvitation.status === 'Not Attended' ? "bg-rose-50 text-rose-600 border border-rose-100" :
-                  "bg-blue-50 text-blue-600 border border-blue-100"
-                )}>
-                  {selectedInvitation.status || 'Invited'}
-                </span>
-              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Phone Number</p>
-                <p className="text-sm font-bold text-navy">{selectedInvitation.guestPhone}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Email Address</p>
-                <p className="text-sm font-bold text-navy">{selectedInvitation.guestEmail}</p>
-              </div>
-            </div>
-
-            <div className="space-y-1 pt-6 border-t border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Address</p>
-              <p className="text-sm font-bold text-navy leading-relaxed">
-                {[selectedInvitation.address, selectedInvitation.city, selectedInvitation.state].filter(Boolean).join(', ')}
-                {selectedInvitation.fullAddress && (
-                  <span className="block mt-1 text-slate-500 font-medium">{selectedInvitation.fullAddress}</span>
-                )}
-              </p>
-            </div>
-
-            <div className="space-y-1 pt-6 border-t border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Notes</p>
-              <p className="text-sm text-slate-600 italic leading-relaxed">
-                {selectedInvitation.notes || 'No additional notes provided.'}
-              </p>
-            </div>
-
-            <div className="pt-6">
+            <div className="flex gap-3 pt-4 border-t border-slate-100">
               <button
-                onClick={() => setIsDetailsModalOpen(false)}
-                className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95"
+                onClick={() => handleWhatsApp(generateInviteText(selectedGuest.displayName), selectedGuest.displayPhone, selectedGuest)}
+                className="flex-1 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
-                Close Details
+                <MessageSquare size={18} />
+                WhatsApp
+              </button>
+              <button
+                onClick={() => handleCall(selectedGuest)}
+                className="flex-1 py-4 bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+              >
+                <Phone size={18} />
+                Call
               </button>
             </div>
           </div>

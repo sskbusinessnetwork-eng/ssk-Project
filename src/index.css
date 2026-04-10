@@ -49,12 +49,17 @@
   }
   .analytics-grid {
     display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(1, 1fr) !important;
     gap: 12px !important;
   }
-  @media (max-width: 640px) {
+  @media (min-width: 640px) {
     .analytics-grid {
       grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+  @media (min-width: 1024px) {
+    .analytics-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
     }
   }
   .analytics-card {
@@ -67,4 +72,8 @@
   .animate-pulse-subtle {
     animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+}
+
+#demo-account-button, #registration-prompt, #demo-divider {
+  display: none !important;
 }

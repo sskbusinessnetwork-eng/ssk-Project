@@ -322,7 +322,7 @@ export function Referrals() {
       : referrals;
 
     return (
-      <div className="space-y-6 max-w-6xl mx-auto pb-24 px-4">
+      <div className="space-y-6 max-w-7xl mx-auto pb-24 px-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black text-navy uppercase tracking-tight">Referral History</h1>
@@ -439,7 +439,7 @@ export function Referrals() {
   }
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto pb-24">
+    <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
       {/* Feedback Messages */}
       {successMessage && (
         <div className="fixed top-20 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
@@ -538,7 +538,7 @@ export function Referrals() {
                       {filter === 'received' ? 'From: ' : 'To: '}{otherName}
                     </h3>
                   </div>
-                  <p className="text-[11px] font-medium text-text-secondary truncate">
+                  <p className="text-[10px] sm:text-[11px] font-medium text-text-secondary truncate">
                     For: {ref.contactName} • {ref.requirement || 'Business Referral'}
                   </p>
                 </div>

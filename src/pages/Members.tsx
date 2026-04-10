@@ -23,15 +23,16 @@ import {
 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
+import { useSearchParams } from 'react-router-dom';
 import { firestoreService } from '../services/firestoreService';
-import { UserProfile, Category } from '../types';
+import { UserProfile, Category, GuestInvitation } from '../types';
 import { Modal } from '../components/Modal';
 import { MemberTable } from '../components/members/MemberTable';
 import { AddMemberModal } from '../components/members/AddMemberModal';
 import { EditMemberModal } from '../components/members/EditMemberModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
 import { PositionManagement } from '../components/positions/PositionManagement';
-import { where, doc, setDoc, collection, query, getDocs } from 'firebase/firestore';
+import { where, doc, setDoc, collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -39,8 +40,11 @@ import { notificationService } from '../services/notificationService';
 
 export function Members() {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'directory' | 'positions'>('directory');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as 'directory' | 'positions' | 'invites';
+  const [activeTab, setActiveTab] = useState<'directory' | 'positions' | 'invites'>(tabParam || 'directory');
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [memberInvites, setMemberInvites] = useState<GuestInvitation[]>([]);
   const [allAdmins, setAllAdmins] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -77,6 +81,18 @@ export function Members() {
       getDocs(adminsQuery).then(snap => {
         setAllAdmins(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
       });
+
+      // Fetch member invites for Chapter Admin
+      if (profile.role === 'CHAPTER_ADMIN') {
+        const invitesConstraints = [
+          where('associatedChapterAdminId', '==', profile.uid),
+          where('createdByRole', '==', 'MEMBER'),
+          orderBy('createdAt', 'desc')
+        ];
+        firestoreService.subscribe<GuestInvitation>('guest_invitations', invitesConstraints, (data) => {
+          setMemberInvites(data);
+        });
+      }
     }
 
     return () => unsubscribe();
@@ -430,7 +446,10 @@ export function Members() {
         {isChapterAdmin && (
           <div className="flex gap-2 p-1 bg-white/10 backdrop-blur-md rounded-xl w-fit mx-auto mb-6">
             <button 
-              onClick={() => setActiveTab('directory')}
+              onClick={() => {
+                setActiveTab('directory');
+                setSearchParams({});
+              }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
                 activeTab === 'directory' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
@@ -439,7 +458,22 @@ export function Members() {
               Member Directory
             </button>
             <button 
-              onClick={() => setActiveTab('positions')}
+              onClick={() => {
+                setActiveTab('invites');
+                setSearchParams({ tab: 'invites' });
+              }}
+              className={cn(
+                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
+                activeTab === 'invites' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
+              )}
+            >
+              Member Invites
+            </button>
+            <button 
+              onClick={() => {
+                setActiveTab('positions');
+                setSearchParams({ tab: 'positions' });
+              }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
                 activeTab === 'positions' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
@@ -511,6 +545,52 @@ export function Members() {
               onDeleteMember={setDeleteConfirmMember}
             />
           </>
+        ) : activeTab === 'invites' ? (
+          <div className="space-y-4">
+            <div className="bg-white p-6 rounded-[20px] card-shadow border border-border">
+              <h3 className="text-lg font-bold text-slate-900 mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
+              <div className="space-y-4">
+                {memberInvites.length > 0 ? (
+                  memberInvites.map((invite) => {
+                    const inviter = members.find(m => m.uid === invite.createdBy);
+                    return (
+                      <div key={invite.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                            <UserPlus size={20} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">{invite.guestName}</h4>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
+                            <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">
+                              Invited By: {inviter?.name || 'Member'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right hidden md:block">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Date</p>
+                            <p className="text-xs font-bold text-slate-700">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
+                          </div>
+                          <Link 
+                            to={`/guests?highlight=${invite.id}`}
+                            className="px-4 py-2 bg-white border border-border text-primary rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary/5 transition-all"
+                          >
+                            View in Guests
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-12 text-center">
+                    <UserPlus size={40} className="mx-auto text-slate-200 mb-4" />
+                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No member invites yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         ) : (
           <PositionManagement />
         )}
