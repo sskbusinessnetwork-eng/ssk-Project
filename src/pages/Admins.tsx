@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { PositionManagement } from '../components/positions/PositionManagement';
+import { safeFetch } from '../utils/apiUtils';
 
 export function Admins() {
   const { profile } = useAuth();
@@ -105,7 +106,7 @@ export function Admins() {
           updatePayload.password = formData.password;
         }
 
-        await fetch('/api/admin/update-user', {
+        await safeFetch('/api/admin/update-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatePayload)
@@ -122,7 +123,7 @@ export function Admins() {
         });
       } else {
         // 1. Create in Auth via API
-        const response = await fetch('/api/admin/create-user', {
+        const data = await safeFetch('/api/admin/create-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -135,12 +136,7 @@ export function Admins() {
           })
         });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.details || error.error || 'Failed to create admin user');
-        }
-
-        const { uid } = await response.json();
+        const { uid } = data;
 
         // 2. Create Firestore Profile
         const newAdmin: UserProfile = {
@@ -170,7 +166,7 @@ export function Admins() {
   const handleDelete = async (uid: string) => {
     try {
       // 1. Delete from Auth via API
-      await fetch('/api/auth/delete-user', {
+      await safeFetch('/api/auth/delete-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

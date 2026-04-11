@@ -37,6 +37,7 @@ import { db } from '../firebase';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
+import { safeFetch } from '../utils/apiUtils';
 
 export function Members() {
   const { profile } = useAuth();
@@ -188,7 +189,7 @@ export function Members() {
       }
 
       // 2. CREATE AUTH ACCOUNT
-      const response = await fetch('/api/admin/create-user', {
+      const data = await safeFetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -200,12 +201,7 @@ export function Members() {
         })
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.details || error.error || 'Failed to create member account');
-      }
-
-      const { uid } = await response.json();
+      const { uid } = data;
       
       // 3. MEMBER DATA STRUCTURE
       const memberProfile = {
@@ -284,7 +280,7 @@ export function Members() {
         updatePayload.password = editMemberData.password;
       }
 
-      await fetch('/api/admin/update-user', {
+      await safeFetch('/api/admin/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload)
@@ -368,7 +364,7 @@ export function Members() {
 
     setDeleting(true);
     try {
-      const response = await fetch('/api/auth/delete-user', {
+      await safeFetch('/api/auth/delete-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -376,10 +372,6 @@ export function Members() {
           adminUid: adminUid
         })
       });
-
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data.error || 'Failed to delete user');
 
       setDeleteConfirmMember(null);
     } catch (err: any) {

@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { handleFirestoreError, OperationType } from '../utils/firebaseUtils';
 
 import { normalizePhoneNumber } from '../utils/phoneUtils';
+import { safeFetch } from '../utils/apiUtils';
 
 interface RegisterFormProps {
   onSuccess?: (role: UserRole) => void;
@@ -110,7 +111,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       // Set logging_in flag to prevent useAuth from clearing localStorage prematurely
       sessionStorage.setItem('logging_in', 'true');
       
-      const response = await fetch('/api/auth/register', {
+      const data = await safeFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,12 +127,6 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           address: formData.address
         })
       });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed. Please try again.');
-      }
 
       // Sign in with custom token
       await signInWithCustomToken(auth, data.token);

@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath } from '../utils/authUtils';
+import { safeFetch } from '../utils/apiUtils';
 import { ConfirmationResult, signOut } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -115,25 +116,24 @@ export function Login() {
       console.log("Entered:", password);
       console.log("Flow:", isForgotPasswordFlow);
       
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalizedPhone, password })
-      });
-
-      const data = await response.json();
-      
-      console.log("Stored:", data.storedPassword || "Hidden (Server-side)");
-      
-      if (!response.ok) {
-        let msg = data.error || 'Invalid phone number or password.';
-        if (data.error === "User not found") {
+      let data;
+      try {
+        data = await safeFetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: normalizedPhone, password })
+        });
+      } catch (err: any) {
+        let msg = err.message || 'Invalid phone number or password.';
+        if (err.data?.error === "User not found") {
           msg = "Phone number not registered.";
-        } else if (data.error === "Wrong password" || data.error === "Invalid phone number or password") {
+        } else if (err.data?.error === "Wrong password" || err.data?.error === "Invalid phone number or password") {
           msg = "Incorrect password. Please try again.";
         }
         throw new Error(msg);
       }
+
+      console.log("Stored:", data.storedPassword || "Hidden (Server-side)");
 
       await signInWithCustomToken(auth, data.token);
       localStorage.setItem('user', JSON.stringify({ uid: data.uid, phone: normalizedPhone }));
@@ -257,7 +257,7 @@ export function Login() {
       console.log(`DEBUG: Resetting password for phone: ${normalizedPhone} via Secure API`);
       
       // Use secure backend API for reset since we are signed out
-      const response = await fetch('/api/auth/reset-password', {
+      const data = await safeFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -266,9 +266,6 @@ export function Login() {
           idToken: resetToken
         })
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to reset password');
 
       setSuccess('Password changed successfully! Please login with your new password.');
       setMode('login');
