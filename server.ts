@@ -43,22 +43,27 @@ async function startServer() {
   let firebaseAdminApp: admin.app.App | null = null;
 
   function getFirebaseAdmin() {
-    if (!firebaseAdminApp) {
-      const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-      if (!serviceAccountKey) {
-        throw new Error("FIREBASE_SERVICE_ACCOUNT_KEY missing in environment variables");
-      }
-      
-      try {
+    if (admin.apps.length > 0) {
+      return admin.apps[0]!;
+    }
+
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    try {
+      if (serviceAccountKey) {
         const serviceAccount = JSON.parse(serviceAccountKey);
-        firebaseAdminApp = admin.initializeApp({
+        return admin.initializeApp({
           credential: admin.credential.cert(serviceAccount)
         });
-      } catch (error: any) {
-        throw new Error(`Failed to initialize Firebase Admin: ${error.message}`);
+      } else {
+        // Fallback to default credentials (useful in Cloud Functions/Google Cloud)
+        console.log("FIREBASE_SERVICE_ACCOUNT_KEY not found, using default credentials");
+        return admin.initializeApp();
       }
+    } catch (error: any) {
+      console.error("Firebase Admin Init Error:", error);
+      throw new Error(`Failed to initialize Firebase Admin: ${error.message}`);
     }
-    return firebaseAdminApp;
   }
 
   // Helper to normalize phone number to +91XXXXXXXXXX
@@ -124,7 +129,12 @@ async function startServer() {
     const { email, password, displayName, role, adminUid, phone } = req.body;
 
     if (!phone || !password || !role || !adminUid) {
+      console.log("Validation failed: missing required fields", { phone: !!phone, password: !!password, role: !!role, adminUid: !!adminUid });
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (password.toString().length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long." });
     }
 
     try {
@@ -139,29 +149,56 @@ async function startServer() {
       const trimmedName = displayName ? displayName.toString().trim() : "";
       const trimmedEmail = email ? email.toString().trim().toLowerCase() : null;
 
+      console.log("Checking for existing user with phone:", normalizedPhone);
       const phoneSnapshot = await firestore.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
       if (!phoneSnapshot.empty) {
         return res.status(400).json({ error: "An account with this phone number already exists." });
       }
 
+      console.log("Verifying admin permissions for UID:", adminUid);
       const adminDoc = await firestore.collection('users').doc(adminUid).get();
       if (!adminDoc.exists) {
+        console.error("Admin profile not found for UID:", adminUid);
         return res.status(403).json({ error: "Unauthorized: Admin profile not found." });
       }
 
       const adminData = adminDoc.data();
+      console.log("Admin role:", adminData?.role, "Target role:", role);
       if (adminData?.role !== 'MASTER_ADMIN' && !(adminData?.role === 'CHAPTER_ADMIN' && role === 'MEMBER')) {
         return res.status(403).json({ error: "Unauthorized: Insufficient permissions to create this user role." });
       }
 
-      // 1. Create Firebase Auth user (without email)
-      const userRecord = await admin.auth().createUser({
+      // 1. Create Firebase Auth user
+      const authData: any = {
         displayName: trimmedName,
         phoneNumber: normalizedPhone,
         password: trimmedPassword
-      });
+      };
+      if (trimmedEmail) {
+        authData.email = trimmedEmail;
+        authData.emailVerified = true;
+      }
+
+      console.log("Calling admin.auth().createUser...");
+      let userRecord;
+      try {
+        userRecord = await admin.auth().createUser(authData);
+      } catch (authError: any) {
+        console.error("Firebase Auth Error:", authError.code, authError.message);
+        if (authError.code === 'auth/email-already-exists') {
+          return res.status(400).json({ error: "An account with this email address already exists." });
+        }
+        if (authError.code === 'auth/phone-number-already-exists') {
+          return res.status(400).json({ error: "An account with this phone number already exists in Authentication." });
+        }
+        if (authError.code === 'auth/invalid-phone-number') {
+          return res.status(400).json({ error: "The phone number is invalid. Must be in E.164 format (e.g. +91XXXXXXXXXX)." });
+        }
+        throw authError; // Rethrow for generic handler
+      }
 
       const uid = userRecord.uid;
+      console.log("User created in Auth with UID:", uid);
 
       // 2. Create Firestore profile
       const profileData: any = {
@@ -175,24 +212,32 @@ async function startServer() {
       };
       if (trimmedEmail) profileData.email = trimmedEmail;
 
+      console.log("Saving Firestore profile for UID:", uid);
       await firestore.collection('users').doc(uid).set(profileData);
 
-      // 3. Store plain text password in private auth_data collection
+      // 3. Store plain text password in private auth_data collection (for admin view/reset capability)
+      console.log("Saving auth_data for UID:", uid);
       await firestore.collection('auth_data').doc(uid).set({
         password: trimmedPassword,
         updatedAt: new Date().toISOString()
       });
 
       // 4. Set custom claims
+      console.log("Setting custom claims for UID:", uid);
       await admin.auth().setCustomUserClaims(uid, { 
         role,
         membershipStatus: 'ACTIVE'
       });
 
-      res.json({ uid });
+      console.log("User creation complete for UID:", uid);
+      res.json({ uid, success: true });
     } catch (error: any) {
-      console.error("Error creating user via Firebase Admin:", error);
-      res.status(500).json({ error: "Failed to create user", details: error.message });
+      console.error("Critical error in /api/admin/create-user:", error);
+      // Ensure we return the actual error message to the frontend in the 'error' field
+      res.status(error.status || 500).json({ 
+        error: error.message || "Failed to create user",
+        code: error.code || "unknown_error"
+      });
     }
   });
 
@@ -241,7 +286,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error updating user via Firebase Admin:", error);
-      res.status(500).json({ error: "Failed to update user", details: error.message });
+      res.status(error.status || 500).json({ error: error.message || "Failed to update user" });
     }
   });
 
@@ -277,7 +322,7 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error("Server: Error deleting user:", error);
-      res.status(500).json({ error: "Failed to delete user", details: error.message });
+      res.status(error.status || 500).json({ error: error.message || "Failed to delete user" });
     }
   });
 
