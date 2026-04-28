@@ -1,8 +1,4 @@
-import { initializeApp } from 'firebase/app';
 import { 
-  initializeAuth,
-  browserLocalPersistence,
-  indexedDBLocalPersistence,
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
@@ -14,21 +10,23 @@ import {
   sendPasswordResetEmail,
   signInWithCustomToken
 } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, getDocFromServer } from 'firebase/firestore';
+import { auth, db, app } from './lib/firebase';
 
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-
-// Initialize Auth with explicit persistence for better iframe compatibility
-export const auth = initializeAuth(app, {
-  persistence: [indexedDBLocalPersistence, browserLocalPersistence]
-});
+export { auth, db, app };
 
 export const googleProvider = new GoogleAuthProvider();
 
 export const signIn = () => signInWithPopup(auth, googleProvider);
-export const logOut = () => signOut(auth);
+export const logOut = async () => {
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.error("Logout error:", e);
+  }
+  localStorage.removeItem('user');
+  sessionStorage.clear();
+};
 
 export { 
   RecaptchaVerifier, 
@@ -36,7 +34,8 @@ export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
-  signInWithCustomToken
+  signInWithCustomToken,
+  onAuthStateChanged
 };
 
 // Test connection

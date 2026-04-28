@@ -1,17 +1,17 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogIn, Phone, ShieldCheck, Lock, AlertCircle, Eye, EyeOff, ChevronDown, KeyRound, CheckCircle2, ArrowLeft } from 'lucide-react';
-import { auth, signInWithCustomToken, RecaptchaVerifier, signInWithPhoneNumber, db } from '../firebase';
+import { auth, db } from '../lib/firebase';
+import { signOut, sendPasswordResetEmail, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath } from '../utils/authUtils';
-import { safeFetch } from '../utils/apiUtils';
-import { ConfirmationResult, signOut } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { UserProfile } from '../types';
 
 export function Login() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, login, logout } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -21,6 +21,13 @@ export function Login() {
   const [forgotStep, setForgotStep] = React.useState<'identifier' | 'otp' | 'reset'>('identifier');
   const [confirmationResult, setConfirmationResult] = React.useState<ConfirmationResult | null>(null);
   const [resetToken, setResetToken] = React.useState<string | null>(null);
+
+  // Clear stale session on mount if not authenticated
+  useEffect(() => {
+    if (!localStorage.getItem('user')) {
+      sessionStorage.clear();
+    }
+  }, []);
   
   // Separate flow flags as requested
   const isLoginFlow = mode === 'login';
@@ -34,41 +41,6 @@ export function Login() {
     newPassword: '',
     confirmPassword: ''
   });
-
-  // Initialize reCAPTCHA only once
-  useEffect(() => {
-    if (mode === 'forgot' && !(window as any).recaptchaVerifier) {
-      try {
-        const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-          callback: () => {
-            console.log('reCAPTCHA verified');
-          }
-        });
-        
-        verifier.render().then(() => {
-          (window as any).recaptchaVerifier = verifier;
-          console.log("reCAPTCHA initialized and rendered");
-        });
-      } catch (err: any) {
-        console.error("reCAPTCHA initialization failed:", err.message || err);
-      }
-    }
-  }, [mode]);
-
-  // Cleanup reCAPTCHA on unmount
-  useEffect(() => {
-    return () => {
-      if ((window as any).recaptchaVerifier) {
-        try {
-          (window as any).recaptchaVerifier.clear();
-          (window as any).recaptchaVerifier = null;
-        } catch (e: any) {
-          console.error("Error clearing reCAPTCHA:", e.message || e);
-        }
-      }
-    };
-  }, []);
 
   // If user is logged in, handle redirection
   useEffect(() => {
@@ -104,45 +76,42 @@ export function Login() {
         throw new Error('Phone number and password are required.');
       }
 
-      if (phone.replace(/\D/g, "").length !== 10) {
-        throw new Error("Invalid phone format. Please enter correct 10-digit number.");
-      }
-
       const normalizedPhone = normalizePhoneNumber(phone);
       
-      sessionStorage.setItem('logging_in', 'true');
-      
-      // DEBUG LOGS
-      console.log("Entered:", password);
-      console.log("Flow:", isForgotPasswordFlow);
-      
-      let data;
-      try {
-        data = await safeFetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: normalizedPhone, password })
-        });
-      } catch (err: any) {
-        let msg = err.message || 'Invalid phone number or password.';
-        if (err.data?.error === "User not found") {
-          msg = "Phone number not registered.";
-        } else if (err.data?.error === "Wrong password" || err.data?.error === "Invalid phone number or password") {
-          msg = "Incorrect password. Please try again.";
-        }
-        throw new Error(msg);
+      // Manual Firestore Login
+      const q = query(collection(db, 'users'), where('phone', '==', normalizedPhone), limit(1));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        throw new Error('User not found. Please check your phone number.');
       }
 
-      console.log("Stored:", data.storedPassword || "Hidden (Server-side)");
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data() as UserProfile & { password?: string };
+      const uid = userDoc.id;
 
-      await signInWithCustomToken(auth, data.token);
-      localStorage.setItem('user', JSON.stringify({ uid: data.uid, phone: normalizedPhone }));
-      sessionStorage.removeItem('logging_in');
+      // Check password from users collection or auth_data fallback
+      let storedPassword = userData.password;
+
+      if (!storedPassword) {
+        // Fallback to auth_data if not in users
+        const authDoc = await getDoc(doc(db, 'auth_data', uid));
+        if (authDoc.exists()) {
+          storedPassword = authDoc.data().password;
+        }
+      }
+
+      if (!storedPassword || storedPassword !== password) {
+        throw new Error('Wrong password. Please try again.');
+      }
+
+      // Success - use the login function from AuthContext
+      login({ uid, ...userData } as UserProfile);
       
-      const dashboardPath = getDashboardPath(data.role || 'MEMBER');
+      const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
       navigate(dashboardPath);
     } catch (err: any) {
-      sessionStorage.removeItem('logging_in');
+      console.error("Login error:", err);
       setError(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
@@ -184,7 +153,6 @@ export function Login() {
     } catch (err: any) {
       console.error("OTP send error:", err.message || err);
       setError(err.message || 'Failed to send OTP');
-      alert(err.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
     }
@@ -248,29 +216,13 @@ export function Login() {
     setError(null);
     try {
       const normalizedPhone = normalizePhoneNumber(formData.identifier);
+      const email = `${normalizedPhone.replace('+', '')}@ssk.internal`;
       
-      // Use the token we stored after OTP verification
-      if (!resetToken) {
-        throw new Error('Verification session expired. Please verify OTP again.');
-      }
-      
-      console.log(`DEBUG: Resetting password for phone: ${normalizedPhone} via Secure API`);
-      
-      // Use secure backend API for reset since we are signed out
-      const data = await safeFetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: normalizedPhone,
-          newPassword: formData.newPassword,
-          idToken: resetToken
-        })
-      });
+      await sendPasswordResetEmail(auth, email);
 
-      setSuccess('Password changed successfully! Please login with your new password.');
+      setSuccess('Password reset email sent! Please check your inbox (or internal system).');
       setMode('login');
       setForgotStep('identifier');
-      setResetToken(null);
       setFormData(prev => ({ ...prev, password: '', newPassword: '', confirmPassword: '', otp: '' }));
     } catch (err: any) {
       setError(err.message);
@@ -312,7 +264,7 @@ export function Login() {
         >
           <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white p-1 shadow-2xl mb-6 mx-auto border-4 border-white/20 overflow-hidden">
             <img 
-              src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+              src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
               alt="Logo"
               className="w-full h-full object-cover rounded-full"
               referrerPolicy="no-referrer"

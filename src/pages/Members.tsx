@@ -19,7 +19,9 @@ import {
   Plus,
   Lock,
   UserPlus,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
@@ -105,6 +107,8 @@ export function Members() {
   const [deleteConfirmMember, setDeleteConfirmMember] = useState<UserProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<UserProfile | null>(null);
   const [subDates, setSubDates] = useState({
     subscriptionStart: '',
@@ -140,6 +144,7 @@ export function Members() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
 
   const handleOpenAddModal = () => {
+    setError(null);
     setNewMemberData({
       name: '',
       phone: '',
@@ -158,19 +163,20 @@ export function Members() {
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     if (newMemberData.password.length < 6) {
-      alert('Password must be at least 6 characters long');
+      setError('Password must be at least 6 characters long');
       return;
     }
 
     if (!newMemberData.subscriptionStart || !newMemberData.subscriptionEnd) {
-      alert('Subscription start and end dates are required');
+      setError('Subscription start and end dates are required');
       return;
     }
 
     if (new Date(newMemberData.subscriptionEnd) <= new Date(newMemberData.subscriptionStart)) {
-      alert('Subscription end date must be after start date');
+      setError('Subscription end date must be after start date');
       return;
     }
 
@@ -183,7 +189,7 @@ export function Members() {
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
-        alert("Phone number already exists");
+        setError("Phone number already exists");
         setIsSubmitting(false);
         return;
       }
@@ -238,7 +244,8 @@ export function Members() {
       
       await notificationService.notifyMasterAdmins('MEMBER_ADD', `New member ${newMemberData.name} has been added to the network.`);
       
-      alert('Member created successfully');
+      setSuccessMessage(`Member ${newMemberData.name} added successfully!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
       setIsAddModalOpen(false);
       setNewMemberData({
         name: '',
@@ -255,7 +262,7 @@ export function Members() {
       });
     } catch (err: any) {
       console.error("Create Member Error:", err);
-      alert(err.message || "Failed to create member");
+      setError(err.message || "Failed to create member");
     } finally {
       setIsSubmitting(false);
     }
@@ -300,7 +307,8 @@ export function Members() {
       await firestoreService.update('users', selectedMember.uid, updates);
       setIsEditModalOpen(false);
       setSelectedMember(null);
-      alert('Member updated successfully!');
+      setSuccessMessage('Member updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error('Error updating member:', err);
       alert(`Failed to update member: ${err.message}`);
@@ -338,15 +346,31 @@ export function Members() {
     e.preventDefault();
     if (!selectedMember) return;
 
-    await firestoreService.update('users', selectedMember.uid, {
-      subscriptionStart: new Date(subDates.subscriptionStart).toISOString(),
-      subscriptionEnd: new Date(subDates.subscriptionEnd).toISOString(),
-    });
-    setIsSubModalOpen(false);
+    setError(null);
+    try {
+      await firestoreService.update('users', selectedMember.uid, {
+        subscriptionStart: new Date(subDates.subscriptionStart).toISOString(),
+        subscriptionEnd: new Date(subDates.subscriptionEnd).toISOString(),
+      });
+      setIsSubModalOpen(false);
+      setSuccessMessage('Subscription updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Error updating subscription:", err);
+      setError("Failed to update subscription. Please try again.");
+    }
   };
 
   const updateStatus = async (uid: string, membershipStatus: UserProfile['membershipStatus']) => {
-    await firestoreService.update('users', uid, { membershipStatus });
+    try {
+      await firestoreService.update('users', uid, { membershipStatus });
+      setSuccessMessage(`Status updated to ${membershipStatus} successfully!`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Error updating status:", err);
+      setError("Failed to update status.");
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   const deleteMember = async (member: UserProfile) => {
@@ -406,6 +430,28 @@ export function Members() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {successMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+        >
+          <CheckCircle2 size={24} />
+          {successMessage}
+        </motion.div>
+      )}
+
+      {error && !isAddModalOpen && !isEditModalOpen && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+        >
+          <AlertCircle size={24} />
+          {error}
+        </motion.div>
+      )}
+
       {/* Red Header */}
       <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
@@ -598,6 +644,7 @@ export function Members() {
         isMasterAdmin={isMasterAdmin}
         categories={categories}
         profile={profile}
+        error={error}
       />
 
       <EditMemberModal

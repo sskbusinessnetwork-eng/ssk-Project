@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, Trash2, Search, Tags, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Search, Tags, Edit2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { firestoreService } from '../services/firestoreService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
@@ -11,6 +11,9 @@ export function Categories() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = firestoreService.subscribe<Category>('categories', [], setCategories);
@@ -32,17 +35,35 @@ export function Categories() {
     e.preventDefault();
     if (!categoryName.trim()) return;
 
-    if (editingCategory) {
-      await firestoreService.update('categories', editingCategory.id, { name: categoryName.trim() });
-    } else {
-      await firestoreService.create('categories', { name: categoryName.trim() });
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      if (editingCategory) {
+        await firestoreService.update('categories', editingCategory.id, { name: categoryName.trim() });
+        setSuccess('Category updated successfully!');
+      } else {
+        await firestoreService.create('categories', { name: categoryName.trim() });
+        setSuccess('Category created successfully!');
+      }
+      setCategoryName('');
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save category');
+    } finally {
+      setIsSubmitting(false);
     }
-    setCategoryName('');
-    setIsModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
-    await firestoreService.delete('categories', id);
+    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    try {
+      await firestoreService.delete('categories', id);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete category');
+    }
   };
 
   const filteredCategories = categories.filter(c => 
@@ -115,29 +136,52 @@ export function Categories() {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsModalOpen(false);
+            setError(null);
+            setSuccess(null);
+          }
+        }}
         title={editingCategory ? "Edit Category" : "Add New Category"}
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Category Name</label>
-            <input
-              autoFocus
-              required
-              type="text"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="e.g. Real Estate, Digital Marketing"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-            />
+        {success ? (
+          <div className="py-8 text-center space-y-3">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={32} />
+            </div>
+            <p className="text-navy font-bold">{success}</p>
           </div>
-          <button
-            type="submit"
-            className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
-          >
-            {editingCategory ? "Update Category" : "Create Category"}
-          </button>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Category Name</label>
+              <input
+                autoFocus
+                required
+                type="text"
+                disabled={isSubmitting}
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                placeholder="e.g. Real Estate, Digital Marketing"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingCategory ? "Update Category" : "Create Category")}
+            </button>
+          </form>
+        )}
       </Modal>
     </div>
   );

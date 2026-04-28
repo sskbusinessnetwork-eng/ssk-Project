@@ -1,10 +1,15 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
-import firebaseConfig from "./firebase-applet-config.json" with { type: "json" };
+import cors from "cors";
+
+// Read Firebase Config
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf8"));
 
 dotenv.config();
 
@@ -12,7 +17,21 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Set trust proxy for Cloud Run/Firebase
+  app.set('trust proxy', true);
+
+  // Enable CORS
+  app.use(cors({ origin: true }));
   app.use(express.json());
+  
+  // Request Logger
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/') || process.env.FUNCTION_NAME) {
+      console.log(`[API Request] ${req.method} ${req.path}`);
+    }
+    next();
+  });
+
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (err instanceof SyntaxError && 'status' in err && err.status === 400 && 'body' in err) {
       return res.status(400).json({ error: "Invalid JSON payload" });
@@ -48,263 +67,28 @@ async function startServer() {
     return "+91" + phone.toString().replace(/\D/g, "").slice(-10);
   }
 
-  // Helper to get Auth Email from identifier (phone or email) - DEPRECATED but kept for backward compatibility
-  async function getAuthEmail(identifier: string) {
-    let email = identifier.trim().toLowerCase();
-    if (!email.includes('@')) {
-      const normalizedPhone = normalizePhone(identifier);
-      const last10 = normalizedPhone.slice(-10);
-      
-      try {
-        const firestore = getFirestore(getFirebaseAdmin(), firebaseConfig.firestoreDatabaseId);
-        const userSnapshot = await firestore.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-        
-        if (!userSnapshot.empty) {
-          const userDoc = userSnapshot.docs[0].data();
-          return userDoc.email || `+91${last10}@ssk.internal`;
-        }
-      } catch (e) {
-        console.error("Error looking up user by phone in Firestore:", e);
-      }
-      
-      return `+91${last10}@ssk.internal`;
+  const apiRouter = express.Router();
+
+  // API Router Request Logger - Only log likely API calls, ignore asset spam in dev
+  apiRouter.use((req, res, next) => {
+    const isAsset = req.path.match(/\.(tsx?|jsx?|css|png|jpg|jpeg|gif|svg|ico|json|woff2?|ttf|eot)$/) || 
+                    req.path.startsWith('/src/') || 
+                    req.path.startsWith('/@') ||
+                    req.path.startsWith('/node_modules/');
+    
+    if (!isAsset) {
+      console.log(`[API Router Path] ${req.path}`);
     }
-    return email;
-  }
+    next();
+  });
 
   // API Routes
-  app.get("/api/health", (req, res) => {
+  apiRouter.get("/health", (req, res) => {
     res.json({ status: "ok" });
   });
 
-  // NEW: API Route for phone + password login
-  app.post("/api/auth/login", async (req, res) => {
-    const { phone, password } = req.body;
-
-    if (!phone || !password) {
-      return res.status(400).json({ error: "Phone number and password are required" });
-    }
-
-    try {
-      const firestore = getFirestore(getFirebaseAdmin(), firebaseConfig.firestoreDatabaseId);
-      const normalizedPhone = normalizePhone(phone.toString().trim());
-      const trimmedPassword = password.toString().trim();
-      
-      console.log(`Login attempt for phone: ${normalizedPhone}`);
-
-      // 1. Find user by phone in Firestore
-      const userSnapshot = await firestore.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-      
-      if (userSnapshot.empty) {
-        console.log(`User not found for phone: ${normalizedPhone}`);
-        return res.status(401).json({ error: "User not found" });
-      }
-
-      const userDoc = userSnapshot.docs[0];
-      const userData = userDoc.data();
-      const uid = userDoc.id;
-
-      // 2. Get password from SINGLE SOURCE OF TRUTH: auth_data collection
-      let authDoc = await firestore.collection('auth_data').doc(uid).get();
-      let authData = authDoc.data();
-      let storedPassword = authData?.password;
-      
-      // DEBUG REQUIREMENT: Print stored and entered passwords
-      console.log(`DEBUG: UID: ${uid}`);
-      console.log(`DEBUG: Entered Password: ${trimmedPassword}`);
-      console.log(`DEBUG: Stored Password: ${storedPassword}`);
-
-      // 3. Verify password using plain text comparison as requested
-      const isValid = trimmedPassword === storedPassword;
-
-      if (!isValid) {
-        console.log(`Invalid password for phone: ${normalizedPhone}`);
-        return res.status(401).json({ 
-          error: "Wrong password", 
-          storedPassword: storedPassword // Added for debug as requested
-        });
-      }
-
-      // 4. Create custom token with claims for immediate access
-      const customToken = await admin.auth().createCustomToken(uid, {
-        role: userData.role,
-        membershipStatus: userData.membershipStatus,
-        phone: normalizedPhone // Added phone to claims for rules
-      });
-      
-      console.log(`Login successful for phone: ${normalizedPhone}, UID: ${uid}`);
-      res.json({ token: customToken, uid, role: userData.role });
-    } catch (error: any) {
-      console.error("Login error:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // NEW: API Route for registration
-  app.post("/api/auth/register", async (req, res) => {
-    const { phone, password, name, role, state, city, area, address, email } = req.body;
-
-    if (!phone || !password || !name || !role) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    try {
-      const firestore = getFirestore(getFirebaseAdmin(), firebaseConfig.firestoreDatabaseId);
-      const normalizedPhone = normalizePhone(phone.toString().trim());
-      const trimmedPassword = password.toString().trim();
-      const trimmedName = name.toString().trim();
-      const trimmedEmail = email ? email.toString().trim().toLowerCase() : null;
-
-      // 1. Check if phone already exists
-      const phoneSnapshot = await firestore.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-      if (!phoneSnapshot.empty) {
-        return res.status(400).json({ error: "An account with this phone number already exists." });
-      }
-
-      // 2. Use plain text password as requested
-      // (Bcrypt hashing removed per user requirement)
-
-      // 3. Create Firebase Auth user (without email)
-      const userRecord = await admin.auth().createUser({
-        displayName: trimmedName,
-        phoneNumber: normalizedPhone,
-        password: trimmedPassword
-      });
-
-      const uid = userRecord.uid;
-
-      // 4. Create Firestore profile (NO PASSWORD STORED HERE)
-      const profileData: any = {
-        uid,
-        name: trimmedName,
-        role,
-        membershipStatus: role === 'MASTER_ADMIN' ? 'ACTIVE' : 'PENDING',
-        phone: normalizedPhone,
-        state: state || '',
-        city: city || '',
-        area: area || '',
-        address: address || '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      if (trimmedEmail) profileData.email = trimmedEmail;
-
-      await firestore.collection('users').doc(uid).set(profileData);
-
-      // 5. Store plain text password in private auth_data collection (SINGLE SOURCE OF TRUTH)
-      await firestore.collection('auth_data').doc(uid).set({
-        password: trimmedPassword,
-        updatedAt: new Date().toISOString()
-      });
-
-      // 6. Set custom claims
-      await admin.auth().setCustomUserClaims(uid, { 
-        role,
-        membershipStatus: profileData.membershipStatus,
-        phone: normalizedPhone
-      });
-
-      // 7. Create custom token for immediate login with claims
-      const customToken = await admin.auth().createCustomToken(uid, { 
-        role,
-        membershipStatus: profileData.membershipStatus,
-        phone: normalizedPhone
-      });
-
-      res.json({ token: customToken, uid, role });
-    } catch (error: any) {
-      console.error("Registration error:", error);
-      res.status(500).json({ error: "Failed to register", details: error.message });
-    }
-  });
-
-  // API Route for getting Auth Email from identifier (phone or email) - DEPRECATED
-  app.post("/api/auth/get-email", async (req, res) => {
-    const { identifier } = req.body;
-
-    if (!identifier) {
-      return res.status(400).json({ error: "Missing identifier" });
-    }
-
-    try {
-      const email = await getAuthEmail(identifier);
-      res.json({ email });
-    } catch (error: any) {
-      console.error("Error getting auth email:", error);
-      res.status(500).json({ error: "Failed to get auth email", details: error.message });
-    }
-  });
-
-  // API Route for resetting password via Firebase Admin
-  app.post("/api/auth/reset-password", async (req, res) => {
-    const { identifier, newPassword, idToken } = req.body;
-
-    if (!identifier || !newPassword || !idToken) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    try {
-      const adminApp = getFirebaseAdmin();
-      const adminAuth = admin.auth(adminApp);
-      const decodedToken = await adminAuth.verifyIdToken(idToken);
-      
-      // Ensure the token belongs to the user with the provided phone number
-      const normalizedPhone = normalizePhone(identifier.toString().trim());
-      const trimmedPassword = newPassword.toString().trim();
-      
-      // decodedToken.phone_number contains the verified phone number from OTP
-      if (decodedToken.phone_number !== normalizedPhone) {
-        console.error(`Phone mismatch: Token phone ${decodedToken.phone_number} vs Input phone ${normalizedPhone}`);
-        return res.status(403).json({ error: "Unauthorized: Phone number mismatch" });
-      }
-
-      const firestore = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
-
-      // 1. Find user by phone in Firestore to get the correct UID used in the app
-      const userSnapshot = await firestore.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-      
-      if (userSnapshot.empty) {
-        console.error(`User not found in Firestore for phone: ${normalizedPhone}`);
-        return res.status(404).json({ error: "User profile not found in database" });
-      }
-
-      const firestoreUid = userSnapshot.docs[0].id;
-      console.log(`Resetting password for Firestore UID: ${firestoreUid} (Auth UID: ${decodedToken.uid})`);
-
-      // 2. Use plain text password as requested
-      // (Bcrypt hashing removed)
-
-      // 3. Update plain text password in auth_data (SINGLE SOURCE OF TRUTH)
-      await firestore.collection('auth_data').doc(firestoreUid).set({
-        password: trimmedPassword,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      // Remove legacy fields from users if they exist (cleanup)
-      await firestore.collection('users').doc(firestoreUid).update({
-        password: admin.firestore.FieldValue.delete(),
-        passwordHash: admin.firestore.FieldValue.delete(),
-        updatedAt: new Date().toISOString()
-      }).catch(() => {}); // Ignore if fields don't exist
-
-      // 4. Also update Firebase Auth password if possible (optional but good for consistency)
-      try {
-        await admin.auth().updateUser(firestoreUid, {
-          password: trimmedPassword
-        });
-      } catch (authUpdateError) {
-        console.warn("Could not update Firebase Auth password (might be phone-only user):", authUpdateError);
-      }
-
-      res.json({ success: true });
-    } catch (error: any) {
-      console.error("Error resetting password via Firebase Admin:", error);
-      res.status(500).json({ error: "Failed to reset password", details: error.message });
-    }
-  });
-
   // API Route for sending Push Notifications via FCM
-  app.post("/api/send-push-notification", async (req, res) => {
+  apiRouter.post(["/send-push-notification", "/send-push-notification/"], async (req, res) => {
     const { deviceToken, title, body, data } = req.body;
 
     if (!deviceToken || !title || !body) {
@@ -335,7 +119,8 @@ async function startServer() {
   });
 
   // API Route for creating a new user (Admin only)
-  app.post("/api/admin/create-user", async (req, res) => {
+  apiRouter.post(["/admin/create-user", "/admin/create-user/", "/addMember", "/addMember/"], async (req, res) => {
+    console.log("Processing /api/admin/create-user request:", req.body ? "Body present" : "Body missing");
     const { email, password, displayName, role, adminUid, phone } = req.body;
 
     if (!phone || !password || !role || !adminUid) {
@@ -369,10 +154,7 @@ async function startServer() {
         return res.status(403).json({ error: "Unauthorized: Insufficient permissions to create this user role." });
       }
 
-      // 1. Use plain text password
-      // (Bcrypt hashing removed)
-
-      // 2. Create Firebase Auth user (without email)
+      // 1. Create Firebase Auth user (without email)
       const userRecord = await admin.auth().createUser({
         displayName: trimmedName,
         phoneNumber: normalizedPhone,
@@ -381,12 +163,12 @@ async function startServer() {
 
       const uid = userRecord.uid;
 
-      // 3. Create Firestore profile (NO PASSWORD STORED HERE)
+      // 2. Create Firestore profile
       const profileData: any = {
         uid,
         name: trimmedName,
         role,
-        membershipStatus: 'ACTIVE', // Admin-created users are active by default
+        membershipStatus: 'ACTIVE',
         phone: normalizedPhone,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -395,13 +177,13 @@ async function startServer() {
 
       await firestore.collection('users').doc(uid).set(profileData);
 
-      // 4. Store plain text password in private auth_data collection (SINGLE SOURCE OF TRUTH)
+      // 3. Store plain text password in private auth_data collection
       await firestore.collection('auth_data').doc(uid).set({
         password: trimmedPassword,
         updatedAt: new Date().toISOString()
       });
 
-      // 5. Set custom claims
+      // 4. Set custom claims
       await admin.auth().setCustomUserClaims(uid, { 
         role,
         membershipStatus: 'ACTIVE'
@@ -415,7 +197,8 @@ async function startServer() {
   });
 
   // API Route for updating a user (Admin only)
-  app.post("/api/admin/update-user", async (req, res) => {
+  apiRouter.post(["/admin/update-user", "/admin/update_user/", "/admin/update_user"], async (req, res) => {
+    console.log("Processing /api/admin/update-user request for UID:", req.body?.uid);
     const { uid, email, password, displayName, adminUid } = req.body;
 
     if (!uid || !adminUid) {
@@ -433,7 +216,6 @@ async function startServer() {
       }
 
       const adminData = adminDoc.data();
-      // Master Admin can update anyone, Chapter Admin can update members
       if (adminData?.role !== 'MASTER_ADMIN' && adminData?.role !== 'CHAPTER_ADMIN') {
         return res.status(403).json({ error: "Unauthorized: Insufficient permissions." });
       }
@@ -443,22 +225,16 @@ async function startServer() {
 
       await admin.auth().updateUser(uid, authUpdateData);
 
-      // Handle password update if provided
       if (password) {
-        // Update auth_data with plain text password (SINGLE SOURCE OF TRUTH)
         await firestore.collection('auth_data').doc(uid).set({
           password: password,
           updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        // Cleanup users collection
         await firestore.collection('users').doc(uid).update({
-          password: admin.firestore.FieldValue.delete(),
-          passwordHash: admin.firestore.FieldValue.delete(),
           updatedAt: new Date().toISOString()
         }).catch(() => {});
 
-        // Also update Auth password
         await admin.auth().updateUser(uid, { password });
       }
 
@@ -470,49 +246,34 @@ async function startServer() {
   });
 
   // API Route for deleting a user (Admin only)
-  app.post("/api/auth/delete-user", async (req, res) => {
+  apiRouter.post(["/auth/delete-user", "/auth/delete_user/", "/auth/delete_user"], async (req, res) => {
     const { uid, adminUid } = req.body;
 
-    console.log(`Server: Delete request received for UID: ${uid} from Admin UID: ${adminUid}`);
-
     if (!uid || !adminUid) {
-      console.error("Server: Missing required fields (uid or adminUid)");
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     try {
       getFirebaseAdmin();
-      
-      // Verify admin status
       const firestore = getFirestore(getFirebaseAdmin(), firebaseConfig.firestoreDatabaseId);
       const adminDoc = await firestore.collection('users').doc(adminUid).get();
+      
       if (!adminDoc.exists) {
-        console.error(`Server: Admin document not found for UID: ${adminUid}`);
         return res.status(403).json({ error: "Unauthorized: Admin profile not found." });
       }
 
       const adminData = adminDoc.data();
       if (adminData?.role !== 'MASTER_ADMIN' && adminData?.role !== 'CHAPTER_ADMIN') {
-        console.error(`Server: User ${adminUid} is not authorized. Role: ${adminData?.role}`);
         return res.status(403).json({ error: "Unauthorized: Insufficient permissions." });
       }
 
-      // Delete from Auth
       try {
         await admin.auth().deleteUser(uid);
-        console.log(`Server: Successfully deleted user ${uid} from Auth`);
       } catch (authError: any) {
-        if (authError.code === 'auth/user-not-found') {
-          console.warn(`Server: User ${uid} not found in Auth, proceeding to delete from Firestore`);
-        } else {
-          throw authError;
-        }
+        if (authError.code !== 'auth/user-not-found') throw authError;
       }
       
-      // Delete from Firestore
-      await getFirestore(getFirebaseAdmin(), firebaseConfig.firestoreDatabaseId).collection('users').doc(uid).delete();
-      console.log(`Server: Successfully deleted user ${uid} from Firestore`);
-
+      await firestore.collection('users').doc(uid).delete();
       res.json({ success: true });
     } catch (error: any) {
       console.error("Server: Error deleting user:", error);
@@ -520,38 +281,88 @@ async function startServer() {
     }
   });
 
-  // 404 handler for API routes
-  app.use("/api/*", (req, res) => {
-    res.status(404).json({ error: `API route not found: ${req.originalUrl}` });
-  });
+  // Mount API Router - Priority on /api
+  app.use("/api", apiRouter);
 
-  // Global Error Handler for JSON responses
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error("Global error handler:", err);
-    res.status(err.status || 500).json({
-      error: err.message || "Internal server error",
-      details: process.env.NODE_ENV === "development" ? err.stack : undefined
+  // Global 404 handler for API routes (only if we're expected to be an API)
+  const apiNotFoundHandler = (req: express.Request, res: express.Response) => {
+    console.warn(`API route not found: ${req.method} ${req.path}`);
+    res.status(404).json({ 
+      error: "API endpoint not found", 
+      method: req.method,
+      path: req.path,
+      fullUrl: req.originalUrl
     });
-  });
+  };
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  // If running as a Cloud Function, we handle everything as API
+  if (process.env.FUNCTION_NAME) {
+    app.use("/", apiRouter);
+    app.all("*", apiNotFoundHandler);
+  } else if (process.env.NODE_ENV !== "production") {
+    // Local development with Vite
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+    
+    // Mount root API router after Vite in dev so assets are handled first
+    app.use("/", apiRouter);
   } else {
+    // Production (Standard Node server)
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    
+    // Mount root API router after static assets
+    app.use("/", apiRouter);
+    
     app.get("*", (req, res) => {
+      // If reached here and starts with /api or was likely an API call, return a proper 404
+      if (req.path.startsWith('/api')) {
+        return apiNotFoundHandler(req, res);
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  // Global Error Handler for JSON responses
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Global error handler caught an error:", err);
+    if (req.path.startsWith('/api/') || process.env.FUNCTION_NAME) {
+      return res.status(err.status || 500).json({
+        error: err.message || "Internal server error"
+      });
+    }
+    next(err);
   });
+
+  if (!process.env.FUNCTION_NAME) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
+  
+  return app;
 }
 
-startServer();
+// Export for Cloud Functions
+let appInstance: express.Express | null = null;
+async function getApp() {
+  if (!appInstance) {
+    appInstance = await startServer();
+  }
+  return appInstance;
+}
+
+import { onRequest } from "firebase-functions/v2/https";
+export const api = onRequest({ region: "asia-southeast1", cors: true, maxInstances: 10 }, async (req, res) => {
+  const app = await getApp();
+  return app(req, res);
+});
+
+// Run startServer for local standard node execution
+if (!process.env.FUNCTION_NAME) {
+  startServer();
+}
+

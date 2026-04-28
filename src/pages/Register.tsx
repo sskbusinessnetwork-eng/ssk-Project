@@ -43,7 +43,7 @@ export function Register() {
           </Link>
           <div className="w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500 overflow-hidden bg-white p-1">
             <img 
-              src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+              src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
               className="w-full h-full object-cover rounded-[2.2rem]"
               referrerPolicy="no-referrer"
             />

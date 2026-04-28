@@ -3,13 +3,15 @@ import { motion, useScroll, useTransform } from 'motion/react';
 import { 
   ArrowRight, Users, ShieldCheck, TrendingUp, Target, Globe, CheckCircle2, 
   Handshake, Hammer, Clock, Sprout, HardHat, Palette, Headset, Telescope, 
-  Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Map, Calendar, X
+  Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Map, Calendar, X,
+  AlertCircle
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
 import { UserProfile } from '../types';
-import { where } from 'firebase/firestore';
+import { where, orderBy, limit } from 'firebase/firestore';
+import { format } from 'date-fns';
 
 // Reusable animation variants
 const fadeUp = {
@@ -29,6 +31,7 @@ export function LandingPage() {
   const { user, profile, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 1000], [0, 250]);
@@ -46,6 +49,7 @@ export function LandingPage() {
     meetingVenue: ''
   });
   const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
+  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
 
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -54,6 +58,47 @@ export function LandingPage() {
     };
     fetchAdmins();
   }, []);
+
+  useEffect(() => {
+    if (!formData.adminId) {
+      setSelectedMeeting(null);
+      setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      return;
+    }
+
+    const fetchMeeting = async () => {
+      try {
+        const now = new Date().toISOString();
+        const meetings = await firestoreService.list<any>('meetings', [
+          where('adminId', '==', formData.adminId),
+          where('isCompleted', '==', false),
+          where('date', '>=', now),
+          orderBy('date', 'asc'),
+          limit(1)
+        ]);
+
+        if (meetings.length > 0) {
+          const meeting = meetings[0];
+          setSelectedMeeting(meeting);
+          setFormData(prev => ({
+            ...prev,
+            meetingDate: meeting.date,
+            meetingTime: meeting.time || '',
+            meetingVenue: meeting.location || ''
+          }));
+        } else {
+          setSelectedMeeting(null);
+          setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+        }
+      } catch (error) {
+        console.error('Error fetching meeting:', error);
+        setSelectedMeeting(null);
+        setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      }
+    };
+
+    fetchMeeting();
+  }, [formData.adminId]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -66,6 +111,7 @@ export function LandingPage() {
   const handleGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFormError(null);
     try {
       const guestId = await firestoreService.create('guest_registrations', {
         ...formData,
@@ -74,7 +120,7 @@ export function LandingPage() {
         isWhatsAppShared: false,
         isCalled: false
       });
-
+      
       // Send notification to the selected Chapter Admin
       if (formData.adminId) {
         const selectedAdmin = chapterAdmins.find(a => a.uid === formData.adminId);
@@ -103,9 +149,9 @@ export function LandingPage() {
         meetingTime: '',
         meetingVenue: ''
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting guest registration:', error);
-      alert('Failed to submit registration. Please try again.');
+      setFormError(error.message || 'Failed to submit registration. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -133,7 +179,7 @@ export function LandingPage() {
             <div className="flex items-center gap-3">
               <motion.img 
                 whileHover={{ scale: 1.05, rotate: 5 }}
-                src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+                src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
                 alt="Logo" 
                 className="w-10 h-10 rounded-lg object-cover shadow-lg"
                 referrerPolicy="no-referrer"
@@ -725,6 +771,12 @@ export function LandingPage() {
               </motion.div>
             ) : (
               <form onSubmit={handleGuestSubmit} className="space-y-6 md:space-y-8">
+                {formError && (
+                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <AlertCircle size={18} />
+                    {formError}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Full Name</label>
@@ -753,25 +805,31 @@ export function LandingPage() {
                     <input required type="text" placeholder="e.g. Bangalore" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040] placeholder:text-slate-400" />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Preferred Chapter Admin</label>
+                    <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Preferred Chapter Name</label>
                     <select required value={formData.adminId} onChange={e => setFormData({...formData, adminId: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]">
-                      <option value="">Select Admin</option>
+                      <option value="">Select Chapter</option>
                       {chapterAdmins.map(admin => (
-                        <option key={admin.uid} value={admin.uid}>{admin.name || admin.displayName}</option>
+                        <option key={admin.uid} value={admin.uid}>{admin.chapterName || admin.name || admin.displayName}</option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Date</label>
-                    <input required type="date" value={formData.meetingDate} onChange={e => setFormData({...formData, meetingDate: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]" />
+                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl flex items-center font-bold text-[#0F2040]">
+                      {formData.meetingDate ? format(new Date(formData.meetingDate), 'dd MMM yyyy') : 'Nil'}
+                    </div>
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Time</label>
-                    <input required type="time" value={formData.meetingTime} onChange={e => setFormData({...formData, meetingTime: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]" />
+                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl flex items-center font-bold text-[#0F2040]">
+                      {formData.meetingTime || 'Nil'}
+                    </div>
                   </div>
                   <div className="space-y-2 md:space-y-3 md:col-span-2">
                     <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Meeting Venue</label>
-                    <input required type="text" placeholder="e.g. Hotel Grand, Bangalore" value={formData.meetingVenue} onChange={e => setFormData({...formData, meetingVenue: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040] placeholder:text-slate-400" />
+                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl flex items-center font-bold text-[#0F2040]">
+                      {formData.meetingVenue || 'Nil'}
+                    </div>
                   </div>
                 </div>
                 <motion.button 

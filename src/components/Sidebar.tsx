@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { logOut } from '../firebase';
 import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil } from '../utils/authUtils';
 import { format, differenceInDays } from 'date-fns';
@@ -31,7 +30,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
-  const { profile } = useAuth();
+  const { profile, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -94,9 +93,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   };
 
   const handleLogout = async () => {
-    await logOut();
-    localStorage.removeItem('user');
-    navigate('/');
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Fallback redirect
+      navigate('/login', { replace: true });
+    }
   };
 
   const getDashboardPath = () => getDashboardPathUtil(profile?.role);
@@ -126,7 +130,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <div className="p-8 border-b border-white/5 flex items-center justify-between bg-gradient-to-b from-white/5 to-transparent">
         <Link to={getDashboardPath()} className="flex items-center gap-4">
           <img 
-            src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+            src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
             alt="SSK Logo" 
             className="h-12 w-auto object-contain rounded-2xl shadow-2xl shadow-primary/40"
             referrerPolicy="no-referrer"

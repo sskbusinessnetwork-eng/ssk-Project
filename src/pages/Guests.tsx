@@ -15,7 +15,8 @@ import {
   Phone,
   Eye,
   Mail,
-  Building2
+  Building2,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
@@ -23,7 +24,7 @@ import { notificationService } from '../services/notificationService';
 import { GuestInvitation, GuestRegistration, Category, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
-import { where, orderBy, collection, getDocs, query, or } from 'firebase/firestore';
+import { where, orderBy, collection, getDocs, query, or, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
@@ -38,6 +39,9 @@ export function Guests() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRegModalOpen, setIsRegModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -58,6 +62,16 @@ export function Guests() {
       });
     }
   }, [selectedGuest]);
+
+  // Open Registration Modal
+  const handleOpenRegModal = () => {
+    setError(null);
+    setShowSuccess(false);
+    setIsRegModalOpen(true);
+    if (profile?.role === 'CHAPTER_ADMIN') {
+      setRegFormData(prev => ({ ...prev, adminId: profile.uid }));
+    }
+  };
 
   const handleUpdateMeetingDetails = async () => {
     if (!selectedGuest) return;
@@ -98,8 +112,48 @@ export function Guests() {
     meetingVenue: ''
   });
   const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+
+  useEffect(() => {
+    if (!regFormData.adminId) {
+      setSelectedMeeting(null);
+      setRegFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      return;
+    }
+
+    const fetchMeeting = async () => {
+      try {
+        const now = new Date().toISOString();
+        const meetings = await firestoreService.list<any>('meetings', [
+          where('adminId', '==', regFormData.adminId),
+          where('isCompleted', '==', false),
+          where('date', '>=', now),
+          orderBy('date', 'asc'),
+          limit(1)
+        ]);
+
+        if (meetings.length > 0) {
+          const meeting = meetings[0];
+          setSelectedMeeting(meeting);
+          setRegFormData(prev => ({
+            ...prev,
+            meetingDate: meeting.date,
+            meetingTime: meeting.time || '',
+            meetingVenue: meeting.location || ''
+          }));
+        } else {
+          setSelectedMeeting(null);
+          setRegFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+        }
+      } catch (error) {
+        console.error('Error fetching meeting:', error);
+        setSelectedMeeting(null);
+        setRegFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      }
+    };
+
+    fetchMeeting();
+  }, [regFormData.adminId]);
   const [lastCreatedInvitation, setLastCreatedInvitation] = useState<GuestInvitation | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -238,9 +292,10 @@ export function Guests() {
         meetingTime: '',
         meetingVenue: ''
       });
-      
-    } catch (error) {
+      setError(null);
+    } catch (error: any) {
       console.error("Error creating invitation:", error);
+      setError(error.message || "Failed to create invitation. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -275,8 +330,10 @@ export function Guests() {
         meetingTime: '',
         meetingVenue: ''
       });
-    } catch (error) {
+      setError(null);
+    } catch (error: any) {
       console.error("Error creating guest registration:", error);
+      setError(error.message || "Failed to register guest. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -379,7 +436,7 @@ export function Guests() {
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={() => setIsRegModalOpen(true)}
+            onClick={handleOpenRegModal}
             className="hidden items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 text-sm md:text-base"
           >
             <Calendar size={18} />
@@ -595,6 +652,12 @@ export function Guests() {
           </motion.div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Guest Name</label>
               <input
@@ -777,6 +840,12 @@ export function Guests() {
           </motion.div>
         ) : (
           <form onSubmit={handleRegSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
               <input
@@ -844,20 +913,43 @@ export function Guests() {
 
             {profile?.role === 'MASTER_ADMIN' && (
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Preferred Chapter Admin</label>
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Preferred Chapter Name</label>
                 <select
                   required
                   value={regFormData.adminId}
                   onChange={(e) => setRegFormData({ ...regFormData, adminId: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                 >
-                  <option value="">Select Admin</option>
+                  <option value="">Select Chapter</option>
                   {chapterAdmins.map((admin) => (
-                    <option key={admin.uid} value={admin.uid}>{admin.name || admin.displayName}</option>
+                    <option key={admin.uid} value={admin.uid}>{admin.chapterName || admin.name || admin.displayName}</option>
                   ))}
                 </select>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Date</label>
+                <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700">
+                  {regFormData.meetingDate ? format(new Date(regFormData.meetingDate), 'dd MMM yyyy') : 'Nil'}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Time</label>
+                <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700">
+                  {regFormData.meetingTime || 'Nil'}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Venue</label>
+              <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700">
+                {regFormData.meetingVenue || 'Nil'}
+              </div>
+            </div>
 
             <button
               type="submit"

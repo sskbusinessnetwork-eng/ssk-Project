@@ -1,15 +1,21 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { LogOut, ShieldAlert } from 'lucide-react';
-import { logOut } from '../firebase';
+import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 export function SubscriptionExpired() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
-    await logOut();
-    navigate('/login');
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      navigate('/login', { replace: true });
+    }
   };
 
   return (

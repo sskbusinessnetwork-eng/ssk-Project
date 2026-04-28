@@ -46,6 +46,7 @@ export function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReferring, setIsReferring] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
   const [newSubscriptionEnd, setNewSubscriptionEnd] = useState<string>('');
   
@@ -118,7 +119,7 @@ export function Profile() {
           }
         }
 
-        if (!isAdmin && !isViewMode) {
+        if (!isViewMode) {
           const cats = await firestoreService.list<Category>('categories');
           setCategories(cats);
         }
@@ -231,21 +232,33 @@ export function Profile() {
     e.preventDefault();
     if (!currentUserProfile) return;
 
-    setIsSaving(true);
-    const normalizedPhone = normalizePhoneNumber(formData.phone);
-    const dataToUpdate = {
-      ...formData,
-      phone: normalizedPhone
-    };
-    
-    if (isAdmin) {
-      delete (dataToUpdate as any).category;
-    }
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
+      const normalizedPhone = normalizePhoneNumber(formData.phone);
+      const dataToUpdate = {
+        ...formData,
+        phone: normalizedPhone
+      };
+      
+      if (currentUserProfile?.role === 'MASTER_ADMIN') {
+        delete (dataToUpdate as any).category;
+      }
 
-    await firestoreService.update('users', currentUserProfile.uid, dataToUpdate);
-    setIsSaving(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+      await firestoreService.update('users', currentUserProfile.uid, dataToUpdate);
+      setSuccessMessage("Profile updated successfully!");
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      setErrorMessage("Failed to update profile. Please try again.");
+      setTimeout(() => setErrorMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getPositionText = (userId: string) => {
@@ -269,6 +282,28 @@ export function Profile() {
   if (isViewMode && targetProfile) {
     return (
       <div className="min-h-screen bg-background pb-24">
+        {successMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          >
+            <CheckCircle2 size={24} />
+            {successMessage}
+          </motion.div>
+        )}
+
+        {errorMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          >
+            <X size={24} />
+            {errorMessage}
+          </motion.div>
+        )}
+        
         {/* Red Header */}
         <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
@@ -546,6 +581,28 @@ export function Profile() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {successMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+        >
+          <CheckCircle2 size={24} />
+          {successMessage}
+        </motion.div>
+      )}
+
+      {errorMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+        >
+          <X size={24} />
+          {errorMessage}
+        </motion.div>
+      )}
+      
       {/* Red Header */}
       <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />

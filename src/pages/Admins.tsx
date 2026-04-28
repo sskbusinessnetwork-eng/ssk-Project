@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, Shield, Phone, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2 } from 'lucide-react';
+import { Plus, Shield, Phone, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { firestoreService } from '../services/firestoreService';
@@ -21,6 +21,8 @@ export function Admins() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -84,6 +86,8 @@ export function Admins() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
+    setSuccess(null);
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.phone);
@@ -121,6 +125,7 @@ export function Admins() {
           businessName: formData.businessName,
           membershipStatus: formData.membershipStatus
         });
+        setSuccess('Admin updated successfully!');
       } else {
         // 1. Create in Auth via API
         const data = await safeFetch('/api/admin/create-user', {
@@ -151,13 +156,16 @@ export function Admins() {
           createdAt: new Date().toISOString()
         };
         await firestoreService.create('users', newAdmin, uid);
+        setSuccess('Admin created successfully!');
       }
 
-      setIsModalOpen(false);
-      alert(editingAdmin ? 'Admin updated successfully!' : 'Admin created successfully!');
-    } catch (error: any) {
-      console.error("Error: ", error.message);
-      alert(error.message || 'Failed to process admin account');
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setSuccess(null);
+      }, 2000);
+    } catch (err: any) {
+      console.error("Error: ", err.message);
+      setError(err.message || 'Failed to process admin account');
     } finally {
       setIsSubmitting(false);
     }
@@ -425,11 +433,31 @@ export function Admins() {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsModalOpen(false);
+            setError(null);
+            setSuccess(null);
+          }
+        }}
         title={editingAdmin ? "Edit Admin" : "Add New Admin"}
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+        {success ? (
+          <div className="py-12 text-center space-y-4">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 size={48} />
+            </div>
+            <h3 className="text-2xl font-black text-navy uppercase tracking-tight">{success}</h3>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <Shield size={16} className="text-emerald-600" />
               Admin Profile
@@ -544,6 +572,7 @@ export function Admins() {
             )}
           </button>
         </form>
+      )}
       </Modal>
 
       {/* Delete Confirmation Modal */}

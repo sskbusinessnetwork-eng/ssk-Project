@@ -13,6 +13,7 @@ interface AddMemberModalProps {
   isMasterAdmin: boolean;
   categories: Category[];
   profile: any;
+  error?: string | null;
 }
 
 export function AddMemberModal({
@@ -24,7 +25,8 @@ export function AddMemberModal({
   setFormData,
   isMasterAdmin,
   categories,
-  profile
+  profile,
+  error
 }: AddMemberModalProps) {
   return (
     <Modal
@@ -33,6 +35,11 @@ export function AddMemberModal({
       title="Add New Member"
     >
       <form onSubmit={onSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold">
+            {error}
+          </div>
+        )}
         {/* Chapter Admin Field (Read-only) */}
         <div className="space-y-1">
           <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Chapter Admin</label>

@@ -16,7 +16,8 @@ import {
   Map as MapIcon,
   Clock,
   CheckCircle2,
-  Send
+  Send,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -39,6 +40,7 @@ export function Connections() {
   const [loading, setLoading] = useState(true);
   const [referringId, setReferringId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Referral Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,6 +71,7 @@ export function Connections() {
     
     try {
       setReferringId(selectedMember.uid);
+      setErrorMessage(null);
       
       const newReferral: Omit<Referral, 'id'> = {
         fromUserId: profile.uid,
@@ -92,9 +95,9 @@ export function Connections() {
         requirement: ''
       });
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating referral:", error);
-      alert("Failed to send referral. Please try again.");
+      setErrorMessage(error.message || "Failed to send referral. Please try again.");
     } finally {
       setReferringId(null);
     }
@@ -236,7 +239,17 @@ export function Connections() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
-      {/* Search Header */}
+      {/* Feedback Messages */}
+      {successMessage && (
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
+        >
+          <CheckCircle2 size={24} />
+          <span className="font-bold text-sm uppercase tracking-wider">{successMessage}</span>
+        </motion.div>
+      )}
       <div className="bg-white p-4 rounded-[14px] card-shadow border border-border space-y-4">
         {/* Tabs - Hidden for Master Admin to show unified list */}
         {profile?.role !== 'MASTER_ADMIN' && (
@@ -422,10 +435,21 @@ export function Connections() {
       {/* Referral Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (referringId === null) {
+            setIsModalOpen(false);
+            setErrorMessage(null);
+          }
+        }}
         title={`Refer to ${selectedMember?.name}`}
       >
         <form onSubmit={submitReferral} className="space-y-8 p-2">
+          {errorMessage && (
+            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <AlertCircle size={18} />
+              {errorMessage}
+            </div>
+          )}
           <div className="space-y-3">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Customer Name</label>
             <input

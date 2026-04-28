@@ -84,7 +84,7 @@ export function Layout() {
           <div className="flex-1 flex items-center">
             <div className="flex items-center gap-2 md:hidden">
               <img 
-                src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+                src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
                 alt="SSK Logo" 
                 className="h-8 w-8 object-contain rounded-lg shadow-sm"
                 referrerPolicy="no-referrer"
@@ -107,7 +107,7 @@ export function Layout() {
                 <span className="text-sm font-black text-text-primary uppercase leading-none tracking-tighter">SSK Business Network</span>
               </div>
               <img 
-                src="https://i.pinimg.com/736x/f3/63/13/f363133013d828ffadc4ce4c61dedcd4.jpg" 
+                src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
                 alt="SSK Logo" 
                 className="h-10 w-10 object-contain rounded-xl shadow-md border border-border"
                 referrerPolicy="no-referrer"

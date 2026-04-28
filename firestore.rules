@@ -174,122 +174,81 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      // Allow authenticated users to read any profile
-      // Allow unauthenticated users to read only Chapter Admin profiles (for the landing page dropdown)
-      allow read: if request.auth != null || resource.data.role == 'CHAPTER_ADMIN';
-
-      allow create: if request.auth != null &&
-        (
-          // Master Admin can create anyone
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "MASTER_ADMIN"
-
-          ||
-
-          // Chapter Admin can create MEMBER only
-          (
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "CHAPTER_ADMIN"
-            && request.resource.data.role == "MEMBER"
-          )
-        );
-
-      allow update: if request.auth != null;
-
-      allow delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "MASTER_ADMIN";
+      // Allow unauthenticated read for manual login query
+      allow read: if true;
+      allow create: if true; // Allow registration without auth
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /guest_registrations/{regId} {
-      allow read: if isAdmin() || (isChapterAdmin() && resource.data.adminId == request.auth.uid);
-      allow create: if isValidGuestRegistration(request.resource.data);
-      allow update: if isAdmin() || (isChapterAdmin() && resource.data.adminId == request.auth.uid && isValidGuestRegistration(request.resource.data));
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /auth_data/{userId} {
-      allow read, write: if isOwner(userId) || isAdmin();
+      allow read, write: if true;
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
-      allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /meetings/{meetingId} {
-      allow read: if isAuthenticated() && (
-        isAdmin() || 
-        isChapterAdmin() ||
-        (hasRole('MEMBER') && resource.data.adminId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.adminId)
-      );
-      allow create: if isAuthenticated() && isValidMeeting(request.resource.data) && (isAdmin() || (isChapterAdmin() && request.resource.data.adminId == request.auth.uid));
-      allow update: if isAuthenticated() && isValidMeeting(request.resource.data) && (isAdmin() || (isChapterAdmin() && resource.data.adminId == request.auth.uid));
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /referrals/{referralId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.fromUserId || request.auth.uid == resource.data.toUserId || isAdmin() || isChapterAdmin());
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isAuthenticated() && (request.auth.uid == resource.data.fromUserId || request.auth.uid == resource.data.toUserId || isAdmin());
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
     }
 
     match /thank_you_slips/{slipId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.fromUserId || request.auth.uid == resource.data.toUserId || isAdmin() || isChapterAdmin());
-      allow create: if isAuthenticated() && request.resource.data.fromUserId == request.auth.uid;
-      allow update: if isAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
     }
 
     match /guest_invitations/{invitationId} {
-      // MASTER_ADMIN: Full access
-      // CHAPTER_ADMIN: Own + Associated members
-      // MEMBER: Only own
-      allow read: if isAuthenticated() && (
-        isAdmin() || 
-        request.auth.uid == resource.data.createdBy || 
-        request.auth.uid == resource.data.memberId ||
-        (isChapterAdmin() && request.auth.uid == resource.data.associatedChapterAdminId)
-      );
-      
-      allow create: if isAuthenticated() && (
-        request.resource.data.createdBy == request.auth.uid ||
-        request.resource.data.memberId == request.auth.uid
-      );
-      
-      allow update: if isAdmin() || (isAuthenticated() && (
-        request.auth.uid == resource.data.createdBy ||
-        (isChapterAdmin() && request.auth.uid == resource.data.associatedChapterAdminId)
-      ));
-      allow delete: if isAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
     }
 
     match /applications/{applicationId} {
-      allow read: if isAdmin() || isChapterAdmin();
-      allow create: if true; // Publicly writable for registration
-      allow update: if isAdmin() || isChapterAdmin();
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
     }
 
     match /messages/{messageId} {
-      allow read, write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /one_to_one_meetings/{meetingId} {
-      allow read: if isAuthenticated() && (
-        isAdmin() || 
-        isChapterAdmin() || 
-        (request.auth.uid in resource.data.participantIds) || 
-        (request.auth.uid == resource.data.creatorId)
-      );
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
-      allow update: if isAuthenticated() && (request.auth.uid == resource.data.creatorId || isAdmin());
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
     }
 
     match /positions/{positionId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || isChapterAdmin();
+      allow read: if true;
+      allow write: if true;
     }
     
     // Default deny

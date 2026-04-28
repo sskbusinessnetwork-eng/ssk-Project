@@ -185,10 +185,18 @@ export function Referrals() {
   };
 
   const updateStatus = async (id: string, status: Referral['status']) => {
-    await firestoreService.update('referrals', id, { 
-      status,
-      updatedAt: new Date().toISOString()
-    });
+    try {
+      await firestoreService.update('referrals', id, { 
+        status,
+        updatedAt: new Date().toISOString()
+      });
+      setSuccessMessage(`Referral status updated to ${status.replace('_', ' ')}`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (error: any) {
+      console.error("Error updating status:", error);
+      setErrorMessage(error.message || "Failed to update status");
+      setTimeout(() => setErrorMessage(null), 3000);
+    }
   };
 
   const handleThankYouSubmit = async (e: React.FormEvent) => {
@@ -433,17 +441,25 @@ export function Referrals() {
     <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
       {/* Feedback Messages */}
       {successMessage && (
-        <div className="fixed top-20 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-          <CheckCircle2 size={20} />
-          <span className="font-bold text-xs uppercase tracking-wider">{successMessage}</span>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
+        >
+          <CheckCircle2 size={24} />
+          <span className="font-bold text-sm uppercase tracking-wider">{successMessage}</span>
+        </motion.div>
       )}
 
       {errorMessage && (
-        <div className="fixed top-20 right-4 left-4 z-[100] bg-rose-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-          <AlertCircle size={20} />
-          <span className="font-bold text-xs uppercase tracking-wider">{errorMessage}</span>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 right-4 left-4 z-[100] bg-rose-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
+        >
+          <AlertCircle size={24} />
+          <span className="font-bold text-sm uppercase tracking-wider">{errorMessage}</span>
+        </motion.div>
       )}
 
       {/* Tabs & Action */}

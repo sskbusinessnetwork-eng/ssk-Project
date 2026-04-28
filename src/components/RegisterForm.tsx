@@ -1,14 +1,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Phone, ShieldCheck, Lock, User, AlertCircle, Eye, EyeOff, Building2, CheckCircle2 } from 'lucide-react';
-import { auth, signInWithCustomToken, RecaptchaVerifier } from '../firebase';
-import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { UserRole } from '../types';
 import { Link } from 'react-router-dom';
 import { handleFirestoreError, OperationType } from '../utils/firebaseUtils';
 
 import { normalizePhoneNumber } from '../utils/phoneUtils';
-import { safeFetch } from '../utils/apiUtils';
 
 interface RegisterFormProps {
   onSuccess?: (role: UserRole) => void;
@@ -33,40 +32,6 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
   const [isSuccess, setIsSuccess] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!(window as any).recaptchaVerifierRegister) {
-      try {
-        const verifier = new RecaptchaVerifier(auth, 'recaptcha-container-register', {
-          size: 'invisible',
-          callback: () => {
-            console.log('Register reCAPTCHA verified');
-          }
-        });
-        
-        verifier.render().then(() => {
-          (window as any).recaptchaVerifierRegister = verifier;
-          console.log("Register reCAPTCHA initialized and rendered");
-        });
-      } catch (err: any) {
-        console.error("Register reCAPTCHA initialization failed:", err.message || err);
-      }
-    }
-  }, []);
-
-  // Cleanup reCAPTCHA on unmount
-  React.useEffect(() => {
-    return () => {
-      if ((window as any).recaptchaVerifierRegister) {
-        try {
-          (window as any).recaptchaVerifierRegister.clear();
-          (window as any).recaptchaVerifierRegister = null;
-        } catch (e: any) {
-          console.error("Error clearing register reCAPTCHA:", e.message || e);
-        }
-      }
-    };
-  }, []);
 
   const handlePasswordRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,68 +73,62 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       
-      // Set logging_in flag to prevent useAuth from clearing localStorage prematurely
-      sessionStorage.setItem('logging_in', 'true');
-      
-      const data = await safeFetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: normalizedPhone,
-          password,
-          name: displayName,
-          role: formData.role,
-          chapterName: formData.role === 'CHAPTER_ADMIN' ? formData.chapterName : undefined,
-          businessName: formData.role === 'CHAPTER_ADMIN' ? formData.businessName : undefined,
-          state: formData.state,
-          city: formData.city,
-          area: formData.area,
-          address: formData.address
-        })
-      });
-
-      // Sign in with custom token
-      await signInWithCustomToken(auth, data.token);
-
-      // Save user session in localStorage as requested
-      localStorage.setItem('user', JSON.stringify({ uid: data.uid, phone: normalizedPhone }));
-      sessionStorage.removeItem('logging_in');
-
-      setIsSuccess(true);
-      if (onSuccess) onSuccess(data.role || formData.role);
-    } catch (err: any) {
-      sessionStorage.removeItem('logging_in');
-      console.error('Registration error:', err.message || err);
-      let message = err.message || 'Failed to create account.';
-      let isExistingAccount = false;
-
-      if (err.code === 'auth/email-already-in-use' || err.message?.includes('email-already-in-use') || err.message?.includes('already exists')) {
-        message = 'An account with this phone number already exists.';
-        isExistingAccount = true;
-      } else if (err.code === 'auth/weak-password') {
-        message = 'The password is too weak. Please use at least 6 characters.';
-      } else if (err.code === 'auth/network-request-failed') {
-        message = 'A network error occurred. This is often caused by a firewall, ad-blocker, or restricted network. Please ensure your internet connection is stable and try disabling any ad-blockers.';
-      } else if (err.code === 'permission-denied' || err.message?.includes('insufficient permissions')) {
-        message = 'You do not have permission to create this account. Please contact support.';
+      // Check if user already exists
+      const q = query(collection(db, 'users'), where('phone', '==', normalizedPhone), limit(1));
+      const existingUsers = await getDocs(q);
+      if (!existingUsers.empty) {
+        throw new Error('An account with this phone number already exists.');
       }
 
+      // Generate a new UID manually since we're not using Firebase Auth
+      const newUserRef = doc(collection(db, 'users'));
+      const uid = newUserRef.id;
+
+      // Create user profile in Firestore with password
+      const userProfile = {
+        uid,
+        name: displayName,
+        phone: normalizedPhone,
+        password: password, // Store plain text password as requested
+        role: formData.role,
+        membershipStatus: 'PENDING',
+        chapterName: formData.role === 'CHAPTER_ADMIN' ? formData.chapterName : undefined,
+        businessName: formData.role === 'CHAPTER_ADMIN' ? formData.businessName : undefined,
+        state: formData.state,
+        city: formData.city,
+        area: formData.area,
+        address: formData.address,
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(newUserRef, userProfile);
+
+      // Also store in auth_data for consistency with rules if needed
+      await setDoc(doc(db, 'auth_data', uid), {
+        uid,
+        password: password,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Save user session in localStorage
+      localStorage.setItem('user', JSON.stringify({ uid, phone: normalizedPhone }));
+
+      setIsSuccess(true);
+      if (onSuccess) onSuccess(formData.role);
+    } catch (err: any) {
+      console.error('Registration error:', err.message || err);
+      let message = err.message || 'Failed to create account.';
+      
       setRegError(
         <div className="space-y-3">
           <p>{message}</p>
-          {isExistingAccount && (
+          {message.includes('already exists') && (
             <div className="flex flex-col gap-2 mt-2">
               <Link 
                 to="/login" 
                 className="w-full py-2 bg-slate-100 text-slate-900 rounded-lg font-bold text-xs hover:bg-slate-200 transition-all text-center"
               >
                 Go to Login
-              </Link>
-              <Link 
-                to="/login?mode=reset" 
-                className="w-full py-2 bg-primary/10 text-primary rounded-lg font-bold text-xs hover:bg-primary/20 transition-all text-center"
-              >
-                Reset Password
               </Link>
             </div>
           )}

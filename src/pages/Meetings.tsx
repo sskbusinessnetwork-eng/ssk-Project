@@ -259,13 +259,6 @@ export function Meetings() {
     }
   };
 
-  const markAttendance = async (userId: string, status: AttendanceStatus) => {
-    if (!selectedMeeting) return;
-    
-    const newAttendance = { ...selectedMeeting.attendance, [userId]: status };
-    await firestoreService.update('meetings', selectedMeeting.id, { attendance: newAttendance });
-  };
-
   const handleSaveUpdate = async () => {
     if (!selectedMeeting) return;
     setIsSubmitting(true);
@@ -316,14 +309,6 @@ export function Meetings() {
     }
   };
 
-  const saveNotes = async () => {
-    if (!selectedMeeting) return;
-    setIsSavingNotes(true);
-    await firestoreService.update('meetings', selectedMeeting.id, { notes });
-    setIsSavingNotes(false);
-  };
-
-  // Calculate attendance stats
   const userAttendance = meetings.map(m => m.attendance[profile?.uid || ''] === 'PRESENT');
   const attendancePercentage = userAttendance.length > 0 
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
@@ -633,10 +618,28 @@ export function Meetings() {
       {/* Update Meeting Modal */}
       <Modal
         isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsUpdateModalOpen(false);
+            setError(null);
+            setSuccess(null);
+          }
+        }}
         title="Update Meeting Data"
       >
         <div className="space-y-6">
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <AlertCircle size={18} />
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <CheckCircle2 size={18} />
+              {success}
+            </div>
+          )}
           <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Meeting Update</p>
             <p className="text-sm font-bold text-slate-900">Update attendance and amounts</p>
@@ -891,10 +894,28 @@ export function Meetings() {
       {/* Notes Modal */}
       <Modal
         isOpen={isNotesModalOpen}
-        onClose={() => setIsNotesModalOpen(false)}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsNotesModalOpen(false);
+            setError(null);
+            setSuccess(null);
+          }
+        }}
         title="Meeting Notes"
       >
         <div className="space-y-6">
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <AlertCircle size={18} />
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <CheckCircle2 size={18} />
+              {success}
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-bold text-slate-700">Notes & Key Points</label>
             <textarea

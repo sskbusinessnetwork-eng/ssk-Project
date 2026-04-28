@@ -7,24 +7,31 @@ export async function safeFetch(url: string, options: RequestInit) {
     const response = await fetch(url, options);
     const contentType = response.headers.get("content-type");
     
-    let data;
+    let text = "";
+    try {
+      text = await response.text();
+    } catch (e) {
+      text = "Could not read response text";
+    }
+
+    let data: any = null;
     if (contentType && contentType.includes("application/json")) {
       try {
-        data = await response.json();
+        data = JSON.parse(text);
       } catch (e) {
-        throw new Error("Failed to parse server response as JSON.");
+        throw new Error("Failed to parse server response as JSON. Body: " + text.slice(0, 100));
       }
     } else {
-      const text = await response.text();
       // If it's HTML, it might be a 404 or 500 from the server/proxy
       if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-        throw new Error(`Server returned an error page (HTML). Status: ${response.status}`);
+        const preview = text.slice(0, 300).replace(/<[^>]*>?/gm, ' ').trim();
+        throw new Error(`Server returned an error page (HTML) instead of JSON. \nStatus: ${response.status}\nPreview: ${preview}\nCheck if the API route is correctly defined or if there is a proxy redirect issue.`);
       }
       throw new Error(`Server returned non-JSON response: ${text.slice(0, 100)}${text.length > 100 ? '...' : ''}`);
     }
 
     if (!response.ok) {
-      const error = new Error(data.error || data.message || `Request failed with status ${response.status}`);
+      const error = new Error(data?.error || data?.message || `Request failed with status ${response.status}`);
       (error as any).status = response.status;
       (error as any).data = data;
       throw error;

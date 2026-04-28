@@ -11,7 +11,8 @@ import {
   History,
   ChevronRight,
   X,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
@@ -45,6 +46,7 @@ export function OneToOneMeetings() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // Update Meeting state
@@ -116,6 +118,7 @@ export function OneToOneMeetings() {
     }
 
     setIsSubmitting(true);
+    setError(null);
     try {
       const meetingDate = parseISO(formData.date);
       const now = new Date();
@@ -148,8 +151,9 @@ export function OneToOneMeetings() {
         setShowSuccess(false);
       }, 2000);
       
-    } catch (error) {
-      console.error("Error creating one-to-one meeting:", error);
+    } catch (err: any) {
+      console.error("Error creating one-to-one meeting:", err);
+      setError(err.message || "Failed to schedule meeting. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -158,6 +162,7 @@ export function OneToOneMeetings() {
   const handleUpdateMeeting = async (status: 'COMPLETED' | 'NOT_COMPLETED') => {
     if (!updatingMeeting) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       await firestoreService.update('one_to_one_meetings', updatingMeeting.id, {
         status,
@@ -167,8 +172,9 @@ export function OneToOneMeetings() {
       });
       setIsUpdateModalOpen(false);
       setUpdatingMeeting(null);
-    } catch (error) {
-      console.error("Error updating meeting:", error);
+    } catch (err: any) {
+      console.error("Error updating meeting:", err);
+      setError(err.message || "Failed to update meeting status.");
     } finally {
       setIsSubmitting(false);
     }
@@ -482,6 +488,12 @@ export function OneToOneMeetings() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
             {/* Member Selection - Searchable Dropdown */}
             <div className="space-y-3">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Member</label>
@@ -635,6 +647,12 @@ export function OneToOneMeetings() {
       >
         {updatingMeeting && (
           <div className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
             <div className="space-y-4">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Attendance</label>
               <div className="space-y-3">

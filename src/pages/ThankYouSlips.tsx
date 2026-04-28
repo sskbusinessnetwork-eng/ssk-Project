@@ -10,7 +10,8 @@ import {
   IndianRupee,
   ChevronRight,
   CheckCircle2,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
@@ -30,6 +31,8 @@ export function ThankYouSlips() {
   const [activeTab, setActiveTab] = useState<'sent' | 'received' | 'all'>('sent');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -129,23 +132,37 @@ export function ThankYouSlips() {
     const selectedReferral = referrals.find(r => r.id === formData.referralId);
     if (!selectedReferral) return;
 
-    const newSlip: Omit<ThankYouSlip, 'id'> = {
-      referralId: formData.referralId,
-      fromUserId: profile.uid,
-      toUserId: selectedReferral.fromUserId,
-      customerName: formData.customerName,
-      businessValue: Number(formData.businessValue),
-      notes: formData.notes,
-      createdAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const newSlip: Omit<ThankYouSlip, 'id'> = {
+        referralId: formData.referralId,
+        fromUserId: profile.uid,
+        toUserId: selectedReferral.fromUserId,
+        customerName: formData.customerName,
+        businessValue: Number(formData.businessValue),
+        notes: formData.notes,
+        createdAt: new Date().toISOString()
+      };
 
-    await firestoreService.create('thank_you_slips', newSlip);
-    
-    // Close the referral status
-    await firestoreService.update('referrals', formData.referralId, { status: 'CLOSED' });
-    
-    setIsModalOpen(false);
-    setFormData({ referralId: '', customerName: '', businessValue: '', notes: '' });
+      await firestoreService.create('thank_you_slips', newSlip);
+      
+      // Close the referral status
+      await firestoreService.update('referrals', formData.referralId, { status: 'CLOSED' });
+      
+      setShowSuccess(true);
+      setFormData({ referralId: '', customerName: '', businessValue: '', notes: '' });
+      
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setShowSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      console.error("Error creating thank you slip:", err);
+      setError(err.message || "Failed to submit thank you slip. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const totalBusinessSent = slips.reduce((acc, slip) => acc + slip.businessValue, 0);
@@ -751,11 +768,31 @@ export function ThankYouSlips() {
       {/* Submit Slip Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsModalOpen(false);
+            setShowSuccess(false);
+          }
+        }}
         title="Submit Thank You Slip"
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
+        {showSuccess ? (
+          <div className="py-12 text-center space-y-4">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 size={48} />
+            </div>
+            <h3 className="text-2xl font-black text-navy uppercase tracking-tight">Slip Submitted!</h3>
+            <p className="text-slate-500 font-medium">Thank you for sharing your business success.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
+            <div className="space-y-2">
             <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Select Referral</label>
             <select
               required
@@ -832,6 +869,7 @@ export function ThankYouSlips() {
             </button>
           </div>
         </form>
+      )}
       </Modal>
     </div>
   );
