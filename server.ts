@@ -281,12 +281,15 @@ async function startServer() {
     }
   });
 
-  // Mount API Router - Priority on /api
+  // Mount API Router
+  // We mount it at /api and / to be safe with different Hosting/Function pathing
   app.use("/api", apiRouter);
+  app.use("/", apiRouter);
 
-  // Global 404 handler for API routes (only if we're expected to be an API)
+  // Global 404 handler for API routes
+  // This must be after all specific API routes but before static assets/SPA fallback
   const apiNotFoundHandler = (req: express.Request, res: express.Response) => {
-    console.warn(`API route not found: ${req.method} ${req.path}`);
+    console.warn(`[Route Not Found] ${req.method} ${req.path} (Original: ${req.originalUrl})`);
     res.status(404).json({ 
       error: "API endpoint not found", 
       method: req.method,
@@ -295,36 +298,45 @@ async function startServer() {
     });
   };
 
-  // If running as a Cloud Function, we handle everything as API
-  if (process.env.FUNCTION_NAME) {
-    app.use("/", apiRouter);
-    app.all("*", apiNotFoundHandler);
-  } else if (process.env.NODE_ENV !== "production") {
-    // Local development with Vite
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-    
-    // Mount root API router after Vite in dev so assets are handled first
-    app.use("/", apiRouter);
   } else {
-    // Production (Standard Node server)
+    // Production (Standard Node server or Cloud Function)
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
     
-    // Mount root API router after static assets
-    app.use("/", apiRouter);
+    // Serve static files
+    app.use(express.static(distPath, {
+      setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      }
+    }));
     
     app.get("*", (req, res) => {
-      // If reached here and starts with /api or was likely an API call, return a proper 404
-      if (req.path.startsWith('/api')) {
+      // If it looks like an API call (starts with /api or /addMember), return JSON 404 instead of HTML
+      if (req.path.startsWith('/api') || req.path === '/addMember' || req.path === '/addMember/') {
         return apiNotFoundHandler(req, res);
       }
-      res.sendFile(path.join(distPath, "index.html"));
+      
+      // Serve SPA index.html for everything else (GET only)
+      if (req.method === 'GET') {
+        res.sendFile(path.join(distPath, "index.html"));
+      } else {
+        // Falling through for non-GET requests to unknown paths
+        apiNotFoundHandler(req, res);
+      }
     });
   }
+
+  // Final catch-all for anything that reached here (e.g. POST to unknown routes)
+  app.all("*", apiNotFoundHandler);
+
 
   // Global Error Handler for JSON responses
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

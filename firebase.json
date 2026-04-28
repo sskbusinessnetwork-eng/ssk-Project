@@ -12,6 +12,10 @@
         "function": "api"
       },
       {
+        "source": "/addMember",
+        "function": "api"
+      },
+      {
         "source": "/addMember/**",
         "function": "api"
       },
