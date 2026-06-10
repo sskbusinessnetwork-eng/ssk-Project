@@ -177,7 +177,10 @@ export function Analytics() {
       const memberId = filters.id;
       const memberMeetings = filteredMeetings.filter(m => m.attendance && m.attendance[memberId]);
       totalMeetings = memberMeetings.length;
-      attendanceCount = memberMeetings.filter(m => m.attendance[memberId] === 'PRESENT').length;
+      attendanceCount = memberMeetings.filter(m => {
+        const status = m.attendance[memberId];
+        return status === 'PRESENT' || status === 'Yes' || status === 'Substitute' || status === 'YES' || status === 'SUBSTITUTE';
+      }).length;
     } else if (type === 'CHAPTER' && filters.id) {
       // Specific Chapter Admin Report
       totalMeetings = filteredMeetings.filter(m => m.adminId === filters.id).length;

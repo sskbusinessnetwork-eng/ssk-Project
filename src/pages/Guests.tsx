@@ -29,6 +29,7 @@ import { db } from '../firebase';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
 import { useLocation } from 'react-router-dom';
+import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 
 export function Guests() {
   const { profile } = useAuth();
@@ -352,7 +353,7 @@ export function Guests() {
           text += `Date: ${guest.meetingDate}\n`;
         }
       }
-      if (guest.meetingTime) text += `Time: ${guest.meetingTime}\n`;
+      if (guest.meetingTime) text += `Time: ${formatTime12h(guest.meetingTime)}\n`;
       if (guest.meetingVenue) text += `Venue: ${guest.meetingVenue}\n`;
       text += `\n`;
     }
@@ -769,13 +770,47 @@ export function Guests() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Time</label>
-                <input
-                  required
-                  type="time"
-                  value={formData.meetingTime}
-                  onChange={(e) => setFormData({ ...formData, meetingTime: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                />
+                {(() => {
+                  const { time: timePart, ampm: ampmPart } = parseTo12hParts(formData.meetingTime);
+                  const [selectedHour, selectedMinute] = timePart.split(':');
+                  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                  const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                  
+                  const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                    setFormData({ ...formData, meetingTime: `${hour}:${minute} ${ampm}` });
+                  };
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {hoursList.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {minutesList.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={ampmPart}
+                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -939,7 +974,7 @@ export function Guests() {
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Meeting Time</label>
                 <div className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700">
-                  {regFormData.meetingTime || 'Nil'}
+                  {regFormData.meetingTime ? formatTime12h(regFormData.meetingTime) : 'Nil'}
                 </div>
               </div>
             </div>
@@ -1038,12 +1073,47 @@ export function Guests() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting Time</label>
-                      <input
-                        type="time"
-                        value={editMeetingData.meetingTime}
-                        onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingTime: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
-                      />
+                      {(() => {
+                        const { time: timePart, ampm: ampmPart } = parseTo12hParts(editMeetingData.meetingTime);
+                        const [selectedHour, selectedMinute] = timePart.split(':');
+                        const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                        const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                        
+                        const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                          setEditMeetingData({ ...editMeetingData, meetingTime: `${hour}:${minute} ${ampm}` });
+                        };
+
+                        return (
+                          <div className="grid grid-cols-3 gap-2">
+                            <select
+                              value={selectedHour}
+                              onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
+                            >
+                              {hoursList.map(h => (
+                                <option key={h} value={h}>{h}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={selectedMinute}
+                              onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
+                            >
+                              {minutesList.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={ampmPart}
+                              onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
+                            >
+                              <option value="AM">AM</option>
+                              <option value="PM">PM</option>
+                            </select>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting Venue</label>

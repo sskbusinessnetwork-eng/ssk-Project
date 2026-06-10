@@ -26,6 +26,163 @@ import { where, orderBy, limit } from 'firebase/firestore';
 import { format, startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore } from 'date-fns';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
+import { parseTimeTo24h, formatTime12h, parseTo12hParts } from '../utils/timeUtils';
+
+export function getMeetingExactDateTime(meeting: Meeting): Date {
+  const d = new Date(meeting.date);
+  const { hours, minutes } = parseTimeTo24h(meeting.time || '07:30');
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hours, minutes, 0, 0);
+}
+
+export function getAttendanceDisplay(status?: string) {
+  if (!status) return { label: 'No', color: 'bg-red-50 text-red-600 border-red-100' };
+  
+  const statusUpper = status.toUpperCase();
+  if (statusUpper === 'PRESENT' || statusUpper === 'YES') {
+    return { label: 'Yes', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+  }
+  if (statusUpper === 'ABSENT' || statusUpper === 'NO') {
+    return { label: 'No', color: 'bg-red-50 text-red-600 border-red-100' };
+  }
+  if (statusUpper === 'SUBSTITUTE') {
+    return { label: 'Substitute', color: 'bg-amber-50 text-amber-600 border-amber-100' };
+  }
+  return { label: status, color: 'bg-slate-50 text-slate-600 border-slate-100' };
+}
+
+const WEEKDAYS: Record<string, number> = {
+  'Sunday': 0,
+  'Monday': 1,
+  'Tuesday': 2,
+  'Wednesday': 3,
+  'Thursday': 4,
+  'Friday': 5,
+  'Saturday': 6
+};
+
+function calculateOccurrences(
+  frequency: 'Weekly' | 'Monthly',
+  day: string,
+  date: number,
+  time: string
+): Date[] {
+  const dates: Date[] = [];
+  const { hours, minutes } = parseTimeTo24h(time || '07:30');
+  const now = new Date();
+  
+  if (frequency === 'Weekly') {
+    const targetDayNum = WEEKDAYS[day] !== undefined ? WEEKDAYS[day] : 1;
+    let checkDate = startOfDay(now);
+    checkDate.setHours(hours, minutes, 0, 0);
+    
+    let count = 0;
+    for (let i = 0; i < 90; i++) {
+      if (checkDate.getDay() === targetDayNum) {
+        if (isAfter(checkDate, now) || isSameDay(checkDate, now)) {
+          dates.push(new Date(checkDate));
+          count++;
+          if (count >= 5) break;
+        }
+      }
+      checkDate = addDays(checkDate, 1);
+    }
+  } else {
+    let count = 0;
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    for (let i = 0; i < 12; i++) {
+      const monthDate = new Date(currentYear, currentMonth + i, 1);
+      const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+      const actualDay = Math.min(date || 1, daysInMonth);
+      
+      monthDate.setDate(actualDay);
+      monthDate.setHours(hours, minutes, 0, 0);
+      
+      if (isAfter(monthDate, now) || isSameDay(monthDate, now)) {
+        dates.push(new Date(monthDate));
+        count++;
+        if (count >= 5) break;
+      }
+    }
+  }
+  
+  return dates;
+}
+
+async function syncDefaultMeetings(adminId: string, setup: {
+  frequency: 'Weekly' | 'Monthly';
+  day: string;
+  date: number;
+  time: string;
+  location: string;
+  enabled: boolean;
+}) {
+  if (!adminId) return;
+
+  const allMeetings = await firestoreService.list<Meeting>('meetings', [
+    where('adminId', '==', adminId)
+  ]);
+
+  const now = new Date();
+
+  if (!setup.enabled) {
+    const toDelete = allMeetings.filter(m => 
+      !m.isCompleted && 
+      m.isRecurring && 
+      new Date(m.date) >= startOfDay(now)
+    );
+    for (const m of toDelete) {
+      await firestoreService.delete('meetings', m.id);
+    }
+    return;
+  }
+
+  const occurrences = calculateOccurrences(setup.frequency, setup.day, setup.date, setup.time);
+  const occurrenceIdsToPreserve = new Set<string>();
+
+  for (const occurrenceDate of occurrences) {
+    const existingMeeting = allMeetings.find(m => isSameDay(new Date(m.date), occurrenceDate));
+
+    if (existingMeeting) {
+      await firestoreService.update('meetings', existingMeeting.id, {
+        date: occurrenceDate.toISOString(),
+        time: setup.time,
+        location: setup.location,
+        isRecurring: true
+      });
+      occurrenceIdsToPreserve.add(existingMeeting.id);
+    } else {
+      const newMeeting: Omit<Meeting, 'id'> = {
+        adminId,
+        date: occurrenceDate.toISOString(),
+        time: setup.time,
+        location: setup.location,
+        attendance: {},
+        amountCollected: {},
+        memberNotes: {},
+        notes: '',
+        isCompleted: false,
+        isRecurring: true
+      };
+      const newId = await firestoreService.create('meetings', newMeeting);
+      if (newId) {
+        occurrenceIdsToPreserve.add(newId);
+      }
+    }
+  }
+
+  const obsoleteMeetings = allMeetings.filter(m => 
+    !m.isCompleted && 
+    m.isRecurring && 
+    new Date(m.date) >= startOfDay(now) && 
+    !occurrenceIdsToPreserve.has(m.id)
+  );
+
+  for (const m of obsoleteMeetings) {
+    await firestoreService.delete('meetings', m.id);
+  }
+}
 
 export function Meetings() {
   const { profile } = useAuth();
@@ -74,6 +231,16 @@ export function Meetings() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000); // 10s intervals for fast real-time client updates
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
       firestoreService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setAdminAdmins);
@@ -85,6 +252,60 @@ export function Meetings() {
       setAdminAdmins([profile]);
     }
   }, [profile]);
+
+  useEffect(() => {
+    const chapterId = isMasterAdmin ? selectedAdminId : (isChapterAdmin ? profile?.uid : profile?.adminId);
+    if (!chapterId) {
+      setDefaultSetupData({
+        adminId: '',
+        frequency: 'Weekly',
+        day: 'Monday',
+        date: 1,
+        time: '07:30',
+        location: '',
+        enabled: false
+      });
+      return;
+    }
+
+    const loadAndSyncSetup = async () => {
+      try {
+        const adminProfile = await firestoreService.get<UserProfile & { defaultMeetingSetup?: any }>('users', chapterId);
+        if (adminProfile && adminProfile.defaultMeetingSetup) {
+          const setup = {
+            adminId: chapterId,
+            frequency: adminProfile.defaultMeetingSetup.frequency || 'Weekly',
+            day: adminProfile.defaultMeetingSetup.day || 'Monday',
+            date: adminProfile.defaultMeetingSetup.date || 1,
+            time: adminProfile.defaultMeetingSetup.time || '07:30',
+            location: adminProfile.defaultMeetingSetup.location || '',
+            enabled: adminProfile.defaultMeetingSetup.enabled || false
+          };
+          setDefaultSetupData(setup);
+
+          if (setup.enabled) {
+            syncDefaultMeetings(chapterId, setup).catch(err => {
+              console.error("Background default meetings sync error:", err);
+            });
+          }
+        } else {
+          setDefaultSetupData({
+            adminId: chapterId,
+            frequency: 'Weekly',
+            day: 'Monday',
+            date: 1,
+            time: '07:30',
+            location: '',
+            enabled: false
+          });
+        }
+      } catch (err) {
+        console.error("Error loading default meeting setup:", err);
+      }
+    };
+
+    loadAndSyncSetup();
+  }, [isMasterAdmin, selectedAdminId, isChapterAdmin, profile]);
 
   useEffect(() => {
     if (!profile) return;
@@ -119,14 +340,14 @@ export function Meetings() {
       const start = startOfWeek(now);
       const end = endOfWeek(now);
       
-      const actionableMeetings = data.filter(m => !m.isCompleted);
+      const actionableMeetings = data.filter(m => !m.isCompleted && !m.isCancelled && getMeetingExactDateTime(m) >= now);
       const thisWeekMeeting = actionableMeetings.find(m => {
-        const mDate = new Date(m.date);
+        const mDate = getMeetingExactDateTime(m);
         return mDate >= start && mDate <= end;
       });
       
       const nearestActionable = [...actionableMeetings].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
+        getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime()
       )[0];
       
       setSelectedMeeting(prev => {
@@ -239,20 +460,40 @@ export function Meetings() {
 
   const handleUpdateDefaultSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    // This logic might need to be moved to user profile or a global settings collection
-    // Since chapters are removed. For now, let's just disable it or simplify.
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
 
     try {
-      // Placeholder for updating default setup without chapters
-      setSuccess('Default meeting setup updated!');
+      const adminId = isChapterAdmin ? profile?.uid : defaultSetupData.adminId;
+      if (!adminId) {
+        throw new Error('No chapter admin associated or selected.');
+      }
+
+      const defaultSetupDoc = {
+        frequency: defaultSetupData.frequency,
+        day: defaultSetupData.day,
+        date: defaultSetupData.date,
+        time: defaultSetupData.time,
+        location: defaultSetupData.location,
+        enabled: defaultSetupData.enabled
+      };
+
+      // Save to Chapter Admin's user profile document inside users collection
+      await firestoreService.update('users', adminId, {
+        defaultMeetingSetup: defaultSetupDoc
+      });
+
+      // Synchronize recurring meetings to meetings collection
+      await syncDefaultMeetings(adminId, defaultSetupDoc);
+
+      setSuccess('Default meeting setup updated and synchronized!');
       setTimeout(() => {
         setIsDefaultSetupOpen(false);
         setSuccess(null);
       }, 1500);
     } catch (err: any) {
+      console.error('Error updating default meeting setup:', err);
       setError(err.message || 'Failed to update default setup.');
     } finally {
       setIsSubmitting(false);
@@ -262,7 +503,28 @@ export function Meetings() {
   const handleSaveUpdate = async () => {
     if (!selectedMeeting) return;
     setIsSubmitting(true);
+    setError(null);
     try {
+      // Find all active chapter members for this meeting
+      const meetingMembers = members.filter(m => m.adminId === selectedMeeting.adminId || m.uid === selectedMeeting.adminId);
+      
+      // Perform validation
+      for (const member of meetingMembers) {
+        const status = tempAttendance[member.uid];
+        if (!status) {
+          setError(`Attendance status is required for ${member.name || member.displayName || 'all members'} before saving.`);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        const allowedStatuses = ['Yes', 'No', 'Substitute', 'PRESENT', 'ABSENT', 'VISITOR', 'YES', 'NO', 'SUBSTITUTE'];
+        if (!allowedStatuses.includes(status)) {
+          setError(`Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       await firestoreService.update('meetings', selectedMeeting.id, { 
         attendance: tempAttendance,
         amountCollected: tempAmount,
@@ -309,42 +571,43 @@ export function Meetings() {
     }
   };
 
-  const userAttendance = meetings.map(m => m.attendance[profile?.uid || ''] === 'PRESENT');
+  const userAttendance = meetings.map(m => {
+    const status = m.attendance?.[profile?.uid || ''];
+    if (!status) return false;
+    const statusUpper = status.toUpperCase();
+    return statusUpper === 'PRESENT' || statusUpper === 'YES' || statusUpper === 'SUBSTITUTE';
+  });
   const attendancePercentage = userAttendance.length > 0 
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
     : 0;
 
   const getMeetingStatus = (meeting: Meeting) => {
+    if (meeting.isCancelled) {
+      return { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200' };
+    }
     if (meeting.isCompleted) {
       return { label: 'Completed', color: 'bg-slate-100 text-slate-600 border-slate-200' };
     }
-    const meetingDate = new Date(meeting.date);
-    const now = new Date();
+    const meetingDate = getMeetingExactDateTime(meeting);
     
-    if (isSameDay(meetingDate, now)) {
-      return { label: 'Today', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    if (meetingDate < currentTime) {
+      return { label: 'Completed', color: 'bg-slate-100 text-slate-600 border-slate-200' };
     }
     
-    if (meetingDate < now) {
-      return { label: 'Past Due', color: 'bg-amber-100 text-amber-700 border-amber-200' };
-    }
-    
-    return { label: 'Scheduled', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+    return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700 border-blue-200' };
   };
 
   const filteredMeetings = selectedAdminId 
     ? meetings.filter(m => m.adminId === selectedAdminId)
     : meetings;
 
-  const now = new Date();
+  // Upcoming: Non-completed, non-cancelled meetings that are in the future
+  const scheduledMeetings = [...filteredMeetings.filter(m => !m.isCompleted && !m.isCancelled && getMeetingExactDateTime(m) >= currentTime)]
+    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
   
-  // Upcoming: Non-completed meetings that are in the future
-  const scheduledMeetings = [...filteredMeetings.filter(m => !m.isCompleted && new Date(m.date) >= now)]
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  
-  // History: Completed meetings OR past meetings
-  const completedMeetings = [...filteredMeetings.filter(m => m.isCompleted || new Date(m.date) < now)]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // History: Completed meetings OR past meetings OR cancelled meetings in chronological order
+  const completedMeetings = [...filteredMeetings.filter(m => m.isCompleted || m.isCancelled || getMeetingExactDateTime(m) < currentTime)]
+    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 
   // For Master Admin, find the single latest/upcoming meeting
   const masterAdminUpcoming = scheduledMeetings[0];
@@ -413,12 +676,23 @@ export function Meetings() {
         {/* 1. Upcoming Meetings */}
         {scheduledMeetings.length > 0 && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-1.5 h-6 bg-primary rounded-full" />
-              <h2 className="text-sm font-bold text-navy uppercase tracking-widest font-display">Upcoming Meetings</h2>
+            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-6 bg-primary rounded-full" />
+                <h2 className="text-sm font-bold text-navy uppercase tracking-widest font-display">Upcoming Meetings</h2>
+              </div>
+              {scheduledMeetings.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllFutureMeetings(!showAllFutureMeetings)}
+                  className="text-xs text-emerald-600 font-bold hover:text-emerald-700 hover:underline transition-all"
+                >
+                  {showAllFutureMeetings ? "Show Next Meeting Only" : `View All Scheduled Meetings (${scheduledMeetings.length})`}
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scheduledMeetings.map((meeting) => (
+              {(showAllFutureMeetings ? scheduledMeetings : scheduledMeetings.slice(0, 1)).map((meeting) => (
                 <div 
                   key={meeting.id} 
                   onClick={() => setSelectedMeeting(meeting)}
@@ -446,7 +720,7 @@ export function Meetings() {
                     </h3>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                       <Clock size={12} className="text-primary shrink-0" />
-                      <span className="truncate">{meeting.time || '07:30 AM'}</span>
+                      <span className="truncate">{formatTime12h(meeting.time || '07:30')}</span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                       <MapPin size={12} className="text-primary shrink-0" />
@@ -460,8 +734,17 @@ export function Meetings() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedMeeting(meeting);
-                          setTempAttendance(meeting.attendance || {});
+                          const normalizedAttendance: Record<string, any> = {};
+                          if (meeting.attendance) {
+                            Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                              if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
+                              else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                              else normalizedAttendance[uid] = val;
+                            });
+                          }
+                          setTempAttendance(normalizedAttendance);
                           setTempAmount(meeting.amountCollected || {});
+                          setTempMemberNotes(meeting.memberNotes || {});
                           setIsUpdateModalOpen(true);
                         }}
                         className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
@@ -534,7 +817,12 @@ export function Meetings() {
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Attendance Count</p>
                   <p className="text-2xl font-black text-navy tracking-tight">
-                    {completedMeetings.filter(m => m.attendance[profile?.uid || ''] === 'PRESENT').length}
+                    {completedMeetings.filter(m => {
+                      const status = m.attendance?.[profile?.uid || ''];
+                      if (!status) return false;
+                      const uStatus = status.toUpperCase();
+                      return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE';
+                    }).length}
                   </p>
                   <p className="text-[9px] text-slate-500 font-medium mt-1 uppercase tracking-wider">Meetings Attended</p>
                 </div>
@@ -575,7 +863,7 @@ export function Meetings() {
                   </h3>
                   <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
                     <Clock size={10} className="text-primary shrink-0" />
-                    <span>{meeting.time || '07:30 AM'}</span>
+                    <span>{formatTime12h(meeting.time || '07:30')}</span>
                   </div>
                 </div>
                 
@@ -585,7 +873,15 @@ export function Meetings() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedMeeting(meeting);
-                        setTempAttendance(meeting.attendance || {});
+                        const normalizedAttendance: Record<string, any> = {};
+                        if (meeting.attendance) {
+                          Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                            if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
+                            else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                            else normalizedAttendance[uid] = val;
+                          });
+                        }
+                        setTempAttendance(normalizedAttendance);
                         setTempAmount(meeting.amountCollected || {});
                         setTempMemberNotes(meeting.memberNotes || {});
                         setIsUpdateModalOpen(true);
@@ -676,27 +972,24 @@ export function Meetings() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'PRESENT' }))}
-                              className={cn(
-                                "p-1.5 rounded-lg transition-all",
-                                status === 'PRESENT' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                              )}
-                            >
-                              <CheckCircle2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => setTempAttendance(prev => ({ ...prev, [member.uid]: 'ABSENT' }))}
-                              className={cn(
-                                "p-1.5 rounded-lg transition-all",
-                                status === 'ABSENT' ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                              )}
-                            >
-                              <XCircle size={16} />
-                            </button>
-                          </div>
+                        <td className="py-4 text-center">
+                          <select
+                            id={`attendance-select-${member.uid}`}
+                            value={status || ''}
+                            onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-white cursor-pointer",
+                              status === 'Yes' || status === 'PRESENT' ? "border-emerald-200 focus:border-emerald-400 text-emerald-700 bg-emerald-50/50" :
+                              status === 'No' || status === 'ABSENT' ? "border-red-200 focus:border-red-400 text-red-700 bg-red-50/50" :
+                              status === 'Substitute' ? "border-amber-200 focus:border-amber-400 text-amber-700 bg-amber-50/50" :
+                              "border-slate-200 focus:border-primary text-slate-500"
+                            )}
+                          >
+                            <option value="">Select Status</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                            <option value="Substitute">Substitute</option>
+                          </select>
                         </td>
                         <td className="py-4">
                           <input
@@ -727,7 +1020,7 @@ export function Meetings() {
             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
               <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Total Present</p>
               <p className="text-xl font-extrabold text-emerald-600">
-                {Object.values(tempAttendance).filter(s => s === 'PRESENT').length}
+                {Object.values(tempAttendance).filter(s => s === 'PRESENT' || s === 'Yes' || s === 'Substitute').length}
               </p>
             </div>
             <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-right">
@@ -796,14 +1089,14 @@ export function Meetings() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={cn(
-                          "px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest",
-                          status === 'PRESENT' ? "bg-emerald-100 text-emerald-700" : 
-                          status === 'VISITOR' ? "bg-blue-100 text-blue-700" :
-                          "bg-red-100 text-red-700"
-                        )}>
-                          {status || 'ABSENT'}
-                        </span>
+                        {(() => {
+                          const displayObj = getAttendanceDisplay(status);
+                          return (
+                            <span className={cn("px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border", displayObj.color)}>
+                              {displayObj.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <p className="text-xs font-bold text-slate-700">₹{amount.toLocaleString()}</p>
@@ -844,12 +1137,14 @@ export function Meetings() {
                     />
                     <p className="text-sm font-bold text-slate-900">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
-                  <span className={cn(
-                    "px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest",
-                    status === 'PRESENT' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                  )}>
-                    {status || 'ABSENT'}
-                  </span>
+                  {(() => {
+                    const displayObj = getAttendanceDisplay(status);
+                    return (
+                      <span className={cn("px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border", displayObj.color)}>
+                        {displayObj.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -1051,13 +1346,47 @@ export function Meetings() {
               )}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Meeting Time</label>
-                <input
-                  required
-                  type="time"
-                  value={defaultSetupData.time}
-                  onChange={(e) => setDefaultSetupData({ ...defaultSetupData, time: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
+                {(() => {
+                  const { time: timePart, ampm: ampmPart } = parseTo12hParts(defaultSetupData.time);
+                  const [selectedHour, selectedMinute] = timePart.split(':');
+                  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                  const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                  
+                  const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                    setDefaultSetupData({ ...defaultSetupData, time: `${hour}:${minute} ${ampm}` });
+                  };
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {hoursList.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {minutesList.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={ampmPart}
+                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1170,13 +1499,47 @@ export function Meetings() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Time</label>
-              <input
-                required
-                type="time"
-                value={scheduleData.time}
-                onChange={(e) => setScheduleData({ ...scheduleData, time: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
+              {(() => {
+                const { time: timePart, ampm: ampmPart } = parseTo12hParts(scheduleData.time);
+                const [selectedHour, selectedMinute] = timePart.split(':');
+                const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                
+                const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                  setScheduleData({ ...scheduleData, time: `${hour}:${minute} ${ampm}` });
+                };
+
+                return (
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      value={selectedHour}
+                      onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                    >
+                      {hoursList.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedMinute}
+                      onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                    >
+                      {minutesList.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={ampmPart}
+                      onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1254,7 +1617,7 @@ export function Meetings() {
                           </p>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-xs font-medium text-slate-600">{meeting.time || '07:30 AM'}</p>
+                          <p className="text-xs font-medium text-slate-600">{formatTime12h(meeting.time || '07:30')}</p>
                         </td>
                         <td className="py-4 px-4">
                           <p className="text-xs font-medium text-slate-600 truncate max-w-[150px]" title={meeting.location}>
@@ -1262,14 +1625,17 @@ export function Meetings() {
                           </p>
                         </td>
                         <td className="py-4 px-4 text-center">
-                          <span className={cn(
-                            "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
-                            status === 'PRESENT' ? "bg-emerald-50 text-emerald-600" : 
-                            status === 'ABSENT' ? "bg-red-50 text-red-600" :
-                            "bg-slate-50 text-slate-400"
-                          )}>
-                            {status || 'ABSENT'}
-                          </span>
+                          {(() => {
+                            const displayObj = getAttendanceDisplay(status);
+                            return (
+                              <span className={cn(
+                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                displayObj.color
+                              )}>
+                                {displayObj.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-4 px-4 text-right">
                           <p className="text-sm font-black text-navy">

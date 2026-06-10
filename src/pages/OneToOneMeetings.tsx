@@ -22,6 +22,7 @@ import { format, isAfter, parseISO } from 'date-fns';
 import { where, orderBy, collection, getDocs, query, or } from 'firebase/firestore';
 import { db } from '../firebase';
 import { cn } from '../lib/utils';
+import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 
 export function OneToOneMeetings() {
   const { profile } = useAuth();
@@ -440,7 +441,7 @@ export function OneToOneMeetings() {
                           <div className="md:col-span-1">
                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Date & Time</p>
                             <p className="text-[10px] font-bold text-navy">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
-                            <p className="text-[9px] text-slate-400 font-medium">{meeting.time}</p>
+                            <p className="text-[9px] text-slate-400 font-medium">{formatTime12h(meeting.time)}</p>
                           </div>
                           <div className="md:col-span-2">
                             <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Note</p>
@@ -608,13 +609,47 @@ export function OneToOneMeetings() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Time</label>
-                <input
-                  required
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  className="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
-                />
+                {(() => {
+                  const { time: timePart, ampm: ampmPart } = parseTo12hParts(formData.time);
+                  const [selectedHour, selectedMinute] = timePart.split(':');
+                  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                  const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                  
+                  const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                    setFormData({ ...formData, time: `${hour}:${minute} ${ampm}` });
+                  };
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {hoursList.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        {minutesList.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={ampmPart}
+                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -775,7 +810,7 @@ export function OneToOneMeetings() {
                           <span className="text-xs font-bold text-slate-600">{format(new Date(meeting.date), 'dd MMM yyyy')}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-slate-600">{meeting.time}</span>
+                          <span className="text-xs font-bold text-slate-600">{formatTime12h(meeting.time)}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className={cn(
@@ -918,7 +953,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, 
             <Clock size={12} className="text-primary" />
             <div className="min-w-0">
               <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Time</p>
-              <p className="text-[10px] font-black text-navy uppercase tracking-tight truncate">{meeting.time}</p>
+              <p className="text-[10px] font-black text-navy uppercase tracking-tight truncate">{formatTime12h(meeting.time)}</p>
             </div>
           </div>
         </div>

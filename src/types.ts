@@ -1,7 +1,7 @@
 export type UserRole = 'MASTER_ADMIN' | 'CHAPTER_ADMIN' | 'MEMBER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING';
 export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED';
-export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'VISITOR';
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE';
 
 export interface UserProfile {
   uid: string;
@@ -39,6 +39,8 @@ export interface Meeting {
   memberNotes?: Record<string, string>;
   notes?: string;
   isCompleted?: boolean;
+  isRecurring?: boolean;
+  isCancelled?: boolean;
 }
 
 export interface Referral {
