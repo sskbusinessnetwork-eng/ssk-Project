@@ -244,6 +244,12 @@ export function ThankYouSlips() {
                 <Award size={32} strokeWidth={1.5} />
               </div>
               <div>
+                <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase">
+                  Thank You Slips
+                </h1>
+                <p className="text-[10px] text-slate-300 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+                  Business Value generated through the network
+                </p>
               </div>
             </div>
             
@@ -450,6 +456,12 @@ export function ThankYouSlips() {
               <Award size={32} strokeWidth={1.5} />
             </div>
             <div>
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight uppercase">
+                My Thank You Slips
+              </h1>
+              <p className="text-[10px] text-slate-300 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+                Value generated and received in your network
+              </p>
             </div>
           </div>
           

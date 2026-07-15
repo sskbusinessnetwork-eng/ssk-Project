@@ -613,18 +613,29 @@ export function Meetings() {
   const masterAdminUpcoming = scheduledMeetings[0];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
+    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-100 pb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+            <Calendar size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
+              Meetings & Attendance
+            </h1>
+            <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+              Chapter schedule and attendance roster
+            </p>
+          </div>
         </div>
 
         {profile?.role === 'MASTER_ADMIN' && (
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 w-full md:w-auto">
-            <Filter size={16} className="text-slate-400" />
+          <div className="flex items-center gap-2 bg-neutral-50 px-4 py-2 rounded-xl border border-neutral-200/60 w-full md:w-auto focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary transition-all">
+            <Filter size={14} className="text-neutral-400" />
             <select
               value={selectedAdminId}
               onChange={(e) => setSelectedAdminId(e.target.value)}
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none flex-1 md:min-w-[150px]"
+              className="bg-transparent text-xs font-black text-neutral-700 outline-none flex-1 md:min-w-[150px] appearance-none cursor-pointer uppercase tracking-wider"
             >
               <option value="">All Chapters</option>
               {adminAdmins.map(admin => (
@@ -640,9 +651,9 @@ export function Meetings() {
               onClick={() => {
                 setIsDefaultSetupOpen(true);
               }}
-              className="flex items-center justify-center gap-2 px-4 md:px-6 py-3 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-all shadow-sm text-sm md:text-base"
+              className="flex items-center justify-center gap-2 h-11 px-5 bg-neutral-50 text-neutral-700 border border-neutral-200/80 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-neutral-100 transition-all active:scale-95 shadow-sm"
             >
-              <Settings size={18} />
+              <Settings size={14} />
               <span>Default Setup</span>
             </button>
             <button
@@ -653,9 +664,9 @@ export function Meetings() {
                   adminId: profile.uid
                 }));
               }}
-              className="flex items-center justify-center gap-2 px-4 md:px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 text-sm md:text-base"
+              className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-all active:scale-95 shadow-lg shadow-primary/10"
             >
-              <Calendar size={18} />
+              <Calendar size={14} />
               <span>Schedule Meeting</span>
             </button>
           </div>

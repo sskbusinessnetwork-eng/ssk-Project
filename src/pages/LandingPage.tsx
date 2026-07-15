@@ -9,7 +9,7 @@ import {
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
-import { UserProfile } from '../types';
+import { UserProfile, Category } from '../types';
 import { where, orderBy, limit } from 'firebase/firestore';
 import { format } from 'date-fns';
 
@@ -50,6 +50,24 @@ export function LandingPage() {
   });
   const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = firestoreService.subscribe<Category>('categories', [], (data) => {
+      // Filter Active/Enabled categories (case-insensitive checks, checking active status/enabled/isActive if present)
+      const activeCats = data.filter(cat => {
+        if ((cat as any).active === false) return false;
+        if ((cat as any).isActive === false) return false;
+        if ((cat as any).enabled === false) return false;
+        if ((cat as any).status === 'Inactive' || (cat as any).status === 'Disabled') return false;
+        return true;
+      });
+      // Sort alphabetically
+      const sorted = [...activeCats].sort((a, b) => a.name.localeCompare(b.name));
+      setCategories(sorted);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -793,11 +811,16 @@ export function LandingPage() {
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest ml-2">Business Category</label>
                     <select required value={formData.businessCategory} onChange={e => setFormData({...formData, businessCategory: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-bold text-[#0F2040]">
-                      <option value="">Select</option>
-                      <option value="IT">IT Services</option>
-                      <option value="Manufacturing">Manufacturing</option>
-                      <option value="Retail">Retail</option>
-                      <option value="Other">Other</option>
+                      {categories.length > 0 ? (
+                        <>
+                          <option value="">Select</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
+                        </>
+                      ) : (
+                        <option value="">No Business Categories Available.</option>
+                      )}
                     </select>
                   </div>
                   <div className="space-y-2 md:space-y-3">

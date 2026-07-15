@@ -111,7 +111,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       });
 
       // Save user session in localStorage
-      localStorage.setItem('user', JSON.stringify({ uid, phone: normalizedPhone }));
+      localStorage.setItem('user', JSON.stringify({ 
+        uid, 
+        phone: normalizedPhone,
+        profile: userProfile
+      }));
 
       setIsSuccess(true);
       if (onSuccess) onSuccess(formData.role);

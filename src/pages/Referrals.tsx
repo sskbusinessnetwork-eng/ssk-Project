@@ -12,7 +12,8 @@ import {
   ArrowRightLeft,
   Heart,
   AlertCircle,
-  Share2
+  Share2,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -330,8 +331,25 @@ export function Referrals() {
       : referrals;
 
     return (
-      <div className="space-y-6 max-w-7xl mx-auto pb-24 px-4">
-        <div className="bg-white rounded-[20px] card-shadow border border-slate-100 overflow-hidden">
+      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 pb-24">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-100 pb-6 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+              <Users size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
+                Business Referrals
+              </h1>
+              <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+                Monitor business transactions and conversion rates
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[24px] border border-neutral-100 shadow-xl shadow-neutral-100/30 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -438,7 +456,33 @@ export function Referrals() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
+    <div className="space-y-6 max-w-2xl mx-auto pb-24 px-4 sm:px-0 py-8 md:py-12">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-100 pb-6 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+            <Users size={24} />
+          </div>
+          <div>
+            <h1 className="text-lg md:text-xl font-black text-neutral-900 tracking-tight uppercase">
+              My Referrals
+            </h1>
+            <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.12em] mt-0.5">
+              Pass and receive business opportunities
+            </p>
+          </div>
+        </div>
+        {!isPending && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-primary/10 hover:bg-primary/90 hover:shadow-xl shrink-0"
+          >
+            <Plus size={14} />
+            <span>Pass Referral</span>
+          </button>
+        )}
+      </div>
+
       {/* Feedback Messages */}
       {successMessage && (
         <motion.div 
@@ -463,7 +507,7 @@ export function Referrals() {
       )}
 
       {/* Tabs & Action */}
-      <div className="bg-white p-4 rounded-[14px] card-shadow border border-border space-y-4">
+      <div className="bg-white p-4 rounded-[20px] shadow-xl shadow-neutral-100/30 border border-neutral-100 space-y-4">
         <div className="flex gap-2 p-1 bg-muted rounded-xl">
           <button
             onClick={() => setFilter('received')}

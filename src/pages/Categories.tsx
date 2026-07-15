@@ -66,6 +66,16 @@ export function Categories() {
     }
   };
 
+  const toggleStatus = async (cat: Category) => {
+    const currentStatus = (cat as any).status || 'Active';
+    const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    try {
+      await firestoreService.update('categories', cat.id, { status: newStatus });
+    } catch (err: any) {
+      alert(err.message || 'Failed to update category status');
+    }
+  };
+
   const filteredCategories = categories.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => a.name.localeCompare(b.name));
@@ -104,11 +114,29 @@ export function Categories() {
           {filteredCategories.length > 0 ? (
             filteredCategories.map((cat) => (
               <div key={cat.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                    <Tags size={16} />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+                      <Tags size={16} />
+                    </div>
+                    <div>
+                      <span className="font-medium text-slate-700 block">{cat.name}</span>
+                      <span className={`text-[9px] font-black uppercase tracking-wider ${((cat as any).status || 'Active') === 'Active' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {((cat as any).status || 'Active')}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-medium text-slate-700">{cat.name}</span>
+                  
+                  <button
+                    onClick={() => toggleStatus(cat)}
+                    className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-full transition-all border ${
+                      ((cat as any).status || 'Active') === 'Active'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {((cat as any).status || 'Active') === 'Active' ? 'Deactivate' : 'Activate'}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button

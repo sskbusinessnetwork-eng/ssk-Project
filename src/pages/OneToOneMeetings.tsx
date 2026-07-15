@@ -287,17 +287,28 @@ export function OneToOneMeetings() {
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-4 py-6 md:py-10">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
+    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-100 pb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+            <Users size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
+              1-to-1 Meetings
+            </h1>
+            <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+              Personalized direct business networking
+            </p>
+          </div>
         </div>
         {!isAdmin && !isChapterAdmin && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:shadow-2xl hover:shadow-primary/30 transition-all active:scale-95 text-xs shrink-0"
+            className="flex items-center justify-center gap-2 px-6 h-11 bg-primary text-white rounded-xl font-black uppercase tracking-wider transition-all active:scale-95 text-xs shrink-0 shadow-lg shadow-primary/10 hover:bg-primary/90 hover:shadow-xl"
           >
-            <Plus size={18} />
-            <span>Schedule Meeting</span>
+            <Plus size={16} />
+            <span>Schedule 1:1 Meeting</span>
           </button>
         )}
       </header>

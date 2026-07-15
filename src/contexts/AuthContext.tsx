@@ -24,15 +24,46 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any | null>(() => {
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.uid ? { uid: parsed.uid } : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem('user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.profile || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState(() => {
+    return !localStorage.getItem('user');
+  });
+
   const [error, setError] = useState<string | null>(null);
 
   const login = (userProfile: UserProfile) => {
     setUser({ uid: userProfile.uid });
     setProfile(userProfile);
-    localStorage.setItem('user', JSON.stringify({ uid: userProfile.uid, phone: userProfile.phone }));
+    localStorage.setItem('user', JSON.stringify({ 
+      uid: userProfile.uid, 
+      phone: userProfile.phone,
+      profile: userProfile
+    }));
   };
 
   const logout = async () => {
@@ -54,32 +85,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      setLoading(true);
+    const syncProfile = async () => {
       const savedUser = localStorage.getItem('user');
-      
-      if (savedUser) {
-        try {
-          const { uid } = JSON.parse(savedUser);
-          const userDoc = await getDoc(doc(db, 'users', uid));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as UserProfile;
-            setUser({ uid });
-            setProfile({ uid, ...userData });
-          } else {
-            localStorage.removeItem('user');
-          }
-        } catch (err: any) {
-          console.error("Error restoring session:", err);
-          localStorage.removeItem('user');
-        }
+      if (!savedUser) {
+        setLoading(false);
+        return;
       }
-      
-      setLoading(false);
+
+      try {
+        const { uid } = JSON.parse(savedUser);
+        const userDoc = await getDoc(doc(db, 'users', uid));
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data() as UserProfile;
+          const updatedProfile = { uid, ...userData };
+          setUser({ uid });
+          setProfile(updatedProfile);
+          localStorage.setItem('user', JSON.stringify({
+            uid,
+            phone: userData.phone,
+            profile: updatedProfile
+          }));
+        } else {
+          // Profile deleted on the server, clear session
+          logout();
+        }
+      } catch (err: any) {
+        console.error("Error syncing profile in background:", err);
+        const errorMsg = err?.message || String(err);
+        const isOffline = errorMsg.includes('offline') || 
+                          errorMsg.includes('unavailable') || 
+                          errorMsg.includes('Could not reach') || 
+                          errorMsg.includes('network');
+        
+        // Only log out if it is definitively a non-network error indicating permission/not-found issues
+        if (!isOffline && (errorMsg.includes('permission-denied') || errorMsg.includes('not-found'))) {
+          logout();
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
-    initAuth();
+    syncProfile();
   }, []);
 
   return (

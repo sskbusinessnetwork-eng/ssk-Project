@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserPlus, Lock } from 'lucide-react';
+import { UserPlus, Lock, Smartphone, Briefcase, Tag, Globe, MapPin, Calendar, HelpCircle } from 'lucide-react';
 import { Modal } from '../Modal';
 import { Category } from '../../types';
 
@@ -34,155 +34,187 @@ export function AddMemberModal({
       onClose={onClose}
       title="Add New Member"
     >
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-5 py-2">
         {error && (
-          <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold">
+          <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-bold flex items-center gap-2">
+            <HelpCircle size={16} />
             {error}
           </div>
         )}
+
         {/* Chapter Admin Field (Read-only) */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Chapter Admin</label>
+        <div className="space-y-2">
+          <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Chapter Admin Assignment</label>
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <input
+              type="text"
+              value={profile?.name || profile?.displayName || 'Chapter Admin'}
+              disabled
+              className="w-full h-11 pl-8 pr-4 rounded-xl bg-neutral-50 border border-neutral-100 text-xs font-bold text-neutral-600 opacity-90 cursor-not-allowed"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Full Name</label>
           <input
+            required
             type="text"
-            value={profile?.name || profile?.displayName || ''}
-            disabled
-            className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent text-sm font-bold opacity-70 cursor-not-allowed"
+            placeholder="John Doe"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full h-11 px-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Full Name</label>
-            <input
-              required
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Phone Number</label>
-            <input
-              required
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Password</label>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Phone Number</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+              <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="tel"
+                placeholder="+91 99999 99999"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Login Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input
                 required
                 type="password"
+                placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
               />
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Business Name</label>
-            <input
-              required
-              type="text"
-              value={formData.businessName}
-              onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Business Name</label>
+            <div className="relative">
+              <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="text"
+                placeholder="Acme Corp"
+                value={formData.businessName}
+                onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Category</label>
-            <select
-              required
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold appearance-none cursor-pointer"
-            >
-              <option value="">Select Category</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">State</label>
-            <input
-              required
-              type="text"
-              value={formData.state}
-              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">City</label>
-            <input
-              required
-              type="text"
-              value={formData.city}
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Industry Category</label>
+            <div className="relative">
+              <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <select
+                required
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800 appearance-none cursor-pointer"
+              >
+                <option value="">Select Category</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Area</label>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">State</label>
+            <div className="relative">
+              <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="text"
+                placeholder="Karnataka"
+                value={formData.state}
+                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">City</label>
+            <div className="relative">
+              <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="text"
+                placeholder="Bengaluru"
+                value={formData.city}
+                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Area</label>
             <input
               required
               type="text"
+              placeholder="Indiranagar"
               value={formData.area}
               onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
+              className="w-full h-11 px-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Address</label>
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Complete Address</label>
             <input
               required
               type="text"
+              placeholder="123, 100 Feet Rd"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
+              className="w-full h-11 px-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Subscription Start Date</label>
-            <input
-              required
-              type="date"
-              value={formData.subscriptionStart}
-              onChange={(e) => setFormData({ ...formData, subscriptionStart: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest font-mono">Subscription Start</label>
+            <div className="relative">
+              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="date"
+                value={formData.subscriptionStart}
+                onChange={(e) => setFormData({ ...formData, subscriptionStart: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Subscription End Date</label>
-            <input
-              required
-              type="date"
-              value={formData.subscriptionEnd}
-              onChange={(e) => setFormData({ ...formData, subscriptionEnd: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
-            />
+          <div className="space-y-2">
+            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest font-mono">Subscription End</label>
+            <div className="relative">
+              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="date"
+                value={formData.subscriptionEnd}
+                onChange={(e) => setFormData({ ...formData, subscriptionEnd: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-xl bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800"
+              />
+            </div>
           </div>
         </div>
 
@@ -190,17 +222,17 @@ export function AddMemberModal({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-12 bg-primary text-white rounded-xl font-bold uppercase tracking-widest hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full h-12 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2 hover:bg-primary/90"
           >
             {isSubmitting ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Creating Member...
+                <span>Creating Member...</span>
               </>
             ) : (
               <>
-                <UserPlus size={18} />
-                Create Member
+                <UserPlus size={16} />
+                <span>Create Member Account</span>
               </>
             )}
           </button>

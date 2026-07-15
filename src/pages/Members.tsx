@@ -452,37 +452,36 @@ export function Members() {
         </motion.div>
       )}
 
-      {/* Red Header */}
-      <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
+      {/* Header */}
+      <div className="pt-6 pb-12 px-4">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between max-w-7xl mx-auto gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white">
-              <Users size={28} />
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+              <Users size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white uppercase tracking-widest">
+              <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
                 Member Directory
               </h1>
-              <p className="text-xs text-white/70 font-medium tracking-wide">Manage memberships and roles</p>
+              <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">Manage roster, roles, and status</p>
             </div>
           </div>
           
           {isChapterAdmin && (
             <button
               onClick={handleOpenAddModal}
-              className="h-11 px-6 bg-white text-primary rounded-xl text-xs font-bold uppercase tracking-widest transition-all active:scale-95 shadow-lg flex items-center gap-2"
+              className="h-11 px-6 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-primary/10 flex items-center gap-2 hover:bg-primary/90 hover:shadow-xl"
             >
-              <UserPlus size={18} />
+              <UserPlus size={16} />
               Add Member
             </button>
           )}
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 -mt-12 relative z-20 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 space-y-6">
         {isChapterAdmin && (
-          <div className="flex gap-2 p-1 bg-white/10 backdrop-blur-md rounded-xl w-fit mx-auto mb-6">
+          <div className="flex gap-2 p-1 bg-neutral-100/80 backdrop-blur-md rounded-xl w-fit mb-6 border border-neutral-200/30">
             <button 
               onClick={() => {
                 setActiveTab('directory');
@@ -490,7 +489,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'directory' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
+                activeTab === 'directory' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
               )}
             >
               Member Directory
@@ -502,7 +501,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'invites' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
+                activeTab === 'invites' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
               )}
             >
               Member Invites
@@ -514,7 +513,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'positions' ? "bg-white text-primary shadow-lg" : "text-white/70 hover:bg-white/10"
+                activeTab === 'positions' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
               )}
             >
               Positions
@@ -525,16 +524,16 @@ export function Members() {
         {activeTab === 'directory' ? (
           <>
             {/* Search and Filters */}
-            <div className="bg-white p-6 rounded-[20px] card-shadow border border-border space-y-6">
+            <div className="bg-white p-6 rounded-[24px] border border-neutral-100 shadow-xl shadow-neutral-100/30 space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-4 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
                   <input
                     type="text"
                     placeholder="Search members..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-muted border border-transparent focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold"
+                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-neutral-50 border border-neutral-200/50 focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold focus:ring-2 focus:ring-primary/10"
                   />
                 </div>
                 
@@ -542,7 +541,7 @@ export function Members() {
                   <select
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    className="h-11 px-4 bg-muted border border-transparent rounded-xl text-xs font-bold text-text-primary uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px]"
+                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-bold text-neutral-700 uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
                   >
                     <option value="">All Categories</option>
                     {categories.map(cat => (
@@ -555,12 +554,12 @@ export function Members() {
                     placeholder="City"
                     value={filters.city}
                     onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                    className="h-11 px-4 bg-muted border border-transparent rounded-xl text-xs font-bold text-text-primary focus:bg-white focus:border-primary outline-none transition-all min-w-[120px]"
+                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-bold text-neutral-700 focus:bg-white focus:border-primary outline-none transition-all min-w-[120px] focus:ring-2 focus:ring-primary/10"
                   />
 
                   <button
                     onClick={() => setFilters({ category: '', state: '', city: '', area: '' })}
-                    className="h-11 px-4 text-[10px] font-bold text-text-secondary hover:text-primary transition-colors uppercase tracking-widest"
+                    className="h-11 px-4 text-[10px] font-black text-neutral-400 hover:text-primary transition-colors uppercase tracking-widest"
                   >
                     Reset
                   </button>
