@@ -87,8 +87,8 @@ export function Notifications() {
             <Bell size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-neutral-900 uppercase tracking-widest">Notifications</h1>
-            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Stay updated with your network</p>
+            <h1 className="text-xl font-bold text-white uppercase tracking-widest">Notifications</h1>
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Stay updated with your network</p>
           </div>
         </div>
         
@@ -104,7 +104,7 @@ export function Notifications() {
           {notifications.length > 0 && (
             <button
               onClick={clearAllNotifications}
-              className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-[10px] font-bold uppercase tracking-widest"
+              className="flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors text-[10px] font-bold uppercase tracking-widest"
             >
               <Trash2 size={14} />
               Clear All
@@ -137,7 +137,7 @@ export function Notifications() {
                 }
               }}
               className={cn(
-                "bg-white p-4 rounded-[16px] border border-neutral-200 card-shadow flex gap-4 items-start group hover:border-primary/30 transition-all cursor-pointer relative overflow-hidden",
+                "bg-[#111827] p-4 rounded-[16px] border border-white/5 flex gap-4 items-start group hover:border-primary/30 transition-all cursor-pointer relative overflow-hidden",
                 !notif.read && "border-l-4 border-l-primary"
               )}
             >
@@ -146,12 +146,12 @@ export function Notifications() {
               )}
               <div className={cn(
                 "w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
-                (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-50 text-emerald-600" :
-                notif.type === 'SUBSCRIPTION' ? "bg-red-50 text-red-600" :
-                notif.type === 'REFERRAL' ? "bg-primary/5 text-primary" :
-                notif.type === 'GUEST_REGISTRATION' ? "bg-purple-50 text-purple-600" :
-                notif.type === 'THANKYOU' ? "bg-amber-50 text-amber-600" :
-                "bg-primary/5 text-primary"
+                (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-500/10 text-emerald-400" :
+                notif.type === 'SUBSCRIPTION' ? "bg-red-500/10 text-red-400" :
+                notif.type === 'REFERRAL' ? "bg-primary/10 text-primary" :
+                notif.type === 'GUEST_REGISTRATION' ? "bg-purple-500/10 text-purple-400" :
+                notif.type === 'THANKYOU' ? "bg-amber-500/10 text-amber-400" :
+                "bg-primary/10 text-primary"
               )}>
                 {(notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? <Award size={20} /> :
                  notif.type === 'SUBSCRIPTION' ? <AlertTriangle size={20} /> :
@@ -164,9 +164,9 @@ export function Notifications() {
                 <div className="flex items-center justify-between mb-1">
                   <span className={cn(
                     "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md",
-                    (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-100 text-emerald-700" :
-                    notif.type === 'SUBSCRIPTION' ? "bg-red-100 text-red-700" :
-                    "bg-neutral-100 text-neutral-600"
+                    (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-500/10 text-emerald-400" :
+                    notif.type === 'SUBSCRIPTION' ? "bg-red-500/10 text-red-400" :
+                    "bg-[#151C2E] text-neutral-400"
                   )}>
                     {notif.type.replace('_', ' ')}
                   </span>
@@ -176,15 +176,15 @@ export function Notifications() {
                 </div>
                 <p className={cn(
                   "text-sm leading-relaxed",
-                  !notif.read ? "font-bold text-neutral-900" : "font-medium text-neutral-600"
+                  !notif.read ? "font-bold text-white" : "font-medium text-neutral-400"
                 )}>{notif.message}</p>
               </div>
             </motion.div>
           ))
         ) : (
-          <div className="py-20 text-center bg-white rounded-[24px] border border-dashed border-neutral-200">
-            <Bell size={48} className="mx-auto text-neutral-200 mb-4" />
-            <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-widest">No notifications</h3>
+          <div className="py-20 text-center bg-[#111827] rounded-[24px] border border-dashed border-white/5">
+            <Bell size={48} className="mx-auto text-neutral-600 mb-4" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-widest">No notifications</h3>
             <p className="text-xs text-neutral-400 font-medium mt-1">We'll notify you when something important happens.</p>
           </div>
         )}

@@ -56,7 +56,7 @@ export function EditMemberModal({
             placeholder="John Doe"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full h-11 px-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+            className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
           />
         </div>
 
@@ -71,7 +71,7 @@ export function EditMemberModal({
                 placeholder="+91 99999 99999"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
             </div>
           </div>
@@ -85,7 +85,7 @@ export function EditMemberModal({
                 placeholder="Acme Corp"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
             </div>
           </div>
@@ -100,11 +100,11 @@ export function EditMemberModal({
                 required
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800 appearance-none cursor-pointer"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white appearance-none cursor-pointer"
               >
-                <option value="">Select Category</option>
+                <option value="" className="bg-[#151C2E] text-white">Select Category</option>
                 {categories.map(cat => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
                 ))}
               </select>
             </div>
@@ -118,7 +118,7 @@ export function EditMemberModal({
                 value={formData.password || ''}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="Leave blank to keep current"
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900 placeholder:text-neutral-400 placeholder:font-normal placeholder:text-xs"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-neutral-400 placeholder:font-normal placeholder:text-xs"
               />
             </div>
           </div>
@@ -135,7 +135,7 @@ export function EditMemberModal({
                 placeholder="Karnataka"
                 value={formData.state}
                 onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
             </div>
           </div>
@@ -149,7 +149,7 @@ export function EditMemberModal({
                 placeholder="Bengaluru"
                 value={formData.city}
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
             </div>
           </div>
@@ -164,7 +164,7 @@ export function EditMemberModal({
               placeholder="Indiranagar"
               value={formData.area}
               onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-              className="w-full h-11 px-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
             />
           </div>
           <div className="space-y-2">
@@ -175,7 +175,7 @@ export function EditMemberModal({
               placeholder="123, 100 Feet Rd"
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full h-11 px-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-900"
+              className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
             />
           </div>
         </div>

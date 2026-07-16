@@ -481,7 +481,7 @@ export function Members() {
 
       <div className="max-w-7xl mx-auto px-4 space-y-6">
         {isChapterAdmin && (
-          <div className="flex gap-2 p-1 bg-neutral-100/80 backdrop-blur-md rounded-[12px] w-fit mb-6 border border-neutral-200/30">
+          <div className="flex gap-2 p-1 bg-[#151C2E] backdrop-blur-md rounded-[12px] w-fit mb-6 border border-white/5">
             <button 
               onClick={() => {
                 setActiveTab('directory');
@@ -489,7 +489,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'directory' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                activeTab === 'directory' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
               )}
             >
               Member Directory
@@ -501,7 +501,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'invites' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                activeTab === 'invites' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
               )}
             >
               Member Invites
@@ -513,7 +513,7 @@ export function Members() {
               }}
               className={cn(
                 "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'positions' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                activeTab === 'positions' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
               )}
             >
               Positions
@@ -524,7 +524,7 @@ export function Members() {
         {activeTab === 'directory' ? (
           <>
             {/* Search and Filters */}
-            <div className="bg-white p-6 rounded-[16px] border border-neutral-200 shadow-sm space-y-6">
+            <div className="bg-card p-6 rounded-[16px] border border-white/5 shadow-card space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-4 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
@@ -533,7 +533,7 @@ export function Members() {
                     placeholder="Search members..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 rounded-[12px] bg-neutral-50 border border-neutral-200/50 focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium focus:ring-2 focus:ring-primary/10"
+                    className="w-full h-11 pl-11 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary outline-none transition-all text-sm font-medium focus:ring-4 focus:ring-primary/15 text-white placeholder:text-[#8A93A7]"
                   />
                 </div>
                 
@@ -541,11 +541,11 @@ export function Members() {
                   <select
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-[12px] text-xs font-semibold text-neutral-700 uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
+                    className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-semibold text-neutral-200 uppercase tracking-wider focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-4 focus:ring-primary/15"
                   >
-                    <option value="">All Categories</option>
+                    <option value="" className="bg-[#151C2E] text-white">All Categories</option>
                     {categories.map(cat => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
                     ))}
                   </select>
                   
@@ -554,7 +554,7 @@ export function Members() {
                     placeholder="City"
                     value={filters.city}
                     onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-[12px] text-xs font-bold text-neutral-700 focus:bg-white focus:border-primary outline-none transition-all min-w-[120px] focus:ring-2 focus:ring-primary/10"
+                    className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-bold text-neutral-200 focus:border-primary outline-none transition-all min-w-[120px] focus:ring-4 focus:ring-primary/15 placeholder:text-[#8A93A7]"
                   />
 
                   <button
@@ -584,21 +584,21 @@ export function Members() {
           </>
         ) : activeTab === 'invites' ? (
           <div className="space-y-4">
-            <div className="bg-white p-6 rounded-[20px] card-shadow border border-border">
-              <h3 className="text-lg font-bold text-neutral-900 mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
+            <div className="bg-card p-6 rounded-[20px] card-shadow border border-white/5">
+              <h3 className="text-lg font-bold text-white mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
               <div className="space-y-4">
                 {memberInvites.length > 0 ? (
                   memberInvites.map((invite) => {
                     const inviter = members.find(m => m.uid === invite.createdBy);
                     return (
-                      <div key={invite.id} className="p-4 bg-neutral-50 rounded-[16px] border border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div key={invite.id} className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-primary/10 text-primary rounded-[12px] flex items-center justify-center">
                             <UserPlus size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-neutral-900">{invite.guestName}</h4>
-                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
+                            <h4 className="text-sm font-bold text-white">{invite.guestName}</h4>
+                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
                             <p className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1">
                               Invited By: {inviter?.name || 'Member'}
                             </p>
@@ -607,11 +607,11 @@ export function Members() {
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden md:block">
                             <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Date</p>
-                            <p className="text-xs font-bold text-neutral-700">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
+                            <p className="text-xs font-bold text-neutral-200">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
                           </div>
                           <Link 
                             to={`/guests?highlight=${invite.id}`}
-                            className="px-4 py-2 bg-white border border-border text-primary rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary/5 transition-all"
+                            className="px-4 py-2 bg-card border border-white/5 text-primary rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary hover:text-white transition-all"
                           >
                             View in Guests
                           </Link>

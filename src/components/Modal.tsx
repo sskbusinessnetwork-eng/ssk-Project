@@ -27,7 +27,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`relative w-full ${maxWidth} bg-white rounded-[24px] shadow-2xl overflow-hidden border border-border`}
+            className={`relative w-full ${maxWidth} bg-card backdrop-blur-2xl rounded-[24px] shadow-2xl overflow-hidden border border-white/5`}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-primary" />
             <div className="p-6 md:p-6">

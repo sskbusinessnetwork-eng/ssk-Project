@@ -30,13 +30,13 @@ export function SubscriptionModal({
       title="Member Subscription"
     >
       <form onSubmit={onSubmit} className="space-y-5 py-2">
-        <div className="p-4 bg-primary/[0.03] border border-primary/10 rounded-[16px] flex items-start gap-3">
+        <div className="p-4 bg-primary/[0.08] border border-primary/15 rounded-[16px] flex items-start gap-3">
           <Calendar className="text-primary mt-0.5 shrink-0" size={18} />
           <div>
-            <h4 className="text-xs font-bold text-neutral-900 uppercase tracking-wider mb-1">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-1">
               {selectedMember?.name || selectedMember?.displayName || 'Active Member'}
             </h4>
-            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest leading-normal">
+            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest leading-normal">
               Modify joining & validity dates. System warnings will be sent automatically based on expiration.
             </p>
           </div>
@@ -51,7 +51,7 @@ export function SubscriptionModal({
               type="date"
               value={subDates.subscriptionStart}
               onChange={(e) => setSubDates({ ...subDates, subscriptionStart: e.target.value })}
-              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800"
+              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white"
             />
           </div>
         </div>
@@ -65,7 +65,7 @@ export function SubscriptionModal({
               type="date"
               value={subDates.subscriptionEnd}
               onChange={(e) => setSubDates({ ...subDates, subscriptionEnd: e.target.value })}
-              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-neutral-50/50 border border-neutral-200/60 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-semibold text-neutral-800"
+              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white"
             />
           </div>
         </div>
