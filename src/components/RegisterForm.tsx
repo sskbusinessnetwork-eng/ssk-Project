@@ -145,12 +145,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
 
   if (isSuccess) {
     return (
-      <div className="text-center py-12 space-y-8">
+      <div className="text-center py-8 space-y-8">
         <div className="w-24 h-24 bg-secondary/10 text-secondary rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl shadow-secondary/10 rotate-3">
           <CheckCircle2 size={48} />
         </div>
         <div className="space-y-3">
-          <h2 className="text-3xl font-black text-navy tracking-tight uppercase">Success!</h2>
+          <h2 className="text-3xl font-bold text-navy tracking-tight uppercase">Success!</h2>
           <p className="text-muted-foreground font-medium text-sm leading-relaxed">Your account has been created. We're redirecting you to your dashboard now...</p>
         </div>
         <div className="flex justify-center">
@@ -170,7 +170,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       )}
 
       <div className="space-y-4">
-        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
+        <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <User size={12} className="text-primary" /> Full Name
         </label>
         <input
@@ -179,12 +179,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           value={formData.displayName}
           onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
           placeholder="Enter your full name"
-          className="w-full px-8 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-black text-navy placeholder:text-neutral-300"
+          className="w-full px-6 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-neutral-300"
         />
       </div>
 
       <div className="space-y-4">
-        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
+        <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <Phone size={12} className="text-primary" /> Phone Number
         </label>
         <input
@@ -193,12 +193,12 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           value={formData.phone}
           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
           placeholder="Enter phone number"
-          className="w-full px-8 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-black text-navy placeholder:text-neutral-300"
+          className="w-full px-6 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-neutral-300"
         />
       </div>
 
       <div className="space-y-4">
-        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
+        <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <Lock size={12} className="text-primary" /> Password
         </label>
         <div className="relative">
@@ -208,7 +208,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             placeholder="Create a password"
-            className="w-full px-8 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-black text-navy placeholder:text-neutral-300 pr-16"
+            className="w-full px-6 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-neutral-300 pr-16"
           />
           <button
             type="button"
@@ -221,7 +221,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       </div>
 
       <div className="space-y-4">
-        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
+        <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <Lock size={12} className="text-primary" /> Confirm Password
         </label>
         <div className="relative">
@@ -231,7 +231,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
             value={formData.confirmPassword}
             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
             placeholder="Confirm your password"
-            className="w-full px-8 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-black text-navy placeholder:text-neutral-300 pr-16"
+            className="w-full px-6 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-neutral-300 pr-16"
           />
           <button
             type="button"
@@ -244,14 +244,14 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       </div>
 
       <div className="space-y-4">
-        <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
+        <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <ShieldCheck size={12} className="text-primary" /> Select Role
         </label>
         <select
           required
           value={formData.role}
           onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-          className="w-full px-8 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-black text-navy"
+          className="w-full px-6 py-5 rounded-[2rem] border-2 border-neutral-50 bg-neutral-50/50 focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy"
         >
           <option value="MEMBER">Member</option>
           <option value="CHAPTER_ADMIN">Chapter Admin</option>
@@ -264,30 +264,30 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-8 p-8 bg-neutral-50 rounded-[3rem] border-2 border-neutral-100"
+          className="space-y-8 p-6 bg-neutral-50 rounded-[3rem] border-2 border-neutral-100"
         >
-          <p className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] mb-4 ml-2">Chapter Details</p>
+          <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] mb-4 ml-2">Chapter Details</p>
           
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">Chapter Name <span className="text-red-500">*</span></label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">Chapter Name <span className="text-red-500">*</span></label>
             <input
               required
               type="text"
               value={formData.chapterName}
               onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
               placeholder="Enter chapter name"
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">Business Name (Optional)</label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">Business Name (Optional)</label>
             <input
               type="text"
               value={formData.businessName}
               onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
               placeholder="Enter business name"
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs"
             />
           </div>
         </motion.div>
@@ -297,55 +297,55 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-8 p-8 bg-neutral-50 rounded-[3rem] border-2 border-neutral-100"
+          className="space-y-8 p-6 bg-neutral-50 rounded-[3rem] border-2 border-neutral-100"
         >
-          <p className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] mb-4 ml-2">Location Details</p>
+          <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] mb-4 ml-2">Location Details</p>
           
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">State</label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">State</label>
             <input
               required
               type="text"
               value={formData.state}
               onChange={(e) => setFormData({ ...formData, state: e.target.value })}
               placeholder="Enter state"
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">City</label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">City</label>
             <input
               required
               type="text"
               value={formData.city}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
               placeholder="Enter city"
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">Area</label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">Area</label>
             <input
               required
               type="text"
               value={formData.area}
               onChange={(e) => setFormData({ ...formData, area: e.target.value })}
               placeholder="Enter area"
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.3em] ml-2">Address</label>
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.3em] ml-2">Address</label>
             <textarea
               required
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               placeholder="Enter full address"
               rows={3}
-              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-black text-navy text-xs resize-none"
+              className="w-full px-6 py-4 rounded-[1.5rem] border-2 border-white bg-white focus:border-primary outline-none transition-all font-bold text-navy text-xs resize-none"
             />
           </div>
         </motion.div>
@@ -358,7 +358,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       <button
         type="submit"
         disabled={regLoading}
-        className="w-full py-6 bg-navy text-white rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs hover:bg-secondary transition-all shadow-2xl shadow-navy/20 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-4"
+        className="w-full py-6 bg-navy text-white rounded-[2rem] font-bold uppercase tracking-[0.2em] text-xs hover:bg-secondary transition-all shadow-2xl shadow-navy/20 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-4"
       >
         {regLoading ? (
           <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />

@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Plus, CircleCheck as CheckCircle2, Circle as XCircle, UserPlus, Clock, ChevronRight, Users, MapPin, FileText, Save, TrendingUp, CircleAlert as AlertCircle, Settings, Shield, ListFilter as Filter, Info } from 'lucide-react';
+import { 
+  Calendar, 
+  Plus, 
+  CheckCircle2, 
+  XCircle, 
+  UserPlus, 
+  Clock, 
+  ChevronRight,
+  Users,
+  MapPin,
+  FileText,
+  Save,
+  TrendingUp,
+  AlertCircle,
+  Settings,
+  Shield,
+  Filter,
+  Info
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
@@ -29,7 +47,7 @@ export function getAttendanceDisplay(status?: string) {
   if (statusUpper === 'SUBSTITUTE') {
     return { label: 'Substitute', color: 'bg-amber-50 text-amber-600 border-amber-100' };
   }
-  return { label: status, color: 'bg-neutral-50 text-text-secondary border-neutral-200/80' };
+  return { label: status, color: 'bg-[#F9FAFB] text-[#4B5563] border-[#F3F4F6]' };
 }
 
 const WEEKDAYS: Record<string, number> = {
@@ -568,15 +586,15 @@ export function Meetings() {
       return { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200' };
     }
     if (meeting.isCompleted) {
-      return { label: 'Completed', color: 'bg-neutral-100 text-text-secondary border-neutral-200' };
+      return { label: 'Completed', color: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' };
     }
     const meetingDate = getMeetingExactDateTime(meeting);
     
     if (meetingDate < currentTime) {
-      return { label: 'Completed', color: 'bg-neutral-100 text-text-secondary border-neutral-200' };
+      return { label: 'Completed', color: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' };
     }
     
-    return { label: 'Upcoming', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+    return { label: 'Upcoming', color: 'bg-blue-100 text-primary border-blue-200' };
   };
 
   const filteredMeetings = selectedAdminId 
@@ -595,30 +613,29 @@ export function Meetings() {
   const masterAdminUpcoming = scheduledMeetings[0];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-200/80 pb-6">
+    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-100 pb-6">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/10">
-
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
             <Calendar size={24} />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">
+            <h1 className="text-xl md:text-2xl font-bold text-neutral-900 tracking-tight uppercase">
               Meetings & Attendance
             </h1>
-            <p className="text-sm text-text-secondary font-medium mt-0.5">
+            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.15em] mt-0.5">
               Chapter schedule and attendance roster
             </p>
           </div>
         </div>
 
         {profile?.role === 'MASTER_ADMIN' && (
-          <div className="flex items-center gap-2 bg-neutral-50 px-4 py-2 rounded-xl border border-neutral-200/80 w-full md:w-auto focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary transition-all">
-            <Filter size={16} className="text-neutral-400" />
+          <div className="flex items-center gap-2 bg-neutral-50 px-4 py-2 rounded-[12px] border border-neutral-200/60 w-full md:w-auto focus-within:ring-2 focus-within:ring-primary/10 focus-within:border-primary transition-all">
+            <Filter size={14} className="text-neutral-400" />
             <select
               value={selectedAdminId}
               onChange={(e) => setSelectedAdminId(e.target.value)}
-              className="bg-transparent text-sm font-medium text-text-primary outline-none flex-1 md:min-w-[150px] appearance-none cursor-pointer"
+              className="bg-transparent text-xs font-bold text-neutral-700 outline-none flex-1 md:min-w-[150px] appearance-none cursor-pointer uppercase tracking-wider"
             >
               <option value="">All Chapters</option>
               {adminAdmins.map(admin => (
@@ -634,9 +651,9 @@ export function Meetings() {
               onClick={() => {
                 setIsDefaultSetupOpen(true);
               }}
-              className="flex items-center justify-center gap-2 h-11 px-5 bg-white text-text-primary border border-neutral-200/80 rounded-xl text-sm font-bold hover:bg-neutral-50 hover:border-neutral-300 transition-all active:scale-95 shadow-sm"
+              className="flex items-center justify-center gap-2 h-11 px-5 bg-neutral-50 text-neutral-700 border border-neutral-200/80 rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-neutral-100 transition-all active:scale-95 shadow-sm"
             >
-              <Settings size={16} />
+              <Settings size={14} />
               <span>Default Setup</span>
             </button>
             <button
@@ -647,9 +664,9 @@ export function Meetings() {
                   adminId: profile.uid
                 }));
               }}
-              className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-all active:scale-95 shadow-lg shadow-primary/20"
+              className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10"
             >
-              <Calendar size={16} />
+              <Calendar size={14} />
               <span>Schedule Meeting</span>
             </button>
           </div>
@@ -657,7 +674,7 @@ export function Meetings() {
       </header>
 
       {isPending && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-[20px] flex items-center gap-3 text-amber-800 shadow-sm">
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-[16px] flex items-center gap-3 text-amber-800">
           <AlertCircle className="shrink-0" size={20} />
           <p className="text-sm font-medium">
             Your membership is currently <strong>PENDING</strong>. You can view meeting details, but attendance tracking may be limited until approval.
@@ -673,7 +690,7 @@ export function Meetings() {
             <div className="flex items-center justify-between px-1 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-primary rounded-full" />
-                <h2 className="text-base font-bold text-text-primary tracking-tight">Upcoming Meetings</h2>
+                <h2 className="text-sm font-bold text-navy uppercase tracking-widest font-display">Upcoming Meetings</h2>
               </div>
               {scheduledMeetings.length > 1 && (
                 <button
@@ -691,32 +708,32 @@ export function Meetings() {
                   key={meeting.id} 
                   onClick={() => setSelectedMeeting(meeting)}
                   className={cn(
-                    "bg-white p-4 rounded-[20px] border shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col h-full cursor-pointer",
-                    selectedMeeting?.id === meeting.id ? "border-primary ring-2 ring-primary/10" : "border-neutral-200/80"
+                    "bg-white p-3.5 rounded-[12px] border shadow-sm hover:shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-all flex flex-col h-full cursor-pointer",
+                    selectedMeeting?.id === meeting.id ? "border-primary ring-2 ring-primary/10" : "border-[#E5E7EB]"
                   )}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+                    <div className="w-9 h-9 bg-primary/5 rounded-lg flex items-center justify-center text-primary shrink-0">
                       <Calendar size={18} />
                     </div>
                     {(() => {
                       const status = getMeetingStatus(meeting);
                       return (
-                        <span className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0", status.color)}>
+                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", status.color)}>
                           {status.label}
                         </span>
                       );
                     })()}
                   </div>
                   <div className="space-y-1.5 mb-3 flex-grow min-w-0">
-                    <h3 className="text-sm font-bold text-text-primary tracking-tight leading-none truncate" title={format(new Date(meeting.date), 'EEEE, MMM do')}>
+                    <h3 className="text-sm font-bold text-navy uppercase tracking-tight leading-none truncate" title={format(new Date(meeting.date), 'EEEE, MMM do')}>
                       {format(new Date(meeting.date), 'EEEE, MMM do')}
                     </h3>
-                    <div className="flex items-center gap-2 text-[12px] text-text-secondary font-medium">
+                    <div className="flex items-center gap-2 text-[11px] text-[#6B7280] font-medium">
                       <Clock size={12} className="text-primary shrink-0" />
                       <span className="truncate">{formatTime12h(meeting.time || '07:30')}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[12px] text-text-secondary font-medium">
+                    <div className="flex items-center gap-2 text-[11px] text-[#6B7280] font-medium">
                       <MapPin size={12} className="text-primary shrink-0" />
                       <span className="truncate">{meeting.location || 'Meeting Venue'}</span>
                     </div>
@@ -741,7 +758,7 @@ export function Meetings() {
                           setTempMemberNotes(meeting.memberNotes || {});
                           setIsUpdateModalOpen(true);
                         }}
-                        className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                        className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20"
                       >
                         <Settings size={10} />
                         Update
@@ -753,7 +770,7 @@ export function Meetings() {
                           setTempNotes(meeting.notes || '');
                           setIsNotesModalOpen(true);
                         }}
-                        className="flex-1 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-bold hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5"
+                        className="flex-1 py-1.5 bg-primary/5 text-primary rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5"
                       >
                         <FileText size={10} />
                         Notes
@@ -767,12 +784,12 @@ export function Meetings() {
         )}
 
         {scheduledMeetings.length === 0 && (
-          <div className="p-12 text-center bg-white rounded-[18px] border border-dashed border-neutral-300">
-            <div className="w-12 h-12 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-300">
+          <div className="p-12 text-center bg-white rounded-[24px] border border-dashed border-[#D1D5DB]">
+            <div className="w-12 h-12 bg-[#F9FAFB] rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
               <Calendar size={24} />
             </div>
-            <h3 className="text-base font-bold text-text-primary">No upcoming meetings</h3>
-            <p className="text-xs text-text-secondary mt-1">
+            <h3 className="text-base font-bold text-[#111827]">No upcoming meetings</h3>
+            <p className="text-xs text-[#6B7280] mt-1">
               {isChapterAdmin 
                 ? "Click the button above to schedule a new meeting." 
                 : "Your admin hasn't scheduled any meetings yet."}
@@ -784,33 +801,33 @@ export function Meetings() {
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <div className="w-1.5 h-6 bg-secondary rounded-full" />
-            <h2 className="text-base font-bold text-text-primary tracking-tight">Your Meeting History</h2>
+            <h2 className="text-sm font-bold text-navy uppercase tracking-widest font-display">Your Meeting History</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Total Meetings Card */}
-            <div className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center gap-4">
-              <div className="w-12 h-12 bg-neutral-100 rounded-xl flex items-center justify-center text-neutral-500">
+            <div className="bg-white p-5 rounded-[16px] border border-[#E5E7EB] shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 bg-[#F3F4F6] rounded-[12px] flex items-center justify-center text-[#6B7280]">
                 <Calendar size={24} />
               </div>
               <div>
-                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Total Meetings</p>
-                <p className="text-2xl font-bold text-text-primary tracking-tight">{completedMeetings.length}</p>
-                <p className="text-[10px] text-text-secondary font-medium mt-1">Under same chapter</p>
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest mb-1">Total Meetings</p>
+                <p className="text-2xl font-bold text-navy tracking-tight">{completedMeetings.length}</p>
+                <p className="text-[9px] text-[#6B7280] font-medium mt-1 uppercase tracking-wider">Under same chapter</p>
               </div>
             </div>
 
             {/* Attendance Count Card */}
             <div 
               onClick={() => setIsMemberHistoryModalOpen(true)}
-              className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-sm flex items-center justify-between cursor-pointer group hover:border-primary hover:shadow-lg hover:-translate-y-0.5 transition-all"
+              className="bg-white p-5 rounded-[16px] border border-[#E5E7EB] shadow-sm flex items-center justify-between cursor-pointer group hover:border-primary transition-all"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-primary group-hover:text-white transition-colors">
+                <div className="w-12 h-12 bg-emerald-50 rounded-[12px] flex items-center justify-center text-emerald-600 group-hover:bg-primary group-hover:text-white transition-colors">
                   <CheckCircle2 size={24} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Attendance Count</p>
-                  <p className="text-2xl font-bold text-text-primary tracking-tight">
+                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest mb-1">Attendance Count</p>
+                  <p className="text-2xl font-bold text-navy tracking-tight">
                     {completedMeetings.filter(m => {
                       const status = m.attendance?.[profile?.uid || ''];
                       if (!status) return false;
@@ -818,10 +835,10 @@ export function Meetings() {
                       return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE';
                     }).length}
                   </p>
-                  <p className="text-[10px] text-text-secondary font-medium mt-1">Meetings Attended</p>
+                  <p className="text-[9px] text-[#6B7280] font-medium mt-1 uppercase tracking-wider">Meetings Attended</p>
                 </div>
               </div>
-              <div className="w-8 h-8 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300 group-hover:bg-primary group-hover:text-white transition-all">
+              <div className="w-8 h-8 rounded-full bg-[#F9FAFB] flex items-center justify-center text-slate-300 group-hover:bg-primary group-hover:text-white transition-all">
                 <ChevronRight size={16} />
               </div>
             </div>
@@ -836,33 +853,33 @@ export function Meetings() {
                   setDetailsMeeting(meeting);
                   setIsMeetingDetailsModalOpen(true);
                 }}
-                className="bg-white p-4 rounded-[20px] border border-neutral-200/80 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col cursor-pointer group"
+                className="bg-white p-4 rounded-[12px] border border-[#E5E7EB] shadow-sm hover:shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition-all flex flex-col cursor-pointer group"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 bg-neutral-50 rounded-xl flex items-center justify-center text-neutral-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                  <div className="w-8 h-8 bg-[#F9FAFB] rounded-lg flex items-center justify-center text-[#9CA3AF] group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                     <Calendar size={16} />
                   </div>
                   {(() => {
                     const status = getMeetingStatus(meeting);
                     return (
-                      <span className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0", status.color)}>
+                      <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", status.color)}>
                         {status.label}
                       </span>
                     );
                   })()}
                 </div>
                 <div className="space-y-1 mb-3">
-                  <h3 className="text-sm font-bold text-text-primary tracking-tight truncate">
+                  <h3 className="text-xs font-bold text-navy uppercase tracking-tight truncate">
                     {format(new Date(meeting.date), 'EEEE, MMM do yyyy')}
                   </h3>
-                  <div className="flex items-center gap-2 text-[12px] text-text-secondary font-medium">
-                    <Clock size={12} className="text-primary shrink-0" />
+                  <div className="flex items-center gap-2 text-[10px] text-[#6B7280] font-medium">
+                    <Clock size={10} className="text-primary shrink-0" />
                     <span>{formatTime12h(meeting.time || '07:30')}</span>
                   </div>
                 </div>
                 
                 {(isChapterAdmin || isMasterAdmin) && (
-                  <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-neutral-100">
+                  <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-slate-50">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -880,7 +897,7 @@ export function Meetings() {
                         setTempMemberNotes(meeting.memberNotes || {});
                         setIsUpdateModalOpen(true);
                       }}
-                      className="py-1.5 bg-neutral-50 text-text-secondary rounded-lg text-[10px] font-bold hover:bg-emerald-50 hover:text-emerald-600 transition-all flex items-center justify-center gap-1"
+                      className="py-1 bg-[#F9FAFB] text-[#4B5563] rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-emerald-50 hover:text-emerald-600 transition-all flex items-center justify-center gap-1"
                     >
                       <Settings size={10} />
                       Edit
@@ -892,7 +909,7 @@ export function Meetings() {
                         setTempNotes(meeting.notes || '');
                         setIsNotesModalOpen(true);
                       }}
-                      className="py-1.5 bg-neutral-50 text-text-secondary rounded-lg text-[10px] font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all flex items-center justify-center gap-1"
+                      className="py-1 bg-[#F9FAFB] text-[#4B5563] rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-primary/5 hover:text-primary transition-all flex items-center justify-center gap-1"
                     >
                       <FileText size={10} />
                       Notes
@@ -919,40 +936,40 @@ export function Meetings() {
       >
         <div className="space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
               <AlertCircle size={18} />
               {error}
             </div>
           )}
           {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-bold flex items-center gap-2">
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
               <CheckCircle2 size={18} />
               {success}
             </div>
           )}
-          <div className="p-4 bg-emerald-50 rounded-[20px] border border-emerald-100">
-            <p className="text-xs font-bold text-emerald-700">Meeting Update</p>
-            <p className="text-sm font-bold text-text-primary">Update attendance and amounts</p>
+          <div className="p-4 bg-emerald-50 rounded-[16px] border border-emerald-100">
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Meeting Update</p>
+            <p className="text-sm font-bold text-[#111827]">Update attendance and amounts</p>
           </div>
 
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="min-w-[600px] px-4 sm:px-0">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-neutral-200/80">
-                    <th className="py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Member</th>
-                    <th className="py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-center">Attendance</th>
-                    <th className="py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-right">Amount (₹)</th>
-                    <th className="py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-right">Note</th>
+                  <tr className="border-b border-[#F3F4F6]">
+                    <th className="py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Member</th>
+                    <th className="py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-center">Attendance</th>
+                    <th className="py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-right">Amount (₹)</th>
+                    <th className="py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-right">Note</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-slate-100">
                   {members.filter(m => m.adminId === selectedMeeting?.adminId || m.uid === selectedMeeting?.adminId).map((member) => {
                     const status = tempAttendance[member.uid];
                     const amount = tempAmount[member.uid] || 0;
                     const note = tempMemberNotes[member.uid] || '';
                     return (
-                      <tr key={member.uid} className="hover:bg-neutral-50/80 transition-colors">
+                      <tr key={member.uid} className="hover:bg-[#F9FAFB]/50 transition-colors">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
                             <img 
@@ -961,8 +978,8 @@ export function Meetings() {
                               referrerPolicy="no-referrer"
                             />
                             <div className="min-w-0">
-                              <p className="text-[14px] font-bold text-text-primary truncate">{member.name || member.displayName}</p>
-                              <p className="text-[11px] text-text-secondary truncate">{member.businessName}</p>
+                              <p className="text-sm font-bold text-[#111827] truncate">{member.name || member.displayName}</p>
+                              <p className="text-[10px] text-[#6B7280] truncate">{member.businessName}</p>
                             </div>
                           </div>
                         </td>
@@ -976,7 +993,7 @@ export function Meetings() {
                               status === 'Yes' || status === 'PRESENT' ? "border-emerald-200 focus:border-emerald-400 text-emerald-700 bg-emerald-50/50" :
                               status === 'No' || status === 'ABSENT' ? "border-red-200 focus:border-red-400 text-red-700 bg-red-50/50" :
                               status === 'Substitute' ? "border-amber-200 focus:border-amber-400 text-amber-700 bg-amber-50/50" :
-                              "border-neutral-200 focus:border-primary text-text-secondary"
+                              "border-[#E5E7EB] focus:border-primary text-[#6B7280]"
                             )}
                           >
                             <option value="">Select Status</option>
@@ -990,7 +1007,7 @@ export function Meetings() {
                             type="number"
                             value={amount}
                             onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
-                            className="w-20 px-2 py-1.5 rounded-lg border border-neutral-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-right text-[14px] font-bold text-text-primary"
+                            className="w-20 px-2 py-1.5 rounded-lg border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-[#374151]"
                           />
                         </td>
                         <td className="py-4 pl-4">
@@ -999,7 +1016,7 @@ export function Meetings() {
                             value={note}
                             onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
                             placeholder="Private note..."
-                            className="w-full px-2 py-1.5 rounded-lg border border-neutral-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-xs text-text-secondary"
+                            className="w-full px-2 py-1.5 rounded-lg border border-[#E5E7EB] focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-[#4B5563]"
                           />
                         </td>
                       </tr>
@@ -1011,15 +1028,15 @@ export function Meetings() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-emerald-50 rounded-[20px] border border-emerald-100">
-              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-1">Total Present</p>
+            <div className="p-4 bg-emerald-50 rounded-[16px] border border-emerald-100">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Total Present</p>
               <p className="text-xl font-bold text-emerald-600">
                 {Object.values(tempAttendance).filter(s => s === 'PRESENT' || s === 'Yes' || s === 'Substitute').length}
               </p>
             </div>
-            <div className="p-4 bg-blue-50 rounded-[20px] border border-blue-100 text-right">
-              <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Total Collected</p>
-              <p className="text-xl font-bold text-blue-600">
+            <div className="p-4 bg-primary/5 rounded-[16px] border border-blue-100 text-right">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Total Collected</p>
+              <p className="text-xl font-bold text-primary">
                 ₹{Object.values(tempAmount).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
               </p>
             </div>
@@ -1028,7 +1045,7 @@ export function Meetings() {
           <button
             onClick={handleSaveUpdate}
             disabled={isSubmitting}
-            className="w-full py-4 bg-secondary text-white rounded-xl font-bold hover:bg-secondary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-secondary/20"
+            className="w-full py-4 bg-[#111827] text-white rounded-[12px] font-bold hover:bg-[#1F2937] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save & Complete Meeting'}
           </button>
@@ -1042,36 +1059,36 @@ export function Meetings() {
         title="Meeting Member Details"
       >
         <div className="space-y-6">
-          <div className="p-4 bg-neutral-50 rounded-[20px] border border-neutral-200/80 flex items-center justify-between">
+          <div className="p-4 bg-[#F9FAFB] rounded-[16px] border border-[#F3F4F6] flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Chapter</p>
-              <p className="text-sm font-bold text-text-primary">
+              <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Chapter</p>
+              <p className="text-sm font-bold text-navy">
                 {adminAdmins.find(a => a.uid === detailsMeeting?.adminId)?.name || 'Unknown Chapter'}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Meeting Date</p>
-              <p className="text-sm font-bold text-text-primary">
+              <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Meeting Date</p>
+              <p className="text-sm font-bold text-navy">
                 {detailsMeeting && format(new Date(detailsMeeting.date), 'dd MMM yyyy')}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-[20px] border border-neutral-200/80 overflow-hidden">
+          <div className="bg-white rounded-[16px] border border-[#F3F4F6] overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-neutral-50/50 border-b border-neutral-200/80">
-                  <th className="px-4 py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Member Name</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-right">Contribution</th>
+                <tr className="bg-[#F9FAFB]/50 border-b border-[#F3F4F6]">
+                  <th className="px-4 py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Member Name</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-right">Contribution</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-slate-50">
                 {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
                   const status = detailsMeeting?.attendance[member.uid];
                   const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
                   return (
-                    <tr key={member.uid} className="hover:bg-neutral-50/80 transition-colors">
+                    <tr key={member.uid} className="hover:bg-[#F9FAFB]/50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <img 
@@ -1079,21 +1096,21 @@ export function Meetings() {
                             className="w-6 h-6 rounded-lg"
                             referrerPolicy="no-referrer"
                           />
-                          <p className="text-[14px] font-bold text-text-primary">{member.name || member.displayName || 'Unnamed Member'}</p>
+                          <p className="text-xs font-bold text-[#111827]">{member.name || member.displayName || 'Unnamed Member'}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         {(() => {
                           const displayObj = getAttendanceDisplay(status);
                           return (
-                            <span className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-bold border", displayObj.color)}>
+                            <span className={cn("px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border", displayObj.color)}>
                               {displayObj.label}
                             </span>
                           );
                         })()}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <p className="text-[14px] font-bold text-text-primary">₹{amount.toLocaleString()}</p>
+                        <p className="text-xs font-bold text-[#374151]">₹{amount.toLocaleString()}</p>
                       </td>
                     </tr>
                   );
@@ -1102,7 +1119,7 @@ export function Meetings() {
             </table>
           </div>
 
-          <div className="p-4 bg-emerald-50 rounded-[20px] border border-emerald-100 flex items-center justify-between">
+          <div className="p-4 bg-emerald-50 rounded-[16px] border border-emerald-100 flex items-center justify-between">
             <span className="text-sm font-bold text-emerald-700">Total Collected</span>
             <span className="text-lg font-bold text-emerald-600">
               ₹{Object.values(detailsMeeting?.amountCollected || {}).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
@@ -1118,7 +1135,7 @@ export function Meetings() {
         title="Attendance Details"
       >
         <div className="space-y-4">
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-slate-100">
             {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
               const status = detailsMeeting?.attendance[member.uid];
               return (
@@ -1129,12 +1146,12 @@ export function Meetings() {
                       className="w-8 h-8 rounded-lg"
                       referrerPolicy="no-referrer"
                     />
-                    <p className="text-[14px] font-bold text-text-primary">{member.name || member.displayName || 'Unnamed Member'}</p>
+                    <p className="text-sm font-bold text-[#111827]">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
                   {(() => {
                     const displayObj = getAttendanceDisplay(status);
                     return (
-                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold border", displayObj.color)}>
+                      <span className={cn("px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest border", displayObj.color)}>
                         {displayObj.label}
                       </span>
                     );
@@ -1153,7 +1170,7 @@ export function Meetings() {
         title="Amount Collection Details"
       >
         <div className="space-y-4">
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-slate-100">
             {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
               const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
               return (
@@ -1164,16 +1181,16 @@ export function Meetings() {
                       className="w-8 h-8 rounded-lg"
                       referrerPolicy="no-referrer"
                     />
-                    <p className="text-[14px] font-bold text-text-primary">{member.name || member.displayName || 'Unnamed Member'}</p>
+                    <p className="text-sm font-bold text-[#111827]">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
-                  <span className="text-[14px] font-bold text-text-primary">₹{amount.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-[#374151]">₹{amount.toLocaleString()}</span>
                 </div>
               );
             })}
           </div>
-          <div className="p-4 bg-blue-50 rounded-[20px] border border-blue-100 flex items-center justify-between">
-            <span className="text-sm font-bold text-blue-700">Total Collected</span>
-            <span className="text-lg font-bold text-blue-600">
+          <div className="p-4 bg-primary/5 rounded-[16px] border border-blue-100 flex items-center justify-between">
+            <span className="text-sm font-bold text-primary">Total Collected</span>
+            <span className="text-lg font-bold text-primary">
               ₹{Object.values(detailsMeeting?.amountCollected || {}).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
             </span>
           </div>
@@ -1194,39 +1211,39 @@ export function Meetings() {
       >
         <div className="space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+            <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
               <AlertCircle size={18} />
               {error}
             </div>
           )}
           {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-xl text-sm font-bold flex items-center gap-2">
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
               <CheckCircle2 size={18} />
               {success}
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-sm font-bold text-text-primary">Notes & Key Points</label>
+            <label className="text-sm font-bold text-[#374151]">Notes & Key Points</label>
             <textarea
               value={tempNotes}
               onChange={(e) => setTempNotes(e.target.value)}
               placeholder="Enter meeting notes, discussion points, takeaways..."
               rows={8}
-              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none text-sm text-text-primary bg-neutral-50"
+              className="w-full px-4 py-3 rounded-[16px] border border-[#E5E7EB] focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none text-sm"
             />
           </div>
 
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => setIsNotesModalOpen(false)}
-              className="flex-1 px-6 py-3 bg-neutral-100 text-text-secondary rounded-xl font-bold hover:bg-neutral-200 transition-all"
+              className="flex-1 px-6 py-3 bg-[#F3F4F6] text-[#4B5563] rounded-[12px] font-bold hover:bg-slate-200 transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveNotes}
               disabled={isSubmitting}
-              className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+              className="flex-1 px-6 py-3 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting ? <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div> : <Save size={20} />}
               Save Notes
@@ -1247,14 +1264,14 @@ export function Meetings() {
       >
         <form onSubmit={handleUpdateDefaultSetup} className="space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-800 text-sm">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-[12px] flex items-center gap-3 text-red-800 text-sm">
               <AlertCircle size={18} className="shrink-0" />
               <p>{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-sm">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[12px] flex items-center gap-3 text-emerald-800 text-sm">
               <CheckCircle2 size={18} className="shrink-0" />
               <p>{success}</p>
             </div>
@@ -1262,14 +1279,14 @@ export function Meetings() {
 
           {/* Admin Info Header */}
           {(isChapterAdmin) && (
-            <div className="p-4 bg-emerald-50 rounded-[20px] border border-emerald-100 space-y-4">
+            <div className="p-4 bg-emerald-50 rounded-[16px] border border-emerald-100 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                <div className="w-10 h-10 bg-white rounded-[12px] flex items-center justify-center text-emerald-600 shadow-sm">
                   <Shield size={20} />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Admin</p>
-                  <p className="text-sm font-bold text-text-primary">
+                  <p className="text-sm font-bold text-[#111827]">
                     {isChapterAdmin ? profile?.name : (adminAdmins.find(a => a.uid === defaultSetupData.adminId)?.name || 'Assigned Admin')}
                   </p>
                 </div>
@@ -1279,16 +1296,16 @@ export function Meetings() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Meeting Frequency</label>
+              <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Meeting Frequency</label>
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setDefaultSetupData({ ...defaultSetupData, frequency: 'Weekly' })}
                   className={cn(
-                    "py-3 rounded-xl border font-bold transition-all",
+                    "py-3 rounded-[12px] border font-bold transition-all",
                     defaultSetupData.frequency === 'Weekly' 
                       ? "bg-emerald-50 border-emerald-500 text-emerald-700" 
-                      : "bg-white border-neutral-200/80 text-text-secondary hover:bg-neutral-50"
+                      : "bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-[#F9FAFB]"
                   )}
                 >
                   Weekly
@@ -1297,10 +1314,10 @@ export function Meetings() {
                   type="button"
                   onClick={() => setDefaultSetupData({ ...defaultSetupData, frequency: 'Monthly' })}
                   className={cn(
-                    "py-3 rounded-xl border font-bold transition-all",
+                    "py-3 rounded-[12px] border font-bold transition-all",
                     defaultSetupData.frequency === 'Monthly' 
                       ? "bg-emerald-50 border-emerald-500 text-emerald-700" 
-                      : "bg-white border-neutral-200/80 text-text-secondary hover:bg-neutral-50"
+                      : "bg-white border-[#E5E7EB] text-[#4B5563] hover:bg-[#F9FAFB]"
                   )}
                 >
                   Monthly
@@ -1311,12 +1328,12 @@ export function Meetings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {defaultSetupData.frequency === 'Weekly' ? (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Meeting Day</label>
+                  <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Meeting Day</label>
                   <select
                     required
                     value={defaultSetupData.day}
                     onChange={(e) => setDefaultSetupData({ ...defaultSetupData, day: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-200/80 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-neutral-50"
+                    className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                       <option key={day} value={day}>{day}</option>
@@ -1325,12 +1342,12 @@ export function Meetings() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Date of Month</label>
+                  <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Date of Month</label>
                   <select
                     required
                     value={defaultSetupData.date}
                     onChange={(e) => setDefaultSetupData({ ...defaultSetupData, date: parseInt(e.target.value) })}
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-200/80 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-neutral-50"
+                    className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none"
                   >
                     {Array.from({ length: 31 }, (_, i) => i + 1).map(date => (
                       <option key={date} value={date}>{date}{date === 1 ? 'st' : date === 2 ? 'nd' : date === 3 ? 'rd' : 'th'}</option>
@@ -1339,7 +1356,7 @@ export function Meetings() {
                 </div>
               )}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Meeting Time</label>
+                <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Meeting Time</label>
                 {(() => {
                   const { time: timePart, ampm: ampmPart } = parseTo12hParts(defaultSetupData.time);
                   const [selectedHour, selectedMinute] = timePart.split(':');
@@ -1355,7 +1372,7 @@ export function Meetings() {
                       <select
                         value={selectedHour}
                         onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         {hoursList.map(h => (
                           <option key={h} value={h}>{h}</option>
@@ -1364,7 +1381,7 @@ export function Meetings() {
                       <select
                         value={selectedMinute}
                         onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         {minutesList.map(m => (
                           <option key={m} value={m}>{m}</option>
@@ -1373,7 +1390,7 @@ export function Meetings() {
                       <select
                         value={ampmPart}
                         onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                        className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -1385,29 +1402,29 @@ export function Meetings() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Venue / Location</label>
+              <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Venue / Location</label>
               <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
                 <input
                   required
                   type="text"
                   placeholder="Enter meeting venue"
                   value={defaultSetupData.location}
                   onChange={(e) => setDefaultSetupData({ ...defaultSetupData, location: e.target.value })}
-                  className="w-full pl-12 pr-4 py-3 rounded-xl border border-neutral-200/80 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-neutral-50"
+                  className="w-full pl-12 pr-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
             </div>
           </div>
 
-          <div className="p-4 bg-neutral-50 rounded-[20px] border border-neutral-200/80 flex items-center justify-between">
+          <div className="p-4 bg-[#F9FAFB] rounded-[16px] border border-[#F3F4F6] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+              <div className="w-10 h-10 bg-white rounded-[12px] flex items-center justify-center text-emerald-600 shadow-sm">
                 <Calendar size={20} />
               </div>
               <div>
-                <p className="text-sm font-bold text-text-primary">Enable Recurring Meetings</p>
-                <p className="text-xs text-text-secondary">Automatically schedule meetings {defaultSetupData.frequency.toLowerCase()}</p>
+                <p className="text-sm font-bold text-[#111827]">Enable Recurring Meetings</p>
+                <p className="text-xs text-[#6B7280]">Automatically schedule meetings {defaultSetupData.frequency.toLowerCase()}</p>
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -1417,14 +1434,14 @@ export function Meetings() {
                 checked={defaultSetupData.enabled}
                 onChange={(e) => setDefaultSetupData({ ...defaultSetupData, enabled: e.target.checked })}
               />
-              <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
             </label>
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-4 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1450,14 +1467,14 @@ export function Meetings() {
       >
         <form onSubmit={handleScheduleMeeting} className="space-y-6">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-800 text-sm">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-[12px] flex items-center gap-3 text-red-800 text-sm">
               <AlertCircle size={18} className="shrink-0" />
               <p>{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-800 text-sm">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[12px] flex items-center gap-3 text-emerald-800 text-sm">
               <CheckCircle2 size={18} className="shrink-0" />
               <p>{success}</p>
             </div>
@@ -1465,14 +1482,14 @@ export function Meetings() {
 
           {/* Admin Info Header */}
           {(isChapterAdmin) && (
-            <div className="p-4 bg-emerald-50 rounded-[20px] border border-emerald-100 space-y-4">
+            <div className="p-4 bg-emerald-50 rounded-[16px] border border-emerald-100 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                <div className="w-10 h-10 bg-white rounded-[12px] flex items-center justify-center text-emerald-600 shadow-sm">
                   <Shield size={20} />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Admin</p>
-                  <p className="text-sm font-bold text-text-primary">
+                  <p className="text-sm font-bold text-[#111827]">
                     {isChapterAdmin ? profile?.name : (adminAdmins.find(a => a.uid === scheduleData.adminId)?.name || 'Assigned Admin')}
                   </p>
                 </div>
@@ -1482,17 +1499,17 @@ export function Meetings() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Date</label>
+              <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Date</label>
               <input
                 required
                 type="date"
                 value={scheduleData.date}
                 onChange={(e) => setScheduleData({ ...scheduleData, date: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-200/80 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-neutral-50"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Time</label>
+              <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Time</label>
               {(() => {
                 const { time: timePart, ampm: ampmPart } = parseTo12hParts(scheduleData.time);
                 const [selectedHour, selectedMinute] = timePart.split(':');
@@ -1508,7 +1525,7 @@ export function Meetings() {
                     <select
                       value={selectedHour}
                       onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                      className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                      className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                     >
                       {hoursList.map(h => (
                         <option key={h} value={h}>{h}</option>
@@ -1517,7 +1534,7 @@ export function Meetings() {
                     <select
                       value={selectedMinute}
                       onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                      className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                      className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                     >
                       {minutesList.map(m => (
                         <option key={m} value={m}>{m}</option>
@@ -1526,7 +1543,7 @@ export function Meetings() {
                     <select
                       value={ampmPart}
                       onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                      className="w-full px-3 py-3 rounded-xl border border-neutral-200/80 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-bold bg-neutral-50 text-sm"
+                      className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                     >
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
@@ -1538,16 +1555,16 @@ export function Meetings() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Location</label>
+            <label className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">Location</label>
             <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
               <input
                 required
                 type="text"
                 placeholder="Enter meeting venue"
                 value={scheduleData.location}
                 onChange={(e) => setScheduleData({ ...scheduleData, location: e.target.value })}
-                className="w-full pl-12 pr-4 py-3 rounded-xl border border-neutral-200/80 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-neutral-50"
+                className="w-full pl-12 pr-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none"
               />
             </div>
           </div>
@@ -1555,7 +1572,7 @@ export function Meetings() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-4 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1576,7 +1593,7 @@ export function Meetings() {
         title="My Attendance History"
       >
         <div className="space-y-6">
-          <div className="bg-emerald-50 rounded-[20px] p-4 border border-emerald-100">
+          <div className="bg-emerald-50 rounded-[12px] p-4 border border-emerald-100">
             <p className="text-xs text-emerald-700 font-medium leading-relaxed">
               Detailed attendance data for <strong>{profile?.name || profile?.displayName}</strong>.
             </p>
@@ -1585,17 +1602,17 @@ export function Meetings() {
           <div className="overflow-x-auto -mx-6 px-6">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
-                <tr className="border-b border-neutral-200/80">
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Date</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Time</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Venue</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-center">Status</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider text-right">Amount</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Member</th>
-                  <th className="py-4 px-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Chapter</th>
+                <tr className="border-b border-[#F3F4F6]">
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Date</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Time</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Venue</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-center">Status</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest text-right">Amount</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Member</th>
+                  <th className="py-4 px-4 text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Chapter</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-slate-50">
                 {completedMeetings.length > 0 ? (
                   completedMeetings.map((meeting) => {
                     const status = meeting.attendance[profile?.uid || ''];
@@ -1604,17 +1621,17 @@ export function Meetings() {
                     const memberName = profile?.name || profile?.displayName || 'Member';
                     
                     return (
-                      <tr key={meeting.id} className="hover:bg-neutral-50/80 transition-colors">
+                      <tr key={meeting.id} className="hover:bg-[#F9FAFB]/50 transition-colors">
                         <td className="py-4 px-4">
-                          <p className="text-[14px] font-bold text-text-primary">
+                          <p className="text-sm font-bold text-navy">
                             {format(new Date(meeting.date), 'dd MMM yyyy')}
                           </p>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-[14px] font-medium text-text-secondary">{formatTime12h(meeting.time || '07:30')}</p>
+                          <p className="text-xs font-medium text-[#4B5563]">{formatTime12h(meeting.time || '07:30')}</p>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-[14px] font-medium text-text-secondary truncate max-w-[150px]" title={meeting.location}>
+                          <p className="text-xs font-medium text-[#4B5563] truncate max-w-[150px]" title={meeting.location}>
                             {meeting.location || 'Meeting Venue'}
                           </p>
                         </td>
@@ -1623,7 +1640,7 @@ export function Meetings() {
                             const displayObj = getAttendanceDisplay(status);
                             return (
                               <span className={cn(
-                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
                                 displayObj.color
                               )}>
                                 {displayObj.label}
@@ -1632,27 +1649,27 @@ export function Meetings() {
                           })()}
                         </td>
                         <td className="py-4 px-4 text-right">
-                          <p className="text-[14px] font-bold text-text-primary">
+                          <p className="text-sm font-bold text-navy">
                             ₹{amount.toLocaleString()}
                           </p>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-[14px] font-bold text-text-secondary">{memberName}</p>
+                          <p className="text-xs font-bold text-[#4B5563]">{memberName}</p>
                         </td>
                         <td className="py-4 px-4">
-                          <p className="text-[14px] font-bold text-text-secondary">{chapterName}</p>
+                          <p className="text-xs font-bold text-[#6B7280]">{chapterName}</p>
                         </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center">
+                    <td colSpan={7} className="py-8 text-center">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 bg-neutral-50 rounded-full flex items-center justify-center text-neutral-300">
+                        <div className="w-12 h-12 bg-[#F9FAFB] rounded-full flex items-center justify-center text-slate-300">
                           <Calendar size={24} />
                         </div>
-                        <p className="text-sm font-bold text-neutral-400">No records found</p>
+                        <p className="text-sm font-bold text-[#9CA3AF]">No records found</p>
                       </div>
                     </td>
                   </tr>

@@ -132,7 +132,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
           <select
             value={selectedAdminId}
             onChange={(e) => setSelectedAdminId(e.target.value)}
-            className="w-full h-12 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold text-text-primary appearance-none cursor-pointer"
+            className="w-full h-12 px-4 bg-muted border border-transparent rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold text-text-primary appearance-none cursor-pointer"
           >
             <option value="">Choose an Admin...</option>
             {chapterAdmins.map(admin => (
@@ -149,7 +149,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
             {['President', 'Vice President', 'Treasurer'].map(pos => {
               const holder = positions.find(p => p.position === pos);
               return (
-                <div key={pos} className="p-4 bg-muted rounded-2xl border border-border flex flex-col items-center text-center">
+                <div key={pos} className="p-4 bg-muted rounded-[16px] border border-border flex flex-col items-center text-center">
                   <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">{pos}</p>
                   <p className="font-bold text-text-primary">{holder ? holder.userName : 'Vacant'}</p>
                 </div>
@@ -175,7 +175,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
                 placeholder="Search members..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium"
+                className="w-full h-11 px-4 bg-muted border border-transparent rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium"
               />
             </div>
           </div>

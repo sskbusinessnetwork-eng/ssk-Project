@@ -1,7 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Users, Shield, Calendar, Activity, Sparkles, CircleCheck as CheckCircle2, Clock, Handshake, UserPlus, ArrowRight, Trophy, Target, Globe } from 'lucide-react';
+import { 
+  Users, Shield, Calendar, Activity, Sparkles, CheckCircle2, 
+  Clock, Handshake, UserPlus, ArrowRight, Trophy, Target, Globe
+} from 'lucide-react';
 import { UserProfile } from '../types';
 import { format } from 'date-fns';
 
@@ -48,7 +51,7 @@ export function MasterAdminCompanionView({
       animate="show"
       className="space-y-10 font-sans"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* LEFT COLUMN: Strategic Focus, Quick Controls, Recent Activity */}
         <div className="lg:col-span-8 space-y-8">
@@ -57,7 +60,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-todays-focus" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all duration-300"
+            className="bg-white rounded-[24px] p-5 sm:p-6 border border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all duration-300"
           >
             <div className="absolute top-0 left-0 w-2 h-full bg-primary" />
             
@@ -89,8 +92,8 @@ export function MasterAdminCompanionView({
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row items-center gap-10 relative z-10 pt-4">
-              <div className="relative shrink-0 flex items-center justify-center w-[140px] h-[140px] bg-white rounded-full shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] border border-neutral-100">
+            <div className="flex flex-col md:flex-row items-center gap-8 relative z-10 pt-4">
+              <div className="relative shrink-0 flex items-center justify-center w-[140px] h-[140px] bg-white rounded-full shadow-soft border border-neutral-100">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="70" cy="70" r="60" stroke="#F7F8FA" strokeWidth="8" fill="transparent" />
                   <circle
@@ -120,7 +123,7 @@ export function MasterAdminCompanionView({
                       "flex items-center gap-4 p-4 rounded-[16px] border transition-all duration-300",
                       item.isDone 
                         ? "bg-[#F7F8FA] border-transparent opacity-70" 
-                        : "bg-white border-neutral-200 hover:border-primary/20 hover:shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] cursor-pointer"
+                        : "bg-white border-neutral-200 hover:border-primary/30 hover:shadow-soft cursor-pointer"
                     )}
                   >
                     <div className={cn(
@@ -162,7 +165,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-next-opportunity" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] relative overflow-hidden group transition-all duration-300 hover:border-primary/30"
+            className="bg-white rounded-[24px] p-5 sm:p-6 border border-neutral-200/80 shadow-soft relative overflow-hidden group transition-all duration-300 hover:border-primary/30"
           >
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none transition-transform duration-700 group-hover:scale-110" />
             
@@ -196,7 +199,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-recent-activity" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)]"
+            className="bg-white rounded-[24px] p-5 sm:p-6 border border-neutral-200/80 shadow-soft"
           >
             <div className="flex items-center justify-between mb-8">
               <div>
@@ -251,11 +254,11 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-ai-advisor" 
             variants={itemVariants}
-            className="dark-glass-card text-white border border-neutral-800/80 rounded-[24px] p-8 shadow-[0_20px_40px_rgba(11,11,13,0.15)] relative overflow-hidden group hover:border-neutral-700 transition-all duration-300"
+            className="bg-[#0B0B0D] text-white border border-neutral-800/80 rounded-[24px] p-6 shadow-[0_20px_40px_rgba(11,11,13,0.15)] relative overflow-hidden group hover:border-neutral-700 transition-all duration-300"
           >
             <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 rounded-full blur-[60px] transition-transform duration-700 group-hover:scale-110 pointer-events-none" />
             
-            <div className="flex flex-col gap-8 relative z-10">
+            <div className="flex flex-col gap-6 relative z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-primary flex items-center gap-2">
@@ -293,7 +296,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-weekly-progress" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] space-y-8"
+            className="bg-white rounded-[24px] p-5 sm:p-6 border border-neutral-200/80 shadow-soft space-y-8"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -305,8 +308,8 @@ export function MasterAdminCompanionView({
               </span>
             </div>
 
-            <div className="flex items-center gap-8">
-              <div className="relative shrink-0 flex items-center justify-center w-28 h-28 bg-white rounded-full p-2 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] border border-neutral-100">
+            <div className="flex items-center gap-6">
+              <div className="relative shrink-0 flex items-center justify-center w-28 h-28 bg-white rounded-full p-2 shadow-soft border border-neutral-100">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="56" cy="56" r="48" stroke="#F7F8FA" strokeWidth="8" fill="transparent" />
                   <circle
@@ -362,12 +365,12 @@ export function MasterAdminCompanionView({
 
           {/* CORE CONTROLS */}
           <motion.div id="master-quick-actions" variants={itemVariants} className="space-y-5">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-500 ml-1">Enterprise Console</h4>
+            <h4 className="text-[13px] font-semibold uppercase tracking-[0.2em] text-neutral-500 ml-1">Enterprise Console</h4>
             <div className="grid grid-cols-2 gap-4">
               
               <Link 
                 to="/members" 
-                className="hover-lift bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:border-primary/20 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
+                className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-soft hover:border-primary/30 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
               >
                 <div className="w-12 h-12 rounded-[14px] bg-[#F7F8FA] text-[#111827] flex items-center justify-center group-hover:scale-105 group-hover:bg-primary group-hover:text-white transition-all duration-300">
                   <Users size={20} strokeWidth={2} />
@@ -380,7 +383,7 @@ export function MasterAdminCompanionView({
 
               <Link 
                 to="/admins" 
-                className="hover-lift bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:border-primary/20 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
+                className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-soft hover:border-primary/30 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
               >
                 <div className="w-12 h-12 rounded-[14px] bg-[#F7F8FA] text-[#111827] flex items-center justify-center group-hover:scale-105 group-hover:bg-primary group-hover:text-white transition-all duration-300">
                   <Shield size={20} strokeWidth={2} />
@@ -393,7 +396,7 @@ export function MasterAdminCompanionView({
 
               <Link 
                 to="/meetings" 
-                className="hover-lift bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:border-primary/20 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
+                className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-soft hover:border-primary/30 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px]"
               >
                 <div className="w-12 h-12 rounded-[14px] bg-[#F7F8FA] text-[#111827] flex items-center justify-center group-hover:scale-105 group-hover:bg-primary group-hover:text-white transition-all duration-300">
                   <Calendar size={20} strokeWidth={2} />
@@ -406,7 +409,7 @@ export function MasterAdminCompanionView({
 
               <button 
                 onClick={() => setActiveTab('reports')} 
-                className="hover-lift bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:border-primary/20 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px] text-left"
+                className="bg-white p-5 rounded-[20px] border border-neutral-200/80 shadow-soft hover:border-primary/30 hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] transition-all duration-300 group flex flex-col justify-between min-h-[140px] text-left"
               >
                 <div className="w-12 h-12 rounded-[14px] bg-[#F7F8FA] text-[#111827] flex items-center justify-center group-hover:scale-105 group-hover:bg-primary group-hover:text-white transition-all duration-300">
                   <Activity size={20} strokeWidth={2} />

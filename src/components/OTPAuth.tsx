@@ -96,8 +96,8 @@ export function OTPAuth() {
             className="space-y-4"
           >
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <Phone size={16} className="text-slate-400" /> Phone Number
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider flex items-center gap-2">
+                <Phone size={16} className="text-[#9CA3AF]" /> Phone Number
               </label>
               <div className="relative">
                 <input
@@ -106,10 +106,10 @@ export function OTPAuth() {
                   placeholder="+919876543210"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
-              <p className="text-xs text-slate-500 italic">Include country code (e.g., +91 for India)</p>
+              <p className="text-xs text-[#6B7280] italic">Include country code (e.g., +91 for India)</p>
             </div>
 
             {error && (
@@ -122,7 +122,7 @@ export function OTPAuth() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
@@ -143,8 +143,8 @@ export function OTPAuth() {
             className="space-y-4"
           >
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-slate-400" /> Enter OTP
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-[#9CA3AF]" /> Enter OTP
               </label>
               <input
                 required
@@ -152,10 +152,10 @@ export function OTPAuth() {
                 placeholder="6-digit code"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-center text-2xl tracking-widest"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-center text-2xl tracking-widest"
                 maxLength={6}
               />
-              <p className="text-xs text-slate-500 text-center">Sent to {phoneNumber}</p>
+              <p className="text-xs text-[#6B7280] text-center">Sent to {phoneNumber}</p>
             </div>
 
             {error && (
@@ -169,14 +169,14 @@ export function OTPAuth() {
               <button
                 type="button"
                 onClick={() => setStep('phone')}
-                className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                className="flex-1 py-3 bg-[#F3F4F6] text-[#4B5563] rounded-[12px] font-bold hover:bg-slate-200 transition-all"
               >
                 Back
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-[2] py-3 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>

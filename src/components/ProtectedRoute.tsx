@@ -16,10 +16,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // 1. If we are still determining auth state OR we have a user but no profile yet, show loading
   if (loading || (user && !profile)) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex items-center justify-center min-h-screen bg-[#F9FAFB]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">
+          <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.3em] animate-pulse">
             Loading Profile...
           </p>
         </div>

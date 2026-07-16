@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, UserPlus, MessageSquare, Copy, CircleCheck as CheckCircle2, Share2, Calendar, Clock, MapPin, ExternalLink, Database, Phone, Eye, Mail, Building2, CircleAlert as AlertCircle } from 'lucide-react';
+import { 
+  Plus, 
+  UserPlus, 
+  MessageSquare, 
+  Copy, 
+  CheckCircle2, 
+  Share2, 
+  Calendar, 
+  Clock, 
+  MapPin,
+  ExternalLink,
+  Database,
+  Phone,
+  Eye,
+  Mail,
+  Building2,
+  AlertCircle
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
 import { notificationService } from '../services/notificationService';
@@ -414,32 +431,21 @@ export function Guests() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-200/80 pb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/10">
-            <UserPlus size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-neutral-900 tracking-tight">
-              Guests
-            </h1>
-            <p className="text-sm text-neutral-500 font-medium mt-0.5">
-              Invite and manage your business network visitors
-            </p>
-          </div>
+    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-6 py-4 md:py-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
+        <div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handleOpenRegModal}
-            className="hidden items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 text-sm md:text-base hover:-translate-y-0.5"
+            className="hidden items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-[12px] font-semibold hover:bg-primary/90 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-blue-500/20 text-sm md:text-base"
           >
             <Calendar size={18} />
             <span>Register for Meeting</span>
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-sm md:text-base hover:-translate-y-0.5"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-[12px] font-semibold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 text-sm md:text-base"
           >
             <Plus size={18} />
             <span>Invite a Guest</span>
@@ -449,16 +455,16 @@ export function Guests() {
 
       {/* Filters for Master Admin */}
       {profile?.role === 'MASTER_ADMIN' && (
-        <div className="bg-white p-4 rounded-[20px] border border-neutral-200/80 shadow-sm">
+        <div className="bg-white p-4 rounded-[16px] border border-[#E5E7EB] shadow-sm">
           <div className="relative">
             <input
               type="text"
               placeholder="Search guests by name, email, or business..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm text-neutral-900 placeholder:text-neutral-400"
+              className="w-full pl-10 pr-4 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm"
             />
-            <Plus className="absolute left-3 top-3 text-neutral-400 rotate-45" size={18} />
+            <Plus className="absolute left-3 top-2.5 text-[#9CA3AF] rotate-45" size={18} />
           </div>
         </div>
       )}
@@ -467,7 +473,7 @@ export function Guests() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {loading ? (
           <div className="col-span-full p-12 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mx-auto"></div>
           </div>
         ) : filteredInvitations.length > 0 ? (
           filteredInvitations.map((inv: any) => {
@@ -482,13 +488,13 @@ export function Guests() {
                 animate={{ opacity: 1, scale: 1 }}
                 key={inv.id}
                 className={cn(
-                  "bg-white p-5 md:p-6 rounded-[20px] border transition-all relative overflow-hidden hover:-translate-y-1",
-                  isHighlighted ? "ring-2 ring-primary ring-offset-2 border-primary shadow-lg" :
-                  needsAttention ? "border-rose-200 shadow-lg shadow-rose-100/50" : "border-neutral-200/80 shadow-sm hover:shadow-md"
+                  "bg-white p-5 md:p-6 rounded-[16px] md:rounded-[24px] border transition-all relative overflow-hidden",
+                  isHighlighted ? "ring-2 ring-primary ring-offset-2 border-primary shadow-[0_2px_10px_rgba(0,0,0,0.02)]" :
+                  needsAttention ? "border-rose-200 shadow-rose-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]" : "border-[#E5E7EB] shadow-sm hover:shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
                 )}
               >
                 {needsAttention && (
-                  <div className="absolute top-0 right-0 px-3 py-1 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-bl-xl">
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-bl-xl">
                     Needs Action
                   </div>
                 )}
@@ -496,39 +502,39 @@ export function Guests() {
                 <div className="flex items-start justify-between mb-4 md:mb-6">
                   <div className="flex items-center gap-3">
                     <div className={cn(
-                      "w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center",
+                      "w-10 h-10 md:w-12 md:h-12 rounded-[12px] md:rounded-[16px] flex items-center justify-center",
                       needsAttention ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"
                     )}>
                       <UserPlus size={20} className="md:w-6 md:h-6" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base md:text-lg font-bold text-neutral-900">{inv.displayName}</h3>
+                        <h3 className="text-base md:text-lg font-bold text-[#111827]">{inv.displayName}</h3>
                         <span className={cn(
-                          "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                          inv.source === 'Created by Admin' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-violet-50 text-violet-600 border-violet-100"
+                          "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+                          inv.source === 'Created by Admin' ? "bg-primary/5 text-primary border border-blue-100" : "bg-purple-50 text-purple-600 border border-purple-100"
                         )}>
                           {inv.source}
                         </span>
                       </div>
                       <div className="flex flex-col gap-0.5">
-                        <p className="text-xs md:text-sm text-neutral-500">{inv.displayBusiness}</p>
+                        <p className="text-xs md:text-sm text-[#6B7280]">{inv.displayBusiness}</p>
                         <div className="space-y-1 mt-1">
-                          <p className="text-[10px] md:text-xs text-neutral-400 font-medium">
+                          <p className="text-[10px] md:text-xs text-[#9CA3AF] font-medium">
                             Invited By: <span className="text-emerald-600">{allUsers.find(u => u.uid === (inv.createdBy || inv.memberId || inv.adminId))?.name || '...'}</span>
                           </p>
                         </div>
                         <div className="flex items-center gap-3 mt-2">
                           <div className={cn(
-                            "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider",
-                            inv.isWhatsAppShared ? "text-emerald-600" : "text-neutral-300"
+                            "flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider",
+                            inv.isWhatsAppShared ? "text-emerald-600" : "text-slate-300"
                           )}>
                             <MessageSquare size={10} />
                             <span>WhatsApp {inv.isWhatsAppShared ? 'Sent' : 'Pending'}</span>
                           </div>
                           <div className={cn(
-                            "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider",
-                            inv.isCalled ? "text-blue-600" : "text-neutral-300"
+                            "flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider",
+                            inv.isCalled ? "text-primary" : "text-slate-300"
                           )}>
                             <Phone size={10} />
                             <span>Call {inv.isCalled ? 'Done' : 'Pending'}</span>
@@ -538,13 +544,13 @@ export function Guests() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] md:text-xs text-neutral-400 block">{format(new Date(inv.createdAt), 'MMM d, yyyy')}</span>
+                    <span className="text-[10px] md:text-xs text-[#9CA3AF] block">{format(new Date(inv.createdAt), 'MMM d, yyyy')}</span>
                     <button
                       onClick={() => {
                         setSelectedGuest(inv);
                         setIsDetailsModalOpen(true);
                       }}
-                      className="flex items-center gap-1 text-[11px] font-bold text-primary uppercase tracking-wider mt-2 hover:underline ml-auto"
+                      className="flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-widest mt-2 hover:underline ml-auto"
                     >
                       <Eye size={12} />
                       View Details
@@ -552,15 +558,15 @@ export function Guests() {
                   </div>
                 </div>
 
-                <div className="bg-neutral-50 p-3 md:p-4 rounded-xl md:rounded-2xl border border-neutral-100 mb-4 md:mb-6">
-                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold mb-1 md:mb-2">Invite Content</p>
-                  <p className="text-xs md:text-sm text-neutral-600 line-clamp-3 italic">"{inviteText}"</p>
+                <div className="bg-[#F9FAFB] p-3 md:p-4 rounded-[12px] md:rounded-[16px] border border-[#F3F4F6] mb-4 md:mb-6">
+                  <p className="text-[10px] text-[#9CA3AF] uppercase tracking-widest font-bold mb-1 md:mb-2">Invite Content</p>
+                  <p className="text-xs md:text-sm text-[#4B5563] line-clamp-3 italic">"{inviteText}"</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     onClick={() => handleWhatsApp(inviteText, inv.displayPhone, inv)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all text-xs md:text-sm shadow-sm shadow-emerald-500/20 hover:-translate-y-0.5"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-emerald-500 text-white rounded-[12px] font-bold hover:bg-emerald-600 transition-all text-xs md:text-sm"
                   >
                     <MessageSquare size={16} className="md:w-[18px] md:h-[18px]" />
                     WhatsApp
@@ -568,8 +574,8 @@ export function Guests() {
                   <button
                     onClick={() => handleCall(inv)}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 rounded-xl font-bold transition-all text-xs md:text-sm",
-                      inv.isCalled ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-blue-500 text-white hover:bg-blue-600 shadow-sm shadow-blue-500/20 hover:-translate-y-0.5"
+                      "flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 rounded-[12px] font-bold transition-all text-xs md:text-sm",
+                      inv.isCalled ? "bg-primary/5 text-primary border border-blue-100" : "bg-primary/50 text-white hover:bg-primary"
                     )}
                   >
                     <Phone size={16} className="md:w-[18px] md:h-[18px]" />
@@ -577,7 +583,7 @@ export function Guests() {
                   </button>
                   <button
                     onClick={() => handleCopy(inviteText, inv.id)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all text-xs md:text-sm"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 md:py-3 bg-[#F3F4F6] text-[#4B5563] rounded-[12px] font-bold hover:bg-slate-200 transition-all text-xs md:text-sm"
                   >
                     {copiedId === inv.id ? <CheckCircle2 size={16} className="text-emerald-500 md:w-[18px] md:h-[18px]" /> : <Copy size={16} className="md:w-[18px] md:h-[18px]" />}
                     {copiedId === inv.id ? 'Copied!' : 'Copy Text'}
@@ -587,12 +593,12 @@ export function Guests() {
             );
           })
         ) : (
-          <div className="col-span-full p-20 text-center bg-white rounded-[18px] border border-dashed border-neutral-300 hover:border-neutral-400 transition-colors">
-            <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300">
+          <div className="col-span-full p-20 text-center bg-white rounded-[24px] border border-dashed border-[#D1D5DB]">
+            <div className="w-16 h-16 bg-[#F9FAFB] rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
               <UserPlus size={32} />
             </div>
-            <h3 className="text-lg font-bold text-neutral-900">No guests invited yet</h3>
-            <p className="text-neutral-500 mt-1">Invite your business contacts to visit and grow the network.</p>
+            <h3 className="text-lg font-bold text-[#111827]">No guests invited yet</h3>
+            <p className="text-[#6B7280] mt-1">Invite your business contacts to visit and grow the network.</p>
           </div>
         )}
       </div>
@@ -613,14 +619,14 @@ export function Guests() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="py-12 text-center space-y-6"
+            className="py-8 text-center space-y-6"
           >
             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 size={48} />
             </div>
             <div className="space-y-2">
-              <h3 className="text-2xl font-bold text-neutral-900">Invitation Sent!</h3>
-              <p className="text-neutral-500 max-w-xs mx-auto">
+              <h3 className="text-2xl font-bold text-[#111827]">Invitation Sent!</h3>
+              <p className="text-[#6B7280] max-w-xs mx-auto">
                 The guest has been invited and a notification has been sent to their phone number.
               </p>
             </div>
@@ -628,7 +634,7 @@ export function Guests() {
             <div className="flex flex-col gap-3 max-w-xs mx-auto">
               <button
                 onClick={() => handleWhatsApp(generateInviteText(lastCreatedInvitation), lastCreatedInvitation.guestPhone, { ...lastCreatedInvitation, source: 'Created by Admin' })}
-                className="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                className="w-full py-4 bg-emerald-500 text-white rounded-[12px] font-bold hover:bg-emerald-600 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
                 <MessageSquare size={20} />
                 Share via WhatsApp
@@ -639,7 +645,7 @@ export function Guests() {
                   setIsModalOpen(false);
                   setLastCreatedInvitation(null);
                 }}
-                className="w-full py-4 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all"
+                className="w-full py-4 bg-[#F3F4F6] text-[#4B5563] rounded-[12px] font-bold hover:bg-slate-200 transition-all"
               >
                 Close
               </button>
@@ -648,56 +654,56 @@ export function Guests() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
                 <AlertCircle size={18} />
                 {error}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700">Guest Name</label>
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Guest Name</label>
               <input
                 required
                 type="text"
                 value={formData.guestName}
                 onChange={(e) => setFormData({ ...formData, guestName: e.target.value })}
                 placeholder="Full name of the guest"
-                className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Guest Phone</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Guest Phone</label>
                 <input
                   required
                   type="tel"
                   value={formData.guestPhone}
                   onChange={(e) => setFormData({ ...formData, guestPhone: e.target.value })}
                   placeholder="e.g. +91 98765 43210"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Guest Email</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Guest Email</label>
                 <input
                   required
                   type="email"
                   value={formData.guestEmail}
                   onChange={(e) => setFormData({ ...formData, guestEmail: e.target.value })}
                   placeholder="guest@example.com"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Business Category</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Business Category</label>
                 <select
                   required
                   value={formData.guestBusiness}
                   onChange={(e) => setFormData({ ...formData, guestBusiness: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all bg-white text-neutral-900"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
                 >
                   <option value="">Select Category</option>
                   {categories.map((cat) => (
@@ -709,61 +715,61 @@ export function Guests() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">City</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">City</label>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   placeholder="City"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">State</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">State</label>
                 <input
                   type="text"
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   placeholder="State"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Area/Address</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Area/Address</label>
                 <input
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="Area"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700">Full Address</label>
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Full Address</label>
               <textarea
                 rows={2}
                 value={formData.fullAddress}
                 onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
                 placeholder="Complete address details"
-                className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all resize-none text-neutral-900 placeholder:text-neutral-400"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Meeting Date</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Date</label>
                 <input
                   required
                   type="date"
                   value={formData.meetingDate}
                   onChange={(e) => setFormData({ ...formData, meetingDate: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Meeting Time</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Time</label>
                 {(() => {
                   const { time: timePart, ampm: ampmPart } = parseTo12hParts(formData.meetingTime);
                   const [selectedHour, selectedMinute] = timePart.split(':');
@@ -779,7 +785,7 @@ export function Guests() {
                       <select
                         value={selectedHour}
                         onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl bg-neutral-50 border border-neutral-200 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-bold text-neutral-900 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         {hoursList.map(h => (
                           <option key={h} value={h}>{h}</option>
@@ -788,7 +794,7 @@ export function Guests() {
                       <select
                         value={selectedMinute}
                         onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl bg-neutral-50 border border-neutral-200 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-bold text-neutral-900 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         {minutesList.map(m => (
                           <option key={m} value={m}>{m}</option>
@@ -797,7 +803,7 @@ export function Guests() {
                       <select
                         value={ampmPart}
                         onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                        className="w-full px-3 py-3 rounded-xl bg-neutral-50 border border-neutral-200 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 font-bold text-neutral-900 text-sm"
+                        className="w-full px-3 py-3 rounded-[12px] border border-[#E5E7EB] outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -809,21 +815,21 @@ export function Guests() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700">Meeting Venue</label>
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Venue</label>
               <input
                 required
                 type="text"
                 value={formData.meetingVenue}
                 onChange={(e) => setFormData({ ...formData, meetingVenue: e.target.value })}
                 placeholder="Meeting venue"
-                className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
+              className="w-full py-4 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}
             </button>
@@ -846,14 +852,14 @@ export function Guests() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="py-12 text-center space-y-6"
+            className="py-8 text-center space-y-6"
           >
             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 size={48} />
             </div>
             <div className="space-y-2">
-              <h3 className="text-2xl font-bold text-neutral-900">Registration Successful!</h3>
-              <p className="text-neutral-500 max-w-xs mx-auto">
+              <h3 className="text-2xl font-bold text-[#111827]">Registration Successful!</h3>
+              <p className="text-[#6B7280] max-w-xs mx-auto">
                 The guest has been registered for the chapter meeting.
               </p>
             </div>
@@ -862,7 +868,7 @@ export function Guests() {
                 setShowSuccess(false);
                 setIsRegModalOpen(false);
               }}
-              className="w-full py-4 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all"
+              className="w-full py-4 bg-[#F3F4F6] text-[#4B5563] rounded-[12px] font-bold hover:bg-slate-200 transition-all"
             >
               Close
             </button>
@@ -870,56 +876,56 @@ export function Guests() {
         ) : (
           <form onSubmit={handleRegSubmit} className="space-y-6">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
                 <AlertCircle size={18} />
                 {error}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700">Full Name</label>
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Full Name</label>
               <input
                 required
                 type="text"
                 value={regFormData.fullName}
                 onChange={(e) => setRegFormData({ ...regFormData, fullName: e.target.value })}
                 placeholder="Guest's full name"
-                className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Phone Number</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Phone Number</label>
                 <input
                   required
                   type="tel"
                   value={regFormData.phone}
                   onChange={(e) => setRegFormData({ ...regFormData, phone: e.target.value })}
                   placeholder="e.g. +91 98765 43210"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Business Name</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Business Name</label>
                 <input
                   required
                   type="text"
                   value={regFormData.businessName}
                   onChange={(e) => setRegFormData({ ...regFormData, businessName: e.target.value })}
                   placeholder="Business name"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Business Category</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Business Category</label>
                 <select
                   required
                   value={regFormData.businessCategory}
                   onChange={(e) => setRegFormData({ ...regFormData, businessCategory: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all bg-white text-neutral-900"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                 >
                   <option value="">Select Category</option>
                   {categories.map((cat) => (
@@ -928,26 +934,26 @@ export function Guests() {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">City</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">City</label>
                 <input
                   required
                   type="text"
                   value={regFormData.city}
                   onChange={(e) => setRegFormData({ ...regFormData, city: e.target.value })}
                   placeholder="City"
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-neutral-900 placeholder:text-neutral-400"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />
               </div>
             </div>
 
             {profile?.role === 'MASTER_ADMIN' && (
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Preferred Chapter Name</label>
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Preferred Chapter Name</label>
                 <select
                   required
                   value={regFormData.adminId}
                   onChange={(e) => setRegFormData({ ...regFormData, adminId: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all bg-white text-neutral-900"
+                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                 >
                   <option value="">Select Chapter</option>
                   {chapterAdmins.map((admin) => (
@@ -959,23 +965,23 @@ export function Guests() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Meeting Date</label>
-                <div className="w-full px-4 py-3 rounded-xl border border-neutral-200 bg-neutral-50 font-bold text-neutral-700">
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Date</label>
+                <div className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] font-bold text-[#374151]">
                   {regFormData.meetingDate ? format(new Date(regFormData.meetingDate), 'dd MMM yyyy') : 'Nil'}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700">Meeting Time</label>
-                <div className="w-full px-4 py-3 rounded-xl border border-neutral-200 bg-neutral-50 font-bold text-neutral-700">
+                <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Time</label>
+                <div className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] font-bold text-[#374151]">
                   {regFormData.meetingTime ? formatTime12h(regFormData.meetingTime) : 'Nil'}
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700">Meeting Venue</label>
-              <div className="w-full px-4 py-3 rounded-xl border border-neutral-200 bg-neutral-50 font-bold text-neutral-700">
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Meeting Venue</label>
+              <div className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] bg-[#F9FAFB] font-bold text-[#374151]">
                 {regFormData.meetingVenue || 'Nil'}
               </div>
             </div>
@@ -983,7 +989,7 @@ export function Guests() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5"
+              className="w-full py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Registering...' : 'Register Guest'}
             </button>
@@ -999,17 +1005,17 @@ export function Guests() {
       >
         {selectedGuest && (
           <div className="space-y-8">
-            <div className="flex items-center gap-4 p-6 bg-neutral-50 rounded-[20px] border border-neutral-100">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+            <div className="flex items-center gap-4 p-6 bg-[#F9FAFB] rounded-[24px] border border-[#F3F4F6]">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-[16px] flex items-center justify-center">
                 <UserPlus size={32} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-neutral-900 tracking-tight">{selectedGuest.displayName}</h3>
-                <p className="text-sm text-neutral-500 font-medium">{selectedGuest.displayBusiness}</p>
+                <h3 className="text-xl font-bold text-navy uppercase tracking-tight">{selectedGuest.displayName}</h3>
+                <p className="text-sm text-[#6B7280] font-medium">{selectedGuest.displayBusiness}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={cn(
-                    "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                    selectedGuest.source === 'Created by Admin' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-violet-50 text-violet-600 border-violet-100"
+                    "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider",
+                    selectedGuest.source === 'Created by Admin' ? "bg-primary/5 text-primary border border-blue-100" : "bg-purple-50 text-purple-600 border border-purple-100"
                   )}>
                     {selectedGuest.source}
                   </span>
@@ -1019,54 +1025,54 @@ export function Guests() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Phone Number</p>
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Phone Number</p>
                 <div className="flex items-center gap-2">
                   <Phone size={14} className="text-primary" />
-                  <p className="text-sm font-bold text-neutral-900">{selectedGuest.displayPhone}</p>
+                  <p className="text-sm font-bold text-navy">{selectedGuest.displayPhone}</p>
                 </div>
               </div>
               {selectedGuest.guestEmail && (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Email Address</p>
+                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Email Address</p>
                   <div className="flex items-center gap-2">
                     <Mail size={14} className="text-primary" />
-                    <p className="text-sm font-bold text-neutral-900">{selectedGuest.guestEmail}</p>
+                    <p className="text-sm font-bold text-navy">{selectedGuest.guestEmail}</p>
                   </div>
                 </div>
               )}
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Business Category</p>
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Business Category</p>
                 <div className="flex items-center gap-2">
                   <Building2 size={14} className="text-primary" />
-                  <p className="text-sm font-bold text-neutral-900">{selectedGuest.displayBusiness || selectedGuest.businessCategory}</p>
+                  <p className="text-sm font-bold text-navy">{selectedGuest.displayBusiness || selectedGuest.businessCategory}</p>
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">City</p>
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">City</p>
                 <div className="flex items-center gap-2">
                   <MapPin size={14} className="text-primary" />
-                  <p className="text-sm font-bold text-neutral-900">{selectedGuest.city || 'N/A'}</p>
+                  <p className="text-sm font-bold text-navy">{selectedGuest.city || 'N/A'}</p>
                 </div>
               </div>
               
               { (profile?.role === 'CHAPTER_ADMIN' || profile?.role === 'MASTER_ADMIN') && (
-                <div className="col-span-full border-t border-neutral-100 pt-6 mt-2">
-                  <h4 className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <div className="col-span-full border-t border-[#F3F4F6] pt-6 mt-2">
+                  <h4 className="text-xs font-bold text-navy uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Calendar size={14} className="text-primary" />
                     Meeting Details
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Meeting Date</label>
+                      <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Meeting Date</label>
                       <input
                         type="date"
                         value={editMeetingData.meetingDate}
                         onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingDate: e.target.value })}
-                        className="w-full px-4 py-2 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-bold text-neutral-900"
+                        className="w-full px-4 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Meeting Time</label>
+                      <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Meeting Time</label>
                       {(() => {
                         const { time: timePart, ampm: ampmPart } = parseTo12hParts(editMeetingData.meetingTime);
                         const [selectedHour, selectedMinute] = timePart.split(':');
@@ -1082,7 +1088,7 @@ export function Guests() {
                             <select
                               value={selectedHour}
                               onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                              className="w-full px-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none font-bold text-neutral-900 text-sm"
+                              className="w-full px-3 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
                             >
                               {hoursList.map(h => (
                                 <option key={h} value={h}>{h}</option>
@@ -1091,7 +1097,7 @@ export function Guests() {
                             <select
                               value={selectedMinute}
                               onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                              className="w-full px-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none font-bold text-neutral-900 text-sm"
+                              className="w-full px-3 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
                             >
                               {minutesList.map(m => (
                                 <option key={m} value={m}>{m}</option>
@@ -1100,7 +1106,7 @@ export function Guests() {
                             <select
                               value={ampmPart}
                               onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                              className="w-full px-3 py-2 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none font-bold text-neutral-900 text-sm"
+                              className="w-full px-3 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-primary outline-none font-bold bg-white text-sm"
                             >
                               <option value="AM">AM</option>
                               <option value="PM">PM</option>
@@ -1110,18 +1116,18 @@ export function Guests() {
                       })()}
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Meeting Venue</label>
+                      <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest">Meeting Venue</label>
                       <input
                         type="text"
                         value={editMeetingData.meetingVenue}
                         onChange={(e) => setEditMeetingData({ ...editMeetingData, meetingVenue: e.target.value })}
                         placeholder="Enter meeting venue"
-                        className="w-full px-4 py-2 rounded-xl bg-neutral-50 border border-neutral-200 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-sm font-bold text-neutral-900 placeholder:text-neutral-400"
+                        className="w-full px-4 py-2 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-bold"
                       />
                     </div>
                     <button
                       onClick={handleUpdateMeetingDetails}
-                      className="md:col-span-2 py-3 bg-navy text-white rounded-xl font-bold text-xs hover:bg-navy/90 transition-all shadow-lg shadow-navy/20"
+                      className="md:col-span-2 py-3 bg-navy text-white rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:bg-navy/90 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-navy/20"
                     >
                       Update Meeting Details
                     </button>
@@ -1131,37 +1137,37 @@ export function Guests() {
 
               {selectedGuest.fullAddress && (
                 <div className="col-span-full space-y-1">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Full Address</p>
-                  <p className="text-sm font-bold text-neutral-900 bg-neutral-50 p-3 rounded-xl border border-neutral-100">
+                  <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Full Address</p>
+                  <p className="text-sm font-bold text-navy bg-[#F9FAFB] p-3 rounded-[12px] border border-[#F3F4F6]">
                     {selectedGuest.fullAddress}
                   </p>
                 </div>
               )}
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Invited By</p>
-                <p className="text-sm font-bold text-neutral-900">
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Invited By</p>
+                <p className="text-sm font-bold text-navy">
                   {allUsers.find(u => u.uid === (selectedGuest.createdBy || selectedGuest.memberId || selectedGuest.adminId))?.name || 'Unknown'}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Date</p>
-                <p className="text-sm font-bold text-neutral-900">
+                <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em]">Date</p>
+                <p className="text-sm font-bold text-navy">
                   {format(new Date(selectedGuest.createdAt), 'dd MMMM yyyy, hh:mm a')}
                 </p>
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-neutral-100">
+            <div className="flex gap-3 pt-4 border-t border-[#F3F4F6]">
               <button
                 onClick={() => handleWhatsApp(generateInviteText(selectedGuest), selectedGuest.displayPhone, selectedGuest)}
-                className="flex-1 py-4 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                className="flex-1 py-4 bg-emerald-500 text-white rounded-[16px] font-bold uppercase tracking-widest text-xs hover:bg-emerald-600 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 flex items-center justify-center gap-2"
               >
                 <MessageSquare size={18} />
                 WhatsApp
               </button>
               <button
                 onClick={() => handleCall(selectedGuest)}
-                className="flex-1 py-4 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600 transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                className="flex-1 py-4 bg-primary/50 text-white rounded-[16px] font-bold uppercase tracking-widest text-xs hover:bg-primary transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-blue-500/20 flex items-center justify-center gap-2"
               >
                 <Phone size={18} />
                 Call

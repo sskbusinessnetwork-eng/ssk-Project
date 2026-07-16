@@ -39,24 +39,24 @@ export class ErrorBoundary extends React.Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-red-100">
+        <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB] p-6">
+          <div className="max-w-md w-full bg-white rounded-[16px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-6 border border-red-100">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 mb-6 mx-auto">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 text-center mb-2">Something went wrong</h1>
-            <p className="text-slate-600 text-center mb-6">
+            <h1 className="text-2xl font-bold text-[#111827] text-center mb-2">Something went wrong</h1>
+            <p className="text-[#4B5563] text-center mb-6">
               {errorData.error || "An unexpected error occurred. Please try again later."}
             </p>
             {errorData.path && (
-              <div className="bg-slate-50 rounded-lg p-4 mb-6 text-xs font-mono text-slate-500 overflow-hidden">
+              <div className="bg-[#F9FAFB] rounded-lg p-4 mb-6 text-xs font-mono text-[#6B7280] overflow-hidden">
                 <p>Path: {errorData.path}</p>
                 <p>Operation: {errorData.operationType}</p>
               </div>
             )}
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20"
+              className="w-full py-3 bg-primary text-white rounded-[12px] font-semibold hover:bg-primary/90 transition-colors shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-indigo-500/20"
             >
               Reload Application
             </button>

@@ -1,142 +1,116 @@
-import re
+import os
 
-with open('src/components/StatGrid.tsx', 'r') as f:
-    content = f.read()
-
-# I will just write a whole new StatGrid.tsx
-new_content = """import React from 'react';
-import { Users, FileCheck, IndianRupee, Calendar } from 'lucide-react';
+statgrid_content = """import React from 'react';
+import { Users, FileCheck, IndianRupee, Calendar, Target, TrendingUp } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '../lib/utils';
 
-interface StatGridProps {
-  activeMembers?: string;
-  referralsPassed?: string;
-  businessGenerated?: string;
-  upcomingMeetings?: string;
-}
-
-export function StatGrid({ activeMembers, referralsPassed, businessGenerated, upcomingMeetings }: StatGridProps) {
+export default function StatGrid() {
   const stats = [
     {
       label: 'Active Partners',
-      value: activeMembers || '142',
+      value: '1',
       trend: '+12%',
       trendLabel: 'vs last month',
       icon: Users,
-      color: 'text-primary',
-      bg: 'bg-primary/5',
-      border: 'border-primary/10'
+      color: 'text-[#DC2626]', // Red
+      bg: 'bg-[#FEF2F2]',
+      trendColor: 'text-[#10B981]'
     },
     {
       label: 'Business Generated',
-      value: businessGenerated || '₹4.2M+',
+      value: '₹4.2M+',
       trend: '+24%',
       trendLabel: 'vs last month',
       icon: IndianRupee,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-500/5',
-      border: 'border-emerald-500/10'
+      color: 'text-[#8B5CF6]', // Purple
+      bg: 'bg-[#F5F3FF]',
+      trendColor: 'text-[#10B981]'
     },
     {
       label: 'Referrals Passed',
-      value: referralsPassed || '845',
+      value: '845',
       trend: '+8%',
       trendLabel: 'vs last month',
       icon: FileCheck,
-      color: 'text-blue-600',
-      bg: 'bg-blue-500/5',
-      border: 'border-blue-500/10'
+      color: 'text-[#10B981]', // Green
+      bg: 'bg-[#ECFDF5]',
+      trendColor: 'text-[#10B981]'
     },
     {
       label: 'Upcoming Syncs',
-      value: upcomingMeetings || '12',
+      value: '12',
       trend: 'Scheduled',
       trendLabel: 'next 14 days',
       icon: Calendar,
-      color: 'text-amber-600',
-      bg: 'bg-amber-500/5',
-      border: 'border-amber-500/10'
+      color: 'text-[#F59E0B]', // Orange
+      bg: 'bg-[#FFFBEB]',
+      trendColor: 'text-[#F59E0B]'
+    },
+    {
+      label: 'Completion Index',
+      value: '94%',
+      trend: '+2%',
+      trendLabel: 'vs last week',
+      icon: Target, 
+      color: 'text-[#3B82F6]', // Blue
+      bg: 'bg-[#EFF6FF]',
+      trendColor: 'text-[#10B981]'
     }
   ];
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15 },
-    show: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] }
-    }
-  };
-
   return (
-    <motion.div 
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
-      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full"
-    >
+    <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
       {stats.map((stat, idx) => {
         const Icon = stat.icon;
         return (
-          <motion.div 
+          <div 
             key={idx}
-            variants={itemVariants}
-            whileHover={{ y: -6, transition: { duration: 0.3, ease: "easeOut" } }}
-            className="bg-white rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-neutral-200/70 flex flex-col justify-between group hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-neutral-300 transition-all duration-300"
+            className="bg-white rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-neutral-100 flex flex-col justify-between group hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300"
           >
             <div className="flex justify-between items-start mb-6">
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-transform duration-500 group-hover:scale-110", stat.bg, stat.color, stat.border)}>
-                <Icon size={24} strokeWidth={2} />
+              <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 ${stat.bg} ${stat.color}`}>
+                <Icon size={24} strokeWidth={2.5} />
               </div>
-              
-              {/* Mini Sparkline Simulation */}
-              <div className="flex items-end gap-1 h-8 opacity-60">
-                {[40, 65, 45, 80, 55, 90, 75].map((h, i) => (
-                  <motion.div 
-                    key={i}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${h}%` }}
-                    transition={{ delay: 0.5 + (i * 0.1), duration: 0.6, ease: "easeOut" }}
-                    className={cn("w-1.5 rounded-t-sm bg-current", stat.color)}
+              <div className="w-16 h-12 relative opacity-50 group-hover:opacity-100 transition-opacity">
+                {/* Simulated colorful sparkline */}
+                <svg viewBox="0 0 100 40" className="w-full h-full" preserveAspectRatio="none">
+                  <path 
+                    d="M0,35 Q10,25 20,28 T40,20 T60,15 T80,5 T100,2" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="3" 
+                    strokeLinecap="round" 
+                    className={stat.color}
                   />
-                ))}
+                </svg>
               </div>
             </div>
             
             <div className="space-y-1">
-              <span className="text-[13px] font-semibold text-neutral-500 uppercase tracking-[0.15em] block">
+              <span className="text-[12px] font-bold text-neutral-800 block">
                 {stat.label}
               </span>
-              <div className="flex items-end gap-3 pt-1">
-                <span className="text-[32px] font-semibold text-[#111827] leading-none tracking-tight">
-                  {stat.value}
-                </span>
+              <div className="text-[32px] font-black text-[#111827] leading-none tracking-tighter pt-1 pb-3">
+                {stat.value}
               </div>
-              <div className="pt-3 flex items-center gap-2">
-                <span className={cn("text-[13px] font-semibold flex items-center gap-1", stat.color)}>
+              <div className="flex items-center gap-2 pt-2 border-t border-neutral-100">
+                <span className={`text-[12px] font-bold flex items-center gap-1 ${stat.trendColor}`}>
+                  <TrendingUp size={12} strokeWidth={3} />
                   {stat.trend}
                 </span>
-                <span className="text-[13px] text-neutral-400 font-medium">
+                <span className="text-[11px] text-neutral-400 font-semibold">
                   {stat.trendLabel}
                 </span>
               </div>
             </div>
-          </motion.div>
+          </div>
         );
       })}
-    </motion.div>
+    </div>
   );
 }
 """
 
 with open('src/components/StatGrid.tsx', 'w') as f:
-    f.write(new_content)
+    f.write(statgrid_content)
+

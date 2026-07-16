@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, Trash2, Search, Tags, CreditCard as Edit2, CircleAlert as AlertCircle, CircleCheck as CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Search, Tags, Edit2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { firestoreService } from '../services/firestoreService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
@@ -83,34 +83,29 @@ export function Categories() {
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-            <Tags size={24} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Business Categories</h1>
-            <p className="text-text-secondary mt-1 text-sm">Manage the global list of business categories.</p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-[#111827] tracking-tight">Business Categories</h1>
+          <p className="text-[#6B7280] mt-1">Manage the global list of business categories.</p>
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:-translate-y-0.5"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-[12px] font-semibold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20"
         >
-          <Plus size={18} />
+          <Plus size={20} />
           <span>Add Category</span>
         </button>
       </header>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+      <div className="bg-white rounded-[16px] border border-[#E5E7EB] shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-[#F3F4F6] bg-[#F9FAFB]/50">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" size={18} />
             <input
               type="text"
               placeholder="Search categories..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all text-sm"
             />
           </div>
         </div>
@@ -118,15 +113,15 @@ export function Categories() {
         <div className="divide-y divide-slate-100">
           {filteredCategories.length > 0 ? (
             filteredCategories.map((cat) => (
-              <div key={cat.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+              <div key={cat.id} className="p-4 flex items-center justify-between hover:bg-[#F9FAFB] transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
                       <Tags size={16} />
                     </div>
                     <div>
-                      <span className="font-medium text-slate-700 block">{cat.name}</span>
-                      <span className={`text-[9px] font-black uppercase tracking-wider ${((cat as any).status || 'Active') === 'Active' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      <span className="font-medium text-[#374151] block">{cat.name}</span>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${((cat as any).status || 'Active') === 'Active' ? 'text-emerald-600' : 'text-[#9CA3AF]'}`}>
                         {((cat as any).status || 'Active')}
                       </span>
                     </div>
@@ -134,10 +129,10 @@ export function Categories() {
                   
                   <button
                     onClick={() => toggleStatus(cat)}
-                    className={`px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded-full transition-all border ${
+                    className={`px-3 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full transition-all border ${
                       ((cat as any).status || 'Active') === 'Active'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        : 'bg-[#F9FAFB] text-[#4B5563] border-[#E5E7EB] hover:bg-[#F3F4F6]'
                     }`}
                   >
                     {((cat as any).status || 'Active') === 'Active' ? 'Deactivate' : 'Activate'}
@@ -146,13 +141,13 @@ export function Categories() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleOpenModal(cat)}
-                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                    className="p-2 text-[#9CA3AF] hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(cat.id)}
-                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    className="p-2 text-[#9CA3AF] hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -160,7 +155,7 @@ export function Categories() {
               </div>
             ))
           ) : (
-            <div className="p-12 text-center text-slate-400">
+            <div className="p-12 text-center text-[#9CA3AF]">
               No categories found.
             </div>
           )}
@@ -179,22 +174,22 @@ export function Categories() {
         title={editingCategory ? "Edit Category" : "Add New Category"}
       >
         {success ? (
-          <div className="py-8 text-center space-y-3">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+          <div className="py-6 text-center space-y-3">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 size={32} />
             </div>
-            <p className="text-text-primary font-bold">{success}</p>
+            <p className="text-navy font-bold">{success}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2">
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
                 <AlertCircle size={18} />
                 {error}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-bold text-text-primary">Category Name</label>
+              <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Category Name</label>
               <input
                 autoFocus
                 required
@@ -203,13 +198,13 @@ export function Categories() {
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
                 placeholder="e.g. Real Estate, Digital Marketing"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-50"
+                className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-emerald-600 text-white rounded-[12px] font-bold hover:bg-emerald-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingCategory ? "Update Category" : "Create Category")}
             </button>

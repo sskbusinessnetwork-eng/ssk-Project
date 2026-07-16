@@ -14,43 +14,38 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
             onClick={onClose}
-            className="absolute inset-0 bg-[#0B0B0D]/70 backdrop-blur-md"
+            className="absolute inset-0 bg-black/80 backdrop-blur-xl transition-all duration-500"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 30 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 30 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320, mass: 0.8 }}
-            className={`relative w-full ${maxWidth} bg-white rounded-t-[28px] sm:rounded-[24px] shadow-[0_20px_60px_rgba(11,11,13,0.15)] overflow-hidden border border-border max-h-[92vh] flex flex-col`}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className={`relative w-full ${maxWidth} bg-white rounded-[24px] shadow-2xl overflow-hidden border border-border`}
           >
-            {/* Header */}
-            <div className="shrink-0 px-5 sm:px-6 md:px-8 pt-5 sm:pt-6 pb-4 border-b border-border bg-gradient-to-b from-neutral-50/50 to-white">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-1 h-6 bg-primary rounded-full shrink-0" />
-                  <h2 className="text-[17px] sm:text-[18px] font-bold text-[#111827] tracking-tight truncate">
-                    {title}
-                  </h2>
+            <div className="absolute top-0 left-0 w-full h-1 bg-primary" />
+            <div className="p-6 md:p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-1.5 h-6 bg-primary rounded-full" />
+                  <h2 className="text-xl font-bold text-text-primary uppercase tracking-widest">{title}</h2>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-muted rounded-xl transition-all text-text-secondary hover:text-[#111827] active:scale-90 shrink-0"
-                  aria-label="Close modal"
+                  className="p-2 bg-muted hover:bg-border rounded-[12px] transition-all text-text-secondary hover:text-text-primary active:scale-90"
                 >
-                  <X size={20} strokeWidth={2.5} />
+                  <X size={20} />
                 </button>
               </div>
-            </div>
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-5 sm:px-6 md:px-8 py-5 sm:py-6 text-[#111827]">
-              {children}
+              <div className="max-h-[70vh] overflow-y-auto pr-2 -mr-2 custom-scrollbar text-text-primary">
+                {children}
+              </div>
             </div>
           </motion.div>
         </div>
