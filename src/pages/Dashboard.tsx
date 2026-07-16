@@ -13,6 +13,7 @@ import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionVi
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
 import StatGrid from '../components/StatGrid';
 import { getDashboardAvatar } from '../utils/avatarUtils';
+import businessmanImg from '../assets/images/businessman_holographic_3d_1784204625654.jpg';
 
 export function Analytics() {
   const { profile } = useAuth();
@@ -102,30 +103,6 @@ export function Analytics() {
               Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong> Here is your enterprise operations overview for today.
             </p>
             
-            {/* Mobile 3D Character (Below welcome message, responsive sizing 160-220px) */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ 
-                opacity: 1, 
-                scale: [1, 1.012, 1],
-                y: [0, -4, 0]
-              }}
-              transition={{
-                initial: { duration: 0.5 },
-                scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
-                y: { duration: 4, repeat: Infinity, ease: "easeInOut" }
-              }}
-              className="block md:hidden my-3 h-[180px] w-auto pointer-events-none select-none shrink-0"
-            >
-              <img
-                src={avatar.image}
-                alt={avatar.name}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                className="h-full mx-auto object-contain mix-blend-screen"
-              />
-            </motion.div>
-            
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
               <motion.button 
@@ -162,98 +139,49 @@ export function Analytics() {
             </div>
           </div>
 
-          {/* Desktop & Tablet 3D Animated Character (Bottom-right of hero section, sized 220-330px) */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ 
-              opacity: 1, 
-              y: [0, -6, 0],
-              scale: [1, 1.015, 1]
-            }}
-            transition={{
-              initial: { duration: 0.6 },
-              y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
-              scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
-            }}
-            className="absolute bottom-0 right-[180px] lg:right-[240px] xl:right-[300px] hidden md:block z-20 pointer-events-none select-none h-[240px] lg:h-[280px] xl:h-[330px]"
-          >
-            <img
-              src={avatar.image}
-              alt={avatar.name}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className="h-full object-contain mix-blend-screen"
-            />
-          </motion.div>
-
-          {/* Center Block: Health Score Circle (Reduced Size by 10%) */}
-          <div className="relative z-10 flex items-center justify-center shrink-0 w-[115px] md:w-[130px] h-[115px] md:h-[130px] md:mr-16 lg:mr-24 mt-3 md:mt-0">
-             {/* Circular Gauge */}
-             <div className="absolute inset-0 rounded-full border-[6px] border-[#111827] shadow-[0_0_20px_rgba(0,0,0,0.4)]" />
-             
-             {/* Spinning/pulsing subtle gradient circle glow */}
-             <motion.div 
-               animate={{ rotate: 360 }}
-               transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-               className="absolute inset-[-4px] rounded-full opacity-40 blur-[8px] border-2 border-dashed border-[#E53935]"
-             />
-
-             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 relative z-10">
-               <defs>
-                 <linearGradient id="score-grad-new" x1="0" y1="0" x2="1" y2="1">
-                   <stop offset="0%" stopColor="#E53935" />
-                   <stop offset="50%" stopColor="#8B5CF6" />
-                   <stop offset="100%" stopColor="#10B981" />
-                 </linearGradient>
-               </defs>
-               {/* Background Track */}
-               <circle 
-                 cx="50" 
-                 cy="50" 
-                 r="44" 
-                 stroke="#1a2233" 
-                 strokeWidth="6" 
-                 fill="none" 
-               />
-               {/* Progress Ring */}
-               <circle 
-                 cx="50" 
-                 cy="50" 
-                 r="44" 
-                 stroke="url(#score-grad-new)" 
-                 strokeWidth="6" 
-                 fill="none" 
-                 strokeDasharray="276" 
-                 strokeDashoffset={276 - (276 * score) / 100}
-                 strokeLinecap="round" 
-                 className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(229,57,53,0.6)]" 
-               />
-             </svg>
-             <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
-               <span className="text-[30px] md:text-[34px] font-extrabold text-white leading-none tracking-tighter">{score}</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">Health Score</span>
-               <div className="mt-1 bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border border-emerald-500/10">
-                 Excellent
-               </div>
-             </div>
-             
-             {/* Trend Indicators (Right Side Desktop Sync) */}
-             <div className="absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col gap-3.5 hidden md:flex">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
-                    <TrendingUp size={13} strokeWidth={3} />
-                    +4%
-                  </div>
-                  <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Weekly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last week</span></span>
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
-                    <TrendingUp size={13} strokeWidth={3} />
-                    +12%
-                  </div>
-                  <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Monthly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last month</span></span>
-                </div>
-             </div>
+          {/* Central Block: Premium 3D Holographic Business Character (Replaces Health Score Circle) */}
+          <div className="relative z-10 flex items-center justify-center shrink-0 mt-3 md:mt-0 md:mr-12 lg:mr-20">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ 
+                opacity: 1, 
+                y: [0, -6, 0], // Floating 4-6px
+                scale: [1, 1.012, 1], // Idle breathing
+                rotate: [0, 0.4, -0.4, 0] // Subtle dynamic hand/body motion
+              }}
+              transition={{
+                initial: { duration: 0.6 },
+                y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                scale: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
+                rotate: { duration: 6, repeat: Infinity, ease: "easeInOut" }
+              }}
+              className="relative z-10 flex items-center justify-center select-none pointer-events-none h-[180px] sm:h-[220px] md:h-[240px] lg:h-[280px] xl:h-[330px] w-auto"
+            >
+              <img
+                src={businessmanImg}
+                alt="Premium 3D Business Leader"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="h-full object-contain mix-blend-screen"
+              />
+              
+              {/* Soft Shadow beneath feet */}
+              <motion.div 
+                animate={{ 
+                  scale: [1, 0.85, 1],
+                  opacity: [0.5, 0.3, 0.5]
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="absolute bottom-1 left-1/2 -translate-x-1/2 w-[110px] h-[8px] bg-black/60 rounded-full blur-[6px] z-0"
+              />
+              
+              {/* Glowing cyan/blue holographic background aura */}
+              <div className="absolute inset-0 bg-[#00e5ff]/5 blur-[40px] rounded-full pointer-events-none -z-10" />
+            </motion.div>
           </div>
         </div>
 
