@@ -81,7 +81,7 @@ export function MemberCompanionView({
             hidden: { opacity: 0, y: 20 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
           }}
-          className="lg:col-span-4 bg-gradient-to-b from-[#1B122C] to-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
+          className="lg:col-span-5 bg-gradient-to-b from-[#1B122C] to-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
           
@@ -166,7 +166,7 @@ export function MemberCompanionView({
             hidden: { opacity: 0, y: 20 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
           }}
-          className="lg:col-span-5 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
+          className="lg:col-span-7 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
         >
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-[17px] font-bold text-white tracking-tight">Business Overview</h3>
@@ -313,7 +313,7 @@ export function MemberCompanionView({
             hidden: { opacity: 0, y: 20 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
           }}
-          className="lg:col-span-3 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col items-center relative overflow-hidden"
+          className="hidden"
         >
            <div className="absolute top-0 left-0 w-full h-[120px] bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
            <div className="flex items-center justify-between w-full mb-5 relative z-10">
@@ -460,7 +460,7 @@ export function MemberCompanionView({
             hidden: { opacity: 0, y: 20 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
           }}
-          className="lg:col-span-4 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
+          className="lg:col-span-6 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
         >
           <div className="flex items-center justify-between mb-5 relative z-10">
             <h3 className="text-[17px] font-bold text-white tracking-tight">Core Operations</h3>
@@ -510,7 +510,7 @@ export function MemberCompanionView({
             hidden: { opacity: 0, y: 20 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
           }}
-          className="lg:col-span-4 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
+          className="lg:col-span-6 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
         >
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-[17px] font-bold text-white tracking-tight">Recent Activity</h3>
@@ -551,72 +551,6 @@ export function MemberCompanionView({
             ))}
           </div>
         </motion.div>
-
-        {/* Top Performing Members */}
-        <motion.div 
-          variants={{
-            hidden: { opacity: 0, y: 20 },
-            show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
-          }}
-          className="lg:col-span-4 bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col h-full relative overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-[17px] font-bold text-white tracking-tight">Top Performing Members</h3>
-            <span className="text-[11px] font-bold text-red-500 hover:text-red-400 uppercase tracking-wider cursor-pointer transition-all hover:tracking-widest">View All</span>
-          </div>
-          
-          {/* Horizontal Scroll on Mobile, Grid on Desktop */}
-          <div className="flex lg:grid lg:grid-cols-3 gap-3 overflow-x-auto pb-2 lg:pb-0 scrollbar-none snap-x snap-mandatory">
-            {[
-               { pos: 1, name: 'Amit Patil', type: 'Real Estate', score: 128, trend: '+18%' },
-               { pos: 2, name: 'Neha Shah', type: 'Finance', score: 94, trend: '+12%' },
-               { pos: 3, name: 'Raj Mehta', type: 'IT Services', score: 76, trend: '+8%' }
-            ].map((member, idx) => (
-              <motion.div 
-                key={idx} 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: idx * 0.1, duration: 0.5, type: "spring", stiffness: 100 }}
-                whileHover={{ 
-                  y: -6, 
-                  borderColor: "rgba(229, 57, 53, 0.25)",
-                  boxShadow: "0 8px 24px rgba(229, 57, 53, 0.08)",
-                  scale: 1.02
-                }}
-                className="flex flex-col items-center bg-[#0B1220]/60 border border-white/5 rounded-[18px] p-3 text-center shrink-0 w-[120px] lg:w-auto snap-center transition-all duration-300 cursor-pointer"
-              >
-                <div className="relative mb-2">
-                  <div className="w-12 h-12 rounded-full border-2 border-white/10 overflow-hidden bg-neutral-800 transition-all group-hover:border-[#E53935]/50">
-                    <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=0F172A&color=ffffff`} alt="Member" className="w-full h-full object-cover" />
-                  </div>
-                  <motion.div 
-                    animate={{ y: [0, -2, 0] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: idx * 0.5 }}
-                    className={`absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border-2 border-[#111827] text-white shadow-md ${
-                     member.pos === 1 ? 'bg-gradient-to-r from-orange-400 to-yellow-500' : 
-                     member.pos === 2 ? 'bg-gradient-to-r from-gray-300 to-gray-400' : 
-                     'bg-gradient-to-r from-amber-600 to-amber-700'
-                    }`}
-                  >
-                    {member.pos}
-                  </motion.div>
-                </div>
-                <h4 className="text-[11px] font-bold text-white leading-tight truncate w-full">{member.name}</h4>
-                <span className="text-[9px] font-bold text-[#9CA3AF] mt-0.5 truncate w-full">{member.type}</span>
-                <div className="mt-2 pt-2 border-t border-white/5 w-full text-center">
-                  <div className="text-[15px] font-black text-white leading-none">{member.score}</div>
-                  <span className="text-[8px] font-bold text-[#6B7280] uppercase tracking-wider block mt-0.5">Referrals</span>
-                  <div className="flex justify-center w-full mt-1">
-                    <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5 bg-emerald-500/10 px-1.5 py-0.5 rounded-md border border-emerald-500/10">
-                      <TrendingUp size={8}/> {member.trend}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
       </motion.div>
 
       {/* BOTTOM UPGRADE BANNER */}

@@ -79,7 +79,7 @@ export function Layout() {
 
   const mobileNavItems = [
     { icon: LayoutDashboard, label: 'Home', path: '/analytics' },
-    { icon: Users, label: 'Network', path: '/network' },
+    ...(profile?.role !== 'MEMBER' ? [{ icon: Users, label: 'Network', path: '/network' }] : []),
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
     { icon: Share2, label: 'Referrals', path: '/refer' },
     { icon: Menu, label: 'More', isAction: true, action: () => setIsBottomSheetOpen(true) },
