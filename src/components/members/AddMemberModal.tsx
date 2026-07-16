@@ -36,7 +36,7 @@ export function AddMemberModal({
     >
       <form onSubmit={onSubmit} className="space-y-5 py-2">
         {error && (
-          <div className="p-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-bold flex items-center gap-2">
+          <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center gap-2">
             <HelpCircle size={16} />
             {error}
           </div>

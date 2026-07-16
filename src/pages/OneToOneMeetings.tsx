@@ -280,8 +280,8 @@ export function OneToOneMeetings() {
   if (profile?.role !== 'MEMBER' && profile?.role !== 'MASTER_ADMIN' && profile?.role !== 'CHAPTER_ADMIN') {
     return (
       <div className="p-8 text-center">
-        <h2 className="text-xl font-bold text-slate-900">Access Denied</h2>
-        <p className="text-slate-500 mt-2">This feature is only available for Members, Chapter Admins and Master Admin.</p>
+        <h2 className="text-xl font-bold text-neutral-900">Access Denied</h2>
+        <p className="text-neutral-500 mt-2">This feature is only available for Members, Chapter Admins and Master Admin.</p>
       </div>
     );
   }
@@ -316,7 +316,7 @@ export function OneToOneMeetings() {
       {(isAdmin || isChapterAdmin) && (
         <div className="space-y-6">
           {/* Member Filter */}
-          <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center gap-4">
+          <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-100 shadow-sm flex flex-col md:flex-row md:items-center gap-4">
             <div className="flex items-center gap-3 shrink-0">
               <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
                 <Users size={20} />
@@ -326,7 +326,7 @@ export function OneToOneMeetings() {
             <select
               value={selectedMemberId}
               onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-slate-50"
+              className="flex-1 px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-neutral-50"
             >
               <option value="">All Members (Overall Analytics)</option>
               {members.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
@@ -349,7 +349,7 @@ export function OneToOneMeetings() {
                 <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-primary mb-6">
                   <Calendar size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Total Meetings Scheduled</p>
+                <p className="text-[10px] font-black text-neutral-300 uppercase tracking-[0.2em] mb-2">Total Meetings Scheduled</p>
                 <h2 className="text-4xl font-black text-white tracking-tight">{stats?.scheduled}</h2>
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-4 flex items-center gap-2">
                   View Detailed History <ChevronRight size={12} />
@@ -362,14 +362,14 @@ export function OneToOneMeetings() {
                 setHistoryType('attended');
                 setIsHistoryModalOpen(true);
               }}
-              className="group relative bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-navy/5 overflow-hidden text-left transition-all hover:scale-[1.02]"
+              className="group relative bg-white p-8 rounded-[2.5rem] border border-neutral-100 shadow-2xl shadow-navy/5 overflow-hidden text-left transition-all hover:scale-[1.02]"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl" />
               <div className="relative z-10">
                 <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
                   <CheckCircle2 size={24} />
                 </div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Total Meetings Attended</p>
+                <p className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-2">Total Meetings Attended</p>
                 <h2 className="text-4xl font-black text-navy tracking-tight">{stats?.attended}</h2>
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-4 flex items-center gap-2">
                   View Detailed History <ChevronRight size={12} />
@@ -413,8 +413,8 @@ export function OneToOneMeetings() {
                 />
               ))
             ) : (
-              <div className="col-span-full p-12 text-center bg-white rounded-3xl border border-dashed border-slate-200">
-                <p className="text-slate-400 font-medium italic text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
+              <div className="col-span-full p-12 text-center bg-white rounded-3xl border border-dashed border-neutral-200">
+                <p className="text-neutral-400 font-medium italic text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
               </div>
             )}
           </div>
@@ -423,15 +423,15 @@ export function OneToOneMeetings() {
         {/* Meeting History */}
         <section className="space-y-4">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
+            <div className="w-10 h-10 bg-neutral-100 rounded-xl flex items-center justify-center text-neutral-500">
               <History size={20} />
             </div>
             <h2 className="text-xl font-black text-navy uppercase tracking-tight">Meeting History</h2>
           </div>
           
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-3xl border border-neutral-100 shadow-sm overflow-hidden">
             <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-neutral-50">
                 {pastMeetings.length > 0 ? (
                   pastMeetings.map((meeting) => {
                     const creator = members.find(m => m.uid === meeting.creatorId) || (meeting.creatorId === profile.uid ? profile : null);
@@ -439,24 +439,24 @@ export function OneToOneMeetings() {
                     const myAttendance = meeting.attendance?.[profile.uid] || 'ABSENT';
 
                     return (
-                      <div key={meeting.id} className="p-4 hover:bg-slate-50/50 transition-all group">
+                      <div key={meeting.id} className="p-4 hover:bg-neutral-50/50 transition-all group">
                         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduled By</p>
+                            <p className="text-[8px] font-black text-neutral-400 uppercase tracking-widest mb-1">Scheduled By</p>
                             <p className="text-[10px] font-bold text-navy truncate">{creator?.name || 'Unknown'}</p>
                           </div>
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Meeting With</p>
+                            <p className="text-[8px] font-black text-neutral-400 uppercase tracking-widest mb-1">Meeting With</p>
                             <p className="text-[10px] font-bold text-navy truncate">{participant?.name || 'Unknown'}</p>
                           </div>
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Date & Time</p>
+                            <p className="text-[8px] font-black text-neutral-400 uppercase tracking-widest mb-1">Date & Time</p>
                             <p className="text-[10px] font-bold text-navy">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
-                            <p className="text-[9px] text-slate-400 font-medium">{formatTime12h(meeting.time)}</p>
+                            <p className="text-[9px] text-neutral-400 font-medium">{formatTime12h(meeting.time)}</p>
                           </div>
                           <div className="md:col-span-2">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Note</p>
-                            <p className="text-[10px] text-slate-500 italic line-clamp-1">{meeting.notes || '-'}</p>
+                            <p className="text-[8px] font-black text-neutral-400 uppercase tracking-widest mb-1">Note</p>
+                            <p className="text-[10px] text-neutral-500 italic line-clamp-1">{meeting.notes || '-'}</p>
                           </div>
                           <div className="md:col-span-1 text-right">
                             <span className={cn(
@@ -472,10 +472,10 @@ export function OneToOneMeetings() {
                   })
                 ) : (
                   <div className="py-20 text-center">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                    <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-200">
                       <History size={32} />
                     </div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No meeting history found.</p>
+                    <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">No meeting history found.</p>
                   </div>
                 )}
               </div>
@@ -496,7 +496,7 @@ export function OneToOneMeetings() {
               <CheckCircle2 size={48} />
             </div>
             <h3 className="text-2xl font-black text-navy uppercase tracking-tight">Meeting Scheduled!</h3>
-            <p className="text-slate-500 font-medium">Your meeting has been successfully created.</p>
+            <p className="text-neutral-500 font-medium">Your meeting has been successfully created.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -508,36 +508,36 @@ export function OneToOneMeetings() {
             )}
             {/* Member Selection - Searchable Dropdown */}
             <div className="space-y-3">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Select Member</label>
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Select Member</label>
               <div className="relative">
                 <div 
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full px-4 py-4 rounded-2xl border border-slate-200 bg-white cursor-pointer flex items-center justify-between group hover:border-primary transition-all"
+                  className="w-full px-4 py-4 rounded-2xl border border-neutral-200 bg-white cursor-pointer flex items-center justify-between group hover:border-primary transition-all"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <Users size={18} className="text-slate-400 group-hover:text-primary transition-colors shrink-0" />
+                    <Users size={18} className="text-neutral-400 group-hover:text-primary transition-colors shrink-0" />
                     {formData.participantId ? (
                       <span className="text-sm font-bold text-navy truncate">
                         {members.find(m => m.uid === formData.participantId)?.name}
                       </span>
                     ) : (
-                      <span className="text-sm font-medium text-slate-400">Select a member...</span>
+                      <span className="text-sm font-medium text-neutral-400">Select a member...</span>
                     )}
                   </div>
-                  <ChevronRight size={18} className={cn("text-slate-400 transition-transform", isDropdownOpen ? "rotate-90" : "")} />
+                  <ChevronRight size={18} className={cn("text-neutral-400 transition-transform", isDropdownOpen ? "rotate-90" : "")} />
                 </div>
 
                 {isDropdownOpen && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-3 border-b border-slate-100 bg-slate-50">
+                  <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-neutral-200 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="p-3 border-b border-neutral-100 bg-neutral-50">
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                        <Search className="absolute left-3 top-1/2 -tranneutral-y-1/2 text-neutral-400" size={14} />
                         <input
                           type="text"
                           placeholder="Search across all chapters..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
+                          className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
                           onClick={(e) => e.stopPropagation()}
                         />
                       </div>
@@ -556,7 +556,7 @@ export function OneToOneMeetings() {
                               "group/item flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all",
                               formData.participantId === member.uid
                                 ? "bg-primary/10 border border-primary/20 shadow-sm"
-                                : "bg-white border border-slate-50 hover:bg-slate-50 hover:border-slate-200"
+                                : "bg-white border border-neutral-50 hover:bg-neutral-50 hover:border-neutral-200"
                             )}
                           >
                             <div className="flex items-center gap-3">
@@ -569,7 +569,7 @@ export function OneToOneMeetings() {
                                 <p className="text-xs font-black text-navy uppercase tracking-tight">
                                   {member.name}
                                 </p>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate">
                                   {member.category || 'General'} • {member.area || 'Global'}
                                 </p>
                               </div>
@@ -581,7 +581,7 @@ export function OneToOneMeetings() {
                         ))
                       ) : (
                         <div className="py-8 text-center">
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest italic">No members found.</p>
+                          <p className="text-[10px] text-neutral-400 font-black uppercase tracking-widest italic">No members found.</p>
                         </div>
                       )}
                     </div>
@@ -592,12 +592,12 @@ export function OneToOneMeetings() {
 
             {formData.participantId && (
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Location</label>
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
                 <select
                   required
                   value={formData.venue}
                   onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-                  className="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-white"
+                  className="w-full px-4 py-4 rounded-2xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-white"
                 >
                   <option value="">Select a location...</option>
                   {locationOptions.map((opt, idx) => (
@@ -609,17 +609,17 @@ export function OneToOneMeetings() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Date</label>
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
                 <input
                   required
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  className="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
+                  className="w-full px-4 py-4 rounded-2xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Time</label>
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Meeting Time</label>
                 {(() => {
                   const { time: timePart, ampm: ampmPart } = parseTo12hParts(formData.time);
                   const [selectedHour, selectedMinute] = timePart.split(':');
@@ -635,7 +635,7 @@ export function OneToOneMeetings() {
                       <select
                         value={selectedHour}
                         onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                        className="w-full px-3 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-primary font-bold bg-white text-sm"
                       >
                         {hoursList.map(h => (
                           <option key={h} value={h}>{h}</option>
@@ -644,7 +644,7 @@ export function OneToOneMeetings() {
                       <select
                         value={selectedMinute}
                         onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                        className="w-full px-3 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-primary font-bold bg-white text-sm"
                       >
                         {minutesList.map(m => (
                           <option key={m} value={m}>{m}</option>
@@ -653,7 +653,7 @@ export function OneToOneMeetings() {
                       <select
                         value={ampmPart}
                         onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                        className="w-full px-3 py-3 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-white text-sm"
+                        className="w-full px-3 py-3 rounded-xl border border-neutral-200 outline-none focus:ring-2 focus:ring-primary font-bold bg-white text-sm"
                       >
                         <option value="AM">AM</option>
                         <option value="PM">PM</option>
@@ -665,13 +665,13 @@ export function OneToOneMeetings() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Notes (Optional)</label>
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Meeting Notes (Optional)</label>
               <textarea
                 rows={3}
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 placeholder="What would you like to discuss?"
-                className="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium resize-none"
+                className="w-full px-4 py-4 rounded-2xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium resize-none"
               />
             </div>
 
@@ -700,12 +700,12 @@ export function OneToOneMeetings() {
               </div>
             )}
             <div className="space-y-4">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Attendance</label>
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Attendance</label>
               <div className="space-y-3">
                 {[updatingMeeting.creatorId, ...updatingMeeting.participantIds].map(uid => {
                   const member = members.find(m => m.uid === uid) || (uid === profile?.uid ? profile : null);
                   return (
-                    <div key={uid} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div key={uid} className="flex items-center justify-between p-3 bg-neutral-50 rounded-xl border border-neutral-100">
                       <div className="flex items-center gap-3">
                         <img
                           src={member?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member?.name || 'User')}&background=random`}
@@ -725,7 +725,7 @@ export function OneToOneMeetings() {
                             "px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all",
                             updateFormData.attendance[uid] === 'PRESENT' 
                               ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20" 
-                              : "bg-white text-slate-400 border border-slate-200"
+                              : "bg-white text-neutral-400 border border-neutral-200"
                           )}
                         >
                           Present
@@ -739,8 +739,8 @@ export function OneToOneMeetings() {
                           className={cn(
                             "px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all",
                             updateFormData.attendance[uid] === 'ABSENT' 
-                              ? "bg-rose-600 text-white shadow-lg shadow-rose-500/20" 
-                              : "bg-white text-slate-400 border border-slate-200"
+                              ? "bg-red-600 text-white shadow-lg shadow-red-500/20" 
+                              : "bg-white text-neutral-400 border border-neutral-200"
                           )}
                         >
                           Absent
@@ -753,13 +753,13 @@ export function OneToOneMeetings() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Meeting Notes</label>
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em]">Meeting Notes</label>
               <textarea
                 rows={3}
                 value={updateFormData.notes}
                 onChange={(e) => setUpdateFormData({ ...updateFormData, notes: e.target.value })}
                 placeholder="Add any final notes or outcomes..."
-                className="w-full px-4 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium resize-none text-sm"
+                className="w-full px-4 py-4 rounded-2xl border border-neutral-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium resize-none text-sm"
               />
             </div>
 
@@ -774,7 +774,7 @@ export function OneToOneMeetings() {
               <button
                 onClick={() => handleUpdateMeeting('NOT_COMPLETED')}
                 disabled={isSubmitting}
-                className="py-4 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-rose-700 transition-all text-[10px] shadow-lg shadow-rose-500/20"
+                className="py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all text-[10px] shadow-lg shadow-red-500/20"
               >
                 Not Completed
               </button>
@@ -790,27 +790,27 @@ export function OneToOneMeetings() {
         title={historyType === 'scheduled' ? 'Scheduled Meetings History' : 'Attended Meetings History'}
         maxWidth="max-w-6xl"
       >
-        <div className="bg-white rounded-2xl overflow-hidden border border-slate-100">
+        <div className="bg-white rounded-2xl overflow-hidden border border-neutral-100">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Scheduled By</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Meeting With</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Time</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Attendance</th>
+                <tr className="bg-neutral-50 border-b border-neutral-100">
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Scheduled By</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Meeting With</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Date</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Time</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Attendance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-neutral-50">
                 {historyMeetings.length > 0 ? (
                   historyMeetings.map((meeting) => {
                     const creator = members.find(m => m.uid === meeting.creatorId);
                     const participant = members.find(m => m.uid === meeting.participantIds[0]);
                     
                     return (
-                      <tr key={meeting.id} className="hover:bg-slate-50/50 transition-colors">
+                      <tr key={meeting.id} className="hover:bg-neutral-50/50 transition-colors">
                         <td className="px-6 py-4">
                           <span className="text-xs font-bold text-navy">{creator?.name || 'Unknown'}</span>
                         </td>
@@ -818,10 +818,10 @@ export function OneToOneMeetings() {
                           <span className="text-xs font-bold text-navy">{participant?.name || 'Unknown'}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-slate-600">{format(new Date(meeting.date), 'dd MMM yyyy')}</span>
+                          <span className="text-xs font-bold text-neutral-600">{format(new Date(meeting.date), 'dd MMM yyyy')}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-slate-600">{formatTime12h(meeting.time)}</span>
+                          <span className="text-xs font-bold text-neutral-600">{formatTime12h(meeting.time)}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className={cn(
@@ -837,10 +837,10 @@ export function OneToOneMeetings() {
                               const member = members.find(m => m.uid === uid);
                               return (
                                 <div key={uid} className="flex items-center gap-2">
-                                  <span className="text-[9px] font-bold text-slate-400 truncate max-w-[80px]">{member?.name}:</span>
+                                  <span className="text-[9px] font-bold text-neutral-400 truncate max-w-[80px]">{member?.name}:</span>
                                   <span className={cn(
                                     "text-[8px] font-black uppercase tracking-tighter",
-                                    status === 'PRESENT' ? "text-emerald-600" : "text-rose-600"
+                                    status === 'PRESENT' ? "text-emerald-600" : "text-red-600"
                                   )}>{status}</span>
                                 </div>
                               );
@@ -853,7 +853,7 @@ export function OneToOneMeetings() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No meeting history found.</p>
+                      <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">No meeting history found.</p>
                     </td>
                   </tr>
                 )}
@@ -883,99 +883,99 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       className={cn(
-        "group relative bg-white p-4 rounded-2xl border transition-all duration-500 flex flex-col h-full overflow-hidden",
+        "group relative bg-white p-5 rounded-2xl border transition-all duration-300 flex flex-col h-full overflow-hidden",
         isOverdue 
-          ? "border-rose-200 shadow-lg shadow-rose-500/5 bg-rose-50/30" 
-          : "border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-primary/10"
+          ? "border-red-200 shadow-sm bg-red-50/20" 
+          : "border-neutral-200 shadow-sm hover:shadow-md hover:border-neutral-300"
       )}
     >
       <div className={cn(
-        "absolute top-0 right-0 w-24 h-24 rounded-full -mr-12 -mt-12 transition-transform duration-700 group-hover:scale-150",
-        isOverdue ? "bg-rose-500/5" : "bg-primary/5"
+        "absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 transition-transform duration-700 group-hover:scale-110 opacity-70",
+        isOverdue ? "bg-red-500/5" : "bg-primary/5"
       )} />
       
-      <div className="relative z-10 flex items-start justify-between mb-3">
+      <div className="relative z-10 flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-500",
-            isOverdue ? "bg-rose-500 text-white" : (isCreator ? "bg-primary text-white" : "bg-navy text-white")
+            "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300",
+            isOverdue ? "bg-red-500 text-white" : (isCreator ? "bg-primary text-white" : "bg-navy text-white")
           )}>
-            <Users size={20} strokeWidth={2.5} />
+            <Users size={22} strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-black text-navy uppercase tracking-tight leading-none truncate">
+            <h3 className="text-[15px] font-semibold text-[#111827] tracking-tight leading-tight truncate">
               {isAdmin ? 'One-to-One Meeting' : (isCreator ? 'Organized by You' : 'Invited to Meeting')}
             </h3>
-            <p className="text-[9px] text-slate-400 uppercase tracking-[0.2em] font-black mt-1">
+            <p className="text-[11px] text-neutral-500 font-medium mt-0.5">
               {isAdmin ? `Scheduled By: ${creator?.name || 'Unknown'}` : `${meeting.participantIds.length} Participants`}
             </p>
           </div>
         </div>
         <div className={cn(
-          "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-[0.2em] border shrink-0 shadow-sm flex items-center gap-1",
+          "px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider border shrink-0 flex items-center gap-1.5",
           isOverdue 
-            ? "bg-rose-100 text-rose-600 border-rose-200 animate-pulse" 
+            ? "bg-red-50 text-red-600 border-red-100" 
             : "bg-emerald-50 text-emerald-600 border-emerald-100"
         )}>
-          {isOverdue && <AlertTriangle size={10} />}
+          {isOverdue && <AlertTriangle size={12} />}
           {isOverdue ? 'Action Pending' : 'Upcoming'}
         </div>
       </div>
 
-      <div className="relative z-10 space-y-2.5 mb-4 flex-grow">
-        <div className="flex items-center gap-3 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
+      <div className="relative z-10 space-y-3 mb-5 flex-grow">
+        <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-200/60">
           <div className="flex -space-x-2 overflow-hidden shrink-0">
             {participants.slice(0, 4).map((p) => (
               <img
                 key={p.uid}
                 src={p.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=random`}
-                className="w-7 h-7 rounded-lg border-2 border-white shadow-md object-cover"
+                className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
                 title={p.name}
                 referrerPolicy="no-referrer"
               />
             ))}
             {participants.length > 4 && (
-              <div className="w-7 h-7 rounded-lg bg-white border-2 border-white shadow-md flex items-center justify-center text-[8px] font-black text-slate-400">
+              <div className="w-8 h-8 rounded-full bg-white border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-bold text-neutral-500">
                 +{participants.length - 4}
               </div>
             )}
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{isAdmin ? 'Meeting With' : 'Participants'}</span>
-            <span className="text-[10px] font-black text-navy truncate uppercase tracking-tight">
+            <span className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">{isAdmin ? 'Meeting With' : 'Participants'}</span>
+            <span className="text-xs font-semibold text-[#111827] truncate">
               {participants.map(p => p.name).join(', ')}
             </span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="flex flex-col gap-1 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
+          <div className="flex flex-col gap-1 p-2.5 bg-neutral-50/50 rounded-xl border border-neutral-100/50">
             <Calendar size={12} className="text-primary" />
             <div className="min-w-0">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Date</p>
+              <p className="text-[7px] font-black text-neutral-400 uppercase tracking-widest">Date</p>
               <p className="text-[10px] font-black text-navy uppercase tracking-tight truncate">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
             </div>
           </div>
-          <div className="flex flex-col gap-1 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
+          <div className="flex flex-col gap-1 p-2.5 bg-neutral-50/50 rounded-xl border border-neutral-100/50">
             <Clock size={12} className="text-primary" />
             <div className="min-w-0">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Time</p>
+              <p className="text-[7px] font-black text-neutral-400 uppercase tracking-widest">Time</p>
               <p className="text-[10px] font-black text-navy uppercase tracking-tight truncate">{formatTime12h(meeting.time)}</p>
             </div>
           </div>
         </div>
 
         {meeting.venue && (
-          <div className="flex items-center gap-2.5 p-2.5 bg-slate-50/50 rounded-xl border border-slate-100/50">
+          <div className="flex items-center gap-2.5 p-2.5 bg-neutral-50/50 rounded-xl border border-neutral-100/50">
             <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-primary shadow-sm shrink-0">
               <Search size={12} />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Venue</p>
+              <p className="text-[7px] font-black text-neutral-400 uppercase tracking-widest">Venue</p>
               <p className="text-[10px] font-black text-navy uppercase tracking-tight truncate" title={meeting.venue}>{meeting.venue}</p>
             </div>
           </div>
@@ -985,7 +985,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, 
           <div className="p-3 bg-primary/5 rounded-xl border border-primary/10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-10 h-10 bg-primary/5 rounded-full -mr-5 -mt-5" />
             <p className="text-[7px] text-primary font-black uppercase tracking-[0.2em] mb-1 relative z-10">Meeting Notes</p>
-            <p className="text-[10px] text-slate-600 font-medium italic leading-relaxed line-clamp-2 relative z-10">"{meeting.notes}"</p>
+            <p className="text-[10px] text-neutral-600 font-medium italic leading-relaxed line-clamp-2 relative z-10">"{meeting.notes}"</p>
           </div>
         )}
       </div>
@@ -995,12 +995,12 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, 
         className={cn(
           "relative z-10 w-full py-3 rounded-xl font-black uppercase tracking-[0.2em] text-[8px] transition-all duration-500 flex items-center justify-center gap-2 mt-auto",
           isOverdue 
-            ? "bg-rose-600 text-white shadow-lg shadow-rose-500/30 hover:bg-rose-700" 
-            : "bg-slate-50 text-slate-400 group-hover:bg-navy group-hover:text-white group-hover:shadow-2xl group-hover:shadow-navy/30"
+            ? "bg-red-600 text-white shadow-lg shadow-red-500/30 hover:bg-red-700" 
+            : "bg-neutral-50 text-neutral-400 group-hover:bg-navy group-hover:text-white group-hover:shadow-2xl group-hover:shadow-navy/30"
         )}
       >
         <span>{isOverdue ? 'Update Now' : 'Update Meeting'}</span>
-        <ChevronRight size={12} className="group-hover:translate-x-1 transition-transform" />
+        <ChevronRight size={12} className="group-hover:tranneutral-x-1 transition-transform" />
       </button>
     </motion.div>
   );

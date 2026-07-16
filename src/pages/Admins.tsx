@@ -201,8 +201,8 @@ export function Admins() {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Chapter Management</h1>
-          <p className="text-slate-600 mt-1">Manage administrators and positions for the network.</p>
+          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Chapter Management</h1>
+          <p className="text-neutral-600 mt-1">Manage administrators and positions for the network.</p>
         </div>
         {activeTab === 'admins' && (
           <button
@@ -215,12 +215,12 @@ export function Admins() {
         )}
       </header>
 
-      <div className="flex gap-2 p-1 bg-slate-100 rounded-xl w-fit">
+      <div className="flex gap-2 p-1 bg-neutral-100 rounded-xl w-fit">
         <button 
           onClick={() => setActiveTab('admins')}
           className={cn(
             "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-            activeTab === 'admins' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:bg-white/50"
+            activeTab === 'admins' ? "bg-white text-emerald-600 shadow-sm" : "text-neutral-500 hover:bg-white/50"
           )}
         >
           Chapter Admins
@@ -229,7 +229,7 @@ export function Admins() {
           onClick={() => setActiveTab('positions')}
           className={cn(
             "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-            activeTab === 'positions' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:bg-white/50"
+            activeTab === 'positions' ? "bg-white text-emerald-600 shadow-sm" : "text-neutral-500 hover:bg-white/50"
           )}
         >
           Position Section
@@ -237,16 +237,16 @@ export function Admins() {
       </div>
 
       {activeTab === 'admins' ? (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white rounded-3xl border border-neutral-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <Search className="absolute left-3 top-1/2 -tranneutral-y-1/2 text-neutral-500" size={18} />
               <input
                 type="text"
                 placeholder="Search admins by name or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
           </div>
@@ -255,16 +255,16 @@ export function Admins() {
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Name</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Role</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chapter</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Members</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                <tr className="bg-neutral-50 border-b border-neutral-200">
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Name</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Email</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Role</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Chapter</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest text-center">Members</th>
+                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-500 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-neutral-100">
                 {loading ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">
@@ -276,7 +276,7 @@ export function Admins() {
                     return (
                       <tr 
                         key={admin.uid} 
-                        className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                        className="hover:bg-neutral-50 transition-colors group cursor-pointer"
                         onClick={() => navigate(`/profile?id=${admin.uid}`)}
                       >
                         <td className="px-6 py-4">
@@ -285,40 +285,40 @@ export function Admins() {
                               <Shield size={20} />
                             </div>
                             <div>
-                              <span className="font-bold text-slate-900 block">{admin.name}</span>
-                              <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+                              <span className="font-bold text-neutral-900 block">{admin.name}</span>
+                              <span className="text-[10px] text-neutral-600 font-bold uppercase tracking-widest">
                                 {admin.phone}
                               </span>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-xs text-slate-600">
-                            <Mail size={12} className="text-slate-500" />
+                          <div className="flex items-center gap-2 text-xs text-neutral-600">
+                            <Mail size={12} className="text-neutral-500" />
                             <span>{admin.email || 'N/A'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-widest">
+                          <span className="px-2.5 py-1 bg-neutral-100 text-neutral-600 rounded-lg text-[10px] font-bold uppercase tracking-widest">
                             {admin.role.replace('_', ' ')}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2 text-xs text-slate-900 font-bold">
+                            <div className="flex items-center gap-2 text-xs text-neutral-900 font-bold">
                               <Building2 size={12} className="text-primary" />
                               <span>{admin.chapterName || 'N/A'}</span>
                             </div>
                             {admin.businessName && (
-                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                              <div className="flex items-center gap-2 text-[10px] text-neutral-500 font-medium">
                                 <span className="ml-5 italic">{admin.businessName}</span>
                               </div>
                             )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-900 rounded-lg text-xs font-bold">
-                            <UserPlus size={14} className="text-slate-500" />
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 text-neutral-900 rounded-lg text-xs font-bold">
+                            <UserPlus size={14} className="text-neutral-500" />
                             {memberCounts[admin.uid] || 0}
                           </div>
                         </td>
@@ -326,13 +326,13 @@ export function Admins() {
                           <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                             <button 
                               onClick={() => handleOpenModal(admin)}
-                              className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                              className="p-2 text-neutral-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                             >
                               <Edit2 size={18} />
                             </button>
                             <button 
                               onClick={() => setDeleteConfirmId(admin.uid)}
-                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              className="p-2 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                             >
                               <Trash2 size={18} />
                             </button>
@@ -344,11 +344,11 @@ export function Admins() {
                 ) : (
                   <tr>
                     <td colSpan={6} className="px-6 py-20 text-center">
-                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                      <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300">
                         <Shield size={32} />
                       </div>
-                      <h3 className="text-lg font-bold text-slate-900">No admins found</h3>
-                      <p className="text-slate-600 mt-1">Try adjusting your search or add a new admin.</p>
+                      <h3 className="text-lg font-bold text-neutral-900">No admins found</h3>
+                      <p className="text-neutral-600 mt-1">Try adjusting your search or add a new admin.</p>
                     </td>
                   </tr>
                 )}
@@ -357,7 +357,7 @@ export function Admins() {
           </div>
 
           {/* Mobile Card View */}
-          <div className="md:hidden divide-y divide-slate-100">
+          <div className="md:hidden divide-y divide-neutral-100">
             {loading ? (
               <div className="p-12 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mx-auto"></div>
@@ -366,7 +366,7 @@ export function Admins() {
               filteredAdmins.map((admin) => (
                 <div 
                   key={admin.uid}
-                  className="p-4 space-y-4 active:bg-slate-50 transition-colors"
+                  className="p-4 space-y-4 active:bg-neutral-50 transition-colors"
                   onClick={() => navigate(`/profile?id=${admin.uid}`)}
                 >
                   <div className="flex items-center justify-between">
@@ -375,44 +375,44 @@ export function Admins() {
                         <Shield size={20} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-slate-900">{admin.name}</h3>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                        <h3 className="font-bold text-neutral-900">{admin.name}</h3>
+                        <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">
                           {admin.role.replace('_', ' ')}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight size={18} className="text-slate-300" />
+                    <ChevronRight size={18} className="text-neutral-300" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email</p>
-                      <p className="text-xs font-bold text-slate-700 truncate">{admin.email || 'N/A'}</p>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Email</p>
+                      <p className="text-xs font-bold text-neutral-700 truncate">{admin.email || 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</p>
-                      <p className="text-xs font-bold text-slate-700">{admin.phone || 'N/A'}</p>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Phone</p>
+                      <p className="text-xs font-bold text-neutral-700">{admin.phone || 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chapter</p>
-                      <p className="text-xs font-bold text-slate-700 truncate">{admin.businessName || 'N/A'}</p>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Chapter</p>
+                      <p className="text-xs font-bold text-neutral-700 truncate">{admin.businessName || 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Members</p>
-                      <p className="text-xs font-bold text-slate-700">{memberCounts[admin.uid] || 0}</p>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Members</p>
+                      <p className="text-xs font-bold text-neutral-700">{memberCounts[admin.uid] || 0}</p>
                     </div>
                   </div>
 
                   <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
                     <button 
                       onClick={() => handleOpenModal(admin)}
-                      className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+                      className="flex-1 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-50 hover:text-emerald-600 transition-all"
                     >
                       Edit
                     </button>
                     <button 
                       onClick={() => setDeleteConfirmId(admin.uid)}
-                      className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
+                      className="flex-1 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 hover:text-red-600 transition-all"
                     >
                       Delete
                     </button>
@@ -421,8 +421,8 @@ export function Admins() {
               ))
             ) : (
               <div className="p-12 text-center">
-                <Shield size={32} className="text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-slate-900">No admins found</h3>
+                <Shield size={32} className="text-neutral-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-neutral-900">No admins found</h3>
               </div>
             )}
           </div>
@@ -457,77 +457,77 @@ export function Admins() {
                 {error}
               </div>
             )}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 space-y-4">
+            <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-2">
               <Shield size={16} className="text-emerald-600" />
               Admin Profile
             </h3>
             
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Full Name</label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Full Name</label>
               <input
                 required
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter admin's full name"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Phone Number</label>
+                <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Phone Number</label>
                 <input
                   required
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="e.g. 9876543210"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Email Address</label>
+                <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Email Address</label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="admin@example.com"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Chapter Name <span className="text-rose-500">*</span></label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Chapter Name <span className="text-red-500">*</span></label>
               <input
                 required
                 type="text"
                 value={formData.chapterName}
                 onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
                 placeholder="e.g. SSK Mumbai Central"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Business Name (Optional)</label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Business Name (Optional)</label>
               <input
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
                 placeholder="Enter business name"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
                 {editingAdmin ? "New Password (Optional)" : "Password"}
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <Lock className="absolute left-3 top-1/2 -tranneutral-y-1/2 text-neutral-500" size={18} />
                 <input
                   required={!editingAdmin}
                   type="password"
@@ -535,20 +535,20 @@ export function Admins() {
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder={editingAdmin ? "Leave blank to keep current" : "Minimum 6 characters"}
                   minLength={6}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+          <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Account Status</label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Account Status</label>
               <select
                 required
                 value={formData.membershipStatus}
                 onChange={(e) => setFormData({ ...formData, membershipStatus: e.target.value as UserProfile['membershipStatus'] })}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all bg-white"
               >
                 <option value="ACTIVE">Active</option>
                 <option value="PENDING">Pending</option>
@@ -586,15 +586,15 @@ export function Admins() {
             <Trash2 size={32} />
           </div>
           <div className="text-center">
-            <h3 className="text-xl font-bold text-slate-900">Are you sure?</h3>
-            <p className="text-slate-500 mt-2">
+            <h3 className="text-xl font-bold text-neutral-900">Are you sure?</h3>
+            <p className="text-neutral-500 mt-2">
               This will permanently delete the admin's authentication account and their profile. This cannot be undone.
             </p>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => setDeleteConfirmId(null)}
-              className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+              className="flex-1 py-3 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all"
             >
               Cancel
             </button>

@@ -1,4 +1,6 @@
-import React from 'react';
+import re
+
+new_content = """import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -60,7 +62,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-todays-focus" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all duration-300"
+            className="bg-white rounded-[24px] p-8 border border-neutral-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] relative overflow-hidden group transition-all duration-300"
           >
             <div className="absolute top-0 left-0 w-2 h-full bg-primary" />
             
@@ -165,7 +167,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-next-opportunity" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-soft relative overflow-hidden group transition-all duration-300 hover:border-primary/30"
+            className="bg-white rounded-[24px] p-8 border border-neutral-200/80 shadow-soft relative overflow-hidden group transition-all duration-300 hover:border-primary/30"
           >
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none transition-transform duration-700 group-hover:scale-110" />
             
@@ -199,7 +201,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-recent-activity" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-soft"
+            className="bg-white rounded-[24px] p-8 border border-neutral-200/80 shadow-soft"
           >
             <div className="flex items-center justify-between mb-8">
               <div>
@@ -296,7 +298,7 @@ export function MasterAdminCompanionView({
           <motion.div 
             id="master-weekly-progress" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-soft space-y-8"
+            className="bg-white rounded-[24px] p-8 border border-neutral-200/80 shadow-soft space-y-8"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -427,3 +429,7 @@ export function MasterAdminCompanionView({
     </motion.div>
   );
 }
+"""
+
+with open('src/components/MasterAdminCompanionView.tsx', 'w') as f:
+    f.write(new_content)

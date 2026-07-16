@@ -297,7 +297,7 @@ export function Profile() {
           <motion.div 
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+            className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
           >
             <X size={24} />
             {errorMessage}
@@ -318,7 +318,7 @@ export function Profile() {
 
         <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
           {/* Profile Card */}
-          <div className="bg-white p-6 rounded-[20px] card-shadow border border-border text-center space-y-4">
+          <div className="bg-white p-6 rounded-[20px] card-shadow border border-neutral-200 text-center space-y-4">
             <div className="w-24 h-24 rounded-full bg-muted mx-auto border-4 border-white shadow-md overflow-hidden">
               <img 
                 src={targetProfile.photoURL || `https://picsum.photos/seed/${targetProfile.uid}/200/200`} 
@@ -352,7 +352,7 @@ export function Profile() {
               {currentUserProfile?.role === 'MEMBER' && (
                 <button 
                   onClick={handleQuickRefer}
-                  className="flex-1 h-11 bg-white border border-border text-text-primary rounded-xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest active:scale-95 transition-all hover:bg-muted"
+                  className="flex-1 h-11 bg-white border border-neutral-200 text-text-primary rounded-xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest active:scale-95 transition-all hover:bg-muted"
                 >
                   <Send size={18} className="text-primary" />
                   Refer
@@ -362,7 +362,7 @@ export function Profile() {
           </div>
 
           {/* Info List */}
-          <div className="bg-white rounded-[20px] card-shadow border border-border overflow-hidden divide-y divide-border">
+          <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden divide-y divide-border">
             <div className="p-4 flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
                 <Briefcase size={20} />
@@ -416,7 +416,7 @@ export function Profile() {
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Membership Status</p>
                 <span className={cn(
                   "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider inline-block mt-1",
-                  targetProfile.membershipStatus === 'ACTIVE' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                  targetProfile.membershipStatus === 'ACTIVE' ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"
                 )}>
                   {targetProfile.membershipStatus || 'PENDING'}
                 </span>
@@ -466,7 +466,7 @@ export function Profile() {
           {targetProfile.role === 'MEMBER' && (
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-border overflow-hidden">
+              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden">
                 {!adminData ? (
                   <div className="p-6 text-center">
                     <p className="text-sm font-bold text-text-secondary">
@@ -492,7 +492,7 @@ export function Profile() {
           {isAdmin && targetProfile.role === 'MEMBER' && (
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Subscription Management</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-border overflow-hidden p-4 space-y-4">
+              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Current Start Date</p>
@@ -507,7 +507,7 @@ export function Profile() {
                     </p>
                   </div>
                 </div>
-                <div className="space-y-1 pt-2 border-t border-border">
+                <div className="space-y-1 pt-2 border-t border-neutral-200">
                   <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Update End Date</label>
                   <div className="flex gap-2">
                     <input
@@ -596,7 +596,7 @@ export function Profile() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
         >
           <X size={24} />
           {errorMessage}
@@ -621,7 +621,7 @@ export function Profile() {
 
       <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
         {/* Profile Card */}
-        <div className="bg-white p-6 rounded-[20px] card-shadow border border-border text-center space-y-4">
+        <div className="bg-white p-6 rounded-[20px] card-shadow border border-neutral-200 text-center space-y-4">
           <div className="relative w-24 h-24 mx-auto">
             <div className="w-full h-full rounded-full bg-muted border-4 border-white shadow-md overflow-hidden">
               {formData.photoURL ? (
@@ -657,7 +657,7 @@ export function Profile() {
 
         {/* Edit Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="bg-white p-6 rounded-[20px] card-shadow border border-border space-y-4">
+          <div className="bg-white p-6 rounded-[20px] card-shadow border border-neutral-200 space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Full Name</label>
               <input
@@ -680,7 +680,7 @@ export function Profile() {
 
             {formData.role === 'CHAPTER_ADMIN' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Chapter Name <span className="text-rose-500">*</span></label>
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
                 <input
                   required
                   type="text"
@@ -803,7 +803,7 @@ export function Profile() {
           {currentUserProfile?.role === 'MEMBER' && (
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-border overflow-hidden">
+              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden">
                 {!adminData ? (
                   <div className="p-6 text-center">
                     <p className="text-sm font-bold text-text-secondary">

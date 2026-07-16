@@ -400,9 +400,9 @@ export function LandingPage() {
               <h4 className="text-xl md:text-2xl font-black text-[#0F2040] mb-6 uppercase tracking-widest">The Challenge</h4>
               <p className="text-lg md:text-xl text-slate-600 font-medium mb-8">Most of our businesses grow alone.</p>
               <ul className="space-y-4 md:space-y-6 font-bold text-[#0F2040] text-base md:text-lg">
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-rose-100 flex items-center justify-center"><X size={14} md:size={18} className="text-rose-500" /></div> No structured support.</motion.li>
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-rose-100 flex items-center justify-center"><X size={14} md:size={18} className="text-rose-500" /></div> No consistent referrals.</motion.li>
-                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-rose-100 flex items-center justify-center"><X size={14} md:size={18} className="text-rose-500" /></div> No unified network.</motion.li>
+                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-red-100 flex items-center justify-center"><X size={14} md:size={18} className="text-red-500" /></div> No structured support.</motion.li>
+                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-red-100 flex items-center justify-center"><X size={14} md:size={18} className="text-red-500" /></div> No consistent referrals.</motion.li>
+                <motion.li whileHover={{ x: 10 }} className="flex items-center gap-4 transition-transform"><div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-red-100 flex items-center justify-center"><X size={14} md:size={18} className="text-red-500" /></div> No unified network.</motion.li>
               </ul>
             </motion.div>
           </div>

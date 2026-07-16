@@ -86,22 +86,22 @@ export function MemberTable({
   return (
     <div className="space-y-6">
       {/* Desktop Table View */}
-      <div className="hidden md:block bg-white rounded-[24px] border border-neutral-100 shadow-xl shadow-neutral-100/30 overflow-visible">
+      <div className="hidden md:block bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-visible">
         <div className="overflow-visible">
           <table className="w-full text-left border-collapse table-fixed">
-            <thead>
-              <tr className="bg-neutral-50/70 border-b border-neutral-100">
-                <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest w-[32%]">Member</th>
-                <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest w-[28%]">Business & Sector</th>
-                <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest w-[18%]">Chapter Admin</th>
-                <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest w-[12%]">Status</th>
-                <th className="px-6 py-4 text-[10px] font-black text-neutral-400 uppercase tracking-widest text-right w-[10%]">Actions</th>
+            <thead className="bg-[#F9FAFB] border-b border-neutral-200">
+              <tr>
+                <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider w-[32%]">Member</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider w-[28%]">Business & Sector</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider w-[18%]">Chapter Admin</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider w-[12%]">Status</th>
+                <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider text-right w-[10%]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 overflow-visible">
               {members.length > 0 ? (
                 members.map((member) => (
-                  <tr key={member.uid} className="hover:bg-neutral-50/40 transition-colors group overflow-visible">
+                  <tr key={member.uid} className="hover:bg-neutral-50 transition-colors group overflow-visible">
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3.5">
                         <div className="w-11 h-11 rounded-full bg-neutral-100 border border-neutral-200/60 overflow-hidden shrink-0 shadow-sm">
@@ -148,13 +148,13 @@ export function MemberTable({
                         <div className={cn(
                           "inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border leading-tight",
                           member.membershipStatus === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                          member.membershipStatus === 'SUSPENDED' ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
+                          member.membershipStatus === 'SUSPENDED' ? "bg-red-500/10 text-red-600 border-red-500/20" :
                           "bg-amber-500/10 text-amber-600 border-amber-500/20"
                         )}>
                           <div className={cn(
                             "w-1.5 h-1.5 rounded-full animate-pulse-subtle",
                             member.membershipStatus === 'ACTIVE' ? "bg-emerald-500" :
-                            member.membershipStatus === 'SUSPENDED' ? "bg-rose-500" :
+                            member.membershipStatus === 'SUSPENDED' ? "bg-red-500" :
                             "bg-amber-500"
                           )} />
                           {member.membershipStatus}
@@ -196,9 +196,9 @@ export function MemberTable({
                               {member.membershipStatus === 'ACTIVE' ? (
                                 <button
                                   onClick={() => onUpdateStatus(member.uid, 'SUSPENDED')}
-                                  className="w-full px-4 py-2 text-left text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                                  className="w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
                                 >
-                                  <UserMinus size={12} className="text-rose-400" />
+                                  <UserMinus size={12} className="text-red-400" />
                                   Suspend Member
                                 </button>
                               ) : (
@@ -271,7 +271,7 @@ export function MemberTable({
                 <div className={cn(
                   "inline-flex items-center gap-1.5 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border leading-tight shrink-0",
                   member.membershipStatus === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                  member.membershipStatus === 'SUSPENDED' ? "bg-rose-500/10 text-rose-600 border-rose-500/20" :
+                  member.membershipStatus === 'SUSPENDED' ? "bg-red-500/10 text-red-600 border-red-500/20" :
                   "bg-amber-500/10 text-amber-600 border-amber-500/20"
                 )}>
                   {member.membershipStatus}
@@ -325,7 +325,7 @@ export function MemberTable({
                   {member.membershipStatus === 'ACTIVE' ? (
                     <button
                       onClick={() => onUpdateStatus(member.uid, 'SUSPENDED')}
-                      className="h-8 px-3.5 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95"
+                      className="h-8 px-3.5 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95"
                     >
                       Suspend
                     </button>

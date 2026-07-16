@@ -14,6 +14,9 @@ export default defineConfig(({mode}) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'firebase/app': path.resolve(__dirname, './src/lib/supabaseClient.ts'),
+        'firebase/firestore': path.resolve(__dirname, './src/lib/supabaseClient.ts'),
+        'firebase/auth': path.resolve(__dirname, './src/lib/supabaseClient.ts'),
       },
     },
     server: {

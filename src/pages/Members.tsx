@@ -445,7 +445,7 @@ export function Members() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-4 right-4 bg-rose-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
         >
           <AlertCircle size={24} />
           {error}
@@ -524,7 +524,7 @@ export function Members() {
         {activeTab === 'directory' ? (
           <>
             {/* Search and Filters */}
-            <div className="bg-white p-6 rounded-[24px] border border-neutral-100 shadow-xl shadow-neutral-100/30 space-y-6">
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-4 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
@@ -533,7 +533,7 @@ export function Members() {
                     placeholder="Search members..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-neutral-50 border border-neutral-200/50 focus:bg-white focus:border-primary outline-none transition-all text-sm font-bold focus:ring-2 focus:ring-primary/10"
+                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-neutral-50 border border-neutral-200/50 focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium focus:ring-2 focus:ring-primary/10"
                   />
                 </div>
                 
@@ -541,7 +541,7 @@ export function Members() {
                   <select
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-bold text-neutral-700 uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
+                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-semibold text-neutral-700 uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
                   >
                     <option value="">All Categories</option>
                     {categories.map(cat => (
@@ -585,20 +585,20 @@ export function Members() {
         ) : activeTab === 'invites' ? (
           <div className="space-y-4">
             <div className="bg-white p-6 rounded-[20px] card-shadow border border-border">
-              <h3 className="text-lg font-bold text-slate-900 mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
+              <h3 className="text-lg font-bold text-neutral-900 mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
               <div className="space-y-4">
                 {memberInvites.length > 0 ? (
                   memberInvites.map((invite) => {
                     const inviter = members.find(m => m.uid === invite.createdBy);
                     return (
-                      <div key={invite.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div key={invite.id} className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                             <UserPlus size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900">{invite.guestName}</h4>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
+                            <h4 className="text-sm font-bold text-neutral-900">{invite.guestName}</h4>
+                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
                             <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">
                               Invited By: {inviter?.name || 'Member'}
                             </p>
@@ -606,8 +606,8 @@ export function Members() {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden md:block">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Date</p>
-                            <p className="text-xs font-bold text-slate-700">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
+                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Date</p>
+                            <p className="text-xs font-bold text-neutral-700">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
                           </div>
                           <Link 
                             to={`/guests?highlight=${invite.id}`}
@@ -621,8 +621,8 @@ export function Members() {
                   })
                 ) : (
                   <div className="py-12 text-center">
-                    <UserPlus size={40} className="mx-auto text-slate-200 mb-4" />
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No member invites yet</p>
+                    <UserPlus size={40} className="mx-auto text-neutral-200 mb-4" />
+                    <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">No member invites yet</p>
                   </div>
                 )}
               </div>
@@ -678,16 +678,16 @@ export function Members() {
             <Trash2 size={32} />
           </div>
           <div className="text-center">
-            <h3 className="text-xl font-bold text-slate-900">Are you sure?</h3>
-            <p className="text-slate-500 mt-2">
-              Are you sure you want to PERMANENTLY delete <span className="font-bold text-slate-900">{deleteConfirmMember?.name || deleteConfirmMember?.displayName}</span>? 
+            <h3 className="text-xl font-bold text-neutral-900">Are you sure?</h3>
+            <p className="text-neutral-500 mt-2">
+              Are you sure you want to PERMANENTLY delete <span className="font-bold text-neutral-900">{deleteConfirmMember?.name || deleteConfirmMember?.displayName}</span>? 
               This will also delete their login account and all associated data. This action cannot be undone.
             </p>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => setDeleteConfirmMember(null)}
-              className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+              className="flex-1 py-3 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all"
             >
               Cancel
             </button>

@@ -25,7 +25,7 @@ export function SubscriptionExpired() {
         animate={{ opacity: 1, scale: 1 }}
         className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl shadow-navy/5 border border-slate-100 p-10 text-center space-y-8"
       >
-        <div className="w-24 h-24 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+        <div className="w-24 h-24 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
           <ShieldAlert size={48} />
         </div>
         

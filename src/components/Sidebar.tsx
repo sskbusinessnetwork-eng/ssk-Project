@@ -27,7 +27,6 @@ import { format, differenceInDays } from 'date-fns';
 import { firestoreService } from '../services/firestoreService';
 import { notificationService } from '../services/notificationService';
 import { where } from 'firebase/firestore';
-import rocketPlatinumImg from '../assets/images/3d_rocket_upgrade_1784110475703.jpg';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -128,8 +127,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <div className={cn(
-      "w-72 bg-[#0F1117] h-screen flex flex-col fixed left-0 top-0 z-[60] transition-transform duration-500 ease-[0.16,1,0.3,1] md:translate-x-0 border-r border-neutral-900 shadow-2xl",
-      isOpen ? "translate-x-0" : "-translate-x-full"
+      "w-72 bg-[#0F1117] h-screen flex flex-col fixed left-0 top-0 z-[60] transition-transform duration-500 ease-[0.16,1,0.3,1] md:tranneutral-x-0 border-r border-neutral-900 shadow-2xl",
+      isOpen ? "tranneutral-x-0" : "-tranneutral-x-full"
     )}>
       {/* Brand Header */}
       <div className="p-6 border-b border-neutral-900/80 flex items-center justify-between bg-gradient-to-b from-neutral-950 to-transparent">
@@ -244,38 +243,33 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="pt-4 mt-4 border-t border-neutral-900/80">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3.5 px-4 py-2.5 w-full rounded-xl text-neutral-500 hover:bg-rose-500/10 hover:text-rose-400 transition-all duration-300 font-extrabold text-[11px] uppercase tracking-wider group text-left"
+            className="flex items-center gap-3.5 px-4 py-2.5 w-full rounded-xl text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-300 font-extrabold text-[11px] uppercase tracking-wider group text-left"
           >
-            <LogOut size={16} className="group-hover:translate-x-0.5 transition-transform shrink-0" />
+            <LogOut size={16} className="group-hover:tranneutral-x-0.5 transition-transform shrink-0" />
             <span>Logout</span>
           </button>
         </div>
       </nav>
 
-      {/* Upgrade Box (matches the bottom-left rocket container) */}
+      {/* Upgrade Box (premium enterprise SaaS minimalist styling) */}
       <div className="p-4 border-t border-neutral-900/60 bg-neutral-950/20">
-        <div className="p-4 bg-gradient-to-br from-[#111111] to-[#1a1a1a] rounded-2xl border border-neutral-800/80 relative overflow-hidden group hover:border-primary/20 transition-all duration-300">
-          <div className="absolute right-0 bottom-0 w-28 h-28 opacity-80 pointer-events-none group-hover:scale-105 transition-transform duration-500">
-            <img 
-              src={rocketPlatinumImg} 
-              alt="Rocket Blasting Off" 
-              className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
-            />
+        <div className="p-4 bg-[#161920] rounded-xl border border-neutral-800 relative overflow-hidden group hover:border-primary/30 transition-all duration-300">
+          <div className="absolute top-3 right-3 text-primary/30 group-hover:text-primary/50 transition-colors">
+            <Sparkles size={16} className="animate-pulse" />
           </div>
-          <div className="relative z-10 space-y-1.5 pr-14">
-            <h4 className="text-[11px] font-black text-white uppercase tracking-wider">
-              Upgrade to <span className="text-primary font-bold">Platinum</span>
+          <div className="relative z-10 space-y-1.5">
+            <h4 className="text-[11px] font-bold text-white uppercase tracking-wider">
+              Upgrade to <span className="text-primary">Platinum</span>
             </h4>
-            <p className="text-[9px] text-neutral-400 leading-normal">
-              Unlock advanced features and grow faster
+            <p className="text-[9px] text-neutral-400 leading-relaxed">
+              Unlock priority placement, advanced analytics, and deeper network tools.
             </p>
             <button
               onClick={handleUpgradeSubscription}
               disabled={isUpgrading}
-              className="mt-2.5 py-1.5 px-3.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 active:scale-95 disabled:opacity-45"
+              className="mt-2 py-1.5 px-3.5 bg-primary hover:bg-primary/95 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all duration-300 active:scale-95 disabled:opacity-45 w-full text-center"
             >
-              {isUpgrading ? 'Sending...' : 'Upgrade Now →'}
+              {isUpgrading ? 'Sending...' : 'Request Upgrade'}
             </button>
           </div>
         </div>

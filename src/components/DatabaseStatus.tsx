@@ -27,7 +27,7 @@ export function DatabaseStatus() {
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
             status === 'online' ? 'bg-emerald-50 text-emerald-600' : 
-            status === 'offline' ? 'bg-rose-50 text-rose-600' : 
+            status === 'offline' ? 'bg-red-50 text-red-600' : 
             'bg-slate-50 text-slate-400'
           }`}>
             <Database size={20} />
@@ -58,8 +58,8 @@ export function DatabaseStatus() {
               </>
             ) : status === 'offline' ? (
               <>
-                <XCircle size={16} className="text-rose-500" />
-                <span className="text-sm font-bold text-rose-600">Offline / Config Error</span>
+                <XCircle size={16} className="text-red-500" />
+                <span className="text-sm font-bold text-red-600">Offline / Config Error</span>
               </>
             ) : (
               <span className="text-sm font-bold text-slate-400">Verifying...</span>

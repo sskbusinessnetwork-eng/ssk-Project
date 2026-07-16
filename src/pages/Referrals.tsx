@@ -349,27 +349,27 @@ export function Referrals() {
           </div>
         </div>
 
-        <div className="bg-white rounded-[24px] border border-neutral-100 shadow-xl shadow-neutral-100/30 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden mb-12">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Referral ID</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Sent By</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Received By</th>
-                  {isAdmin && <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chapter</th>}
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes</th>
+              <thead className="bg-[#F9FAFB] border-b border-neutral-200 sticky top-0 z-10">
+                <tr>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Referral ID</th>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Sent By</th>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Received By</th>
+                  {isAdmin && <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Chapter</th>}
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-neutral-100">
                 {loading ? (
                   <tr>
                     <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center">
                       <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Data...</p>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Data...</p>
                     </td>
                   </tr>
                 ) : filteredReferrals.length > 0 ? (
@@ -380,43 +380,46 @@ export function Referrals() {
                     const chapterAdmin = members.find(m => m.uid === (toUser?.adminId || fromUser?.adminId));
 
                     return (
-                      <tr key={ref.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <tr key={ref.id} className="hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => {
+                        setSelectedReferral(ref);
+                        setIsDetailModalOpen(true);
+                      }}>
                         <td className="px-6 py-4">
-                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                          <span className="text-[11px] font-mono font-medium text-neutral-500 uppercase">
                             #{ref.id.slice(-6)}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold text-navy">{ref.fromUserName || fromUser?.name || 'Unknown'}</span>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{fromUser?.category || 'Member'}</span>
+                            <span className="text-sm font-semibold text-neutral-900">{ref.fromUserName || fromUser?.name || 'Unknown'}</span>
+                            <span className="text-[11px] text-neutral-500 font-medium truncate max-w-[150px]">{fromUser?.category || 'Member'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold text-navy">{toUser?.name || 'Unknown'}</span>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{toUser?.category || 'Member'}</span>
+                            <span className="text-sm font-semibold text-neutral-900">{toUser?.name || 'Unknown'}</span>
+                            <span className="text-[11px] text-neutral-500 font-medium truncate max-w-[150px]">{toUser?.category || 'Member'}</span>
                           </div>
                         </td>
                         {isAdmin && (
                           <td className="px-6 py-4">
-                            <span className="text-[10px] font-black text-primary uppercase tracking-tight">
+                            <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
                               {chapterAdmin?.businessName || 'Independent'}
                             </span>
                           </td>
                         )}
                         <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-slate-600">
+                          <span className="text-sm font-medium text-neutral-600">
                             {format(new Date(ref.createdAt), 'dd MMM yyyy')}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <span className={cn(
-                            "text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-widest",
-                            ref.status === 'PENDING' && "bg-amber-50 text-amber-600",
-                            ref.status === 'COMPLETED' && "bg-emerald-50 text-emerald-600",
-                            ref.status === 'NOT_CONVERTED' && "bg-rose-50 text-rose-600",
-                            ref.status === 'CONTACTED' && "bg-blue-50 text-blue-600"
+                            "text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider",
+                            ref.status === 'PENDING' && "bg-amber-50 text-amber-600 border border-amber-100",
+                            ref.status === 'COMPLETED' && "bg-emerald-50 text-emerald-600 border border-emerald-100",
+                            ref.status === 'NOT_CONVERTED' && "bg-red-50 text-red-600 border border-red-100",
+                            ref.status === 'CONTACTED' && "bg-blue-50 text-blue-600 border border-blue-100"
                           )}>
                             {isChapterAdmin ? (
                               (ref.status === 'COMPLETED' || ref.status === 'CONVERTED') ? 'Converted' :
@@ -426,12 +429,12 @@ export function Referrals() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-xs font-black text-emerald-600">
+                          <span className="text-sm font-bold text-emerald-600">
                             {slip ? `₹${slip.businessValue.toLocaleString()}` : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-[10px] font-medium text-slate-500 line-clamp-1 max-w-[150px]" title={ref.notes}>
+                          <p className="text-xs font-medium text-neutral-500 line-clamp-1 max-w-[150px]" title={ref.notes}>
                             {ref.notes || '-'}
                           </p>
                         </td>
@@ -441,9 +444,9 @@ export function Referrals() {
                 ) : (
                   <tr>
                     <td colSpan={isAdmin ? 8 : 7} className="px-6 py-20 text-center">
-                      <Share2 size={40} className="mx-auto text-slate-200 mb-3" />
+                      <Share2 size={40} className="mx-auto text-neutral-200 mb-3" />
                       <h3 className="text-sm font-bold text-navy">No referrals found</h3>
-                      <p className="text-xs text-slate-400 mt-1">The referral history is currently empty.</p>
+                      <p className="text-xs text-neutral-400 mt-1">The referral history is currently empty.</p>
                     </td>
                   </tr>
                 )}
@@ -499,7 +502,7 @@ export function Referrals() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 right-4 left-4 z-[100] bg-rose-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
+          className="fixed bottom-24 right-4 left-4 z-[100] bg-red-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
         >
           <AlertCircle size={24} />
           <span className="font-bold text-sm uppercase tracking-wider">{errorMessage}</span>
@@ -564,8 +567,8 @@ export function Referrals() {
                   setIsDetailModalOpen(true);
                 }}
                 className={cn(
-                  "bg-white p-4 rounded-[14px] card-shadow border flex items-center gap-4 group active:scale-[0.98] transition-all cursor-pointer relative overflow-hidden",
-                  ref.status === 'PENDING' && filter === 'received' ? "border-amber-200 animate-pulse-subtle" : "border-border"
+                  "bg-white p-5 rounded-2xl shadow-sm border hover:shadow-md hover:border-neutral-300 flex items-center gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
+                  ref.status === 'PENDING' && filter === 'received' ? "border-amber-200 bg-amber-50/30" : "border-neutral-200"
                 )}
               >
                 {/* Left: Icon */}
@@ -603,7 +606,7 @@ export function Referrals() {
                     "text-[9px] font-bold uppercase tracking-widest",
                     ref.status === 'PENDING' && "text-amber-500",
                     ref.status === 'COMPLETED' && "text-emerald-500",
-                    ref.status === 'NOT_CONVERTED' && "text-rose-500",
+                    ref.status === 'NOT_CONVERTED' && "text-red-500",
                     ref.status === 'CONTACTED' && "text-blue-500"
                   )}>
                     {ref.status.replace('_', ' ')}
@@ -613,7 +616,7 @@ export function Referrals() {
             );
           })
         ) : (
-          <div className="py-20 text-center bg-white rounded-[14px] border border-dashed border-border">
+          <div className="py-20 text-center bg-white rounded-[14px] border border-dashed border-neutral-200">
             <Share2 size={40} className="mx-auto text-text-secondary/20 mb-3" />
             <h3 className="text-sm font-bold text-text-primary">No referrals yet</h3>
             <p className="text-xs text-text-secondary mt-1">Your business referrals will appear here.</p>
@@ -629,12 +632,12 @@ export function Referrals() {
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Select Member</label>
+            <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Select Member</label>
             <select
               required
               value={formData.toUserId}
               onChange={(e) => setFormData({ ...formData, toUserId: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
             >
               <option value="">Choose a member...</option>
               {members.map((m) => (
@@ -645,49 +648,49 @@ export function Referrals() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Contact Name</label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Contact Name</label>
               <input
                 required
                 type="text"
                 value={formData.contactName}
                 onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
                 placeholder="Who are you referring?"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Contact Phone</label>
+              <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Contact Phone</label>
               <input
                 required
                 type="tel"
                 value={formData.contactPhone}
                 onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
                 placeholder="Phone number"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Business Requirement</label>
+            <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Business Requirement</label>
             <textarea
               required
               value={formData.requirement}
               onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
               placeholder="What does the contact need?"
               rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all resize-none"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Additional Notes (Optional)</label>
+            <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Additional Notes (Optional)</label>
             <input
               type="text"
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               placeholder="Any extra info for the member?"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
             />
           </div>
 
@@ -696,7 +699,7 @@ export function Referrals() {
               type="submit"
               disabled={isSubmitting}
               className={cn(
-                "w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] flex items-center justify-center gap-2",
+                "w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] flex items-center justify-center gap-2",
                 isSubmitting && "opacity-70 cursor-not-allowed"
               )}
             >
@@ -720,34 +723,34 @@ export function Referrals() {
         title="Submit Thank You Slip"
       >
         <form onSubmit={handleThankYouSubmit} className="space-y-6">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-            <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Referral From</p>
-            <p className="text-sm font-bold text-slate-900">
+          <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+            <p className="text-xs text-neutral-500 uppercase font-bold tracking-widest mb-1">Referral From</p>
+            <p className="text-sm font-bold text-neutral-900">
               {selectedReferral?.fromUserName || members.find(m => m.uid === selectedReferral?.fromUserId)?.name || 'Member'}
             </p>
-            <p className="text-xs text-slate-600 mt-2">For: {selectedReferral?.contactName}</p>
+            <p className="text-xs text-neutral-600 mt-2">For: {selectedReferral?.contactName}</p>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Business Value (₹)</label>
+            <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Business Value (₹)</label>
             <input
               required
               type="number"
               value={thankYouData.businessValue}
               onChange={(e) => setThankYouData({ ...thankYouData, businessValue: e.target.value })}
               placeholder="Enter amount in INR"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wider">Notes (Optional)</label>
+            <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Notes (Optional)</label>
             <textarea
               value={thankYouData.notes}
               onChange={(e) => setThankYouData({ ...thankYouData, notes: e.target.value })}
               placeholder="Add a thank you note..."
               rows={3}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition-all resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all resize-none"
             />
           </div>
 
@@ -759,7 +762,7 @@ export function Referrals() {
                 setIsDetailModalOpen(true);
               }}
               disabled={isSubmitting}
-              className="flex-1 px-6 py-4 border-2 border-slate-100 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all disabled:opacity-50"
+              className="flex-1 px-6 py-4 border-2 border-neutral-100 text-neutral-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-neutral-50 transition-all disabled:opacity-50"
             >
               Back
             </button>
@@ -767,7 +770,7 @@ export function Referrals() {
               type="submit"
               disabled={isSubmitting}
               className={cn(
-                "flex-2 py-4 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2",
+                "flex-2 py-4 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-2",
                 isSubmitting && "opacity-70 cursor-not-allowed"
               )}
             >
@@ -796,21 +799,21 @@ export function Referrals() {
       >
         <form onSubmit={handleNotConverted} className="space-y-6">
           <div className="space-y-4">
-            <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-1">Referral Details</p>
-              <p className="text-sm font-bold text-slate-900">{selectedReferral?.contactName}</p>
-              <p className="text-xs text-slate-600">{selectedReferral?.requirement}</p>
+            <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
+              <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest mb-1">Referral Details</p>
+              <p className="text-sm font-bold text-neutral-900">{selectedReferral?.contactName}</p>
+              <p className="text-xs text-neutral-600">{selectedReferral?.requirement}</p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest ml-1">
                 Select Reason
               </label>
               <select
                 required
                 value={notConvertedReason}
                 onChange={(e) => setNotConvertedReason(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all text-sm font-medium"
+                className="w-full px-4 py-3 bg-neutral-50 border-2 border-neutral-100 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all text-sm font-medium"
               >
                 <option value="">Choose a reason...</option>
                 <option value="Price Related">Price Related</option>
@@ -830,7 +833,7 @@ export function Referrals() {
                 setIsDetailModalOpen(true);
               }}
               disabled={isSubmitting}
-              className="flex-1 px-6 py-3 border-2 border-slate-100 text-slate-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all disabled:opacity-50"
+              className="flex-1 px-6 py-3 border-2 border-neutral-100 text-neutral-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-neutral-50 transition-all disabled:opacity-50"
             >
               Back
             </button>
@@ -838,7 +841,7 @@ export function Referrals() {
               type="submit"
               disabled={isSubmitting}
               className={cn(
-                "flex-1 px-6 py-3 bg-rose-600 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-rose-700 transition-all shadow-lg shadow-rose-200 flex items-center justify-center gap-2",
+                "flex-1 px-6 py-3 bg-red-600 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-200 flex items-center justify-center gap-2",
                 isSubmitting && "opacity-70 cursor-not-allowed"
               )}
             >
@@ -867,7 +870,7 @@ export function Referrals() {
         {selectedReferral && (
           <div className="space-y-6">
             <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-2xl border border-border">
+              <div className="p-4 bg-muted rounded-2xl border border-neutral-200">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">
@@ -885,7 +888,7 @@ export function Referrals() {
                   </div>
                 </div>
 
-                <div className="space-y-3 pt-3 border-t border-border/50">
+                <div className="space-y-3 pt-3 border-t border-neutral-200/50">
                   <div>
                     <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1">Contact Details</p>
                     <p className="text-sm font-bold text-text-primary">{selectedReferral.contactName}</p>
@@ -929,12 +932,12 @@ export function Referrals() {
               )}
 
               {selectedReferral.status === 'NOT_CONVERTED' && (
-                <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
                   <div className="flex items-center gap-2 mb-2">
-                    <XCircle size={18} className="text-rose-600" />
-                    <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Not Converted</p>
+                    <XCircle size={18} className="text-red-600" />
+                    <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Not Converted</p>
                   </div>
-                  <p className="text-xs font-bold text-rose-900">Reason: {selectedReferral.notConvertedReason}</p>
+                  <p className="text-xs font-bold text-red-900">Reason: {selectedReferral.notConvertedReason}</p>
                 </div>
               )}
             </div>
@@ -947,7 +950,7 @@ export function Referrals() {
                     setIsDetailModalOpen(false);
                     setIsNotConvertedModalOpen(true);
                   }}
-                  className="flex-1 py-3 bg-white border-2 border-rose-100 text-rose-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-rose-50 transition-all active:scale-95"
+                  className="flex-1 py-3 bg-white border-2 border-red-100 text-red-600 rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-red-50 transition-all active:scale-95"
                 >
                   Lost
                 </button>

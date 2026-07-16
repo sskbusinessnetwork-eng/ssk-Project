@@ -18,7 +18,10 @@ import {
   Calendar,
   Bell,
   Monitor,
-  Sparkles
+  Sparkles,
+  Sun,
+  MessageSquare,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -108,10 +111,10 @@ export function Layout() {
       <main className="flex-1 md:ml-72 pb-24 md:pb-0 min-h-screen relative overflow-y-auto custom-scrollbar z-10">
         
         {/* Sticky Premium Header */}
-        <header className="bg-white/85 backdrop-blur-md sticky top-0 z-40 px-6 md:px-8 py-3.5 flex items-center justify-between border-b border-neutral-100 shadow-sm shadow-neutral-100/5">
+        <header className="bg-white sticky top-0 z-40 px-6 md:px-8 py-3.5 flex items-center justify-between border-b border-neutral-200 shadow-sm shadow-neutral-100/5 h-[70px]">
           
-          {/* Left: Mobile branding & burger menu */}
-          <div className="flex items-center gap-3">
+          {/* Left: Mobile burger & brand identity */}
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
               className="md:hidden p-2 hover:bg-neutral-100 active:scale-95 rounded-xl transition-all text-neutral-800"
@@ -119,67 +122,88 @@ export function Layout() {
               <Menu size={20} />
             </button>
             
-            <div className="md:hidden flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <img 
                 src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
                 alt="SSK Logo" 
                 className="h-8 w-8 object-contain rounded-xl border border-neutral-200"
                 referrerPolicy="no-referrer"
               />
-              <span className="text-[10px] font-black uppercase tracking-wider text-neutral-800">SSK NETWORK</span>
-            </div>
-
-            <div className="hidden md:flex items-center gap-2 text-neutral-400">
-              <span className="text-[9px] font-black tracking-widest uppercase bg-neutral-100 px-2 py-1 rounded-md text-neutral-500">PEER COMMAND</span>
+              <span className="text-[15px] font-bold tracking-tight text-[#111827] font-heading uppercase hidden sm:inline-block">
+                SSK BUSINESS NETWORK
+              </span>
+              <span className="text-[12px] font-bold tracking-tight text-[#111827] font-heading uppercase sm:hidden">
+                SSK NETWORK
+              </span>
             </div>
           </div>
 
-          {/* Center: Brand Identity */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-            <span className="text-xs sm:text-sm font-black text-neutral-900 tracking-[0.15em] uppercase whitespace-nowrap">
-              SSK BUSINESS NETWORK
-            </span>
+          {/* Center: Search input representing Vercel/Stripe style commands */}
+          <div className="hidden lg:flex items-center gap-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-full px-4 py-2 w-full max-w-[480px] transition-all hover:border-[#D1D5DB] focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/5">
+            <Search size={16} className="text-[#9CA3AF]" />
+            <input 
+              type="text" 
+              placeholder="Search members, referrals, meetings..." 
+              className="bg-transparent border-none outline-none text-[13px] text-neutral-800 placeholder-neutral-400 w-full font-sans"
+              disabled
+            />
+            <span className="text-[11px] text-neutral-400 font-sans font-medium bg-white px-2 py-0.5 rounded-md border border-[#E5E7EB] shadow-sm select-none">⌘ K</span>
           </div>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-3">
-            {/* Remix Button */}
+          <div className="flex items-center gap-4">
+            {/* Theme Sun Toggle */}
             <button 
-              onClick={() => navigate('/analytics')}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-neutral-200/80 hover:bg-neutral-50 rounded-full transition-all text-neutral-600 active:scale-95 text-[10px] font-bold uppercase tracking-wider bg-white shadow-sm"
+              className="p-2 hover:bg-[#F3F4F6] active:scale-95 rounded-full transition-all text-neutral-500 hover:text-neutral-900 hidden sm:block"
+              title="Light Mode"
             >
-              <Sparkles size={12} className="text-primary" />
-              <span>Remix</span>
+              <Sun size={18} strokeWidth={2} />
             </button>
 
-            {/* Device Button */}
-            <button 
-              onClick={() => navigate('/profile')}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 border border-neutral-200/80 hover:bg-neutral-50 rounded-full transition-all text-neutral-600 active:scale-95 text-[10px] font-bold uppercase tracking-wider bg-white shadow-sm"
+            {/* Notification Bell */}
+            <Link 
+              to="/notifications" 
+              className="relative p-2 hover:bg-[#F3F4F6] active:scale-95 rounded-full transition-all text-neutral-700"
+              title="Notifications"
             >
-              <Monitor size={12} className="text-neutral-500" />
-              <span>Device</span>
-            </button>
-
-            {/* Notifications with Real-time Count */}
-            <Link to="/notifications" className="relative p-2 hover:bg-neutral-100 active:scale-95 rounded-full transition-all text-neutral-700">
-              <Bell size={18} strokeWidth={2.2} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-primary text-white text-[8px] font-black min-w-[15px] h-[15px] px-1 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse-subtle">
-                  {unreadCount}
-                </span>
-              )}
+              <Bell size={18} strokeWidth={2} />
+              <span className="absolute top-1 right-1 bg-primary w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm animate-pulse-subtle" />
             </Link>
 
-            {/* User Profile dropdown or avatar */}
-            <Link to="/profile" className="shrink-0 relative group">
-              <img 
-                src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'User')}&background=D32F2F&color=ffffff`} 
-                alt="Profile Avatar" 
-                className="w-8.5 h-8.5 rounded-full border border-neutral-200 object-cover hover:border-primary/50 transition-colors shadow-sm bg-neutral-50"
-                referrerPolicy="no-referrer"
-              />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm" />
+            {/* Chat Messages Icon */}
+            <Link 
+              to="/notifications" 
+              className="relative p-2 hover:bg-[#F3F4F6] active:scale-95 rounded-full transition-all text-neutral-700"
+              title="Messages"
+            >
+              <MessageSquare size={18} strokeWidth={2} />
+              <span className="absolute top-1.5 right-1.5 bg-primary w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm" />
+            </Link>
+
+            {/* Separator */}
+            <div className="h-6 w-px bg-neutral-200 hidden sm:block" />
+
+            {/* User Profile Block (exactly like the mockup) */}
+            <Link to="/profile" className="flex items-center gap-3 hover:opacity-95 transition-opacity">
+              <div className="relative shrink-0">
+                <img 
+                  src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'User')}&background=DC2626&color=ffffff`} 
+                  alt="Profile Avatar" 
+                  className="w-9 h-9 rounded-full border border-neutral-200 object-cover bg-neutral-50"
+                  referrerPolicy="no-referrer"
+                />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm" />
+              </div>
+              
+              <div className="hidden md:flex flex-col text-left">
+                <span className="text-[13px] font-bold text-[#111827] leading-none">
+                  {profile?.name || 'Sudarshan Vagale'}
+                </span>
+                <span className="text-[11px] text-[#6B7280] mt-1 font-medium">
+                  {profile?.role === 'MASTER_ADMIN' ? 'Platinum Director' : profile?.role === 'CHAPTER_ADMIN' ? 'Platinum President' : 'Platinum Member'}
+                </span>
+              </div>
+              <ChevronDown size={14} className="text-neutral-400 hidden md:block shrink-0" />
             </Link>
           </div>
         </header>

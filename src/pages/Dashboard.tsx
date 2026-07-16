@@ -37,7 +37,7 @@ import { cn } from '../lib/utils';
 import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
-import companionHeroImg from '../assets/images/3d_business_character_hero_1784110459127.jpg';
+import StatGrid from '../components/StatGrid';
 
 export function Analytics() {
   const { profile } = useAuth();
@@ -561,110 +561,192 @@ export function Analytics() {
   return (
     <div className="pb-24 space-y-10">
       
-      {/* 1. PERSONALIZED WELCOME BANNER (matches the redesign upload) */}
-      <div className="glass-card rounded-[32px] p-6 sm:p-8 shadow-2xl relative overflow-hidden transition-all duration-500 hover:shadow-neutral-200/50">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      {/* 1. PERSONALIZED WELCOME BANNER (Premium Dashboard Hero) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-white border border-neutral-200 rounded-[32px] p-5 sm:p-6 md:p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.04)] flex flex-col justify-center min-h-[340px]"
+      >
+        {/* Subtle animated gradient backdrop */}
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/50 to-white pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/[0.03] rounded-full blur-[100px] animate-float pointer-events-none" />
+        <div className="absolute -bottom-[200px] -left-[200px] w-[600px] h-[600px] bg-neutral-100/50 rounded-full blur-[80px] animate-float-delayed pointer-events-none" />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full relative z-10">
           
           {/* Welcome Text & Navigation Tabs */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="space-y-1.5">
-              <span className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400">
+          <div className="lg:col-span-5 space-y-8 flex flex-col justify-center h-full text-center lg:text-left items-center lg:items-start w-full">
+            <div className="space-y-3">
+              <motion.span 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1, duration: 0.5 }}
+                className="text-[14px] font-semibold uppercase tracking-[0.2em] text-neutral-500 block"
+              >
                 {getGreeting()},
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-neutral-900 tracking-tight flex items-center gap-2">
-                {profile?.name || 'Partner'} 👋
-              </h2>
-              <p className="text-sm text-neutral-500 leading-relaxed font-medium">
-                Welcome back to <span className="text-primary font-extrabold">SSK Business Network</span>. Let's build your growth engine today.
-              </p>
+              </motion.span>
+              <motion.h2 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="text-[40px] md:text-[48px] font-semibold text-[#111827] tracking-tight flex items-center justify-center lg:justify-start gap-2 flex-wrap leading-tight"
+              >
+                {profile?.name || 'Partner'}
+              </motion.h2>
+              <motion.p 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3, duration: 0.5 }}
+                className="text-[16px] text-neutral-500 font-medium max-w-md leading-relaxed"
+              >
+                Welcome back to <span className="text-primary font-semibold">SSK Business Network</span>. Here is your enterprise operations overview for today.
+              </motion.p>
             </div>
 
-            {/* Dynamic Companion Tabs (designed as pills) */}
-            <div className="flex bg-neutral-100/80 p-1.5 rounded-2xl border border-neutral-200/50 max-w-md">
+            {/* Dynamic Companion Tabs */}
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="flex bg-[#F7F8FA] p-1.5 rounded-[20px] border border-neutral-200/60 w-full max-w-sm gap-2"
+            >
               <button
                 onClick={() => setActiveTab('companion')}
                 className={cn(
-                  "flex-1 py-2.5 px-4 text-center rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 cursor-pointer",
+                  "flex-1 h-12 rounded-[14px] text-[15px] font-semibold transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === 'companion' 
-                    ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                    : "text-neutral-500 hover:text-primary"
+                    ? "bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.06)]" 
+                    : "text-neutral-500 hover:text-[#111827] hover:bg-neutral-200/50"
                 )}
               >
-                <Sparkles size={12} className={activeTab === 'companion' ? "text-white animate-pulse" : "text-neutral-400"} />
-                Growth Companion
+                <Sparkles size={18} className={activeTab === 'companion' ? "text-primary" : "text-neutral-400"} />
+                Companion
               </button>
               <button
                 onClick={() => setActiveTab('reports')}
                 className={cn(
-                  "flex-1 py-2.5 px-4 text-center rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 cursor-pointer",
+                  "flex-1 h-12 rounded-[14px] text-[15px] font-semibold transition-all duration-300 flex items-center justify-center gap-2",
                   activeTab === 'reports' 
-                    ? "bg-primary text-white shadow-lg shadow-primary/20" 
-                    : "text-neutral-500 hover:text-primary"
+                    ? "bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.06)]" 
+                    : "text-neutral-500 hover:text-[#111827] hover:bg-neutral-200/50"
                 )}
               >
-                <Activity size={12} className={activeTab === 'reports' ? "text-white" : "text-neutral-400"} />
-                Traditional Reports
+                <Activity size={18} className={activeTab === 'reports' ? "text-primary" : "text-neutral-400"} />
+                Reports
               </button>
-            </div>
+            </motion.div>
           </div>
 
-          {/* 3D Character Illustration Area */}
-          <div className="lg:col-span-3 flex justify-center relative">
-            <div className="relative w-40 h-40 group animate-float">
-              <img 
-                src={companionHeroImg} 
-                alt="Growth Companion Hero" 
-                className="w-full h-full object-contain rounded-3xl transition-transform duration-500 group-hover:scale-105"
-                referrerPolicy="no-referrer"
-              />
-              {/* Floating stats tag */}
-              <div className="absolute -bottom-1 -right-4 bg-emerald-500 text-white px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg border border-emerald-400/20 text-[9px] font-black uppercase tracking-wider">
-                <TrendingUp size={10} />
-                <span>Growth +24.8%</span>
+          {/* Large Animated Business Health Score */}
+          <div className="lg:col-span-3 hidden lg:flex flex-col items-center justify-center relative">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-48 h-48 flex flex-col items-center justify-center group"
+            >
+              {/* Soft glowing ring */}
+              <div className="absolute inset-0 rounded-full border border-neutral-100 shadow-[0_0_40px_rgba(220,38,38,0.08)] group-hover:shadow-[0_0_60px_rgba(220,38,38,0.12)] transition-shadow duration-500" />
+              
+              <svg className="w-full h-full -rotate-90 absolute inset-0" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="46" stroke="#F7F8FA" strokeWidth="4" fill="transparent" />
+                <motion.circle 
+                  cx="50" cy="50" r="46" stroke="#DC2626" strokeWidth="4" fill="transparent"
+                  strokeDasharray="289.02" strokeDashoffset="289.02" strokeLinecap="round" 
+                  initial={{ strokeDashoffset: 289.02 }}
+                  animate={{ strokeDashoffset: 289.02 - (289.02 * 0.92) }}
+                  transition={{ delay: 0.6, duration: 1.5, ease: "easeOut" }}
+                />
+              </svg>
+              
+              <div className="flex flex-col items-center justify-center z-10 bg-white w-[140px] h-[140px] rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-neutral-50/50">
+                <span className="text-[48px] font-semibold text-[#111827] leading-none tracking-tight">92</span>
+                <span className="text-[12px] font-semibold text-neutral-400 uppercase tracking-[0.2em] mt-1">Health</span>
               </div>
-            </div>
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              className="mt-6 flex items-center gap-6"
+            >
+              <div className="flex flex-col items-center">
+                <span className="text-[14px] text-emerald-600 font-semibold flex items-center gap-1"><TrendingUp size={14} /> +4%</span>
+                <span className="text-[11px] text-neutral-400 uppercase tracking-widest font-semibold mt-1">Weekly</span>
+              </div>
+              <div className="w-px h-8 bg-neutral-200" />
+              <div className="flex flex-col items-center">
+                <span className="text-[14px] text-emerald-600 font-semibold flex items-center gap-1"><TrendingUp size={14} /> +12%</span>
+                <span className="text-[11px] text-neutral-400 uppercase tracking-widest font-semibold mt-1">Monthly</span>
+              </div>
+            </motion.div>
           </div>
 
-          {/* Rightmost Membership Card */}
-          <div className="lg:col-span-4 h-full">
-            <div className="bg-gradient-to-br from-[#0c0c0c] to-[#1e1e1e] rounded-[24px] p-5 border border-neutral-900 shadow-2xl relative overflow-hidden min-h-[160px] flex flex-col justify-between group animate-glow">
-              {/* Golden Crown Icon */}
-              <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20 shadow-md">
-                <Trophy size={18} />
+          {/* Premium Rightmost Membership Card */}
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.4, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="lg:col-span-4 h-full flex items-center justify-center lg:justify-end w-full"
+          >
+            <div className="bg-[#0B0B0D] rounded-[24px] p-8 shadow-[0_20px_40px_rgba(11,11,13,0.15)] relative overflow-hidden w-full max-w-sm h-full min-h-[260px] flex flex-col justify-between group hover:shadow-[0_30px_60px_rgba(11,11,13,0.2)] transition-shadow duration-500">
+              <div className="absolute top-0 right-0 w-[200px] h-[200px] bg-primary/20 rounded-full blur-[80px] pointer-events-none group-hover:scale-110 group-hover:bg-primary/30 transition-all duration-700" />
+              <div className="absolute -bottom-10 -left-10 w-[150px] h-[150px] bg-white/5 rounded-full blur-[60px] pointer-events-none" />
+              
+              <div className="relative z-10 flex items-start justify-between">
+                <div className="space-y-1.5">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.2em] text-emerald-400 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Active Access
+                  </span>
+                  <h3 className="text-white text-[24px] font-semibold tracking-tight">
+                    {profile?.role === 'MASTER_ADMIN' ? 'Platinum Director' : profile?.role === 'CHAPTER_ADMIN' ? 'Platinum President' : 'Platinum Member'}
+                  </h3>
+                  <p className="text-[14px] text-neutral-400 font-medium pt-1">
+                    {profile?.chapterName || 'SSK Business Network'}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-amber-400 backdrop-blur-md border border-white/5 shadow-inner">
+                  <Trophy size={24} />
+                </div>
               </div>
 
-              {/* Glowing Red Neon Wave Lines */}
-              <div className="absolute inset-0 pointer-events-none opacity-40 group-hover:opacity-60 transition-opacity duration-500">
-                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  <path d="M0,70 Q25,50 50,75 T100,60" fill="none" stroke="#D32F2F" strokeWidth="2" />
-                  <path d="M0,80 Q30,65 60,85 T100,70" fill="none" stroke="#D32F2F" strokeWidth="1" strokeDasharray="3 3" />
-                </svg>
-              </div>
-
-              <div className="relative z-10 space-y-1">
-                <span className="text-[9px] font-black uppercase tracking-[0.25em] text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Membership Active
-                </span>
-                <h3 className="text-white text-base font-black uppercase tracking-wider mt-1">
-                  {profile?.role === 'MASTER_ADMIN' ? 'Platinum Director' : profile?.role === 'CHAPTER_ADMIN' ? 'Platinum President' : 'Platinum Member'}
-                </h3>
-                <p className="text-[10px] text-neutral-400 leading-none mt-1">
-                  {profile?.chapterName || 'SSK Business Network'}
-                </p>
-              </div>
-
-              <div className="relative z-10 pt-4 flex items-center justify-between text-[9px] text-neutral-500 font-extrabold uppercase tracking-widest border-t border-neutral-900">
-                <span>SSK PEER ACCESS</span>
-                <span className="text-white bg-primary/20 text-primary border border-primary/20 px-2 py-0.5 rounded">
-                  EST. 2024
-                </span>
+              <div className="relative z-10 mt-auto pt-6 space-y-4">
+                <div className="flex items-center justify-between text-[13px] font-medium">
+                  <span className="text-neutral-400">Next Milestone</span>
+                  <span className="text-white">Diamond Partner</span>
+                </div>
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: "75%" }}
+                    transition={{ delay: 1, duration: 1.5, ease: "easeOut" }}
+                    className="h-full bg-gradient-to-r from-primary to-rose-400 rounded-full" 
+                  />
+                </div>
+                
+                <div className="pt-4 mt-2 flex items-center justify-between border-t border-white/10">
+                  <span className="text-[11px] text-neutral-500 font-semibold uppercase tracking-[0.2em]">ENTERPRISE SEAT</span>
+                  <button className="text-white bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-lg text-[13px] font-semibold tracking-wide">
+                    Manage
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </motion.div>
 
         </div>
-      </div>
+      </motion.div>
+
+      {/* Premium Animated StatGrid (Dynamic Live Data / High-Value Fallbacks) */}
+      <StatGrid 
+        activeMembers={globalMemberCount > 0 ? globalMemberCount.toLocaleString() : undefined}
+        referralsPassed={globalReferralsCount > 0 ? globalReferralsCount.toLocaleString() : undefined}
+        businessGenerated={globalBusinessGenerated > 0 ? `₹${globalBusinessGenerated.toLocaleString('en-IN')}` : undefined}
+        upcomingMeetings={allData.meetings.length > 0 ? allData.meetings.length.toLocaleString() : undefined}
+      />
 
       {activeTab === 'companion' ? (
         <motion.div 
@@ -694,375 +776,6 @@ export function Analytics() {
             />
           )}
 
-          {false && profile?.role === 'MEMBER' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              
-              {/* LEFT COLUMN: Focus Checklist & AI recommendation (7 cols) */}
-              <div className="lg:col-span-7 space-y-6">
-                
-                {/* 2. TODAY'S BUSINESS FOCUS */}
-                <div className="bg-white rounded-[24px] p-6 border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#0F2040]" />
-                  
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#0F2040]/60">Daily Plan</span>
-                      <h3 className="text-lg font-black text-[#0F2040] tracking-tight">Today's Business Focus</h3>
-                    </div>
-                    <span className="text-[10px] bg-[#0F2040]/5 text-[#0F2040] px-2.5 py-1 rounded-full font-bold">
-                      {completedFocusCount} of 5 Completed
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
-                    {/* Progress Ring */}
-                    <div className="relative shrink-0 flex items-center justify-center w-24 h-24 bg-[#0F2040]/5 rounded-full p-2 border border-slate-100">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="48" cy="48" r="38" stroke="#F1F5F9" strokeWidth="6" fill="transparent" />
-                        <circle
-                          cx="48" cy="48" r="38" stroke="#0F2040" strokeWidth="6" fill="transparent"
-                          strokeDasharray={238}
-                          strokeDashoffset={238 - (238 * focusProgressPercent) / 100}
-                          className="transition-all duration-1000 ease-out text-[#0F2040]"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute flex flex-col items-center justify-center">
-                        <span className="text-lg font-black text-[#0F2040] leading-none">{focusProgressPercent}%</span>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-1">Focus</span>
-                      </div>
-                    </div>
-
-                    {/* Interactive Checklist */}
-                    <div className="flex-1 w-full space-y-2">
-                      {[
-                        { key: 'attendMeeting', label: "Attend Today's Meeting", desc: "Log active attendance to show partner commitment", link: "/meetings", linkText: "Meetings" },
-                        { key: 'passReferral', label: "Pass a Referral", desc: "Share a warm referral with your partners", link: "/refer", linkText: "Pass Lead" },
-                        { key: 'scheduleOneToOne', label: "Schedule One-to-One", desc: "Schedule brief sessions with adjacent sectors", link: "/one-to-one", linkText: "Book 1-1" },
-                        { key: 'followUpReferral', label: "Follow Up Referral", desc: "Track conversions of pending referral slips", link: "/refer", linkText: "My Leads" },
-                        { key: 'inviteGuest', label: "Invite Guest", desc: "Introduce business leaders to expand chapter", link: "/guests", linkText: "Invite" },
-                      ].map((item) => {
-                        const isDone = activeFocusTasks[item.key as keyof typeof activeFocusTasks];
-                        return (
-                          <div 
-                            key={item.key} 
-                            className={cn(
-                              "flex items-start gap-3 p-2.5 rounded-xl border transition-all hover:bg-slate-50 cursor-pointer",
-                              isDone ? "bg-emerald-50/10 border-emerald-100" : "bg-slate-50/40 border-slate-100"
-                            )}
-                            onClick={() => handleToggleTask(item.key as any)}
-                          >
-                            <div className={cn(
-                              "w-4 h-4 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-all duration-200",
-                              isDone ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300 hover:border-[#0F2040]"
-                            )}>
-                              {isDone && (
-                                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-1">
-                                <span className={cn(
-                                  "text-xs font-bold transition-all truncate",
-                                  isDone ? "text-slate-400 line-through font-medium" : "text-slate-700"
-                                )}>
-                                  {item.label}
-                                </span>
-                                {!isDone && (
-                                  <Link 
-                                    to={item.link} 
-                                    onClick={(e) => e.stopPropagation()} 
-                                    className="text-[9px] font-extrabold text-[#0F2040] uppercase tracking-wider hover:underline shrink-0 ml-1"
-                                  >
-                                    {item.linkText} →
-                                  </Link>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 6. AI BUSINESS GROWTH RECOMMENDATION */}
-                <div className="bg-gradient-to-br from-indigo-50/50 via-slate-50/20 to-purple-50/50 border border-indigo-100/70 rounded-[24px] p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-200/20 rounded-full blur-xl" />
-                  <div className="flex gap-4">
-                    <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-2xl shrink-0 h-fit">
-                      <Sparkles size={18} className="animate-pulse" />
-                    </div>
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Growth Advisor</span>
-                        <span className="text-[8px] bg-indigo-600/10 text-indigo-600 px-1.5 py-0.5 rounded-md font-bold uppercase">Smart Action</span>
-                      </div>
-                      <h4 className="text-sm font-extrabold text-slate-800 leading-snug">
-                        {recommendation.title}
-                      </h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                        {recommendation.description}
-                      </p>
-                      <div className="pt-1">
-                        <Link 
-                          to={recommendation.link} 
-                          className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-wider"
-                        >
-                          {recommendation.action} <ArrowRight size={12} />
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Upcoming Meeting, Quick Actions, Snapshot, & Achievement (5 cols) */}
-              <div className="lg:col-span-5 space-y-6">
-                
-                {/* 3. UPCOMING MEETING */}
-                <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Weekly Session</span>
-                      <h3 className="text-sm font-black text-[#0F2040] tracking-tight">Upcoming Meeting</h3>
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-600 border border-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Clock size={10} className="animate-pulse" /> Countdown
-                    </span>
-                  </div>
-
-                  {nextMeeting ? (
-                    <div className="space-y-3.5">
-                      <div className="flex items-start gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <div className="w-11 h-11 bg-indigo-50 border border-indigo-100 rounded-xl flex flex-col items-center justify-center text-indigo-600 shrink-0">
-                          <span className="text-[9px] font-black uppercase leading-none">
-                            {format(new Date(nextMeeting.date), 'MMM')}
-                          </span>
-                          <span className="text-base font-black mt-0.5 leading-none">
-                            {format(new Date(nextMeeting.date), 'd')}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-black text-slate-800 truncate">
-                            {profile?.chapterName || "Chapter Weekly Meeting"}
-                          </h4>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
-                            {format(new Date(nextMeeting.date), 'EEEE • ')} {nextMeeting.time || "8:00 AM"}
-                          </p>
-                          {nextMeeting.location && (
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                              📍 {nextMeeting.location}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Live Countdown Grid */}
-                      <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/50 p-2 rounded-xl border border-slate-100">
-                        <div className="p-1">
-                          <span className="block text-sm font-black text-[#0F2040]">{countdown.days}</span>
-                          <span className="text-[8px] text-slate-400 font-bold uppercase">Days</span>
-                        </div>
-                        <div className="p-1">
-                          <span className="block text-sm font-black text-[#0F2040]">{countdown.hours}</span>
-                          <span className="text-[8px] text-slate-400 font-bold uppercase">Hours</span>
-                        </div>
-                        <div className="p-1">
-                          <span className="block text-sm font-black text-[#0F2040]">{countdown.minutes}</span>
-                          <span className="text-[8px] text-slate-400 font-bold uppercase">Mins</span>
-                        </div>
-                      </div>
-
-                      <Link 
-                        to="/meetings" 
-                        className="w-full py-2.5 bg-[#0F2040] text-white text-center rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all hover:bg-[#152a54] flex items-center justify-center gap-1.5"
-                      >
-                        <Eye size={12} /> View Meeting Details
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-xs text-slate-500 font-medium">No upcoming chapter sync set</p>
-                      <Link to="/meetings" className="mt-2 inline-block text-[10px] font-black text-[#0F2040] uppercase tracking-wider hover:underline">Check Schedule →</Link>
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. QUICK ACTIONS */}
-                <div className="space-y-2.5">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Quick Actions</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link to="/refer" className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-[#0F2040]/30 hover:shadow-md transition-all group flex flex-col justify-between min-h-[96px]">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Share2 size={15} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-800">Pass Referral</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Submit hot client opportunities.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/one-to-one" className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-[#0F2040]/30 hover:shadow-md transition-all group flex flex-col justify-between min-h-[96px]">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Handshake size={15} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-800">Book One-to-One</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Schedule deep sync sessions.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/guests" className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-[#0F2040]/30 hover:shadow-md transition-all group flex flex-col justify-between min-h-[96px]">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <UserPlus size={15} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-800">Invite Guest</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Invite peers to next meeting.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/members" className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-[#0F2040]/30 hover:shadow-md transition-all group flex flex-col justify-between min-h-[96px]">
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Users size={15} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-800">View Members</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Browse chapter partners list.</p>
-                      </div>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* 5. BUSINESS SNAPSHOT */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between ml-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Business Snapshot</h4>
-                    <span className="text-[9px] text-indigo-600 font-extrabold uppercase bg-indigo-50 px-2 py-0.5 rounded-full">This Month</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Referrals</span>
-                      <span className="text-base font-black text-[#0F2040] mt-1 block">
-                        {currentMonthMetrics.referralsSent} Sent
-                      </span>
-                      <div className="w-full bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
-                        <div className="bg-amber-500 h-full rounded-full" style={{ width: `${Math.min(100, (currentMonthMetrics.referralsSent / 4) * 100)}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Business Done</span>
-                      <span className="text-base font-black text-emerald-600 mt-1 block">
-                        ₹{currentMonthMetrics.businessGenerated.toLocaleString()}
-                      </span>
-                      <span className="text-[8px] text-slate-400 mt-1.5 block font-medium truncate">Value Closed</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Meetings</span>
-                      <span className="text-base font-black text-[#0F2040] mt-1 block">
-                        {currentMonthMetrics.oneToOnes} Sessions
-                      </span>
-                      <div className="w-full bg-slate-100 h-1 rounded-full mt-2 overflow-hidden">
-                        <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${Math.min(100, (currentMonthMetrics.oneToOnes / 2) * 100)}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Attendance</span>
-                      <span className="text-base font-black text-indigo-600 mt-1 block">
-                        {currentMonthMetrics.attendanceCount > 0 ? "100%" : "Ready"}
-                      </span>
-                      <span className="text-[8px] text-indigo-500 font-bold mt-1.5 block uppercase">Active Sync</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 7. ACHIEVEMENT PROGRESS */}
-                <div className="bg-white rounded-[24px] p-5 border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-widest block">Strategic Growth</span>
-                      <h4 className="text-sm font-black text-[#0F2040] tracking-tight">Achievement Progress</h4>
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest bg-[#0F2040] text-white px-2.5 py-1 rounded-full shrink-0">
-                      {businessGrowthScore < 50 ? '🌱 Rising' : businessGrowthScore < 75 ? '🥈 Silver' : '🏆 Elite'}
-                    </span>
-                  </div>
-
-                  {/* Business Growth Score */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-slate-600">Business Growth Score</span>
-                      <span className="text-indigo-600 font-extrabold">{businessGrowthScore} / 100 PTS</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-100">
-                      <motion.div 
-                        className="h-full bg-[#0F2040] rounded-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${businessGrowthScore}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Streaks & Monthly Goal */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2.5 border-t border-slate-100">
-                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500 font-extrabold flex items-center gap-1">
-                        <Flame size={12} className="text-amber-500" /> Referral Streak
-                      </span>
-                      <span className="text-[11px] font-black text-slate-800">
-                        {currentMonthMetrics.referralsSent > 0 ? '2 Weeks 🔥' : '0 Weeks'}
-                      </span>
-                    </div>
-                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500 font-extrabold flex items-center gap-1">
-                        <Target size={12} className="text-indigo-500" /> Monthly Goal
-                      </span>
-                      <span className="text-[11px] font-black text-slate-800">4 Referrals</span>
-                    </div>
-                  </div>
-
-                  {/* Badges container */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest block mb-2">Achievement Badges</span>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="flex items-center justify-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-100" title="Founding Partner Badge">
-                        <div className="w-6 h-6 rounded-full bg-[#0F2040] text-amber-400 flex items-center justify-center shadow-sm">
-                          <Shield size={12} />
-                        </div>
-                        <span className="text-[8px] text-slate-700 font-extrabold uppercase">Founding</span>
-                      </div>
-
-                      <div className="flex items-center justify-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-100" title="Super Connector Badge">
-                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shadow-sm", hasLoggedOneToOne ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-400")}>
-                          <Zap size={12} />
-                        </div>
-                        <span className="text-[8px] text-slate-700 font-extrabold uppercase">Connector</span>
-                      </div>
-
-                      <div className="flex items-center justify-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-100" title="Network Catalyst Badge">
-                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shadow-sm", hasSentThankYouSlip ? "bg-purple-600 text-white" : "bg-slate-200 text-slate-400")}>
-                          <Award size={12} />
-                        </div>
-                        <span className="text-[8px] text-slate-700 font-extrabold uppercase">Catalyst</span>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-            </div>
-          )}
-
-
-          {/* 2. CHAPTER ADMIN COMPANION VIEW */}
           {profile?.role === 'CHAPTER_ADMIN' && (
             <ChapterAdminCompanionView
               profile={profile}
@@ -1074,251 +787,6 @@ export function Analytics() {
             />
           )}
 
-          {false && profile?.role === 'CHAPTER_ADMIN' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              
-              {/* LEFT COLUMN: Focus Checklist & AI recommendation (7 cols) */}
-              <div className="lg:col-span-7 space-y-6">
-                
-                {/* TODAY'S FOCUS CARD (The largest card) */}
-                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
-                  <div className="absolute top-0 left-0 w-2 h-full bg-emerald-600" />
-                  
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operational Checklist</span>
-                      <h3 className="text-xl font-extrabold text-[#0F2040] tracking-tight">Today's Focus</h3>
-                    </div>
-                    <div className="flex items-center gap-2 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
-                      <span className="text-[11px] font-extrabold text-emerald-700">75% Complete</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
-                    <motion.div 
-                      className="h-full bg-gradient-to-r from-emerald-500 to-[#0F2040] rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: `75%` }}
-                      transition={{ duration: 0.8, ease: "easeOut" }}
-                    />
-                  </div>
-
-                  {/* Checklist Items */}
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Schedule Chapter Weekly Meetings
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Plan the calendar structure, speakers schedule, and meeting locations ahead of time.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Moderate Guest & Visitor Onboarding
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Ensure all external chapter visitors receive welcoming instructions and follow-ups.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Verify Active Business Categories balance
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Resolve overlaps and map vacancies to guide high-quality prospective member targets.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-slate-200 text-slate-400">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-800">
-                            Review and Approve Attendance Registers
-                          </span>
-                          <Link to="/meetings" className="text-[9px] font-black text-emerald-600 uppercase tracking-wider hover:underline">Verify logs →</Link>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Audit marked attendances for recent meetings to confirm accuracy and score statistics.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI CHAPTER COMPANION RECOMMENDATION */}
-                <div className="bg-gradient-to-br from-emerald-50/60 to-teal-50/60 border border-emerald-100/70 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-200/20 rounded-full blur-xl" />
-                  <div className="flex gap-4">
-                    <div className="p-2.5 bg-emerald-100 text-emerald-600 rounded-2xl shrink-0 h-fit">
-                      <Sparkles size={18} className="animate-pulse" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Chapter Optimization Advice</span>
-                      <h4 className="text-sm font-bold text-slate-800 leading-snug">
-                        Focus visitor invitations on vacant business categories.
-                      </h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        Currently, recruiting a <span className="font-extrabold text-emerald-900">Chartered Accountant</span> or <span className="font-extrabold text-emerald-900">Digital Marketer</span> will generate the highest outbound transaction volumes historically. Direct members to invite peers from these sectors next week to grow chapter transaction velocity!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Quick Actions, Business Snapshot, & Gamification (5 cols) */}
-              <div className="lg:col-span-5 space-y-6">
-                
-                {/* QUICK ACTIONS SECTION (Chapter Admin actions) */}
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">President Controls</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link to="/meetings" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-emerald-400/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Calendar size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-emerald-600 transition-colors">Start Meeting</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Organize new weekly session logs.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/meetings" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-amber-400/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-amber-600 transition-colors">Approve Attendance</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Track marked attendances easily.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/guests" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-blue-400/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <UserPlus size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-blue-600 transition-colors">Add Visitor</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Register external business guests.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/members" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-purple-400/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Users size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-purple-600 transition-colors">Manage Members</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Moderate assigned chapter directory.</p>
-                      </div>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* BUSINESS SNAPSHOT: EXACTLY 4 KPI CARDS, 2-COLUMN LAYOUT ON MOBILE */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between ml-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Chapter Snapshot</h4>
-                    <span className="text-[9px] text-emerald-600 font-extrabold uppercase bg-emerald-50 px-2 py-0.5 rounded-full">Current Month</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Chapter Members</span>
-                      <span className="text-lg font-black text-[#0F2040] mt-1.5 block">{chapterMemberCount} Members</span>
-                      <span className="text-[8px] text-emerald-600 mt-1 block font-semibold">Active Roster</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Chapter Referrals</span>
-                      <span className="text-lg font-black text-[#0F2040] mt-1.5 block">{chapterReferrals} Passed</span>
-                      <span className="text-[8px] text-slate-400 mt-1 block font-medium truncate">Leads Logged</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Chapter Revenue</span>
-                      <span className="text-lg font-black text-emerald-600 mt-1.5 block">₹{chapterBusiness.toLocaleString()}</span>
-                      <span className="text-[8px] text-slate-400 mt-1 block font-medium">Business Generated</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Chapter Meetings</span>
-                      <span className="text-lg font-black text-indigo-600 mt-1.5 block">{chapterMeetings} Sessions</span>
-                      <span className="text-[8px] text-indigo-500 font-bold mt-1 block uppercase">Syncs Organized</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* GAMIFICATION & HEALTH RING */}
-                <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Administrative Rating</span>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Chapter Health Score</h4>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {/* Progress Ring */}
-                    <div className="relative shrink-0 flex items-center justify-center w-20 h-20">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="40" cy="40" r="32" stroke="#F1F5F9" strokeWidth="6" fill="transparent" />
-                        <circle
-                          cx="40" cy="40" r="32" stroke="#10B981" strokeWidth="6" fill="transparent"
-                          strokeDasharray={201}
-                          strokeDashoffset={201 - (201 * chapterHealthScore) / 100}
-                          className="transition-all duration-1000 ease-out"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute flex flex-col items-center">
-                        <span className="text-lg font-black text-emerald-600 leading-none">{chapterHealthScore}</span>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">HEALTH</span>
-                      </div>
-                    </div>
-
-                    {/* Performance metrics */}
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-1.5">
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          Member Engagement
-                        </span>
-                        <span className="text-xs font-extrabold text-emerald-600">85% Active 📈</span>
-                      </div>
-                      <div className="flex items-center justify-between pb-1">
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          Chapter Growth Index
-                        </span>
-                        <span className="text-xs font-extrabold text-[#0F2040]">+12% MoM</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-
-          {/* 3. MASTER ADMIN COMPANION VIEW */}
           {profile?.role === 'MASTER_ADMIN' && (
             <MasterAdminCompanionView
               profile={profile}
@@ -1332,257 +800,7 @@ export function Analytics() {
             />
           )}
 
-          {false && profile?.role === 'MASTER_ADMIN' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              
-              {/* LEFT COLUMN: Focus Checklist & AI recommendation (7 cols) */}
-              <div className="lg:col-span-7 space-y-6">
-                
-                {/* TODAY'S FOCUS CARD (The largest card) */}
-                <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden transition-all hover:shadow-md">
-                  <div className="absolute top-0 left-0 w-2 h-full bg-slate-800" />
-                  
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Global Operations</span>
-                      <h3 className="text-xl font-extrabold text-[#0F2040] tracking-tight">Today's Focus</h3>
-                    </div>
-                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
-                      <span className="text-[11px] font-extrabold text-slate-700">100% Active</span>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
-                    <motion.div 
-                      className="h-full bg-gradient-to-r from-slate-800 to-[#0F2040] rounded-full"
-                      initial={{ width: 0 }}
-                      animate={{ width: `100%` }}
-                      transition={{ duration: 0.8, ease: "easeOut" }}
-                    />
-                  </div>
-
-                  {/* Checklist Items */}
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Audit & Enable Chapter Admin Logins
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Review and authorize local Chapter President logins to open regional consoles.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Verify Global Membership directory listings
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Browse across all chapters, approve membership applications, and moderate profile completeness.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Manage Core Industry Category balance
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Configure global business categories, map industry limits, and enable vacancy tags.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 bg-slate-50/50 p-3.5 rounded-2xl border border-slate-100/80 transition-all hover:bg-slate-50">
-                      <div className="p-1 rounded-full shrink-0 mt-0.5 bg-emerald-100 text-emerald-600">
-                        <CheckCircle2 size={16} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            Analyze Aggregate regional Transaction volumes
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">Review overall business generated, track active referrals, and identify network-wide scaling limits.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI NETWORK ADVOCATE RECOMMENDATION */}
-                <div className="bg-gradient-to-br from-slate-100 to-indigo-50/40 border border-slate-200/60 rounded-3xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-200/10 rounded-full blur-xl" />
-                  <div className="flex gap-4">
-                    <div className="p-2.5 bg-slate-200 text-slate-700 rounded-2xl shrink-0 h-fit">
-                      <Sparkles size={18} className="animate-pulse" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 font-extrabold">Network Strategic Insight</span>
-                      <h4 className="text-sm font-bold text-slate-800 leading-snug">
-                        Implement Cross-Chapter Guest Matching.
-                      </h4>
-                      <p className="text-xs text-slate-600 leading-relaxed">
-                        Aggregate network business generation has increased by <span className="font-extrabold text-emerald-600">18%</span> this quarter. Direct Chapter Presidents to share prospective visitor lists on complementary sectors to trigger exponential regional multipliers!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Quick Actions, Business Snapshot, & Gamification (5 cols) */}
-              <div className="lg:col-span-5 space-y-6">
-                
-                {/* QUICK ACTIONS SECTION (Master Admin actions) */}
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Network Console</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link to="/members" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-slate-800/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-slate-800/10 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Users size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-slate-800 transition-colors">Approve Members</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Audit & approve global directory.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/admins" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-slate-800/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-slate-800/10 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Shield size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-slate-800 transition-colors">Create Chapter</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Review and authorize regional admins.</p>
-                      </div>
-                    </Link>
-
-                    <Link to="/meetings" className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-slate-800/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between min-h-[110px]">
-                      <div className="w-9 h-9 rounded-xl bg-slate-800/10 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Calendar size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-slate-800 transition-colors">Create Meeting</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Setup new weekly regional calendars.</p>
-                      </div>
-                    </Link>
-
-                    <button 
-                      onClick={() => setActiveTab('reports')} 
-                      className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:border-slate-800/50 hover:shadow-md transition-all group hover:-translate-y-0.5 flex flex-col justify-between text-left min-h-[110px]"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-slate-800/10 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Activity size={16} />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-800 group-hover:text-slate-800 transition-colors">View Reports</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">Access traditional data filters.</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* BUSINESS SNAPSHOT: EXACTLY 4 KPI CARDS, 2-COLUMN LAYOUT ON MOBILE */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between ml-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Network Snapshot</h4>
-                    <span className="text-[9px] text-slate-800 font-extrabold uppercase bg-slate-100 px-2 py-0.5 rounded-full">Global Footprint</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Active Members</span>
-                      <span className="text-lg font-black text-[#0F2040] mt-1.5 block">{globalMemberCount} Partners</span>
-                      <span className="text-[8px] text-slate-500 mt-1 block">Verified Network</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Active Chapters</span>
-                      <span className="text-lg font-black text-[#0F2040] mt-1.5 block">{globalChapterCount} Hubs</span>
-                      <span className="text-[8px] text-slate-500 mt-1 block">Regional Chapters</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Business Generated</span>
-                      <span className="text-lg font-black text-emerald-600 mt-1.5 block">₹{globalBusinessGenerated.toLocaleString()}</span>
-                      <span className="text-[8px] text-slate-400 mt-1 block font-medium">Aggregate Value</span>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-wider block">Referral Activity</span>
-                      <span className="text-lg font-black text-indigo-600 mt-1.5 block">{globalReferralsCount} Leads</span>
-                      <span className="text-[8px] text-indigo-500 font-bold mt-1 block uppercase">Total Shared</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* GAMIFICATION & HEALTH RING */}
-                <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider block">Global Index Rating</span>
-                      <h4 className="text-sm font-black text-slate-800 tracking-tight">Network Health Score</h4>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {/* Progress Ring */}
-                    <div className="relative shrink-0 flex items-center justify-center w-20 h-20">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="40" cy="40" r="32" stroke="#F1F5F9" strokeWidth="6" fill="transparent" />
-                        <circle
-                          cx="40" cy="40" r="32" stroke="#1E293B" strokeWidth="6" fill="transparent"
-                          strokeDasharray={201}
-                          strokeDashoffset={201 - (201 * networkHealthScore) / 100}
-                          className="transition-all duration-1000 ease-out"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="absolute flex flex-col items-center">
-                        <span className="text-lg font-black text-slate-800 leading-none">{networkHealthScore}</span>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">HEALTH</span>
-                      </div>
-                    </div>
-
-                    {/* Performance metrics */}
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-1.5">
-                        <span className="text-[9px] text-slate-500 font-medium">
-                          Fastest Growing
-                        </span>
-                        <span className="text-[10px] font-extrabold text-indigo-600 uppercase bg-indigo-50 px-2 py-0.5 rounded-full truncate max-w-[120px]">SSK Founders</span>
-                      </div>
-                      <div className="flex items-center justify-between pb-1">
-                        <span className="text-[9px] text-slate-500 font-medium">
-                          Top Performing
-                        </span>
-                        <span className="text-[10px] font-extrabold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full truncate max-w-[120px]">SSK Elite</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Network Alert Notification */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center gap-2 bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/50">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    <span className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider">All chapters online & compliant</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
-        </motion.div>
+          </motion.div>
       ) : (
         <motion.div 
           initial={{ opacity: 0, y: 15 }} 
@@ -1597,28 +815,28 @@ export function Analytics() {
               <div className="absolute top-0 left-0 w-1 h-12 bg-primary rounded-br-lg" />
               <div className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em] ml-2">Next Meeting Metrics</span>
+                  <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-[0.15em] ml-2">Next Meeting Metrics</span>
                   <Eye size={16} className="text-text-secondary" />
                 </div>
                 
                 <div className="text-center py-2">
-                  <h3 className="text-base sm:text-lg font-bold text-primary break-words px-2">
+                  <h3 className="text-base sm:text-lg font-semibold text-primary break-words px-2">
                     {nextMeeting ? format(new Date(nextMeeting.date), 'EEEE, MMMM d, yyyy') : 'No Upcoming Meetings'}
                   </h3>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border">
                   <div className="text-center">
-                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">TYFCB</p>
-                    <p className="text-xs font-bold text-text-primary mt-0.5">₹0</p>
+                    <p className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">TYFCB</p>
+                    <p className="text-xs font-semibold text-text-primary mt-0.5">₹0</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Speakers</p>
-                    <p className="text-xs font-bold text-text-primary mt-0.5">0</p>
+                    <p className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">Speakers</p>
+                    <p className="text-xs font-semibold text-text-primary mt-0.5">0</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-wider">Visitors</p>
-                    <p className="text-xs font-bold text-text-primary mt-0.5">0</p>
+                    <p className="text-[9px] font-semibold text-text-secondary uppercase tracking-wider">Visitors</p>
+                    <p className="text-xs font-semibold text-text-primary mt-0.5">0</p>
                   </div>
                 </div>
               </div>
@@ -1702,13 +920,13 @@ function ReportCard({ title, filters, setFilters, options, optionLabel, metrics,
       <div className="absolute top-0 left-0 w-1 h-12 bg-primary rounded-br-lg" />
       <div className="p-4 space-y-4">
         <div className="text-center">
-          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.15em]">{title}</span>
+          <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-[0.15em]">{title}</span>
         </div>
 
         {/* Filters */}
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <label className="text-[8px] font-bold text-text-secondary uppercase ml-1">Start Date</label>
+            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">Start Date</label>
             <input 
               type="date" 
               value={filters.startDate}
@@ -1717,7 +935,7 @@ function ReportCard({ title, filters, setFilters, options, optionLabel, metrics,
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[8px] font-bold text-text-secondary uppercase ml-1">End Date</label>
+            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">End Date</label>
             <input 
               type="date" 
               value={filters.endDate}
@@ -1729,7 +947,7 @@ function ReportCard({ title, filters, setFilters, options, optionLabel, metrics,
 
         {!hideDropdown && options && (
           <div className="space-y-1">
-            <label className="text-[8px] font-bold text-text-secondary uppercase ml-1">{optionLabel}</label>
+            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">{optionLabel}</label>
             <select 
               value={type === 'CHAPTER_ADMIN' ? filters.adminId : filters.memberId}
               onChange={(e) => setFilters({ ...filters, [type === 'CHAPTER_ADMIN' ? 'adminId' : 'memberId']: e.target.value })}
@@ -1799,7 +1017,7 @@ function MetricItem({ icon: Icon, label, value }: { icon: any, label: string, va
         <span className="text-[11px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">{label}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-sm font-bold text-primary">{value}</span>
+        <span className="text-sm font-semibold text-primary">{value}</span>
         <Plus size={12} className="text-primary" />
       </div>
     </div>
