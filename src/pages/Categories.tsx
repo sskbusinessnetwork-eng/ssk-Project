@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, Trash2, Search, Tags, Edit2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Search, Tags, CreditCard as Edit2, CircleAlert as AlertCircle, CircleCheck as CheckCircle2 } from 'lucide-react';
 import { firestoreService } from '../services/firestoreService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
@@ -83,15 +83,20 @@ export function Categories() {
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Business Categories</h1>
-          <p className="text-slate-500 mt-1">Manage the global list of business categories.</p>
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+            <Tags size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Business Categories</h1>
+            <p className="text-text-secondary mt-1 text-sm">Manage the global list of business categories.</p>
+          </div>
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 hover:-translate-y-0.5"
         >
-          <Plus size={20} />
+          <Plus size={18} />
           <span>Add Category</span>
         </button>
       </header>
@@ -175,10 +180,10 @@ export function Categories() {
       >
         {success ? (
           <div className="py-8 text-center space-y-3">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
               <CheckCircle2 size={32} />
             </div>
-            <p className="text-navy font-bold">{success}</p>
+            <p className="text-text-primary font-bold">{success}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -189,7 +194,7 @@ export function Categories() {
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Category Name</label>
+              <label className="text-sm font-bold text-text-primary">Category Name</label>
               <input
                 autoFocus
                 required
@@ -198,13 +203,13 @@ export function Categories() {
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
                 placeholder="e.g. Real Estate, Digital Marketing"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:opacity-50"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (editingCategory ? "Update Category" : "Create Category")}
             </button>

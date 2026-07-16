@@ -1,28 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Shield, 
-  UserCheck, 
-  UserMinus,
-  Phone,
-  Briefcase,
-  Tags,
-  Calendar,
-  CreditCard,
-  Trash2,
-  Building2,
-  Plus,
-  Lock,
-  UserPlus,
-  ChevronRight,
-  AlertCircle,
-  CheckCircle2
-} from 'lucide-react';
+import { Users, Search, ListFilter as Filter, MoveVertical as MoreVertical, Shield, UserCheck, UserMinus, Phone, Briefcase, Tags, Calendar, CreditCard, Trash2, Building2, Plus, Lock, UserPlus, ChevronRight, CircleAlert as AlertCircle, CircleCheck as CheckCircle2 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
@@ -434,10 +413,12 @@ export function Members() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-white text-neutral-900 px-5 py-4 rounded-[20px] shadow-xl shadow-emerald-500/10 border border-emerald-100 z-50 flex items-center gap-3 font-bold max-w-md w-[calc(100%-2rem)]"
         >
-          <CheckCircle2 size={24} />
-          {successMessage}
+          <div className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
+            <CheckCircle2 size={20} />
+          </div>
+          <span className="text-sm">{successMessage}</span>
         </motion.div>
       )}
 
@@ -445,34 +426,36 @@ export function Members() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-white text-neutral-900 px-5 py-4 rounded-[20px] shadow-xl shadow-red-500/10 border border-red-100 z-50 flex items-center gap-3 font-bold max-w-md w-[calc(100%-2rem)]"
         >
-          <AlertCircle size={24} />
-          {error}
+          <div className="w-9 h-9 bg-red-50 text-red-600 rounded-full flex items-center justify-center shrink-0">
+            <AlertCircle size={20} />
+          </div>
+          <span className="text-sm">{error}</span>
         </motion.div>
       )}
 
       {/* Header */}
-      <div className="pt-6 pb-12 px-4">
+      <div className="pt-8 pb-10 px-4">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between max-w-7xl mx-auto gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-              <Users size={24} />
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/10 ring-1 ring-primary/5">
+              <Users size={22} />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
+              <h1 className="text-xl md:text-2xl font-bold text-neutral-900 tracking-tight">
                 Member Directory
               </h1>
-              <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">Manage roster, roles, and status</p>
+              <p className="text-sm text-neutral-500 font-medium mt-0.5">Manage roster, roles, and status</p>
             </div>
           </div>
           
           {isChapterAdmin && (
             <button
               onClick={handleOpenAddModal}
-              className="h-11 px-6 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-primary/10 flex items-center gap-2 hover:bg-primary/90 hover:shadow-xl"
+              className="h-11 px-5 bg-primary text-white rounded-xl text-sm font-bold transition-all active:scale-95 shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/25"
             >
-              <UserPlus size={16} />
+              <UserPlus size={18} />
               Add Member
             </button>
           )}
@@ -481,15 +464,15 @@ export function Members() {
 
       <div className="max-w-7xl mx-auto px-4 space-y-6">
         {isChapterAdmin && (
-          <div className="flex gap-2 p-1 bg-neutral-100/80 backdrop-blur-md rounded-xl w-fit mb-6 border border-neutral-200/30">
+          <div className="inline-flex gap-1 p-1 bg-white rounded-[14px] w-fit mb-6 border border-neutral-200/80 shadow-sm">
             <button 
               onClick={() => {
                 setActiveTab('directory');
                 setSearchParams({});
               }}
               className={cn(
-                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'directory' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                "px-5 py-2 text-sm font-bold rounded-[10px] transition-all",
+                activeTab === 'directory' ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
               )}
             >
               Member Directory
@@ -500,8 +483,8 @@ export function Members() {
                 setSearchParams({ tab: 'invites' });
               }}
               className={cn(
-                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'invites' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                "px-5 py-2 text-sm font-bold rounded-[10px] transition-all",
+                activeTab === 'invites' ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
               )}
             >
               Member Invites
@@ -512,8 +495,8 @@ export function Members() {
                 setSearchParams({ tab: 'positions' });
               }}
               className={cn(
-                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'positions' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                "px-5 py-2 text-sm font-bold rounded-[10px] transition-all",
+                activeTab === 'positions' ? "bg-primary text-white shadow-sm shadow-primary/20" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
               )}
             >
               Positions
@@ -524,7 +507,7 @@ export function Members() {
         {activeTab === 'directory' ? (
           <>
             {/* Search and Filters */}
-            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-6">
+            <div className="bg-white p-6 rounded-[20px] border border-neutral-200/80 shadow-sm shadow-neutral-200/50 space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-4 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
@@ -533,7 +516,7 @@ export function Members() {
                     placeholder="Search members..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-neutral-50 border border-neutral-200/50 focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium focus:ring-2 focus:ring-primary/10"
+                    className="w-full h-11 pl-11 pr-4 rounded-xl bg-neutral-50 border border-neutral-200/80 text-[14px] font-medium text-neutral-900 placeholder:text-neutral-400 focus:bg-white focus:border-primary outline-none transition-all focus:ring-2 focus:ring-primary/10"
                   />
                 </div>
                 
@@ -541,7 +524,7 @@ export function Members() {
                   <select
                     value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-semibold text-neutral-700 uppercase tracking-wider focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
+                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl text-sm font-semibold text-neutral-700 focus:bg-white focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-2 focus:ring-primary/10"
                   >
                     <option value="">All Categories</option>
                     {categories.map(cat => (
@@ -554,12 +537,12 @@ export function Members() {
                     placeholder="City"
                     value={filters.city}
                     onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/50 rounded-xl text-xs font-bold text-neutral-700 focus:bg-white focus:border-primary outline-none transition-all min-w-[120px] focus:ring-2 focus:ring-primary/10"
+                    className="h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl text-sm font-semibold text-neutral-700 placeholder:text-neutral-400 focus:bg-white focus:border-primary outline-none transition-all min-w-[120px] focus:ring-2 focus:ring-primary/10"
                   />
 
                   <button
                     onClick={() => setFilters({ category: '', state: '', city: '', area: '' })}
-                    className="h-11 px-4 text-[10px] font-black text-neutral-400 hover:text-primary transition-colors uppercase tracking-widest"
+                    className="h-11 px-4 text-sm font-bold text-neutral-400 hover:text-primary transition-colors"
                   >
                     Reset
                   </button>
@@ -584,34 +567,34 @@ export function Members() {
           </>
         ) : activeTab === 'invites' ? (
           <div className="space-y-4">
-            <div className="bg-white p-6 rounded-[20px] card-shadow border border-border">
-              <h3 className="text-lg font-bold text-neutral-900 mb-4 uppercase tracking-tight">New Associate Member Invites</h3>
-              <div className="space-y-4">
+            <div className="bg-white p-6 rounded-[20px] border border-neutral-200/80 shadow-sm shadow-neutral-200/50">
+              <h3 className="text-lg font-bold text-neutral-900 mb-4 tracking-tight">New Associate Member Invites</h3>
+              <div className="space-y-3">
                 {memberInvites.length > 0 ? (
                   memberInvites.map((invite) => {
                     const inviter = members.find(m => m.uid === invite.createdBy);
                     return (
-                      <div key={invite.id} className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div key={invite.id} className="p-4 bg-neutral-50/80 rounded-[16px] border border-neutral-200/60 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:bg-neutral-50 hover:border-neutral-200 hover:shadow-sm">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                          <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center ring-1 ring-primary/5">
                             <UserPlus size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-neutral-900">{invite.guestName}</h4>
-                            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
-                            <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">
-                              Invited By: {inviter?.name || 'Member'}
+                            <h4 className="text-[14px] font-bold text-neutral-900">{invite.guestName}</h4>
+                            <p className="text-xs text-neutral-500 font-medium mt-0.5">{invite.guestBusiness}</p>
+                            <p className="text-xs text-primary font-bold mt-1">
+                              Invited by {inviter?.name || 'Member'}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden md:block">
-                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Date</p>
-                            <p className="text-xs font-bold text-neutral-700">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
+                            <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider">Date</p>
+                            <p className="text-sm font-bold text-neutral-700 mt-0.5">{format(new Date(invite.createdAt), 'dd MMM yyyy')}</p>
                           </div>
                           <Link 
                             to={`/guests?highlight=${invite.id}`}
-                            className="px-4 py-2 bg-white border border-border text-primary rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary/5 transition-all"
+                            className="px-4 py-2 bg-white border border-neutral-200/80 text-primary rounded-xl text-sm font-bold hover:bg-primary/5 hover:border-primary/20 transition-all"
                           >
                             View in Guests
                           </Link>
@@ -620,9 +603,12 @@ export function Members() {
                     );
                   })
                 ) : (
-                  <div className="py-12 text-center">
-                    <UserPlus size={40} className="mx-auto text-neutral-200 mb-4" />
-                    <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">No member invites yet</p>
+                  <div className="py-16 px-6 text-center rounded-[18px] border border-2 border-dashed border-neutral-300/80">
+                    <div className="w-14 h-14 bg-neutral-100 text-neutral-300 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <UserPlus size={28} />
+                    </div>
+                    <p className="text-sm font-bold text-neutral-500">No member invites yet</p>
+                    <p className="text-xs text-neutral-400 font-medium mt-1">Invitations sent by members will appear here</p>
                   </div>
                 )}
               </div>
@@ -674,20 +660,20 @@ export function Members() {
         title="Delete Member"
       >
         <div className="space-y-6 py-4">
-          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
-            <Trash2 size={32} />
+          <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto ring-4 ring-red-50/50">
+            <Trash2 size={28} />
           </div>
           <div className="text-center">
-            <h3 className="text-xl font-bold text-neutral-900">Are you sure?</h3>
-            <p className="text-neutral-500 mt-2">
-              Are you sure you want to PERMANENTLY delete <span className="font-bold text-neutral-900">{deleteConfirmMember?.name || deleteConfirmMember?.displayName}</span>? 
+            <h3 className="text-xl font-bold text-neutral-900 tracking-tight">Are you sure?</h3>
+            <p className="text-sm text-neutral-500 mt-2 leading-relaxed">
+              Are you sure you want to permanently delete <span className="font-bold text-neutral-900">{deleteConfirmMember?.name || deleteConfirmMember?.displayName}</span>? 
               This will also delete their login account and all associated data. This action cannot be undone.
             </p>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => setDeleteConfirmMember(null)}
-              className="flex-1 py-3 bg-neutral-100 text-neutral-600 rounded-xl font-bold hover:bg-neutral-200 transition-all"
+              className="flex-1 py-3 bg-neutral-100 text-neutral-700 rounded-xl font-bold hover:bg-neutral-200 transition-all"
             >
               Cancel
             </button>

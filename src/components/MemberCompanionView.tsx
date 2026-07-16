@@ -1,11 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { 
-  Share2, Handshake, UserPlus, Users, Clock, Calendar, 
-  Flame, Target, Shield, Zap, Award, Sparkles, ArrowRight, 
-  TrendingUp, CheckCircle2, Lock, Activity
-} from 'lucide-react';
+import { Share2, Handshake, UserPlus, Users, Clock, Calendar, Flame, Target, Shield, Zap, Award, Sparkles, ArrowRight, TrendingUp, CircleCheck as CheckCircle2, Lock, Activity } from 'lucide-react';
 import { Meeting, UserProfile } from '../types';
 import { format } from 'date-fns';
 
@@ -113,7 +109,7 @@ export function MemberCompanionView({
 
             <div className="flex flex-col md:flex-row items-center gap-10 relative z-10 pt-4">
               {/* Dynamic Progress Indicator Gauge */}
-              <div className="relative shrink-0 flex items-center justify-center w-[140px] h-[140px] bg-white rounded-full shadow-soft border border-neutral-100">
+              <div className="relative shrink-0 flex items-center justify-center w-[140px] h-[140px] bg-white rounded-full shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] border border-neutral-100">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="70" cy="70" r="60" stroke="#F7F8FA" strokeWidth="8" fill="transparent" />
                   <circle
@@ -148,7 +144,7 @@ export function MemberCompanionView({
                         "flex items-center gap-4 p-4 rounded-[16px] border cursor-pointer transition-all duration-300",
                         isDone 
                           ? "bg-[#F7F8FA] border-transparent opacity-70" 
-                          : "bg-white border-neutral-200 hover:border-primary/30 hover:shadow-soft"
+                          : "bg-white border-neutral-200 hover:border-primary/20 hover:shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)]"
                       )}
                     >
                       <div className={cn(
@@ -190,12 +186,12 @@ export function MemberCompanionView({
 
           {/* CORE OPERATIONS */}
           <motion.div id="member-quick-actions" variants={itemVariants} className="space-y-5">
-            <h4 className="text-[13px] font-semibold uppercase tracking-[0.2em] text-neutral-500 ml-1">Core Operations</h4>
+            <h4 className="text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-500 ml-1">Core Operations</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
               <Link 
                 to="/refer" 
-                className="bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-soft hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/30 transition-all duration-400 group flex items-start gap-5"
+                className="hover-lift bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/20 transition-all duration-400 group flex items-start gap-5"
               >
                 <div className="w-12 h-12 rounded-[16px] bg-primary/5 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-400 shrink-0 border border-primary/10 group-hover:scale-105">
                   <Share2 size={20} strokeWidth={2} />
@@ -208,7 +204,7 @@ export function MemberCompanionView({
 
               <Link 
                 to="/one-to-one" 
-                className="bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-soft hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/30 transition-all duration-400 group flex items-start gap-5"
+                className="hover-lift bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/20 transition-all duration-400 group flex items-start gap-5"
               >
                 <div className="w-12 h-12 rounded-[16px] bg-primary/5 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-400 shrink-0 border border-primary/10 group-hover:scale-105">
                   <Handshake size={20} strokeWidth={2} />
@@ -221,7 +217,7 @@ export function MemberCompanionView({
 
               <Link 
                 to="/guests" 
-                className="bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-soft hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/30 transition-all duration-400 group flex items-start gap-5"
+                className="hover-lift bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/20 transition-all duration-400 group flex items-start gap-5"
               >
                 <div className="w-12 h-12 rounded-[16px] bg-primary/5 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-400 shrink-0 border border-primary/10 group-hover:scale-105">
                   <UserPlus size={20} strokeWidth={2} />
@@ -234,7 +230,7 @@ export function MemberCompanionView({
 
               <Link 
                 to="/members" 
-                className="bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-soft hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/30 transition-all duration-400 group flex items-start gap-5"
+                className="hover-lift bg-white p-6 rounded-[24px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-primary/20 transition-all duration-400 group flex items-start gap-5"
               >
                 <div className="w-12 h-12 rounded-[16px] bg-primary/5 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-400 shrink-0 border border-primary/10 group-hover:scale-105">
                   <Users size={20} strokeWidth={2} />
@@ -256,7 +252,7 @@ export function MemberCompanionView({
           <motion.div 
             id="member-weekly-progress" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-soft space-y-8"
+            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] space-y-8"
           >
             <div>
               <span className="text-[12px] text-neutral-500 uppercase font-semibold tracking-[0.2em] block mb-1">Executive KPI</span>
@@ -264,7 +260,7 @@ export function MemberCompanionView({
             </div>
 
             <div className="flex flex-col items-center">
-              <div className="relative shrink-0 flex items-center justify-center w-36 h-36 bg-white rounded-full p-2 shadow-soft border border-neutral-100 group">
+              <div className="relative shrink-0 flex items-center justify-center w-36 h-36 bg-white rounded-full p-2 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] border border-neutral-100 group">
                 <div className="absolute inset-0 rounded-full border border-neutral-100 shadow-[0_0_20px_rgba(220,38,38,0.05)] group-hover:shadow-[0_0_30px_rgba(220,38,38,0.1)] transition-shadow duration-500" />
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="64" cy="64" r="54" stroke="#F7F8FA" strokeWidth="8" fill="transparent" />
@@ -326,7 +322,7 @@ export function MemberCompanionView({
           <motion.div 
             id="member-recent-activity" 
             variants={itemVariants}
-            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-soft"
+            className="bg-white rounded-[24px] p-5 sm:p-8 border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)]"
           >
             <div className="flex items-center justify-between mb-8">
               <div>

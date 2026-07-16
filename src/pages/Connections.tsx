@@ -1,24 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Users, 
-  Search, 
-  MapPin, 
-  Building2, 
-  ChevronRight, 
-  Phone, 
-  Mail, 
-  Globe, 
-  Share2,
-  Filter,
-  X,
-  Briefcase,
-  Map as MapIcon,
-  Clock,
-  CheckCircle2,
-  Send,
-  AlertCircle
-} from 'lucide-react';
+import { Users, Search, MapPin, Building2, ChevronRight, Phone, Mail, Globe, Share2, ListFilter as Filter, X, Briefcase, Map as MapIcon, Clock, CircleCheck as CheckCircle2, Send, CircleAlert as AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -202,7 +184,7 @@ export function Connections() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -210,16 +192,16 @@ export function Connections() {
   if (profile?.membershipStatus !== 'ACTIVE' && profile?.role !== 'MASTER_ADMIN') {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
-        <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
+        <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500 border border-amber-100">
           <Clock size={48} />
         </div>
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Account Pending Approval</h2>
-        <p className="text-slate-500 mt-4 text-lg max-w-lg mx-auto leading-relaxed">
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight">Account Pending Approval</h2>
+        <p className="text-text-secondary mt-4 text-base max-w-lg mx-auto leading-relaxed">
           Your account is currently being reviewed by our team. You will be able to access the member directory and discover connections once your membership is activated.
         </p>
         <Link 
           to="/network" 
-          className="mt-8 inline-block px-8 py-3 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all"
+          className="mt-8 inline-block px-6 py-3 bg-navy text-white rounded-xl font-bold hover:bg-primary transition-all shadow-lg shadow-navy/20 hover:-translate-y-0.5"
         >
           Return to Network
         </Link>
@@ -231,7 +213,7 @@ export function Connections() {
     const position = getPositionForUser(userId);
     if (!position) return null;
     return (
-      <span className="text-[10px] font-bold text-primary uppercase tracking-tight bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
+      <span className="text-[10px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
         {position}
       </span>
     );
@@ -247,10 +229,10 @@ export function Connections() {
           className="fixed bottom-24 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
         >
           <CheckCircle2 size={24} />
-          <span className="font-bold text-sm uppercase tracking-wider">{successMessage}</span>
+          <span className="font-bold text-sm">{successMessage}</span>
         </motion.div>
       )}
-      <div className="bg-white p-4 rounded-[14px] card-shadow border border-border space-y-4">
+      <div className="bg-white p-4 rounded-[20px] border border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow space-y-4">
         {/* Tabs - Hidden for Master Admin to show unified list */}
         {profile?.role !== 'MASTER_ADMIN' && (
           <div className="flex gap-2 p-1 bg-muted rounded-xl">
@@ -304,7 +286,7 @@ export function Connections() {
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 bg-white rounded-[14px] card-shadow border border-border space-y-4"
+          className="p-4 bg-white rounded-[20px] border border-neutral-200/80 shadow-sm space-y-4"
         >
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -385,7 +367,7 @@ export function Connections() {
       )}
 
       {/* Members List */}
-      <div className="bg-white rounded-[14px] card-shadow border border-border overflow-hidden">
+      <div className="bg-white rounded-[20px] border border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
         {filteredMembers.length > 0 ? (
           <div className="divide-y divide-border">
             {filteredMembers.map((member, i) => (
@@ -425,7 +407,9 @@ export function Connections() {
           </div>
         ) : (
           <div className="p-12 text-center">
-            <Users size={48} className="mx-auto text-muted-foreground/20 mb-4" />
+            <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center mx-auto mb-4 text-neutral-300">
+              <Users size={32} />
+            </div>
             <h3 className="text-lg font-bold text-text-primary">No members found</h3>
             <p className="text-sm text-text-secondary mt-1">Try adjusting your search or filters.</p>
           </div>
@@ -451,48 +435,48 @@ export function Connections() {
             </div>
           )}
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Customer Name</label>
+            <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Customer Name</label>
             <input
               required
               type="text"
               value={referralForm.customerName}
               onChange={(e) => setReferralForm(prev => ({ ...prev, customerName: e.target.value }))}
               placeholder="Enter customer name"
-              className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-4 py-3 bg-neutral-50 border border-transparent rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-text-primary placeholder:text-text-secondary/60"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Mobile Number</label>
+            <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Mobile Number</label>
             <input
               required
               type="tel"
               value={referralForm.mobileNumber}
               onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
               placeholder="Enter mobile number"
-              className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-4 py-3 bg-neutral-50 border border-transparent rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-text-primary placeholder:text-text-secondary/60"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Requirement</label>
+            <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Requirement</label>
             <input
               type="text"
               value={referralForm.requirement}
               onChange={(e) => setReferralForm(prev => ({ ...prev, requirement: e.target.value }))}
               placeholder="What is the requirement?"
-              className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-4 py-3 bg-neutral-50 border border-transparent rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-text-primary placeholder:text-text-secondary/60"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Notes</label>
+            <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Notes</label>
             <textarea
               value={referralForm.notes}
               onChange={(e) => setReferralForm(prev => ({ ...prev, notes: e.target.value }))}
               placeholder="Add any additional notes..."
               rows={3}
-              className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300 resize-none"
+              className="w-full px-4 py-3 bg-neutral-50 border border-transparent rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-text-primary placeholder:text-text-secondary/60 resize-none"
             />
           </div>
 
@@ -500,7 +484,7 @@ export function Connections() {
             <button
               type="submit"
               disabled={referringId !== null}
-              className="w-full py-5 bg-gradient-to-br from-secondary to-emerald-600 text-white rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-xs hover:shadow-2xl hover:shadow-secondary/30 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
+              className="w-full py-4 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
             >
               {referringId !== null ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

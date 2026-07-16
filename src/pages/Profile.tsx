@@ -1,26 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  User, 
-  Briefcase, 
-  Phone, 
-  Globe, 
-  FileText, 
-  Save, 
-  Shield,
-  CheckCircle2,
-  Camera,
-  Upload,
-  Trash2,
-  X,
-  MapPin,
-  Building2,
-  ArrowLeft,
-  Share2,
-  Send,
-  Mail,
-  Calendar
-} from 'lucide-react';
+import { User, Briefcase, Phone, Globe, FileText, Save, Shield, CircleCheck as CheckCircle2, Camera, Upload, Trash2, X, MapPin, Building2, ArrowLeft, Share2, Send, Mail, Calendar } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
 import { notificationService } from '../services/notificationService';
@@ -286,10 +266,10 @@ export function Profile() {
           <motion.div 
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+            className="fixed bottom-24 left-4 right-4 bg-emerald-500 text-white p-4 rounded-[20px] shadow-[0_8px_30px_rgba(16,185,129,0.3)] z-50 flex items-center gap-3 font-bold"
           >
-            <CheckCircle2 size={24} />
-            {successMessage}
+            <CheckCircle2 size={22} />
+            <span className="text-[14px]">{successMessage}</span>
           </motion.div>
         )}
 
@@ -297,28 +277,29 @@ export function Profile() {
           <motion.div 
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-2xl shadow-lg z-50 flex items-center gap-3 font-bold"
+            className="fixed bottom-24 left-4 right-4 bg-red-500 text-white p-4 rounded-[20px] shadow-[0_8px_30px_rgba(239,68,68,0.3)] z-50 flex items-center gap-3 font-bold"
           >
-            <X size={24} />
-            {errorMessage}
+            <X size={22} />
+            <span className="text-[14px]">{errorMessage}</span>
           </motion.div>
         )}
         
         {/* Red Header */}
         <div className="bg-primary pt-12 pb-24 px-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24 blur-2xl" />
           <div className="relative z-10 flex items-center justify-between max-w-2xl mx-auto">
             <div className="w-10" />
             <div className="flex-1" />
-            <button className="p-2 text-white hover:bg-white/10 rounded-full transition-colors">
-              <Share2 size={24} />
+            <button className="p-2.5 text-white hover:bg-white/15 rounded-xl transition-all active:scale-90">
+              <Share2 size={20} />
             </button>
           </div>
         </div>
 
         <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
           {/* Profile Card */}
-          <div className="bg-white p-6 rounded-[20px] card-shadow border border-neutral-200 text-center space-y-4">
+          <div className="bg-white p-6 rounded-[24px] shadow-[0_4px_20px_rgba(11,11,13,0.06),0_12px_40px_-8px_rgba(11,11,13,0.08)] border border-neutral-200/80 text-center space-y-4">
             <div className="w-24 h-24 rounded-full bg-muted mx-auto border-4 border-white shadow-md overflow-hidden">
               <img 
                 src={targetProfile.photoURL || `https://picsum.photos/seed/${targetProfile.uid}/200/200`} 
@@ -344,7 +325,7 @@ export function Profile() {
             <div className="flex gap-3 pt-2">
               <a 
                 href={`tel:${targetProfile.phone}`}
-                className="flex-1 h-11 bg-primary text-white rounded-xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest active:scale-95 transition-all shadow-md shadow-primary/20"
+                className="flex-1 h-11 bg-primary text-white rounded-xl flex items-center justify-center gap-2 text-[13px] font-bold active:scale-95 transition-all shadow-lg shadow-primary/20"
               >
                 <Phone size={18} />
                 Call
@@ -362,10 +343,10 @@ export function Profile() {
           </div>
 
           {/* Info List */}
-          <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden divide-y divide-border">
+          <div className="bg-white rounded-[20px] shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] border border-neutral-200/80 overflow-hidden divide-y divide-border">
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <Briefcase size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shrink-0">
+                <Briefcase size={18} strokeWidth={2} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Category</p>
@@ -374,8 +355,8 @@ export function Profile() {
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <Building2 size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                <Building2 size={18} strokeWidth={2} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Business Name</p>
@@ -384,18 +365,18 @@ export function Profile() {
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <Phone size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <Phone size={18} strokeWidth={2} />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Phone Number</p>
+                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Phone Number</p>
                 <p className="text-sm font-bold text-text-primary">{targetProfile.phone || 'Not specified'}</p>
               </div>
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <MapPin size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                <MapPin size={18} strokeWidth={2} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Address & Location</p>
@@ -409,8 +390,8 @@ export function Profile() {
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <CheckCircle2 size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <CheckCircle2 size={18} strokeWidth={2} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Membership Status</p>
@@ -424,8 +405,8 @@ export function Profile() {
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <Calendar size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 shrink-0">
+                <Calendar size={18} strokeWidth={2} />
               </div>
               <div>
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Date of Joining</p>
@@ -436,8 +417,8 @@ export function Profile() {
             </div>
 
             <div className="p-4 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                <Globe size={20} />
+              <div className="w-10 h-10 rounded-[12px] bg-cyan-50 border border-cyan-100 flex items-center justify-center text-cyan-600 shrink-0">
+                <Globe size={18} strokeWidth={2} />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Website</p>
@@ -465,18 +446,18 @@ export function Profile() {
           {/* Associated Chapter Admin Section */}
           {targetProfile.role === 'MEMBER' && (
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden">
+              <h3 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Chapter Admin</h3>
+              <div className="bg-white rounded-[20px] shadow-[0_2px_8px_rgba(11,11,13,0.03)] border border-neutral-200/80 overflow-hidden">
                 {!adminData ? (
                   <div className="p-6 text-center">
-                    <p className="text-sm font-bold text-text-secondary">
+                    <p className="text-[14px] font-bold text-neutral-500">
                       {!targetProfile.associatedChapterAdminId && !targetProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
                     </p>
                   </div>
                 ) : (
                   <div className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                      <Shield size={20} />
+                    <div className="w-10 h-10 rounded-[12px] bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <Shield size={18} strokeWidth={2} />
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Chapter Admin</p>
@@ -491,8 +472,8 @@ export function Profile() {
           {/* Subscription Management for Admins */}
           {isAdmin && targetProfile.role === 'MEMBER' && (
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Subscription Management</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden p-4 space-y-4">
+              <h3 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Subscription Management</h3>
+              <div className="bg-white rounded-[20px] shadow-[0_2px_8px_rgba(11,11,13,0.03)] border border-neutral-200/80 overflow-hidden p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Current Start Date</p>
@@ -508,7 +489,7 @@ export function Profile() {
                   </div>
                 </div>
                 <div className="space-y-1 pt-2 border-t border-neutral-200">
-                  <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Update End Date</label>
+                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Update End Date</label>
                   <div className="flex gap-2">
                     <input
                       type="date"
@@ -519,7 +500,7 @@ export function Profile() {
                     <button
                       onClick={handleUpdateSubscription}
                       disabled={!newSubscriptionEnd || isUpdatingSubscription}
-                      className="h-11 px-6 bg-primary text-white rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
+                      className="h-11 px-6 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {isUpdatingSubscription ? 'Updating...' : 'Update'}
                     </button>
@@ -538,38 +519,38 @@ export function Profile() {
         >
           <form onSubmit={submitReferral} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Customer Name</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Customer Name</label>
               <input
                 required
                 type="text"
                 value={referralForm.customerName}
                 onChange={(e) => setReferralForm(prev => ({ ...prev, customerName: e.target.value }))}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Mobile Number</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Mobile Number</label>
               <input
                 required
                 type="tel"
                 value={referralForm.mobileNumber}
                 onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Requirement</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Requirement</label>
               <input
                 type="text"
                 value={referralForm.requirement}
                 onChange={(e) => setReferralForm(prev => ({ ...prev, requirement: e.target.value }))}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             <button
               type="submit"
               disabled={isReferring}
-              className="w-full h-12 bg-primary text-white rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 mt-4"
+              className="w-full h-12 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 mt-4"
             >
               {isReferring ? 'Sending...' : 'Submit Referral'}
             </button>
@@ -659,17 +640,17 @@ export function Profile() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="bg-white p-6 rounded-[20px] card-shadow border border-neutral-200 space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Full Name</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Full Name</label>
               <input
                 required
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Phone Number</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Phone Number</label>
               <input
                 readOnly
                 type="tel"
@@ -680,30 +661,30 @@ export function Profile() {
 
             {formData.role === 'CHAPTER_ADMIN' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
                 <input
                   required
                   type="text"
                   value={formData.chapterName}
                   onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
-                  className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                  className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
                 />
               </div>
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : ''}</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : ''}</label>
               <input
                 required={formData.role !== 'CHAPTER_ADMIN'}
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             {currentUserProfile?.role !== 'MASTER_ADMIN' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Category</label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Category</label>
                 <select
                   required
                   value={formData.category}
@@ -718,57 +699,57 @@ export function Profile() {
               </div>
             )}
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Website</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Website</label>
               <input
                 type="url"
                 value={formData.website}
                 onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Bio / Tagline</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Bio / Tagline</label>
               <input
                 type="text"
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">City</label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">City</label>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                  className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">State</label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">State</label>
                 <input
                   type="text"
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                  className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Area</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Area</label>
               <input
                 type="text"
                 value={formData.area}
                 onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                className="w-full h-11 px-4 bg-muted border border-transparent rounded-xl focus:bg-white focus:border-primary outline-none transition-all font-bold text-sm"
+                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200/80 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all font-medium text-[14px] text-[#111827]"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Address</label>
+              <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Address</label>
               <textarea
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -779,7 +760,7 @@ export function Profile() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Status</label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Status</label>
                 <input
                   readOnly
                   type="text"
@@ -788,7 +769,7 @@ export function Profile() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Joined On</label>
+                <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Joined On</label>
                 <input
                   readOnly
                   type="text"
@@ -802,22 +783,22 @@ export function Profile() {
           {/* Associated Chapter Admin Section (My Profile) */}
           {currentUserProfile?.role === 'MEMBER' && (
             <div className="space-y-3">
-              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-white rounded-[20px] card-shadow border border-neutral-200 overflow-hidden">
+              <h3 className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1">Chapter Admin</h3>
+              <div className="bg-white rounded-[20px] shadow-[0_2px_8px_rgba(11,11,13,0.03)] border border-neutral-200/80 overflow-hidden">
                 {!adminData ? (
                   <div className="p-6 text-center">
-                    <p className="text-sm font-bold text-text-secondary">
+                    <p className="text-[14px] font-bold text-neutral-500">
                       {!currentUserProfile.associatedChapterAdminId && !currentUserProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
                     </p>
                   </div>
                 ) : (
                   <div className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-primary shrink-0">
-                      <Shield size={20} />
+                    <div className="w-10 h-10 rounded-[12px] bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <Shield size={18} strokeWidth={2} />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Chapter Admin</p>
-                      <p className="text-sm font-bold text-text-primary">{adminData.name || adminData.displayName}</p>
+                      <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Chapter Admin</p>
+                      <p className="text-[14px] font-bold text-[#111827]">{adminData.name || adminData.displayName}</p>
                     </div>
                   </div>
                 )}
@@ -828,7 +809,7 @@ export function Profile() {
           <button
             type="submit"
             disabled={isSaving}
-            className="w-full h-12 bg-primary text-white rounded-xl font-bold uppercase tracking-widest shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
+            className="w-full h-12 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </button>

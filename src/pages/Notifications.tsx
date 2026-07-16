@@ -1,14 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Bell,
-  Info,
-  Award,
-  AlertTriangle,
-  CheckCircle2,
-  Trash2,
-  UserPlus
-} from 'lucide-react';
+import { Bell, Info, Award, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Trash2, UserPlus } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
 import { Notification } from '../types';
@@ -81,14 +73,14 @@ export function Notifications() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24 px-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-            <Bell size={24} />
+          <div className="w-11 h-11 bg-primary/10 rounded-2xl flex items-center justify-center text-primary ring-1 ring-primary/15">
+            <Bell size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-neutral-900 uppercase tracking-widest">Notifications</h1>
-            <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest">Stay updated with your network</p>
+            <h1 className="text-xl font-bold text-neutral-900 tracking-tight">Notifications</h1>
+            <p className="text-sm text-neutral-500 font-medium tracking-tight">Stay updated with your network</p>
           </div>
         </div>
         
@@ -96,7 +88,7 @@ export function Notifications() {
           {notifications.some(n => !n.read) && (
             <button
               onClick={markAllAsRead}
-              className="px-3 py-2 text-primary hover:bg-primary/5 rounded-lg transition-colors text-[10px] font-bold uppercase tracking-widest"
+              className="px-3.5 py-2 text-primary bg-primary/5 hover:bg-primary/10 rounded-xl transition-all text-sm font-bold shadow-sm shadow-primary/10 hover:shadow-md hover:shadow-primary/15"
             >
               Mark all as read
             </button>
@@ -104,9 +96,9 @@ export function Notifications() {
           {notifications.length > 0 && (
             <button
               onClick={clearAllNotifications}
-              className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-[10px] font-bold uppercase tracking-widest"
+              className="flex items-center gap-2 px-3.5 py-2 text-red-600 bg-red-50/60 hover:bg-red-50 rounded-xl transition-all text-sm font-bold shadow-sm hover:shadow-md shadow-red-500/10"
             >
-              <Trash2 size={14} />
+              <Trash2 size={15} />
               Clear All
             </button>
           )}
@@ -116,8 +108,8 @@ export function Notifications() {
       <div className="space-y-3">
         {loading ? (
           <div className="py-20 text-center">
-            <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Notifications...</p>
+            <div className="w-10 h-10 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-sm font-semibold text-neutral-400 tracking-tight">Loading notifications…</p>
           </div>
         ) : notifications.length > 0 ? (
           notifications.map((notif, i) => (
@@ -137,21 +129,21 @@ export function Notifications() {
                 }
               }}
               className={cn(
-                "bg-white p-4 rounded-2xl border border-neutral-200 card-shadow flex gap-4 items-start group hover:border-primary/30 transition-all cursor-pointer relative overflow-hidden",
-                !notif.read && "border-l-4 border-l-primary"
+                "bg-white p-4 rounded-[14px] border border-neutral-200/80 shadow-sm shadow-neutral-900/[0.03] flex gap-4 items-start group hover:shadow-md hover:shadow-neutral-900/[0.06] hover:-translate-y-0.5 hover:border-primary/30 transition-all cursor-pointer relative overflow-hidden",
+                !notif.read && "border-l-[3px] border-l-primary"
               )}
             >
               {!notif.read && (
-                <div className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full" />
+                <div className="absolute top-3 right-3 w-2 h-2 bg-primary rounded-full ring-2 ring-white" />
               )}
               <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
-                (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-50 text-emerald-600" :
-                notif.type === 'SUBSCRIPTION' ? "bg-red-50 text-red-600" :
-                notif.type === 'REFERRAL' ? "bg-blue-50 text-blue-600" :
-                notif.type === 'GUEST_REGISTRATION' ? "bg-purple-50 text-purple-600" :
-                notif.type === 'THANKYOU' ? "bg-amber-50 text-amber-600" :
-                "bg-primary/5 text-primary"
+                "w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ring-1",
+                (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-50 text-emerald-600 ring-emerald-200/70" :
+                notif.type === 'SUBSCRIPTION' ? "bg-red-50 text-red-600 ring-red-200/70" :
+                notif.type === 'REFERRAL' ? "bg-blue-50 text-blue-600 ring-blue-200/70" :
+                notif.type === 'GUEST_REGISTRATION' ? "bg-purple-50 text-purple-600 ring-purple-200/70" :
+                notif.type === 'THANKYOU' ? "bg-amber-50 text-amber-600 ring-amber-200/70" :
+                "bg-primary/5 text-primary ring-primary/20"
               )}>
                 {(notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? <Award size={20} /> :
                  notif.type === 'SUBSCRIPTION' ? <AlertTriangle size={20} /> :
@@ -161,16 +153,19 @@ export function Notifications() {
                  <Info size={20} />}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5 gap-2">
                   <span className={cn(
-                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md",
-                    (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-100 text-emerald-700" :
-                    notif.type === 'SUBSCRIPTION' ? "bg-red-100 text-red-700" :
-                    "bg-neutral-100 text-neutral-600"
+                    "text-[11px] font-bold tracking-tight px-2.5 py-0.5 rounded-full border",
+                    (notif.type === 'UPGRADE' || notif.type === 'UPGRADE_REQUEST') ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                    notif.type === 'SUBSCRIPTION' ? "bg-red-50 text-red-700 border-red-200" :
+                    notif.type === 'REFERRAL' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                    notif.type === 'GUEST_REGISTRATION' ? "bg-purple-50 text-purple-700 border-purple-200" :
+                    notif.type === 'THANKYOU' ? "bg-amber-50 text-amber-700 border-amber-200" :
+                    "bg-neutral-100 text-neutral-600 border-neutral-200"
                   )}>
                     {notif.type.replace('_', ' ')}
                   </span>
-                  <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-tight">
+                  <span className="text-[11px] text-neutral-400 font-semibold tracking-tight shrink-0">
                     {format(new Date(notif.createdAt), 'dd MMM • HH:mm')}
                   </span>
                 </div>
@@ -182,10 +177,12 @@ export function Notifications() {
             </motion.div>
           ))
         ) : (
-          <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-neutral-200">
-            <Bell size={48} className="mx-auto text-neutral-200 mb-4" />
-            <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-widest">No notifications</h3>
-            <p className="text-xs text-neutral-400 font-medium mt-1">We'll notify you when something important happens.</p>
+          <div className="py-20 text-center bg-white rounded-[18px] border border-dashed border-neutral-300">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-neutral-50 flex items-center justify-center ring-1 ring-neutral-200/80">
+              <Bell size={26} className="text-neutral-300" />
+            </div>
+            <h3 className="text-base font-bold text-neutral-900 tracking-tight">No notifications</h3>
+            <p className="text-sm text-neutral-400 font-medium mt-1 tracking-tight">We'll notify you when something important happens.</p>
           </div>
         )}
       </div>

@@ -890,42 +890,53 @@ interface ReportCardProps {
 
 function ReportCard({ title, filters, setFilters, options, optionLabel, metrics, type, hideDropdown, profile }: ReportCardProps) {
   return (
-    <div className="bg-white rounded-[14px] card-shadow border border-border overflow-hidden relative">
-      <div className="absolute top-0 left-0 w-1 h-12 bg-primary rounded-br-lg" />
-      <div className="p-4 space-y-4">
-        <div className="text-center">
-          <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-[0.15em]">{title}</span>
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className="bg-white rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] overflow-hidden"
+    >
+      {/* Header */}
+      <div className="px-5 sm:px-6 py-5 border-b border-neutral-100 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-[12px] bg-primary/5 text-primary border border-primary/10 flex items-center justify-center shrink-0">
+          <Activity size={18} strokeWidth={2} />
         </div>
+        <div className="min-w-0">
+          <h3 className="text-[16px] font-bold text-[#111827] tracking-tight">{title}</h3>
+          <p className="text-[12px] text-neutral-500 font-medium mt-0.5">Performance analytics & insights</p>
+        </div>
+      </div>
 
+      <div className="p-5 sm:p-6 space-y-5">
         {/* Filters */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">Start Date</label>
-            <input 
-              type="date" 
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Start Date</label>
+            <input
+              type="date"
               value={filters.startDate}
               onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              className="w-full p-2 text-[10px] rounded-lg border border-border focus:ring-1 focus:ring-primary outline-none"
+              className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-[13px] font-medium text-[#111827]"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">End Date</label>
-            <input 
-              type="date" 
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">End Date</label>
+            <input
+              type="date"
               value={filters.endDate}
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              className="w-full p-2 text-[10px] rounded-lg border border-border focus:ring-1 focus:ring-primary outline-none"
+              className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-[13px] font-medium text-[#111827]"
             />
           </div>
         </div>
 
         {!hideDropdown && options && (
-          <div className="space-y-1">
-            <label className="text-[8px] font-semibold text-text-secondary uppercase ml-1">{optionLabel}</label>
-            <select 
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">{optionLabel}</label>
+            <select
               value={type === 'CHAPTER_ADMIN' ? filters.adminId : filters.memberId}
               onChange={(e) => setFilters({ ...filters, [type === 'CHAPTER_ADMIN' ? 'adminId' : 'memberId']: e.target.value })}
-              className="w-full p-2 text-[10px] rounded-lg border border-border focus:ring-1 focus:ring-primary outline-none bg-white"
+              className="w-full h-10 px-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all text-[13px] font-medium text-[#111827] cursor-pointer"
             >
               <option value="">All {optionLabel}s (Combined)</option>
               {options.map(opt => (
@@ -935,64 +946,57 @@ function ReportCard({ title, filters, setFilters, options, optionLabel, metrics,
           </div>
         )}
 
-        {/* Metrics */}
-        <div className="space-y-3 pt-2">
-          <MetricItem icon={Handshake} label="Business Generated" value={`₹${metrics.businessGenerated.toLocaleString()}`} />
-          <MetricItem icon={Share2} label="Total Referral Sent" value={metrics.referralsSent} />
-          <MetricItem icon={BookOpen} label="Total Referral Received" value={metrics.referralsReceived} />
-          
-          {/* Chapter Admin Report */}
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <MetricItem icon={Handshake} label="Business Generated" value={`₹${metrics.businessGenerated.toLocaleString()}`} color="text-emerald-600" bg="bg-emerald-500/5" border="border-emerald-500/10" />
+          <MetricItem icon={Share2} label="Referrals Sent" value={metrics.referralsSent} color="text-amber-600" bg="bg-amber-500/5" border="border-amber-500/10" />
+          <MetricItem icon={BookOpen} label="Referrals Received" value={metrics.referralsReceived} color="text-blue-600" bg="bg-blue-500/5" border="border-blue-500/10" />
+
           {type === 'CHAPTER_ADMIN' && (
             <>
-              {profile?.role !== 'MEMBER' && <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} />}
-              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} />
-              <MetricItem icon={Clock} label="Total One-to-One Meetings" value={metrics.oneToOnes} />
+              {profile?.role !== 'MEMBER' && <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} color="text-violet-600" bg="bg-violet-500/5" border="border-violet-500/10" />}
+              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} color="text-cyan-600" bg="bg-cyan-500/5" border="border-cyan-500/10" />
+              <MetricItem icon={Clock} label="One-to-One Meetings" value={metrics.oneToOnes} color="text-rose-600" bg="bg-rose-500/5" border="border-rose-500/10" />
             </>
           )}
 
-          {/* Master Admin: Member Report */}
           {type === 'MEMBER' && profile?.role === 'MASTER_ADMIN' && (
             <>
-              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} />
-              <MetricItem icon={CheckCircle2} label="Total Meeting Attendance" value={metrics.attendanceCount} />
-              <MetricItem icon={Clock} label="Total One-to-One Meetings" value={metrics.oneToOnes} />
+              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} color="text-cyan-600" bg="bg-cyan-500/5" border="border-cyan-500/10" />
+              <MetricItem icon={CheckCircle2} label="Meeting Attendance" value={metrics.attendanceCount} color="text-emerald-600" bg="bg-emerald-500/5" border="border-emerald-500/10" />
+              <MetricItem icon={Clock} label="One-to-One Meetings" value={metrics.oneToOnes} color="text-rose-600" bg="bg-rose-500/5" border="border-rose-500/10" />
             </>
           )}
 
-          {/* Chapter Admin: Member Report */}
           {type === 'MEMBER' && profile?.role === 'CHAPTER_ADMIN' && (
             <>
-              <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} />
-              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} />
-              <MetricItem icon={Clock} label="Total One-to-One Meetings" value={metrics.oneToOnes} />
+              <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} color="text-violet-600" bg="bg-violet-500/5" border="border-violet-500/10" />
+              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} color="text-cyan-600" bg="bg-cyan-500/5" border="border-cyan-500/10" />
+              <MetricItem icon={Clock} label="One-to-One Meetings" value={metrics.oneToOnes} color="text-rose-600" bg="bg-rose-500/5" border="border-rose-500/10" />
             </>
           )}
 
-          {/* Member: My Performance */}
           {type === 'MY_PERFORMANCE' && (
             <>
-              <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} />
-              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} />
+              <MetricItem icon={Users} label="Total Members" value={metrics.totalMembers} color="text-violet-600" bg="bg-violet-500/5" border="border-violet-500/10" />
+              <MetricItem icon={Calendar} label="Total Meetings" value={metrics.totalMeetings} color="text-cyan-600" bg="bg-cyan-500/5" border="border-cyan-500/10" />
             </>
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-function MetricItem({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) {
+function MetricItem({ icon: Icon, label, value, color, bg, border }: { icon: any, label: string, value: string | number, color: string, bg: string, border: string }) {
   return (
-    <div className="flex items-center justify-between group">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-text-primary group-hover:bg-primary/5 group-hover:text-primary transition-colors">
-          <Icon size={16} strokeWidth={1.5} />
-        </div>
-        <span className="text-[11px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">{label}</span>
+    <div className="flex items-center gap-3 p-3 rounded-[14px] border border-neutral-100 hover:border-neutral-200 hover:shadow-sm transition-all duration-300 group">
+      <div className={cn("w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 border transition-transform duration-300 group-hover:scale-110", bg, color, border)}>
+        <Icon size={16} strokeWidth={2} />
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-primary">{value}</span>
-        <Plus size={12} className="text-primary" />
+      <div className="min-w-0 flex-1">
+        <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide block leading-tight">{label}</span>
+        <span className="text-[16px] font-bold text-[#111827] tracking-tight">{value}</span>
       </div>
     </div>
   );

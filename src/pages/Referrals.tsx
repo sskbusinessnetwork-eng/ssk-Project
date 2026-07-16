@@ -1,20 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  Phone, 
-  MessageSquare,
-  ArrowRightLeft,
-  Heart,
-  AlertCircle,
-  Share2,
-  Users
-} from 'lucide-react';
+import { Plus, Search, ListFilter as Filter, Clock, CircleCheck as CheckCircle2, Circle as XCircle, Phone, MessageSquare, ArrowRightLeft, Heart, CircleAlert as AlertCircle, Share2, Users } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, Link } from 'react-router-dom';
 import { firestoreService } from '../services/firestoreService';
@@ -331,37 +317,37 @@ export function Referrals() {
       : referrals;
 
     return (
-      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 pb-24">
+      <div className="space-y-8 max-w-7xl mx-auto pb-24">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-neutral-100 pb-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-              <Users size={24} />
+            <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 border border-primary/10">
+              <Users size={22} strokeWidth={2} />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black text-neutral-900 tracking-tight uppercase">
+              <h1 className="text-[22px] md:text-[24px] font-bold text-[#111827] tracking-tight">
                 Business Referrals
               </h1>
-              <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.15em] mt-0.5">
+              <p className="text-[13px] text-neutral-500 font-medium mt-0.5">
                 Monitor business transactions and conversion rates
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden mb-12">
+        <div className="bg-white rounded-[20px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03),0_8px_24px_-4px_rgba(11,11,13,0.04)] overflow-hidden mb-12">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead className="bg-[#F9FAFB] border-b border-neutral-200 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Referral ID</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Sent By</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Received By</th>
-                  {isAdmin && <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Chapter</th>}
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Notes</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Referral ID</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Sent By</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Received By</th>
+                  {isAdmin && <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Chapter</th>}
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -380,24 +366,24 @@ export function Referrals() {
                     const chapterAdmin = members.find(m => m.uid === (toUser?.adminId || fromUser?.adminId));
 
                     return (
-                      <tr key={ref.id} className="hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => {
+                      <tr key={ref.id} className="hover:bg-neutral-50/80 transition-colors group cursor-pointer" onClick={() => {
                         setSelectedReferral(ref);
                         setIsDetailModalOpen(true);
                       }}>
                         <td className="px-6 py-4">
-                          <span className="text-[11px] font-mono font-medium text-neutral-500 uppercase">
+                          <span className="text-[11px] font-mono font-medium text-neutral-400 uppercase">
                             #{ref.id.slice(-6)}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-neutral-900">{ref.fromUserName || fromUser?.name || 'Unknown'}</span>
+                            <span className="text-[14px] font-semibold text-[#111827]">{ref.fromUserName || fromUser?.name || 'Unknown'}</span>
                             <span className="text-[11px] text-neutral-500 font-medium truncate max-w-[150px]">{fromUser?.category || 'Member'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-neutral-900">{toUser?.name || 'Unknown'}</span>
+                            <span className="text-[14px] font-semibold text-[#111827]">{toUser?.name || 'Unknown'}</span>
                             <span className="text-[11px] text-neutral-500 font-medium truncate max-w-[150px]">{toUser?.category || 'Member'}</span>
                           </div>
                         </td>
@@ -409,13 +395,13 @@ export function Referrals() {
                           </td>
                         )}
                         <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-neutral-600">
+                          <span className="text-[13px] font-medium text-neutral-600">
                             {format(new Date(ref.createdAt), 'dd MMM yyyy')}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <span className={cn(
-                            "text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider",
+                            "text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider inline-block",
                             ref.status === 'PENDING' && "bg-amber-50 text-amber-600 border border-amber-100",
                             ref.status === 'COMPLETED' && "bg-emerald-50 text-emerald-600 border border-emerald-100",
                             ref.status === 'NOT_CONVERTED' && "bg-red-50 text-red-600 border border-red-100",
@@ -429,12 +415,12 @@ export function Referrals() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm font-bold text-emerald-600">
+                          <span className="text-[14px] font-bold text-emerald-600">
                             {slip ? `₹${slip.businessValue.toLocaleString()}` : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-xs font-medium text-neutral-500 line-clamp-1 max-w-[150px]" title={ref.notes}>
+                          <p className="text-[12px] font-medium text-neutral-500 line-clamp-1 max-w-[150px]" title={ref.notes}>
                             {ref.notes || '-'}
                           </p>
                         </td>
@@ -444,9 +430,9 @@ export function Referrals() {
                 ) : (
                   <tr>
                     <td colSpan={isAdmin ? 8 : 7} className="px-6 py-20 text-center">
-                      <Share2 size={40} className="mx-auto text-neutral-200 mb-3" />
-                      <h3 className="text-sm font-bold text-navy">No referrals found</h3>
-                      <p className="text-xs text-neutral-400 mt-1">The referral history is currently empty.</p>
+                      <Share2 size={40} className="mx-auto text-neutral-300 mb-3" strokeWidth={1.5} />
+                      <h3 className="text-[15px] font-bold text-[#111827]">No referrals found</h3>
+                      <p className="text-[13px] text-neutral-500 mt-1">The referral history is currently empty.</p>
                     </td>
                   </tr>
                 )}
@@ -459,18 +445,18 @@ export function Referrals() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto pb-24 px-4 sm:px-0 py-8 md:py-12">
+    <div className="space-y-6 max-w-2xl mx-auto pb-24">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-100 pb-6 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-            <Users size={24} />
+          <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 border border-primary/10">
+            <Users size={22} strokeWidth={2} />
           </div>
           <div>
-            <h1 className="text-lg md:text-xl font-black text-neutral-900 tracking-tight uppercase">
+            <h1 className="text-[20px] md:text-[22px] font-bold text-[#111827] tracking-tight">
               My Referrals
             </h1>
-            <p className="text-[10px] text-neutral-500 font-extrabold uppercase tracking-[0.12em] mt-0.5">
+            <p className="text-[13px] text-neutral-500 font-medium mt-0.5">
               Pass and receive business opportunities
             </p>
           </div>
@@ -478,9 +464,9 @@ export function Referrals() {
         {!isPending && (
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-primary/10 hover:bg-primary/90 hover:shadow-xl shrink-0"
+            className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-xl text-[13px] font-bold transition-all active:scale-95 shadow-lg shadow-primary/20 hover:bg-primary/90 shrink-0"
           >
-            <Plus size={14} />
+            <Plus size={16} strokeWidth={2.5} />
             <span>Pass Referral</span>
           </button>
         )}
@@ -510,13 +496,13 @@ export function Referrals() {
       )}
 
       {/* Tabs & Action */}
-      <div className="bg-white p-4 rounded-[20px] shadow-xl shadow-neutral-100/30 border border-neutral-100 space-y-4">
-        <div className="flex gap-2 p-1 bg-muted rounded-xl">
+      <div className="bg-white p-2 rounded-[18px] border border-neutral-200/80 shadow-[0_2px_8px_rgba(11,11,13,0.03)]">
+        <div className="flex gap-2 p-1 bg-neutral-50 rounded-[14px]">
           <button
             onClick={() => setFilter('received')}
             className={cn(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-              filter === 'received' ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-white/50"
+              "flex-1 py-2.5 text-[13px] font-semibold rounded-[10px] transition-all",
+              filter === 'received' ? "bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.06)]" : "text-neutral-500 hover:text-[#111827]"
             )}
           >
             Received
@@ -524,8 +510,8 @@ export function Referrals() {
           <button
             onClick={() => setFilter('passed')}
             className={cn(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-              filter === 'passed' ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-white/50"
+              "flex-1 py-2.5 text-[13px] font-semibold rounded-[10px] transition-all",
+              filter === 'passed' ? "bg-white text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.06)]" : "text-neutral-500 hover:text-[#111827]"
             )}
           >
             Given
@@ -534,10 +520,10 @@ export function Referrals() {
       </div>
 
       {isPending && (
-        <div className="p-4 bg-amber-50 border border-amber-100 rounded-[14px] flex items-center gap-3 text-amber-900">
+        <div className="p-4 bg-amber-50 border border-amber-200/60 rounded-[16px] flex items-center gap-3 text-amber-900">
           <AlertCircle size={20} className="text-amber-500 shrink-0" />
-          <p className="text-[11px] font-bold leading-tight">
-            Membership <span className="text-amber-600 uppercase">Pending</span>. You can pass referrals once approved.
+          <p className="text-[13px] font-semibold leading-tight">
+            Membership <span className="text-amber-600 font-bold">Pending</span>. You can pass referrals once approved.
           </p>
         </div>
       )}
@@ -567,16 +553,16 @@ export function Referrals() {
                   setIsDetailModalOpen(true);
                 }}
                 className={cn(
-                  "bg-white p-5 rounded-2xl shadow-sm border hover:shadow-md hover:border-neutral-300 flex items-center gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
-                  ref.status === 'PENDING' && filter === 'received' ? "border-amber-200 bg-amber-50/30" : "border-neutral-200"
+                  "bg-white p-5 rounded-[18px] border hover:shadow-[0_4px_16px_rgba(11,11,13,0.06)] hover:border-neutral-300 flex items-center gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
+                  ref.status === 'PENDING' && filter === 'received' ? "border-amber-200/60 bg-amber-50/20" : "border-neutral-200/80"
                 )}
               >
                 {/* Left: Icon */}
                 <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative",
-                  ref.status === 'COMPLETED' ? "bg-emerald-50 text-emerald-600" : "bg-primary/5 text-primary"
+                  "w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 relative border",
+                  ref.status === 'COMPLETED' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-primary/5 text-primary border-primary/10"
                 )}>
-                  {ref.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <ArrowRightLeft size={24} />}
+                  {ref.status === 'COMPLETED' ? <CheckCircle2 size={22} strokeWidth={2} /> : <ArrowRightLeft size={22} strokeWidth={2} />}
                   {ref.status === 'PENDING' && filter === 'received' && (
                     <span className="absolute -top-1 -right-1 flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -588,22 +574,22 @@ export function Referrals() {
                 {/* Middle: Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-bold text-text-primary truncate">
+                    <h3 className="text-[15px] font-bold text-[#111827] truncate">
                       {filter === 'received' ? 'From: ' : 'To: '}{otherName}
                     </h3>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] font-medium text-text-secondary truncate">
+                  <p className="text-[12px] sm:text-[13px] font-medium text-neutral-500 truncate mt-0.5">
                     For: {ref.contactName} • {ref.requirement || 'Business Referral'}
                   </p>
                 </div>
 
                 {/* Right: Date + Status */}
                 <div className="text-right shrink-0">
-                  <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+                  <p className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
                     {format(new Date(ref.createdAt), 'dd MMM')}
                   </p>
                   <span className={cn(
-                    "text-[9px] font-bold uppercase tracking-widest",
+                    "text-[10px] font-bold uppercase tracking-widest mt-1 block",
                     ref.status === 'PENDING' && "text-amber-500",
                     ref.status === 'COMPLETED' && "text-emerald-500",
                     ref.status === 'NOT_CONVERTED' && "text-red-500",
