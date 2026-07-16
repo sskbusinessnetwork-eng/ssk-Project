@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, CheckCircle2, Clock, Sparkles, Target, Compass, 
-  HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket
+  HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -230,9 +230,9 @@ export function Analytics() {
              <motion.div 
                animate={{ y: [0, -4, 0], rotate: [0, 2, -2, 0] }}
                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-               className="w-9 h-9 rounded-[12px] bg-[#0B1220] flex items-center justify-center text-[#FBBF24] border border-white/10 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+               className="w-10 h-10 rounded-[12px] bg-[#0B1220] flex items-center justify-center text-[#FBBF24] border border-white/10 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
              >
-               <Trophy size={18} />
+               <Crown size={20} className="fill-[#FBBF24]/10" />
              </motion.div>
           </div>
 

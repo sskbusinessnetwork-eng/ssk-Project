@@ -63,10 +63,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: FileText, label: 'Directory', path: '/directory', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Messages', path: '/messages', badge: 3, roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Settings, label: 'Settings', path: '/settings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
   ];
 
+  const userRole = profile?.role || 'MEMBER';
   const visibleMenuItems = menuItems.filter(item => 
-    profile?.role && item.roles.includes(profile.role)
+    item.roles.includes(userRole)
   );
 
   return (
@@ -284,13 +288,23 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
           </div>
         )}
 
-        <div className={cn("flex items-center", isCollapsed ? "flex-col gap-4" : "justify-between pt-1 px-1")}>
-          <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
-            <Settings size={isCollapsed ? 20 : 18} />
-          </Link>
-          <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
-            <LogOut size={isCollapsed ? 20 : 18} />
+        <div className="flex flex-col gap-2 pt-2 border-t border-[#1F2937]/50 mt-1">
+          <button 
+            onClick={onToggleCollapse} 
+            className="flex items-center gap-3 text-neutral-400 hover:text-white transition-colors p-2 rounded-xl hover:bg-[#1F2937] text-[13px] font-bold w-full justify-start outline-none"
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {!isCollapsed && <span className="font-semibold text-[#9CA3AF]">Collapse Menu</span>}
           </button>
+          
+          <div className={cn("flex items-center justify-between px-1.5 mt-1", isCollapsed ? "flex-col gap-3" : "")}>
+            <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
+              <Settings size={isCollapsed ? 20 : 18} />
+            </Link>
+            <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
+              <LogOut size={isCollapsed ? 20 : 18} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

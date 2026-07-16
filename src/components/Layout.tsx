@@ -92,6 +92,17 @@ export function Layout() {
             <button className="hidden md:flex p-2 hover:bg-white/10 rounded-xl transition-all text-white" onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}>
               <Menu size={20} />
             </button>
+            
+            {/* Header Logo branding */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#E53935] flex items-center justify-center text-white font-black text-sm tracking-tighter shadow-[0_0_12px_rgba(229,57,53,0.4)] shrink-0">
+                SSK
+              </div>
+              <div className="flex flex-col hidden xs:flex">
+                <span className="text-white font-black text-[12px] leading-tight tracking-wide">BUSINESS NETWORK</span>
+                <span className="text-[7px] text-[#9CA3AF] font-bold tracking-widest leading-none uppercase -mt-0.5">Enterprise Platform</span>
+              </div>
+            </div>
           </div>
 
           <div className="flex-1 max-w-[600px] px-6 hidden lg:block">

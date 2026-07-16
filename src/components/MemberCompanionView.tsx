@@ -32,11 +32,11 @@ export function MemberCompanionView({
   
   // Local state to simulate interactive checkbox toggling if handleToggleTask is just a mock
   const [localTasks, setLocalTasks] = useState([
-    { key: 'attendMeeting', label: 'Attend Weekly Meeting', desc: 'Show commitment to your local chapter syncs', isDone: false, link: '/meetings', linkText: 'JOIN', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: Calendar },
-    { key: 'passReferral', label: 'Pass a Warm Referral', desc: 'Share commercial opportunities', isDone: false, link: '/refer', linkText: 'PASS', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/10', icon: Share2 },
-    { key: 'scheduleOneToOne', label: 'Book a 1-to-1 Session', desc: 'Coordinate synergy meetings', isDone: false, link: '/one-to-one', linkText: 'BOOK', iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: Handshake },
-    { key: 'followUpReferral', label: 'Follow Up Referral Slips', desc: 'Track conversion status on active leads', isDone: false, link: '/refer?tab=received', linkText: 'SLIPS', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare },
-    { key: 'inviteGuest', label: 'Invite a Business Peer', desc: 'Expand network strength', isDone: false, link: '/guests', linkText: 'INVITE', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10', icon: UserPlus }
+    { key: 'attendMeeting', label: 'Attend Weekly Meeting', desc: 'Show commitment to your local chapter syncs', isDone: false, link: '/meetings', linkText: 'JOIN', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: Calendar, activeClass: 'bg-purple-600 border-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.6)]' },
+    { key: 'passReferral', label: 'Pass a Warm Referral', desc: 'Share commercial opportunities', isDone: false, link: '/refer', linkText: 'PASS', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/10', icon: Share2, activeClass: 'bg-orange-500 border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.6)]' },
+    { key: 'scheduleOneToOne', label: 'Book a 1-to-1 Session', desc: 'Coordinate synergy meetings', isDone: false, link: '/one-to-one', linkText: 'BOOK', iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: Handshake, activeClass: 'bg-blue-500 border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]' },
+    { key: 'followUpReferral', label: 'Follow Up Referral Slips', desc: 'Track conversion status on active leads', isDone: false, link: '/refer?tab=received', linkText: 'SLIPS', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-emerald-500 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]' },
+    { key: 'inviteGuest', label: 'Invite a Business Peer', desc: 'Expand network strength', isDone: false, link: '/guests', linkText: 'INVITE', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10', icon: UserPlus, activeClass: 'bg-pink-500 border-pink-500 shadow-[0_0_12px_rgba(236,72,153,0.6)]' }
   ]);
 
   const handleCheckboxClick = (key: string) => {
@@ -117,7 +117,7 @@ export function MemberCompanionView({
                     whileTap={{ scale: 0.8 }}
                     className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all duration-300 ${
                       task.isDone 
-                        ? 'bg-purple-600 border-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.7)]' 
+                        ? task.activeClass 
                         : 'border-white/20 hover:border-purple-400/50'
                     }`}
                   >
@@ -259,8 +259,9 @@ export function MemberCompanionView({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.5, duration: 0.5, type: "spring", stiffness: 100 }}
               >
-                <rect x="250" y="85" width="60" height="22" rx="6" fill="#1F2937" stroke="rgba(255,255,255,0.1)" />
-                <text x="280" y="99" fill="#FFFFFF" fontSize="9" fontWeight="bold" textAnchor="middle">₹24.50L</text>
+                <rect x="245" y="75" width="70" height="32" rx="8" fill="#0B1220" stroke="rgba(255,255,255,0.15)" strokeWidth="1" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))" />
+                <text x="280" y="88" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">₹24.50L</text>
+                <text x="280" y="100" fill="#9CA3AF" fontSize="8" fontWeight="medium" textAnchor="middle">15 Jul</text>
               </motion.g>
               
               {/* Blue line with drawing animation */}
