@@ -20,7 +20,8 @@ export default function StatGrid({ activeMembers, referralsPassed, businessGener
       icon: Users,
       color: 'text-primary',
       bg: 'bg-primary/5',
-      border: 'border-primary/10'
+      border: 'border-primary/10',
+      sparkColor: 'bg-primary',
     },
     {
       label: 'Business Generated',
@@ -30,7 +31,8 @@ export default function StatGrid({ activeMembers, referralsPassed, businessGener
       icon: IndianRupee,
       color: 'text-emerald-600',
       bg: 'bg-emerald-500/5',
-      border: 'border-emerald-500/10'
+      border: 'border-emerald-500/10',
+      sparkColor: 'bg-emerald-500',
     },
     {
       label: 'Referrals Passed',
@@ -40,7 +42,8 @@ export default function StatGrid({ activeMembers, referralsPassed, businessGener
       icon: FileCheck,
       color: 'text-blue-600',
       bg: 'bg-blue-500/5',
-      border: 'border-blue-500/10'
+      border: 'border-blue-500/10',
+      sparkColor: 'bg-blue-500',
     },
     {
       label: 'Upcoming Syncs',
@@ -50,86 +53,81 @@ export default function StatGrid({ activeMembers, referralsPassed, businessGener
       icon: Calendar,
       color: 'text-amber-600',
       bg: 'bg-amber-500/5',
-      border: 'border-amber-500/10'
+      border: 'border-amber-500/10',
+      sparkColor: 'bg-amber-500',
     },
     {
       label: 'Completion Index',
       value: '94%',
       trend: '+2%',
       trendLabel: 'vs last week',
-      icon: TrendingUp, 
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-500/5',
-      border: 'border-indigo-500/10'
-    }
+      icon: TrendingUp,
+      color: 'text-violet-600',
+      bg: 'bg-violet-500/5',
+      border: 'border-violet-500/10',
+      sparkColor: 'bg-violet-500',
+    },
   ];
 
   const containerVariants = {
     hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
+    show: { opacity: 1, transition: { staggerChildren: 0.08 } },
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 15 },
-    show: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] }
-    }
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
   };
 
   return (
-    <motion.div 
+    <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="show"
-      className="flex overflow-x-auto xl:grid xl:grid-cols-5 gap-6 w-full snap-x pb-4 xl:pb-0"
+      className="flex overflow-x-auto xl:grid xl:grid-cols-5 gap-4 xl:gap-5 w-full snap-x pb-2 xl:pb-0 hide-scrollbar"
     >
       {stats.map((stat, idx) => {
         const Icon = stat.icon;
         return (
-          <motion.div 
+          <motion.div
             key={idx}
             variants={itemVariants}
-            whileHover={{ y: -6, transition: { duration: 0.3, ease: "easeOut" } }}
-            className="min-w-[280px] xl:min-w-0 snap-start bg-white rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-neutral-200/70 flex flex-col justify-between group hover:shadow-[0_12px_30px_rgba(0,0,0,0.06)] hover:border-neutral-300 transition-all duration-300"
+            whileHover={{ y: -4, transition: { duration: 0.25, ease: 'easeOut' } }}
+            className="min-w-[240px] xl:min-w-0 snap-start bg-white rounded-[20px] p-5 shadow-[0_1px_3px_rgba(11,11,13,0.04),0_8px_20px_-4px_rgba(11,11,13,0.03)] border border-neutral-200/60 flex flex-col justify-between group hover:shadow-[0_4px_16px_rgba(11,11,13,0.06),0_16px_40px_-8px_rgba(11,11,13,0.05)] hover:border-neutral-300 transition-all duration-300"
           >
-            <div className="flex justify-between items-start mb-6">
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-transform duration-500 group-hover:scale-110", stat.bg, stat.color, stat.border)}>
-                <Icon size={24} strokeWidth={2} />
+            <div className="flex justify-between items-start mb-5">
+              <div className={cn('w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 border transition-transform duration-500 group-hover:scale-110', stat.bg, stat.color, stat.border)}>
+                <Icon size={20} strokeWidth={2} />
               </div>
-              
-              {/* Mini Sparkline Simulation */}
-              <div className="flex items-end gap-1 h-8 opacity-60">
+
+              {/* Mini Sparkline */}
+              <div className="flex items-end gap-1 h-7 opacity-50">
                 {[40, 65, 45, 80, 55, 90, 75].map((h, i) => (
-                  <motion.div 
+                  <motion.div
                     key={i}
                     initial={{ height: 0 }}
                     animate={{ height: `${h}%` }}
-                    transition={{ delay: 0.5 + (i * 0.1), duration: 0.6, ease: "easeOut" }}
-                    className={cn("w-1.5 rounded-t-sm bg-current", stat.color)}
+                    transition={{ delay: 0.4 + i * 0.08, duration: 0.5, ease: 'easeOut' }}
+                    className={cn('w-1.5 rounded-t-sm', stat.sparkColor)}
                   />
                 ))}
               </div>
             </div>
-            
+
             <div className="space-y-1">
-              <span className="text-[13px] font-semibold text-neutral-500 uppercase tracking-[0.15em] block">
+              <span className="text-[12px] font-semibold text-neutral-500 uppercase tracking-[0.12em] block">
                 {stat.label}
               </span>
-              <div className="flex items-end gap-3 pt-1">
-                <span className="text-[32px] font-semibold text-[#111827] leading-none tracking-tight">
+              <div className="flex items-end gap-3 pt-0.5">
+                <span className="text-[28px] font-bold text-[#111827] leading-none tracking-tight">
                   {stat.value}
                 </span>
               </div>
-              <div className="pt-3 flex items-center gap-2">
-                <span className={cn("text-[13px] font-semibold flex items-center gap-1", stat.color)}>
+              <div className="pt-2.5 flex items-center gap-2">
+                <span className={cn('text-[12px] font-semibold flex items-center gap-1', stat.color)}>
                   {stat.trend}
                 </span>
-                <span className="text-[13px] text-neutral-400 font-medium">
+                <span className="text-[12px] text-neutral-400 font-medium">
                   {stat.trendLabel}
                 </span>
               </div>

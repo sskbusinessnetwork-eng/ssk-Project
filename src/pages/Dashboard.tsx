@@ -1,32 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Share2, 
-  Award, 
-  Calendar, 
-  UserPlus,
-  ChevronRight,
-  Users,
-  Handshake,
-  BookOpen,
-  Eye,
-  Plus,
-  Filter,
-  TrendingUp,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  Target,
-  Compass,
-  HelpCircle,
-  Activity,
-  Briefcase,
-  ArrowRight,
-  Trophy,
-  Flame,
-  Star,
-  Zap,
-  Shield
-} from 'lucide-react';
+import { Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, Eye, Plus, ListFilter as Filter, TrendingUp, CircleCheck as CheckCircle2, Clock, Sparkles, Target, Compass, Circle as HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -559,19 +532,20 @@ export function Analytics() {
   ];
 
   return (
-    <div className="pb-24 space-y-10">
+    <div className="pb-24 space-y-8 md:space-y-10">
       
       {/* 1. PERSONALIZED WELCOME BANNER (Premium Dashboard Hero) */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="bg-white border border-neutral-200 rounded-[32px] p-5 sm:p-6 md:p-8 lg:p-10 relative overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.04)] flex flex-col justify-center min-h-[340px]"
+        className="bg-white border border-neutral-200/80 rounded-[28px] p-5 sm:p-6 md:p-8 lg:p-10 relative overflow-hidden shadow-[0_2px_8px_rgba(11,11,13,0.03),0_20px_40px_-8px_rgba(11,11,13,0.05)] flex flex-col justify-center min-h-[320px] md:min-h-[340px]"
       >
         {/* Subtle animated gradient backdrop */}
-        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/50 to-white pointer-events-none" />
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/[0.03] rounded-full blur-[100px] animate-float pointer-events-none" />
-        <div className="absolute -bottom-[200px] -left-[200px] w-[600px] h-[600px] bg-neutral-100/50 rounded-full blur-[80px] animate-float-delayed pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-50/40 via-white to-white pointer-events-none" />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/[0.04] rounded-full blur-[100px] animate-float pointer-events-none" />
+        <div className="absolute -bottom-[200px] -left-[200px] w-[500px] h-[500px] bg-neutral-100/40 rounded-full blur-[80px] animate-float-delayed pointer-events-none" />
+        <div className="absolute inset-0 bg-grid opacity-30 pointer-events-none" />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full relative z-10">
           

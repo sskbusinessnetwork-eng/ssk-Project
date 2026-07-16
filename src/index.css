@@ -4,9 +4,11 @@
 @theme {
   --color-primary: #DC2626;
   --color-primary-foreground: #FFFFFF;
+  --color-primary-dark: #B91C1C;
+  --color-primary-light: #FEE2E2;
   --color-secondary: #6B7280;
   --color-secondary-foreground: #FFFFFF;
-  --color-background: #F7F8FA;
+  --color-background: #F8F9FB;
   --color-foreground: #111827;
   --color-card: #FFFFFF;
   --color-card-foreground: #111827;
@@ -16,11 +18,18 @@
   --color-navy: #0B0B0D;
   --color-text-primary: #111827;
   --color-text-secondary: #6B7280;
+  --color-accent-blue: #3B82F6;
+  --color-accent-emerald: #10B981;
+  --color-accent-amber: #F59E0B;
+  --color-accent-violet: #8B5CF6;
+  --color-accent-cyan: #06B6D4;
   --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Plus Jakarta Sans", "Inter", sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --shadow-card: 0 1px 3px rgba(11, 11, 13, 0.05), 0 10px 24px -5px rgba(11, 11, 13, 0.03);
   --shadow-soft: 0 1px 2px rgba(11, 11, 13, 0.02);
+  --shadow-premium: 0 4px 20px rgba(11, 11, 13, 0.04), 0 12px 40px -8px rgba(11, 11, 13, 0.06);
+  --shadow-glow: 0 0 30px rgba(220, 38, 38, 0.08);
 }
 
 @layer base {
@@ -32,9 +41,20 @@
     @apply bg-background text-foreground antialiased text-[14px] leading-relaxed;
     font-feature-settings: "rlig" 1, "calt" 1;
     overscroll-behavior-y: contain;
+    font-family: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply tracking-tight font-bold;
+    font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+  }
+  ::selection {
+    @apply bg-primary/10 text-primary;
+  }
+  /* Focus visibility for accessibility */
+  *:focus-visible {
+    outline: 2px solid rgba(220, 38, 38, 0.5);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
@@ -44,6 +64,9 @@
   }
   .soft-shadow {
     @apply shadow-soft;
+  }
+  .premium-shadow {
+    @apply shadow-premium;
   }
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
@@ -66,6 +89,46 @@
   .analytics-card {
     @apply bg-card rounded-[14px] p-4 shadow-card border border-border;
   }
+
+  /* Premium scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(11, 11, 13, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(11, 11, 13, 0.2);
+  }
+  .custom-scrollbar-dark::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .custom-scrollbar-dark::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar-dark::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+  }
+  .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Hide scrollbar for swipeable rows */
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   @keyframes pulse-subtle {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.9; transform: scale(0.99); }
@@ -74,7 +137,7 @@
     animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
-  /* PREMIUM REDESIGN UTILITIES (2026 LUXURY) */
+  /* PREMIUM REDESIGN UTILITIES */
   @keyframes float {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
     50% { transform: translateY(-8px) rotate(0.5deg); }
@@ -107,6 +170,16 @@
     animation: glow-pulse 3s infinite;
   }
 
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .animate-shimmer {
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+
   .glass-card {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(16px);
@@ -128,6 +201,17 @@
     transform: translateY(-5px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
     border-color: rgba(211, 47, 47, 0.15);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(11, 11, 13, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11, 11, 13, 0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
   }
 }
 
