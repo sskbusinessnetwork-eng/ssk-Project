@@ -75,10 +75,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   return (
     <div className={cn(
-      "h-screen bg-[#11131A] flex flex-col fixed left-0 top-0 z-[60] transition-all duration-300 ease-[0.16,1,0.3,1] border-r border-[#1F2937]",
-      "hidden md:flex", 
-      isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-      isCollapsed ? "md:w-[78px]" : "w-[280px]"
+      "h-[100vh] bg-[#11131A] flex flex-col fixed left-0 top-0 border-r border-[#1F2937] transition-transform duration-300 ease-in-out",
+      // Mobile/Tablet off-canvas drawer styling (<1024px)
+      "w-[280px] md:w-[320px] z-[9999]",
+      isOpen ? "translate-x-0" : "-translate-x-full",
+      // Desktop persistent styling (>=1024px)
+      "lg:translate-x-0 lg:z-30",
+      isCollapsed ? "lg:w-[78px]" : "lg:w-[280px]"
     )}>
       
       {/* Brand Section (Max 64px) */}
@@ -91,7 +94,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
           }}
           type="button"
           aria-label="Close sidebar"
-          className="md:hidden absolute top-4 right-4 p-2 hover:bg-[#1F2937] rounded-xl text-[#9CA3AF] hover:text-white transition-colors cursor-pointer z-[70]"
+          className="lg:hidden absolute top-4 right-4 p-2 hover:bg-[#1F2937] rounded-xl text-[#9CA3AF] hover:text-white transition-colors cursor-pointer z-[70]"
         >
           <X size={18} />
         </button>

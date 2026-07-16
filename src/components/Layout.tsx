@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
 import { 
   Menu, Search, Bell, MessageSquare, Plus, ChevronDown, Calendar, Users, LayoutDashboard, Share2, User,
-  FileText, Activity, Settings, Crown, LogOut, ChevronRight
+  FileText, Activity, Settings, Crown, LogOut, ChevronRight, X
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -36,9 +36,33 @@ export function Layout() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isMobileSidebarOpen, isBottomSheetOpen]);
 
-  // Close bottom sheet on route change
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        document.body.style.overflow = '';
+      } else if (isMobileSidebarOpen) {
+        document.body.style.overflow = 'hidden';
+      }
+    };
+
+    if (isMobileSidebarOpen && window.innerWidth < 1024) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isMobileSidebarOpen]);
+
+  // Close bottom sheet and mobile sidebar on route change
   useEffect(() => {
     setIsBottomSheetOpen(false);
+    setIsMobileSidebarOpen(false);
   }, [location.pathname]);
 
   const handleLogout = async () => {
@@ -74,9 +98,9 @@ export function Layout() {
       
       {/* Main Content Area */}
       <main className={cn(
-        "flex-1 md:pb-0 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-all duration-300",
-        "pb-[110px] md:pb-0", // padding for floating mobile bottom nav
-        isDesktopCollapsed ? "md:ml-[78px]" : "md:ml-[280px]"
+        "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-all duration-300",
+        "pb-[110px] lg:pb-0", // padding for floating mobile bottom nav
+        isDesktopCollapsed ? "lg:ml-[78px]" : "lg:ml-[280px]"
       )}>
         
         {/* Top Header */}
@@ -84,12 +108,13 @@ export function Layout() {
           
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white"
+              onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+              className="lg:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white z-[10000] relative"
+              aria-label={isMobileSidebarOpen ? "Close menu" : "Open menu"}
             >
-              <Menu size={20} />
+              {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <button className="hidden md:flex p-2 hover:bg-white/10 rounded-xl transition-all text-white" onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}>
+            <button className="hidden lg:flex p-2 hover:bg-white/10 rounded-xl transition-all text-white" onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}>
               <Menu size={20} />
             </button>
             
@@ -338,18 +363,24 @@ export function Layout() {
         )}
       </AnimatePresence>
 
-      {/* Tablet Overlay Backdrop */}
-      {isMobileSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-[#0B0B0D]/40 backdrop-blur-sm z-[55] md:hidden transition-opacity duration-300 cursor-pointer"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsMobileSidebarOpen(false);
-          }}
-          aria-label="Close sidebar overlay"
-        />
-      )}
+      {/* Tablet/Mobile Overlay Backdrop */}
+      <AnimatePresence>
+        {isMobileSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="fixed inset-0 bg-black/60 z-[9998] lg:hidden cursor-pointer animate-none"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsMobileSidebarOpen(false);
+            }}
+            aria-label="Close sidebar overlay"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
