@@ -26,6 +26,7 @@ export interface UserProfile {
   bio?: string;
   adminId?: string;
   associatedChapterAdminId?: string;
+  avatarStyle?: string;
 }
 
 export interface Meeting {

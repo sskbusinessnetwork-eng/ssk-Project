@@ -31,9 +31,10 @@ import { Modal } from '../components/Modal';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { usePositions } from '../hooks/usePositions';
+import { AVATAR_STYLES } from '../utils/avatarUtils';
 
 export function Profile() {
-  const { profile: currentUserProfile } = useAuth();
+  const { profile: currentUserProfile, login } = useAuth();
   const { getPositionForUser } = usePositions();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -78,7 +79,8 @@ export function Profile() {
     area: '',
     address: '',
     photoURL: '',
-    role: '' as UserRole
+    role: '' as UserRole,
+    avatarStyle: ''
   });
 
   useEffect(() => {
@@ -109,7 +111,8 @@ export function Profile() {
             area: currentUserProfile.area || '',
             address: currentUserProfile.address || '',
             photoURL: currentUserProfile.photoURL || '',
-            role: currentUserProfile.role || 'MEMBER'
+            role: currentUserProfile.role || 'MEMBER',
+            avatarStyle: currentUserProfile.avatarStyle || ''
           });
 
           const adminId = currentUserProfile.associatedChapterAdminId || currentUserProfile.adminId;
@@ -246,6 +249,10 @@ export function Profile() {
       }
 
       await firestoreService.update('users', currentUserProfile.uid, dataToUpdate);
+      login({
+        ...currentUserProfile,
+        ...dataToUpdate
+      });
       setSuccessMessage("Profile updated successfully!");
       setShowSuccess(true);
       setTimeout(() => {
@@ -735,6 +742,29 @@ export function Profile() {
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Dashboard 3D Character Style</label>
+              <select
+                value={formData.avatarStyle}
+                onChange={(e) => setFormData({ ...formData, avatarStyle: e.target.value })}
+                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm appearance-none cursor-pointer"
+              >
+                <option value="" className="bg-[#111827]">Default (Dynamic auto-mapping)</option>
+                {AVATAR_STYLES.map((style) => (
+                  <option key={style.id} value={style.id} className="bg-[#111827]">{style.name}</option>
+                ))}
+              </select>
+              {formData.avatarStyle ? (
+                <p className="text-[11px] text-neutral-400 mt-1 italic pl-1 leading-relaxed">
+                  {AVATAR_STYLES.find(s => s.id === formData.avatarStyle)?.description}
+                </p>
+              ) : (
+                <p className="text-[11px] text-neutral-500 mt-1 italic pl-1 leading-relaxed">
+                  Automatically mapped based on your user role and business category.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

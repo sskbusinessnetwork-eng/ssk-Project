@@ -12,9 +12,11 @@ import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
 import StatGrid from '../components/StatGrid';
+import { getDashboardAvatar } from '../utils/avatarUtils';
 
 export function Analytics() {
   const { profile } = useAuth();
+  const avatar = getDashboardAvatar(profile);
   const [score, setScore] = useState(0);
   const [isRocketHovered, setIsRocketHovered] = useState(false);
   const [isReportHovered, setIsReportHovered] = useState(false);
@@ -100,6 +102,30 @@ export function Analytics() {
               Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong> Here is your enterprise operations overview for today.
             </p>
             
+            {/* Mobile 3D Character (Below welcome message, responsive sizing 160-220px) */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ 
+                opacity: 1, 
+                scale: [1, 1.012, 1],
+                y: [0, -4, 0]
+              }}
+              transition={{
+                initial: { duration: 0.5 },
+                scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                y: { duration: 4, repeat: Infinity, ease: "easeInOut" }
+              }}
+              className="block md:hidden my-3 h-[180px] w-auto pointer-events-none select-none shrink-0"
+            >
+              <img
+                src={avatar.image}
+                alt={avatar.name}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="h-full mx-auto object-contain mix-blend-screen"
+              />
+            </motion.div>
+            
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
               <motion.button 
@@ -135,6 +161,30 @@ export function Analytics() {
               </motion.button>
             </div>
           </div>
+
+          {/* Desktop & Tablet 3D Animated Character (Bottom-right of hero section, sized 220-330px) */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ 
+              opacity: 1, 
+              y: [0, -6, 0],
+              scale: [1, 1.015, 1]
+            }}
+            transition={{
+              initial: { duration: 0.6 },
+              y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+              scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
+            }}
+            className="absolute bottom-0 right-[180px] lg:right-[240px] xl:right-[300px] hidden md:block z-20 pointer-events-none select-none h-[240px] lg:h-[280px] xl:h-[330px]"
+          >
+            <img
+              src={avatar.image}
+              alt={avatar.name}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="h-full object-contain mix-blend-screen"
+            />
+          </motion.div>
 
           {/* Center Block: Health Score Circle (Reduced Size by 10%) */}
           <div className="relative z-10 flex items-center justify-center shrink-0 w-[115px] md:w-[130px] h-[115px] md:h-[130px] md:mr-16 lg:mr-24 mt-3 md:mt-0">
