@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, CheckCircle2, Clock, Sparkles, Target, Compass, 
@@ -8,6 +8,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
+import { where } from 'firebase/firestore';
+import { firestoreService } from '../services/firestoreService';
 import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
@@ -19,10 +21,115 @@ export function Analytics() {
   const [isRocketHovered, setIsRocketHovered] = useState(false);
   const [isReportHovered, setIsReportHovered] = useState(false);
 
-  // Smooth health score count-up animation
+  // Subscribed States for Live Member Data
+  const [meetings, setMeetings] = useState<any[]>([]);
+  const [passedReferrals, setPassedReferrals] = useState<any[]>([]);
+  const [receivedReferrals, setReceivedReferrals] = useState<any[]>([]);
+  const [createdOneToOnes, setCreatedOneToOnes] = useState<any[]>([]);
+  const [participatedOneToOnes, setParticipatedOneToOnes] = useState<any[]>([]);
+  const [guestInvitations, setGuestInvitations] = useState<any[]>([]);
+  const [isChecklistHighlighted, setIsChecklistHighlighted] = useState(false);
+
+  useEffect(() => {
+    if (!profile || profile.role !== 'MEMBER') return;
+
+    const unsubMeetings = firestoreService.subscribe<any>('meetings', [], setMeetings);
+
+    const unsubPassedRefs = firestoreService.subscribe<any>('referrals', [
+      where('fromUserId', '==', profile.uid)
+    ], setPassedReferrals);
+
+    const unsubReceivedRefs = firestoreService.subscribe<any>('referrals', [
+      where('toUserId', '==', profile.uid)
+    ], setReceivedReferrals);
+
+    const unsubCreated1to1s = firestoreService.subscribe<any>('one_to_one_meetings', [
+      where('creatorId', '==', profile.uid)
+    ], setCreatedOneToOnes);
+
+    const unsubParticipated1to1s = firestoreService.subscribe<any>('one_to_one_meetings', [
+      where('participantIds', 'array-contains', profile.uid)
+    ], setParticipatedOneToOnes);
+
+    const unsubGuests = firestoreService.subscribe<any>('guest_invitations', [
+      where('createdBy', '==', profile.uid)
+    ], setGuestInvitations);
+
+    return () => {
+      unsubMeetings();
+      unsubPassedRefs();
+      unsubReceivedRefs();
+      unsubCreated1to1s();
+      unsubParticipated1to1s();
+      unsubGuests();
+    };
+  }, [profile]);
+
+  // Derived Checklist Status
+  const hasAttendedMeeting = useMemo(() => {
+    if (!profile) return false;
+    const relevantMeetings = profile.adminId ? meetings.filter(m => m.adminId === profile.adminId) : meetings;
+    return relevantMeetings.some(m => m.isCompleted && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[profile.uid]));
+  }, [meetings, profile]);
+
+  const hasPassedReferral = useMemo(() => passedReferrals.length > 0, [passedReferrals]);
+  
+  const hasScheduledOneToOne = useMemo(() => {
+    return createdOneToOnes.length > 0 || participatedOneToOnes.length > 0;
+  }, [createdOneToOnes, participatedOneToOnes]);
+
+  const hasFollowedUpReferral = useMemo(() => {
+    return receivedReferrals.some(r => r.status !== 'PENDING');
+  }, [receivedReferrals]);
+
+  const hasInvitedGuest = useMemo(() => guestInvitations.length > 0, [guestInvitations]);
+
+  const completedFocusCount = useMemo(() => {
+    return (hasAttendedMeeting ? 1 : 0) + 
+           (hasPassedReferral ? 1 : 0) + 
+           (hasScheduledOneToOne ? 1 : 0) + 
+           (hasFollowedUpReferral ? 1 : 0) + 
+           (hasInvitedGuest ? 1 : 0);
+  }, [hasAttendedMeeting, hasPassedReferral, hasScheduledOneToOne, hasFollowedUpReferral, hasInvitedGuest]);
+
+  const focusProgressPercent = useMemo(() => {
+    return Math.round((completedFocusCount / 5) * 100);
+  }, [completedFocusCount]);
+
+  // Dynamic Growth Score
+  const dynamicGrowthScore = useMemo(() => {
+    const base = 40;
+    
+    // Attendance score (max 25 points)
+    const completedMeetings = profile?.adminId ? meetings.filter(m => m.adminId === profile.adminId && m.isCompleted) : meetings.filter(m => m.isCompleted);
+    let attendedCount = 0;
+    completedMeetings.forEach(meeting => {
+      const att = meeting.attendance?.[profile?.uid || ''];
+      if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(att)) {
+        attendedCount++;
+      }
+    });
+    const attendanceRate = completedMeetings.length > 0 ? (attendedCount / completedMeetings.length) : 1;
+    const attendanceFactor = attendanceRate * 25;
+
+    // Referrals score (max 15 points)
+    const referralsFactor = Math.min(passedReferrals.length * 7, 15);
+
+    // 1-to-1s score (max 10 points)
+    const completedOneToOnes = [...createdOneToOnes, ...participatedOneToOnes].filter(m => m.status === 'COMPLETED');
+    const uniqueOneToOnes = Array.from(new Set(completedOneToOnes.map(m => m.id)));
+    const oneToOnesFactor = Math.min(uniqueOneToOnes.length * 7, 10);
+
+    // Guest score (max 10 points)
+    const guestFactor = Math.min(guestInvitations.length * 5, 10);
+
+    return Math.min(Math.round(base + attendanceFactor + referralsFactor + oneToOnesFactor + guestFactor), 100);
+  }, [meetings, passedReferrals, createdOneToOnes, participatedOneToOnes, guestInvitations, profile]);
+
+  // Count up animation to dynamicGrowthScore
   useEffect(() => {
     let start = 0;
-    const end = 92;
+    const end = profile?.role === 'MEMBER' ? dynamicGrowthScore : 92;
     const duration = 1500; // 1.5 seconds
     const startTime = performance.now();
 
@@ -38,7 +145,18 @@ export function Analytics() {
     };
 
     requestAnimationFrame(animate);
-  }, []);
+  }, [dynamicGrowthScore, profile]);
+
+  const handleGrowScoreClick = () => {
+    const element = document.getElementById('workspace-checklist');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setIsChecklistHighlighted(true);
+      setTimeout(() => {
+        setIsChecklistHighlighted(false);
+      }, 2500);
+    }
+  };
   
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -103,6 +221,7 @@ export function Analytics() {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
               <motion.button 
+                onClick={handleGrowScoreClick}
                 onMouseEnter={() => setIsRocketHovered(true)}
                 onMouseLeave={() => setIsRocketHovered(false)}
                 whileHover={{ y: -4, scale: 1.03, boxShadow: "0 0 20px rgba(229,57,53,0.4)" }}
@@ -115,24 +234,26 @@ export function Analytics() {
                 >
                   <Rocket size={16} />
                 </motion.div>
-                Growth Companion
+                Grow Your Score
               </motion.button>
               
-              <motion.button 
-                onMouseEnter={() => setIsReportHovered(true)}
-                onMouseLeave={() => setIsReportHovered(false)}
-                whileHover={{ y: -4, scale: 1.03, bg: "rgba(31, 41, 55, 0.9)" }}
-                whileTap={{ scale: 0.97 }}
-                className="w-full sm:w-auto bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300"
-              >
-                <motion.div
-                  animate={isReportHovered ? { rotate: [0, 10, -10, 0], scale: 1.1 } : { rotate: 0, scale: 1 }}
-                  transition={{ duration: 0.4 }}
+              <Link to="/member/my-report" className="w-full sm:w-auto">
+                <motion.button 
+                  onMouseEnter={() => setIsReportHovered(true)}
+                  onMouseLeave={() => setIsReportHovered(false)}
+                  whileHover={{ y: -4, scale: 1.03, bg: "rgba(31, 41, 55, 0.9)" }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300 w-full"
                 >
-                  <Activity size={16} />
-                </motion.div>
-                View Reports
-              </motion.button>
+                  <motion.div
+                    animate={isReportHovered ? { rotate: [0, 10, -10, 0], scale: 1.1 } : { rotate: 0, scale: 1 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <Activity size={16} />
+                  </motion.div>
+                  My Report
+                </motion.button>
+              </Link>
             </div>
           </div>
 
@@ -274,9 +395,15 @@ export function Analytics() {
         <MemberCompanionView
           profile={profile}
           dynamicContext={{ period: 'Weekly', priority: 'Engage', tip: '', badge: '' }}
-          completedFocusCount={0}
-          focusProgressPercent={20}
-          activeFocusTasks={{ attendMeeting: false, passReferral: false, scheduleOneToOne: false, followUpReferral: false, inviteGuest: false }}
+          completedFocusCount={completedFocusCount}
+          focusProgressPercent={focusProgressPercent}
+          activeFocusTasks={{ 
+            attendMeeting: hasAttendedMeeting, 
+            passReferral: hasPassedReferral, 
+            scheduleOneToOne: hasScheduledOneToOne, 
+            followUpReferral: hasFollowedUpReferral, 
+            inviteGuest: hasInvitedGuest 
+          }}
           handleToggleTask={() => {}}
           nextMeeting={null}
           countdown={{ days: 0, hours: 0, minutes: 0 }}
@@ -285,11 +412,12 @@ export function Analytics() {
             { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
             { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
           ]}
-          businessGrowthScore={85}
+          businessGrowthScore={dynamicGrowthScore}
           currentMonthMetrics={{}}
-          hasLoggedOneToOne={false}
+          hasLoggedOneToOne={hasScheduledOneToOne}
           hasSentThankYouSlip={false}
           recommendation={{ title: 'Schedule 1-to-1', description: 'Schedule 1-to-1 sessions to boost network visibility.', action: 'Schedule', link: '/one-to-one' }}
+          isHighlightActive={isChecklistHighlighted}
         />
       )}
       

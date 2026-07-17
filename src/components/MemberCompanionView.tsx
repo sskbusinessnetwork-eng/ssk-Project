@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { Meeting, UserProfile } from '../types';
 
+import { cn } from '../lib/utils';
+
 interface MemberCompanionViewProps {
   profile: UserProfile | null;
   dynamicContext: any;
@@ -22,32 +24,28 @@ interface MemberCompanionViewProps {
   hasLoggedOneToOne: boolean;
   hasSentThankYouSlip: boolean;
   recommendation: any;
+  isHighlightActive?: boolean;
 }
 
 export function MemberCompanionView({
+  completedFocusCount,
+  focusProgressPercent,
   activeFocusTasks,
   handleToggleTask,
   businessGrowthScore,
+  isHighlightActive,
 }: MemberCompanionViewProps) {
   
-  // Local state to simulate interactive checkbox toggling if handleToggleTask is just a mock
-  const [localTasks, setLocalTasks] = useState([
-    { key: 'attendMeeting', label: 'Attend Weekly Meeting', desc: 'Show commitment to your local chapter syncs', isDone: false, link: '/meetings', linkText: 'JOIN', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: Calendar, activeClass: 'bg-purple-600 border-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.6)]' },
-    { key: 'passReferral', label: 'Pass a Warm Referral', desc: 'Share commercial opportunities', isDone: false, link: '/refer', linkText: 'PASS', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/10', icon: Share2, activeClass: 'bg-orange-500 border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.6)]' },
-    { key: 'scheduleOneToOne', label: 'Book a 1-to-1 Session', desc: 'Coordinate synergy meetings', isDone: false, link: '/one-to-one', linkText: 'BOOK', iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: Handshake, activeClass: 'bg-blue-500 border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]' },
-    { key: 'followUpReferral', label: 'Follow Up Referral Slips', desc: 'Track conversion status on active leads', isDone: false, link: '/refer?tab=received', linkText: 'SLIPS', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-emerald-500 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]' },
-    { key: 'inviteGuest', label: 'Invite a Business Peer', desc: 'Expand network strength', isDone: false, link: '/guests', linkText: 'INVITE', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10', icon: UserPlus, activeClass: 'bg-pink-500 border-pink-500 shadow-[0_0_12px_rgba(236,72,153,0.6)]' }
-  ]);
+  const tasks = [
+    { key: 'attendMeeting', label: 'Attend Weekly Meeting', isDone: !!activeFocusTasks?.attendMeeting, link: '/meetings', linkText: 'JOIN', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: Calendar, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
+    { key: 'passReferral', label: 'Pass a Warm Referral', isDone: !!activeFocusTasks?.passReferral, link: '/refer', linkText: 'PASS', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/10', icon: Share2, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
+    { key: 'scheduleOneToOne', label: 'Book a 1-to-1 Session', isDone: !!activeFocusTasks?.scheduleOneToOne, link: '/one-to-one', linkText: 'BOOK', iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: Handshake, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
+    { key: 'followUpReferral', label: 'Follow Up Referral Slips', isDone: !!activeFocusTasks?.followUpReferral, link: '/refer?tab=received', linkText: 'SLIPS', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
+    { key: 'inviteGuest', label: 'Invite a Business Peer', isDone: !!activeFocusTasks?.inviteGuest, link: '/guests', linkText: 'INVITE', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10', icon: UserPlus, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' }
+  ];
 
-  const handleCheckboxClick = (key: string) => {
-    setLocalTasks(prev => prev.map(t => t.key === key ? { ...t, isDone: !t.isDone } : t));
-    if (handleToggleTask) {
-      handleToggleTask(key);
-    }
-  };
-
-  const completedCount = localTasks.filter(t => t.isDone).length;
-  const progressPercent = Math.round((completedCount / localTasks.length) * 100);
+  const completedCount = completedFocusCount;
+  const progressPercent = focusProgressPercent;
 
   const operations = [
     { icon: Share2, label: 'Pass Referral', desc: 'Generate leads', path: '/refer', color: 'text-red-500', bg: 'bg-red-500/10' },
@@ -118,21 +116,27 @@ export function MemberCompanionView({
 
       {/* 2. Workspace Checklist */}
       <motion.div 
+        id="workspace-checklist"
         variants={{
           hidden: { opacity: 0, y: 20 },
           show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
         }}
         initial="hidden"
         animate="show"
-        className="w-full bg-gradient-to-b from-[#1B122C] to-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
+        className={cn(
+          "w-full bg-gradient-to-b from-[#1B122C] to-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border flex flex-col relative overflow-hidden transition-all duration-700",
+          isHighlightActive 
+            ? "border-purple-500/50 shadow-[0_0_35px_rgba(168,85,247,0.55)] scale-[1.01] bg-gradient-to-b from-[#2B1C4C] to-[#111827]" 
+            : "border-white/5"
+        )}
       >
         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
         
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
             <motion.div 
-              animate={{ rotate: [0, 5, -5, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              animate={isHighlightActive ? { rotate: [0, 15, -15, 10, -10, 0] } : { rotate: [0, 5, -5, 0] }}
+              transition={isHighlightActive ? { duration: 0.8 } : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
               className="w-8 h-8 rounded-[12px] bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/20"
             >
               <CheckSquare size={16} />
@@ -144,24 +148,23 @@ export function MemberCompanionView({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 flex-1">
-          {localTasks.map((task, index) => (
+        <div className="flex flex-col gap-3.5 w-full">
+          {tasks.map((task, index) => (
             <motion.div 
               key={task.key} 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05, duration: 0.4 }}
-              whileHover={{ x: 2, y: -2, backgroundColor: "rgba(23, 32, 51, 0.8)", borderColor: "rgba(168, 85, 247, 0.2)" }}
-              className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between gap-4 transition-colors duration-300 group"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
+              whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
+              className="bg-[#0B1220]/60 border border-white/5 p-4 sm:p-5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full"
             >
-              <div className="flex items-start gap-3">
-                <motion.button 
-                  onClick={() => handleCheckboxClick(task.key)}
-                  whileTap={{ scale: 0.8 }}
+              {/* Left Column: Checkbox and Title */}
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                <div 
                   className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all duration-300 shrink-0 ${
                     task.isDone 
                       ? task.activeClass 
-                      : 'border-white/20 hover:border-purple-400/50'
+                      : 'border-white/20'
                   }`}
                 >
                   {task.isDone ? (
@@ -169,27 +172,36 @@ export function MemberCompanionView({
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                      className="w-2 h-2 rounded-full bg-white block animate-pulse" 
+                      className="w-2 h-2 rounded-full bg-white block" 
                     />
-                  ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-transparent group-hover:bg-purple-400/30 transition-colors" />
-                  )}
-                </motion.button>
-                <div className="min-w-0">
-                  <h4 className={`text-[13px] font-bold tracking-tight transition-all duration-300 ${task.isDone ? 'text-gray-500 line-through opacity-70' : 'text-white'}`}>{task.label}</h4>
-                  <p className="text-[11px] text-[#9CA3AF] font-medium leading-snug mt-1">{task.desc}</p>
+                  ) : null}
                 </div>
+                <h4 className={`text-[12px] sm:text-[14px] md:text-[15px] font-bold tracking-tight leading-none transition-all duration-300 truncate max-w-[calc(100%-10px)] ${task.isDone ? 'text-gray-500 line-through opacity-70' : 'text-white'}`}>
+                  {task.label}
+                </h4>
               </div>
-              <Link to={task.link} className="w-full text-center bg-[#111827] hover:bg-[#1F2937] hover:border-white/25 border border-white/10 font-bold text-[11px] py-1.5 rounded-[16px] transition-all text-white shrink-0 shadow-md block mt-auto">
-                {task.linkText}
-              </Link>
+
+              {/* Right Column: CTA Button */}
+              <motion.div
+                whileHover={{ y: -3, scale: 1.03 }}
+                whileTap={{ scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                className="shrink-0"
+              >
+                <Link 
+                  to={task.link} 
+                  className="h-9 sm:h-10 w-[80px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent"
+                >
+                  {task.linkText}
+                </Link>
+              </motion.div>
             </motion.div>
           ))}
         </div>
 
         <div className="mt-5 pt-4 border-t border-white/5">
           <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest mb-2">
-            <span className="text-[#9CA3AF]">Daily Progress</span>
+            <span className="text-[#9CA3AF]">Progress Indicator</span>
             <span className="text-white">{progressPercent}%</span>
           </div>
           <div className="w-full h-2 bg-[#1F2937] rounded-full overflow-hidden border border-white/5">

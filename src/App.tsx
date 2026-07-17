@@ -7,6 +7,7 @@ import { LandingPage } from './pages/LandingPage';
 import { Register } from './pages/Register';
 import { Login } from './pages/Login';
 import { Analytics } from './pages/Dashboard';
+import { MyReport } from './pages/MyReport';
 import { Referrals } from './pages/Referrals';
 import { ThankYouSlips } from './pages/ThankYouSlips';
 import { Profile } from './pages/Profile';
@@ -40,6 +41,7 @@ export default function App() {
             
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/member/my-report" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><MyReport /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Analytics /></ProtectedRoute>} />
               <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Members /></ProtectedRoute>} />
