@@ -74,7 +74,7 @@ export default function StatGrid() {
           }
         }
       }}
-      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5"
+      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-[12px] sm:gap-4 md:gap-5"
     >
       {stats.map((stat, idx) => {
         const Icon = stat.icon;
@@ -94,24 +94,26 @@ export default function StatGrid() {
               borderColor: "rgba(255, 255, 255, 0.15)"
             }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="bg-[#111827] rounded-[20px] p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex justify-between gap-3 h-[142px] cursor-pointer transition-all duration-300 group"
+            className={`bg-[#111827] rounded-[20px] p-4 sm:p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex justify-between gap-2 h-[120px] sm:h-[142px] cursor-pointer transition-all duration-300 group ${
+              idx === 4 ? "col-span-2 md:col-span-1" : "col-span-1"
+            }`}
           >
             {/* Left Column: Icon and Trend */}
             <div className="flex flex-col justify-between h-full">
               <motion.div 
                 animate={{ y: [0, -3, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: idx * 0.4 }}
-                className={`w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}
+                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-[14px] flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}
               >
-                <Icon size={18} strokeWidth={2.5} />
+                <Icon size={14} className="sm:size-[18px]" strokeWidth={2.5} />
               </motion.div>
               
-              <div className="flex flex-col mt-2">
-                <span className={`text-[12px] font-black flex items-center gap-0.5 ${isScheduled ? 'text-orange-400' : 'text-emerald-400'}`}>
-                  {!isScheduled && <TrendingUp size={11} strokeWidth={3} />}
+              <div className="flex flex-col mt-1 sm:mt-2">
+                <span className={`text-[10px] sm:text-[12px] font-black flex items-center gap-0.5 ${isScheduled ? 'text-orange-400' : 'text-emerald-400'}`}>
+                  {!isScheduled && <TrendingUp size={9} className="sm:size-[11px]" strokeWidth={3} />}
                   {stat.trend}
                 </span>
-                <span className="text-[9px] font-bold text-[#9CA3AF] leading-none uppercase mt-1 whitespace-nowrap">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase mt-0.5 sm:mt-1 whitespace-nowrap">
                   {stat.trendLabel}
                 </span>
               </div>
@@ -120,15 +122,15 @@ export default function StatGrid() {
             {/* Right Column: Label, Value, and Sparkline Graph */}
             <div className="flex flex-col justify-between items-end h-full flex-1">
               <div className="text-right">
-                <span className="text-[11px] font-bold text-[#9CA3AF] block uppercase tracking-wider leading-none">
+                <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] block uppercase tracking-wider leading-none">
                   {stat.label}
                 </span>
-                <div className="text-[24px] font-black text-white leading-none tracking-tight mt-1.5">
+                <div className="text-[18px] xs:text-[20px] sm:text-[24px] font-black text-white leading-none tracking-tight mt-1 sm:mt-1.5">
                   {stat.value}
                 </div>
               </div>
 
-              <div className="w-20 h-8 relative opacity-75 group-hover:opacity-100 transition-opacity mt-auto">
+              <div className="w-14 sm:w-20 h-6 sm:h-8 relative opacity-75 group-hover:opacity-100 transition-opacity mt-auto">
                 <svg viewBox="0 0 100 40" className="w-full h-full" preserveAspectRatio="none">
                   <motion.path 
                     d={stat.path}

@@ -64,7 +64,7 @@ export function Analytics() {
         className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch"
       >
         {/* Left/Center Wrapper: Hero Section (Optimized Height: 320-340px) */}
-        <div className="xl:col-span-8 bg-gradient-to-b from-[#0B1220] to-[#111827] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 lg:h-[330px] md:h-[300px] h-auto">
+        <div className="xl:col-span-12 bg-gradient-to-b from-[#0B1220] to-[#111827] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 lg:h-[330px] md:h-[300px] h-auto">
           
           {/* Suble moving gradient radial light blobs */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
@@ -208,60 +208,62 @@ export function Analytics() {
         </div>
 
         {/* Right Block: Platinum Membership Card (Floating, Glow, Animated Fill) */}
-        <motion.div 
-          animate={{ y: [0, -5, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="xl:col-span-4 bg-gradient-to-b from-[#111827] to-[#0B1220] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col justify-between lg:h-[330px] md:h-[300px] h-auto min-h-[220px]"
-        >
-          <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[#E53935]/8 rounded-full blur-[60px]" />
-          <div className="absolute bottom-0 right-0 w-[100px] h-[100px] bg-[#8B5CF6]/8 rounded-full blur-[50px]" />
-          
-          <div className="relative z-10 flex justify-between items-start">
-             <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Active Access</span>
-                </div>
-                <h3 className="text-white text-[20px] md:text-[22px] font-bold tracking-tight leading-tight">Platinum Member</h3>
-                <p className="text-[#9CA3AF] text-[12px] font-medium mt-1">SSK Business Network</p>
-             </div>
-             
-             {/* Crown / Trophy Floating and Glowing */}
-             <motion.div 
-               animate={{ y: [0, -4, 0], rotate: [0, 2, -2, 0] }}
-               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-               className="w-10 h-10 rounded-[12px] bg-[#0B1220] flex items-center justify-center text-[#FBBF24] border border-white/10 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
-             >
-               <Crown size={20} className="fill-[#FBBF24]/10" />
-             </motion.div>
-          </div>
-
-          <div className="relative z-10 mt-4 md:mt-0">
-            <div className="flex justify-between items-end mb-1 text-[11px]">
-              <span className="font-bold text-[#9CA3AF]">Next Milestone</span>
-              <span className="font-bold text-white">Diamond Partner</span>
-            </div>
-            <div className="w-full h-1.5 bg-[#1F2937] rounded-full overflow-hidden border border-white/5">
-               <motion.div 
-                 initial={{ width: 0 }}
-                 animate={{ width: "75%" }}
-                 transition={{ duration: 1.5, ease: "easeOut" }}
-                 className="h-full bg-gradient-to-r from-[#8B5CF6] to-[#E53935] rounded-full shadow-[0_0_6px_rgba(229,57,53,0.5)]" 
-               />
-            </div>
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
-               <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Enterprise Seat</span>
+        {false && (
+          <motion.div 
+            animate={{ y: [0, -5, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            className="xl:col-span-4 bg-gradient-to-b from-[#111827] to-[#0B1220] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col justify-between lg:h-[330px] md:h-[300px] h-auto min-h-[220px]"
+          >
+            <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[#E53935]/8 rounded-full blur-[60px]" />
+            <div className="absolute bottom-0 right-0 w-[100px] h-[100px] bg-[#8B5CF6]/8 rounded-full blur-[50px]" />
+            
+            <div className="relative z-10 flex justify-between items-start">
+               <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] animate-pulse" />
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Active Access</span>
+                  </div>
+                  <h3 className="text-white text-[20px] md:text-[22px] font-bold tracking-tight leading-tight">Platinum Member</h3>
+                  <p className="text-[#9CA3AF] text-[12px] font-medium mt-1">SSK Business Network</p>
+               </div>
                
-               <motion.button 
-                 whileHover={{ scale: 1.05, boxShadow: "0 0 12px rgba(255,255,255,0.15)" }}
-                 whileTap={{ scale: 0.95 }}
-                 className="bg-[#1F2937] hover:bg-[#374151] text-white px-4 py-1.5 rounded-full text-[11px] font-bold border border-white/10 transition-colors duration-200"
+               {/* Crown / Trophy Floating and Glowing */}
+               <motion.div 
+                 animate={{ y: [0, -4, 0], rotate: [0, 2, -2, 0] }}
+                 transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                 className="w-10 h-10 rounded-[12px] bg-[#0B1220] flex items-center justify-center text-[#FBBF24] border border-white/10 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
                >
-                 Manage
-               </motion.button>
+                 <Crown size={20} className="fill-[#FBBF24]/10" />
+               </motion.div>
             </div>
-          </div>
-        </motion.div>
+
+            <div className="relative z-10 mt-4 md:mt-0">
+              <div className="flex justify-between items-end mb-1 text-[11px]">
+                <span className="font-bold text-[#9CA3AF]">Next Milestone</span>
+                <span className="font-bold text-white">Diamond Partner</span>
+              </div>
+              <div className="w-full h-1.5 bg-[#1F2937] rounded-full overflow-hidden border border-white/5">
+                 <motion.div 
+                   initial={{ width: 0 }}
+                   animate={{ width: "75%" }}
+                   transition={{ duration: 1.5, ease: "easeOut" }}
+                   className="h-full bg-gradient-to-r from-[#8B5CF6] to-[#E53935] rounded-full shadow-[0_0_6px_rgba(229,57,53,0.5)]" 
+                 />
+              </div>
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
+                 <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Enterprise Seat</span>
+                 
+                 <motion.button 
+                   whileHover={{ scale: 1.05, boxShadow: "0 0 12px rgba(255,255,255,0.15)" }}
+                   whileTap={{ scale: 0.95 }}
+                   className="bg-[#1F2937] hover:bg-[#374151] text-white px-4 py-1.5 rounded-full text-[11px] font-bold border border-white/10 transition-colors duration-200"
+                 >
+                   Manage
+                 </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </motion.div>
 
       {/* KPI CARDS ROW */}
