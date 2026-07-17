@@ -135,61 +135,26 @@
   display: none !important;
 }
 
-/* MOBILE TABLE TO CARD CONVERSION */
-@media (max-width: 767px) {
-  table.w-full, .overflow-x-auto table {
-    display: block;
-    width: 100%;
-  }
-  .overflow-x-auto thead {
-    display: none;
-  }
-  .overflow-x-auto tbody, .overflow-x-auto tr {
-    display: block;
-    width: 100%;
-  }
-  .overflow-x-auto tr {
-    background: #fff;
-    border: 1px solid var(--color-border);
-    border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow-soft);
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .overflow-x-auto td {
-    display: flex;
-    border: none !important;
-    padding: 0 !important;
-    align-items: center;
-    text-align: right;
-    min-height: 24px;
-  }
-  /* For TDs that just have text, we align right. If they have complex children, they flow normally but we push them to right */
-  .overflow-x-auto td > div, .overflow-x-auto td > span {
-    margin-left: auto;
-  }
-  .overflow-x-auto td:first-child {
-    justify-content: flex-start;
-    margin-bottom: 8px;
-    padding-bottom: 8px !important;
-    border-bottom: 1px solid var(--color-border) !important;
-  }
-  .overflow-x-auto td:first-child > div, .overflow-x-auto td:first-child > span {
-    margin-left: 0;
-  }
-  .overflow-x-auto td:last-child {
-    margin-top: 12px;
-    padding-top: 12px !important;
-    border-top: 1px solid var(--color-border) !important;
-    justify-content: center;
-  }
-  .overflow-x-auto td:last-child > div, .overflow-x-auto td:last-child > button {
-    margin: 0 auto;
-    width: 100%;
-    justify-content: center;
-  }
+/* MOBILE FRIENDLY TABLE SCROLLING */
+.overflow-x-auto {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+.overflow-x-auto table {
+  min-width: 750px; /* Ensures columns have enough room and tables do not squeeze too much */
+}
+/* Style the scrollbars nicely */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }

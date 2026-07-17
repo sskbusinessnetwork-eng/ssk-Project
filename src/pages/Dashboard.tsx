@@ -293,7 +293,37 @@ export function Analytics() {
         />
       )}
       
-      {/* Include Admin views if necessary... */}
+      {profile?.role === 'CHAPTER_ADMIN' && (
+        <ChapterAdminCompanionView
+          profile={profile}
+          chapterHealthScore={88}
+          chapterMemberCount={42}
+          chapterReferrals={189}
+          chapterBusiness={1250000}
+          finalRecentActivities={[
+            { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
+            { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
+            { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
+          ]}
+        />
+      )}
+
+      {profile?.role === 'MASTER_ADMIN' && (
+        <MasterAdminCompanionView
+          profile={profile}
+          networkHealthScore={92}
+          globalMemberCount={158}
+          globalChapterCount={4}
+          globalBusinessGenerated={4200000}
+          globalReferralsCount={845}
+          finalRecentActivities={[
+            { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
+            { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
+            { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
+          ]}
+          setActiveTab={() => {}}
+        />
+      )}
 
     </div>
   );

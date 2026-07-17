@@ -67,7 +67,7 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-2xl bg-white rounded-[24px] shadow-2xl overflow-hidden"
+        className="relative w-full max-w-2xl bg-white rounded-[24px] shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
       >
         <button
           onClick={onClose}
