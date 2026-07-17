@@ -156,7 +156,7 @@ export function MemberCompanionView({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
               whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-              className="bg-[#0B1220]/60 border border-white/5 p-4 sm:p-5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full"
+              className="bg-[#0B1220]/60 border border-white/5 p-4 sm:p-5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full h-[72px] sm:h-[80px] overflow-hidden"
             >
               {/* Left Column: Checkbox and Title */}
               <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
@@ -176,7 +176,7 @@ export function MemberCompanionView({
                     />
                   ) : null}
                 </div>
-                <h4 className={`text-[12px] sm:text-[14px] md:text-[15px] font-bold tracking-tight leading-none transition-all duration-300 truncate max-w-[calc(100%-10px)] ${task.isDone ? 'text-gray-500 line-through opacity-70' : 'text-white'}`}>
+                <h4 className={`text-[12px] sm:text-[14px] md:text-[15px] font-bold tracking-tight leading-tight transition-all duration-300 line-clamp-2 min-w-0 flex-1 ${task.isDone ? 'text-gray-500 line-through opacity-70' : 'text-white'}`}>
                   {task.label}
                 </h4>
               </div>
@@ -186,11 +186,11 @@ export function MemberCompanionView({
                 whileHover={{ y: -3, scale: 1.03 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                className="shrink-0"
+                className="shrink-0 flex-shrink-0"
               >
                 <Link 
                   to={task.link} 
-                  className="h-9 sm:h-10 w-[80px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent"
+                  className="h-9 sm:h-10 w-[95px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent"
                 >
                   {task.linkText}
                 </Link>
