@@ -25,6 +25,8 @@ interface MemberCompanionViewProps {
   hasSentThankYouSlip: boolean;
   recommendation: any;
   isHighlightActive?: boolean;
+  chapterName?: string;
+  todayTasks?: any[];
 }
 
 export function MemberCompanionView({
@@ -34,18 +36,13 @@ export function MemberCompanionView({
   handleToggleTask,
   businessGrowthScore,
   isHighlightActive,
+  chapterName,
+  todayTasks = [],
 }: MemberCompanionViewProps) {
   
-  const tasks = [
-    { key: 'attendMeeting', label: 'Attend Weekly Meeting', isDone: !!activeFocusTasks?.attendMeeting, link: '/meetings', linkText: 'JOIN', iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: Calendar, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
-    { key: 'passReferral', label: 'Pass a Warm Referral', isDone: !!activeFocusTasks?.passReferral, link: '/refer', linkText: 'PASS', iconColor: 'text-orange-400', bgColor: 'bg-orange-500/10', icon: Share2, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
-    { key: 'scheduleOneToOne', label: 'Book a 1-to-1 Session', isDone: !!activeFocusTasks?.scheduleOneToOne, link: '/one-to-one', linkText: 'BOOK', iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: Handshake, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
-    { key: 'followUpReferral', label: 'Follow Up Referral Slips', isDone: !!activeFocusTasks?.followUpReferral, link: '/refer?tab=received', linkText: 'SLIPS', iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' },
-    { key: 'inviteGuest', label: 'Invite a Business Peer', isDone: !!activeFocusTasks?.inviteGuest, link: '/guests', linkText: 'INVITE', iconColor: 'text-pink-400', bgColor: 'bg-pink-500/10', icon: UserPlus, activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]' }
-  ];
-
-  const completedCount = completedFocusCount;
-  const progressPercent = focusProgressPercent;
+  const displayTasks = todayTasks;
+  const completedCount = displayTasks.filter(t => t.isDone).length;
+  const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 100;
 
   const operations = [
     { icon: Share2, label: 'Pass Referral', desc: 'Generate leads', path: '/refer', color: 'text-red-500', bg: 'bg-red-500/10' },
@@ -74,7 +71,6 @@ export function MemberCompanionView({
       >
         <div className="flex items-center justify-between mb-5 relative z-10">
           <h3 className="text-[17px] font-bold text-white tracking-tight">Core Operations</h3>
-          <span className="text-[11px] font-bold text-red-500 hover:text-red-400 uppercase tracking-wider cursor-pointer transition-all hover:tracking-widest">View All</span>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 w-full">
@@ -144,59 +140,67 @@ export function MemberCompanionView({
             Workspace Checklist
           </h3>
           <span className="text-[11px] font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
-            {completedCount} / 5 COMPLETE
+            {completedCount} / {displayTasks.length} COMPLETE
           </span>
         </div>
 
         <div className="flex flex-col gap-3.5 w-full">
-          {tasks.map((task, index) => (
-            <motion.div 
-              key={task.key} 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
-              whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-              className="bg-[#0B1220]/60 border border-white/5 p-4 sm:p-5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full h-[72px] sm:h-[80px] overflow-hidden"
-            >
-              {/* Left Column: Checkbox and Title */}
-              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                <div 
-                  className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all duration-300 shrink-0 ${
-                    task.isDone 
-                      ? task.activeClass 
-                      : 'border-white/20'
-                  }`}
-                >
-                  {task.isDone ? (
-                    <motion.span 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                      className="w-2 h-2 rounded-full bg-white block" 
-                    />
-                  ) : null}
-                </div>
-                <h4 className={`text-[12px] sm:text-[14px] md:text-[15px] font-bold tracking-tight leading-tight transition-all duration-300 line-clamp-2 min-w-0 flex-1 ${task.isDone ? 'text-gray-500 line-through opacity-70' : 'text-white'}`}>
-                  {task.label}
-                </h4>
-              </div>
-
-              {/* Right Column: CTA Button */}
-              <motion.div
-                whileHover={{ y: -3, scale: 1.03 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 400, damping: 15 }}
-                className="shrink-0 flex-shrink-0"
+          {displayTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center bg-[#0B1220]/40 border border-white/5 rounded-[20px] px-4">
+              <CheckSquare size={28} className="text-emerald-500 mb-2 opacity-60" />
+              <p className="text-white text-[13px] font-bold">All Caught Up!</p>
+              <p className="text-[#9CA3AF] text-[11px] mt-1 leading-snug">No scheduled workspace tasks or meetings for today.</p>
+            </div>
+          ) : (
+            displayTasks.map((task, index) => (
+              <motion.div 
+                key={task.key} 
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
+                whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
+                className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full h-[84px] min-h-[84px] overflow-hidden"
               >
-                <Link 
-                  to={task.link} 
-                  className="h-9 sm:h-10 w-[95px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent"
+                {/* Left Column: Icon Indicator & Title */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Non-interactive check/clock indicator */}
+                  <div className="shrink-0">
+                    {task.isDone ? (
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]">
+                        <CheckSquare size={12} />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-neutral-500/10 text-neutral-500 flex items-center justify-center border border-neutral-500/20">
+                        <Clock size={12} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Title (max 2 lines, ellipsis) */}
+                  <h4 className={cn(
+                    "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 min-w-0 flex-1 break-words pr-2",
+                    task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
+                  )}>
+                    {task.label}
+                  </h4>
+                </div>
+
+                {/* Right Column: CTA Button */}
+                <motion.div
+                  whileHover={{ y: -2, scale: 1.02 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="shrink-0 w-[95px] sm:w-[105px]"
                 >
-                  {task.linkText}
-                </Link>
+                  <Link 
+                    to={task.link} 
+                    className="h-9 sm:h-10 w-full flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0"
+                  >
+                    {task.linkText}
+                  </Link>
+                </motion.div>
               </motion.div>
-            </motion.div>
-          ))}
+            ))
+          )}
         </div>
 
         <div className="mt-5 pt-4 border-t border-white/5">
@@ -271,7 +275,9 @@ export function MemberCompanionView({
         className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[17px] font-bold text-white tracking-tight">Business Overview</h3>
+          <h3 className="text-[17px] font-bold text-white tracking-tight">
+            {chapterName ? `${chapterName} Business Overview` : 'Business Overview'}
+          </h3>
           <button className="flex items-center gap-1.5 bg-[#0B1220] border border-white/10 px-3 py-1 rounded-full text-[11px] font-bold text-white shadow-sm hover:bg-[#1F2937] transition-colors">
             This Month <ChevronDown size={12} />
           </button>

@@ -16,7 +16,8 @@ import {
   Eye,
   Mail,
   Building2,
-  AlertCircle
+  AlertCircle,
+  BookUser
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { firestoreService } from '../services/firestoreService';
@@ -101,6 +102,7 @@ export function Guests() {
     meetingTime: '',
     meetingVenue: ''
   });
+  const [contactPickerError, setContactPickerError] = useState('');
   const [regFormData, setRegFormData] = useState({
     fullName: '',
     phone: '',
@@ -216,6 +218,33 @@ export function Guests() {
       unsubRegistrations();
     };
   }, [profile]);
+
+  const handleContactPick = async () => {
+    try {
+      const supported = ('contacts' in navigator && 'ContactsManager' in window);
+      if (!supported) {
+        setContactPickerError('Contact picker is not supported on this device or browser. Please enter the details manually.');
+        return;
+      }
+
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+      const contacts = await (navigator as any).contacts.select(props, opts);
+      
+      if (contacts && contacts.length > 0) {
+        const contact = contacts[0];
+        setFormData(prev => ({
+          ...prev,
+          guestName: contact.name && contact.name.length > 0 ? contact.name[0] : prev.guestName,
+          guestPhone: contact.tel && contact.tel.length > 0 ? contact.tel[0] : prev.guestPhone,
+        }));
+        setContactPickerError('');
+      }
+    } catch (err) {
+      console.error('Failed to pick contact', err);
+      // User might have cancelled, no need to aggressively show error
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -672,16 +701,29 @@ export function Guests() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Guest Phone</label>
-                <input
-                  required
-                  type="tel"
-                  value={formData.guestPhone}
-                  onChange={(e) => setFormData({ ...formData, guestPhone: e.target.value })}
-                  placeholder="e.g. +91 98765 43210"
-                  className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                />
+                <div className="relative">
+                  <input
+                    required
+                    type="tel"
+                    value={formData.guestPhone}
+                    onChange={(e) => setFormData({ ...formData, guestPhone: e.target.value })}
+                    placeholder="e.g. +91 98765 43210"
+                    className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 outline-none transition-all pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleContactPick}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-emerald-500 transition-colors z-10 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                    title="Select from Contacts"
+                  >
+                    <BookUser size={20} />
+                  </button>
+                </div>
+                {contactPickerError && (
+                  <p className="text-xs text-red-500 mt-1">{contactPickerError}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-[#374151] uppercase tracking-wider">Guest Email</label>

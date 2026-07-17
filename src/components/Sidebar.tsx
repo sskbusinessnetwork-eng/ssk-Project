@@ -54,7 +54,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   const getDashboardPath = () => getDashboardPathUtil(profile?.role);
 
-  const menuItems = [
+  const menuItems: { icon: any; label: string; path: string; roles: string[]; badge?: number }[] = [
     { icon: LayoutDashboard, label: 'Home', path: '/analytics', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Users, label: 'Network', path: '/network', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Calendar, label: 'Meetings', path: '/meetings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
@@ -62,7 +62,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: Share2, label: 'Referrals', path: '/refer', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: FileText, label: 'Directory', path: '/directory', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: MessageSquare, label: 'Messages', path: '/messages', badge: 3, roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Settings, label: 'Settings', path: '/settings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },

@@ -161,14 +161,7 @@ export function Layout() {
                 </span>
               </Link>
               
-              <Link to="/messages" className="relative group hidden sm:block">
-                <div className="p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5">
-                  <MessageSquare size={18} strokeWidth={2} />
-                </div>
-                <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
-                  1
-                </span>
-              </Link>
+
             </div>
 
             <Link to="/profile" className="flex items-center gap-3 hover:opacity-95 transition-opacity pl-2 sm:border-l border-white/10">
@@ -319,18 +312,7 @@ export function Layout() {
                     <ChevronRight size={18} className="text-[#6B7280]" />
                   </Link>
 
-                  <Link to="/messages" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                        <MessageSquare size={18} />
-                      </div>
-                      <span className="font-bold text-[#E5E7EB]">Messages</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="bg-primary text-white text-[11px] font-bold px-2 py-0.5 rounded-full">3 New</span>
-                      <ChevronRight size={18} className="text-[#6B7280]" />
-                    </div>
-                  </Link>
+
                 </div>
 
                 <div className="h-px w-full bg-[#1F2937] my-4" />

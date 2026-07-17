@@ -2,13 +2,42 @@ import React from 'react';
 import { Users, Calendar, Target, TrendingUp, Share2, Briefcase } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export default function StatGrid() {
+interface StatGridProps {
+  activePartnersCount?: number;
+  businessGeneratedTotal?: number;
+  referralsPassedCount?: number;
+  upcomingSyncsCount?: number;
+}
+
+export default function StatGrid({
+  activePartnersCount = 1,
+  businessGeneratedTotal = 4200000,
+  referralsPassedCount = 845,
+  upcomingSyncsCount = 12,
+}: StatGridProps) {
+  const formatValue = (label: string, val: any) => {
+    if (label === 'Active Partners') return String(val);
+    if (label === 'Referrals Passed') return String(val);
+    if (label === 'Upcoming Syncs') return String(val);
+    if (label === 'Business Generated') {
+      const num = Number(val);
+      if (num >= 10000000) {
+        return `₹${(num / 10000000).toFixed(2)}Cr+`;
+      }
+      if (num >= 100000) {
+        return `₹${(num / 100000).toFixed(2)}L+`;
+      }
+      return `₹${num.toLocaleString()}`;
+    }
+    return String(val);
+  };
+
   const stats = [
     {
       label: 'Active Partners',
-      value: '1',
-      trend: '12%',
-      trendLabel: 'vs last month',
+      value: formatValue('Active Partners', activePartnersCount),
+      trend: 'Active',
+      trendLabel: 'In chapter',
       icon: Users,
       color: 'text-red-500', 
       bg: 'bg-red-500/10 border-red-500/20',
@@ -17,9 +46,9 @@ export default function StatGrid() {
     },
     {
       label: 'Business Generated',
-      value: '₹4.2M+',
-      trend: '24%',
-      trendLabel: 'vs last month',
+      value: formatValue('Business Generated', businessGeneratedTotal),
+      trend: 'Lifetime',
+      trendLabel: 'Chapter Total',
       icon: Briefcase,
       color: 'text-purple-500', 
       bg: 'bg-purple-500/10 border-purple-500/20',
@@ -28,9 +57,9 @@ export default function StatGrid() {
     },
     {
       label: 'Referrals Passed',
-      value: '845',
-      trend: '8%',
-      trendLabel: 'vs last month',
+      value: formatValue('Referrals Passed', referralsPassedCount),
+      trend: 'Total',
+      trendLabel: 'Slips Passed',
       icon: Share2, 
       color: 'text-emerald-400', 
       bg: 'bg-emerald-400/10 border-emerald-400/20',
@@ -39,9 +68,9 @@ export default function StatGrid() {
     },
     {
       label: 'Upcoming Syncs',
-      value: '12',
+      value: formatValue('Upcoming Syncs', upcomingSyncsCount),
       trend: 'Scheduled',
-      trendLabel: 'next 14 days',
+      trendLabel: 'Meetings & Syncs',
       icon: Calendar,
       color: 'text-orange-400', 
       bg: 'bg-orange-400/10 border-orange-400/20',
