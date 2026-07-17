@@ -30,6 +30,9 @@ export function MyReport() {
   const [sentThankYouSlips, setSentThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [receivedThankYouSlips, setReceivedThankYouSlips] = useState<ThankYouSlip[]>([]);
   
+  // Period Filter: 'Monthly' | 'Quarterly' | 'Half Yearly' | 'Yearly' | 'Lifetime'
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('Monthly');
+
   // Modal State for Card Details
   const [activeModal, setActiveModal] = useState<'attendance' | 'referrals' | 'revenue' | 'onetoones' | null>(null);
 
@@ -106,16 +109,92 @@ export function MyReport() {
   // COMBINED DATA METRICS
   const userId = profile?.uid || '';
   
-  // 1. Attendance Metrics
+  // Date Helpers for Period and Trend Calculations
+  const getStartDateForPeriod = (period: string): Date => {
+    const now = new Date();
+    switch (period) {
+      case 'Monthly':
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      case 'Quarterly':
+        return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+      case 'Half Yearly':
+        return new Date(now.getFullYear(), now.getMonth() >= 6 ? 6 : 0, 1);
+      case 'Yearly':
+        return new Date(now.getFullYear(), 0, 1);
+      case 'Lifetime':
+      default:
+        return new Date(0);
+    }
+  };
+
+  const parseFlexibleDate = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    if (dateVal instanceof Date) return dateVal;
+    const dStr = String(dateVal).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+      const [year, month, day] = dStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    const parsed = new Date(dStr);
+    if (!isNaN(parsed.getTime())) return parsed;
+    return null;
+  };
+
+  const isToday = (dateVal: any): boolean => {
+    const parsed = parseFlexibleDate(dateVal);
+    if (!parsed) return false;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return parsed >= todayStart;
+  };
+
+  const isThisMonth = (dateVal: any): boolean => {
+    const parsed = parseFlexibleDate(dateVal);
+    if (!parsed) return false;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return parsed >= monthStart;
+  };
+
+  const isLastMonth = (dateVal: any): boolean => {
+    const parsed = parseFlexibleDate(dateVal);
+    if (!parsed) return false;
+    const now = new Date();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return parsed >= lastMonthStart && parsed < thisMonthStart;
+  };
+
+  const filterItemsByPeriod = <T extends { createdAt?: string; date?: string }>(items: T[], period: string): T[] => {
+    if (period === 'Lifetime') return items;
+    const startDate = getStartDateForPeriod(period);
+    return items.filter(item => {
+      const dateVal = item.createdAt || item.date;
+      const parsed = parseFlexibleDate(dateVal);
+      if (!parsed) return false;
+      return parsed >= startDate;
+    });
+  };
+
+  // 1. Attendance Metrics - Raw filtered by chapter first
   const relevantMeetings = useMemo(() => {
-    // Filter meetings that belong to the member's chapter
     if (!profile?.adminId) return meetings;
     return meetings.filter(m => m.adminId === profile.adminId);
   }, [meetings, profile]);
 
+  // Filtered raw data based on period
+  const filteredMeetings = useMemo(() => filterItemsByPeriod(relevantMeetings, selectedPeriod), [relevantMeetings, selectedPeriod]);
+  const filteredPassedReferrals = useMemo(() => filterItemsByPeriod(passedReferrals, selectedPeriod), [passedReferrals, selectedPeriod]);
+  const filteredReceivedReferrals = useMemo(() => filterItemsByPeriod(receivedReferrals, selectedPeriod), [receivedReferrals, selectedPeriod]);
+  const filteredCreatedOneToOnes = useMemo(() => filterItemsByPeriod(createdOneToOnes, selectedPeriod), [createdOneToOnes, selectedPeriod]);
+  const filteredParticipatedOneToOnes = useMemo(() => filterItemsByPeriod(participatedOneToOnes, selectedPeriod), [participatedOneToOnes, selectedPeriod]);
+  const filteredGuestInvitations = useMemo(() => filterItemsByPeriod(guestInvitations, selectedPeriod), [guestInvitations, selectedPeriod]);
+  const filteredSentThankYouSlips = useMemo(() => filterItemsByPeriod(sentThankYouSlips, selectedPeriod), [sentThankYouSlips, selectedPeriod]);
+  const filteredReceivedThankYouSlips = useMemo(() => filterItemsByPeriod(receivedThankYouSlips, selectedPeriod), [receivedThankYouSlips, selectedPeriod]);
+
   const completedMeetings = useMemo(() => {
-    return relevantMeetings.filter(m => m.isCompleted);
-  }, [relevantMeetings]);
+    return filteredMeetings.filter(m => m.isCompleted);
+  }, [filteredMeetings]);
 
   const attendanceData = useMemo(() => {
     let attended = 0;
@@ -136,17 +215,16 @@ export function MyReport() {
 
   // 2. Referrals Metrics
   const referralsStats = useMemo(() => {
-    const passed = passedReferrals.length;
-    const received = receivedReferrals.length;
-    const converted = passedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED').length;
+    const passed = filteredPassedReferrals.length;
+    const received = filteredReceivedReferrals.length;
+    const converted = filteredPassedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED').length;
     const conversionRate = passed > 0 ? Math.round((converted / passed) * 100) : 0;
     return { passed, received, converted, conversionRate };
-  }, [passedReferrals, receivedReferrals]);
+  }, [filteredPassedReferrals, filteredReceivedReferrals]);
 
   // 3. One-to-Ones Metrics
   const oneToOnesStats = useMemo(() => {
-    const allOneToOnes = [...createdOneToOnes, ...participatedOneToOnes];
-    // Deduplicate by ID
+    const allOneToOnes = [...filteredCreatedOneToOnes, ...filteredParticipatedOneToOnes];
     const uniqueMap = new Map();
     allOneToOnes.forEach(m => uniqueMap.set(m.id, m));
     const uniqueList = Array.from(uniqueMap.values());
@@ -154,31 +232,188 @@ export function MyReport() {
     const completed = uniqueList.filter(m => m.status === 'COMPLETED').length;
     const upcoming = uniqueList.filter(m => m.status === 'UPCOMING').length;
     return { total: uniqueList.length, completed, upcoming, list: uniqueList };
-  }, [createdOneToOnes, participatedOneToOnes]);
+  }, [filteredCreatedOneToOnes, filteredParticipatedOneToOnes]);
 
   // 4. Revenue / Thank You Slips
   const revenueStats = useMemo(() => {
-    const businessGiven = sentThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
-    const businessReceived = receivedThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
+    const businessGiven = filteredSentThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
+    const businessReceived = filteredReceivedThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
     return { businessGiven, businessReceived };
-  }, [sentThankYouSlips, receivedThankYouSlips]);
+  }, [filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
   // 5. Dynamic Growth Score
+  // Calculated from: Growth Score = (Completed Checklist Items / Total Checklist Items) * 100
   const dynamicGrowthScore = useMemo(() => {
-    const base = 40; // baseline
-    const attendanceFactor = (attendanceData.rate / 100) * 25; // max 25 points
-    const referralsFactor = Math.min(referralsStats.passed * 7, 15); // max 15 points
-    const oneToOnesFactor = Math.min(oneToOnesStats.completed * 7, 10); // max 10 points
-    const guestFactor = Math.min(guestInvitations.length * 5, 10); // max 10 points
+    const hasAttendedMeeting = completedMeetings.some(m => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[userId]));
+    const hasPassedReferral = filteredPassedReferrals.length > 0;
+    const hasScheduledOneToOne = filteredCreatedOneToOnes.length > 0 || filteredParticipatedOneToOnes.length > 0;
+    const hasFollowedUpReferral = filteredReceivedReferrals.some(r => r.status !== 'PENDING');
+    const hasInvitedGuest = filteredGuestInvitations.length > 0;
+
+    const completedChecklistCount = (hasAttendedMeeting ? 1 : 0) +
+                                    (hasPassedReferral ? 1 : 0) +
+                                    (hasScheduledOneToOne ? 1 : 0) +
+                                    (hasFollowedUpReferral ? 1 : 0) +
+                                    (hasInvitedGuest ? 1 : 0);
+
+    return Math.round((completedChecklistCount / 5) * 100);
+  }, [completedMeetings, filteredPassedReferrals, filteredCreatedOneToOnes, filteredParticipatedOneToOnes, filteredReceivedReferrals, filteredGuestInvitations, userId]);
+
+  // 5b. MOM trend metrics based on actual database logs for high-fidelity dashboards
+  const parsedDatesWithMeta = useMemo(() => {
+    const sumVal = (arr: ThankYouSlip[]) => arr.reduce((sum, item) => sum + (item.businessValue || 0), 0);
     
-    return Math.min(Math.round(base + attendanceFactor + referralsFactor + oneToOnesFactor + guestFactor), 100);
-  }, [attendanceData, referralsStats, oneToOnesStats, guestInvitations]);
+    // Slips Sent
+    const slipsSentToday = sentThankYouSlips.filter(s => isToday(s.createdAt));
+    const slipsSentThisMonth = sentThankYouSlips.filter(s => isThisMonth(s.createdAt));
+    const slipsSentLastMonth = sentThankYouSlips.filter(s => isLastMonth(s.createdAt));
+    
+    const sumSentToday = sumVal(slipsSentToday);
+    const sumSentThisMonth = sumVal(slipsSentThisMonth);
+    const sumSentLastMonth = sumVal(slipsSentLastMonth);
+    const trendSent = sumSentLastMonth > 0 ? Math.round(((sumSentThisMonth - sumSentLastMonth) / sumSentLastMonth) * 100) : (sumSentThisMonth > 0 ? 100 : 0);
+    
+    const lastUpdatedSent = sentThankYouSlips.reduce((latest, s) => {
+      const d = parseFlexibleDate(s.createdAt);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    // Slips Received
+    const slipsRecvToday = receivedThankYouSlips.filter(s => isToday(s.createdAt));
+    const slipsRecvThisMonth = receivedThankYouSlips.filter(s => isThisMonth(s.createdAt));
+    const slipsRecvLastMonth = receivedThankYouSlips.filter(s => isLastMonth(s.createdAt));
+    
+    const sumRecvToday = sumVal(slipsRecvToday);
+    const sumRecvThisMonth = sumVal(slipsRecvThisMonth);
+    const sumRecvLastMonth = sumVal(slipsRecvLastMonth);
+    const trendRecv = sumRecvLastMonth > 0 ? Math.round(((sumRecvThisMonth - sumRecvLastMonth) / sumRecvLastMonth) * 100) : (sumRecvThisMonth > 0 ? 100 : 0);
+    
+    const lastUpdatedRecv = receivedThankYouSlips.reduce((latest, s) => {
+      const d = parseFlexibleDate(s.createdAt);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    // Referrals Sent
+    const refSentToday = passedReferrals.filter(r => isToday(r.createdAt));
+    const refSentThisMonth = passedReferrals.filter(r => isThisMonth(r.createdAt));
+    const refSentLastMonth = passedReferrals.filter(r => isLastMonth(r.createdAt));
+    
+    const trendRefSent = refSentLastMonth.length > 0 
+      ? Math.round(((refSentThisMonth.length - refSentLastMonth.length) / refSentLastMonth.length) * 100) 
+      : (refSentThisMonth.length > 0 ? 100 : 0);
+      
+    const lastUpdatedRefSent = passedReferrals.reduce((latest, r) => {
+      const d = parseFlexibleDate(r.createdAt);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    // Referrals Received
+    const refRecvToday = receivedReferrals.filter(r => isToday(r.createdAt));
+    const refRecvThisMonth = receivedReferrals.filter(r => isThisMonth(r.createdAt));
+    const refRecvLastMonth = receivedReferrals.filter(r => isLastMonth(r.createdAt));
+    
+    const trendRefRecv = refRecvLastMonth.length > 0 
+      ? Math.round(((refRecvThisMonth.length - refRecvLastMonth.length) / refRecvLastMonth.length) * 100) 
+      : (refRecvThisMonth.length > 0 ? 100 : 0);
+      
+    const lastUpdatedRefRecv = receivedReferrals.reduce((latest, r) => {
+      const d = parseFlexibleDate(r.createdAt);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    // One-to-Ones
+    const allOnetoOnes = [...createdOneToOnes, ...participatedOneToOnes];
+    const uniqueOneToOnesMap = new Map();
+    allOnetoOnes.forEach(m => uniqueOneToOnesMap.set(m.id, m));
+    const uniqueOneToOnesList = Array.from(uniqueOneToOnesMap.values());
+    
+    const otoToday = uniqueOneToOnesList.filter(m => isToday(m.createdAt) || isToday(m.date));
+    const otoThisMonth = uniqueOneToOnesList.filter(m => isThisMonth(m.createdAt) || isThisMonth(m.date));
+    const otoLastMonth = uniqueOneToOnesList.filter(m => isLastMonth(m.createdAt) || isLastMonth(m.date));
+    const otoThisMonthComp = otoThisMonth.filter(m => m.status === 'COMPLETED').length;
+    const otoLastMonthComp = otoLastMonth.filter(m => m.status === 'COMPLETED').length;
+    
+    const trendOto = otoLastMonthComp > 0 
+      ? Math.round(((otoThisMonthComp - otoLastMonthComp) / otoLastMonthComp) * 100) 
+      : (otoThisMonthComp > 0 ? 100 : 0);
+      
+    const lastUpdatedOto = uniqueOneToOnesList.reduce((latest, m) => {
+      const d = parseFlexibleDate(m.createdAt || m.date);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    // Attendance
+    const mCompThisMonth = relevantMeetings.filter(m => m.isCompleted && isThisMonth(m.date));
+    const mCompLastMonth = relevantMeetings.filter(m => m.isCompleted && isLastMonth(m.date));
+    
+    const getAttRate = (mList: Meeting[]) => {
+      let att = 0;
+      let abs = 0;
+      mList.forEach(m => {
+        const val = m.attendance?.[userId];
+        if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(val)) {
+          att++;
+        } else if (['ABSENT', 'No', 'NO'].includes(val)) {
+          abs++;
+        }
+      });
+      return (att + abs) > 0 ? Math.round((att / (att + abs)) * 100) : 100;
+    };
+    
+    const attRateThisMonth = getAttRate(mCompThisMonth);
+    const attRateLastMonth = getAttRate(mCompLastMonth);
+    const trendAtt = attRateThisMonth - attRateLastMonth;
+    
+    const lastUpdatedAtt = relevantMeetings.filter(m => m.isCompleted).reduce((latest, m) => {
+      const d = parseFlexibleDate(m.date);
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+
+    return {
+      slipsSent: {
+        today: sumSentToday,
+        monthly: sumSentThisMonth,
+        trend: trendSent,
+        lastUpdated: lastUpdatedSent
+      },
+      slipsRecv: {
+        today: sumRecvToday,
+        monthly: sumRecvThisMonth,
+        trend: trendRecv,
+        lastUpdated: lastUpdatedRecv
+      },
+      refSent: {
+        today: refSentToday.length,
+        monthly: refSentThisMonth.length,
+        trend: trendRefSent,
+        lastUpdated: lastUpdatedRefSent
+      },
+      refRecv: {
+        today: refRecvToday.length,
+        monthly: refRecvThisMonth.length,
+        trend: trendRefRecv,
+        lastUpdated: lastUpdatedRefRecv
+      },
+      oto: {
+        today: otoToday.length,
+        monthly: otoThisMonthComp,
+        trend: trendOto,
+        lastUpdated: lastUpdatedOto
+      },
+      attendance: {
+        today: relevantMeetings.filter(m => m.isCompleted).some(m => isToday(m.date)) ? (relevantMeetings.filter(m => m.isCompleted).some(m => isToday(m.date) && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[userId])) ? 'Present' : 'Absent') : 'No Sync Today',
+        monthly: attRateThisMonth,
+        trend: trendAtt,
+        lastUpdated: lastUpdatedAtt
+      }
+    };
+  }, [sentThankYouSlips, receivedThankYouSlips, passedReferrals, receivedReferrals, createdOneToOnes, participatedOneToOnes, relevantMeetings, userId]);
 
   // 6. Recent activities timeline from actual data
   const dynamicActivities = useMemo(() => {
     const list: Array<{ id: string; title: string; desc: string; type: string; time: number }> = [];
     
-    passedReferrals.forEach(r => {
+    filteredPassedReferrals.forEach(r => {
       list.push({
         id: `ref-pass-${r.id}`,
         title: 'Referral Passed',
@@ -188,7 +423,7 @@ export function MyReport() {
       });
     });
 
-    receivedReferrals.forEach(r => {
+    filteredReceivedReferrals.forEach(r => {
       list.push({
         id: `ref-recv-${r.id}`,
         title: 'Referral Received',
@@ -208,7 +443,7 @@ export function MyReport() {
       });
     });
 
-    guestInvitations.forEach(g => {
+    filteredGuestInvitations.forEach(g => {
       list.push({
         id: `guest-${g.id}`,
         title: 'Guest Invited',
@@ -218,7 +453,7 @@ export function MyReport() {
       });
     });
 
-    sentThankYouSlips.forEach(s => {
+    filteredSentThankYouSlips.forEach(s => {
       list.push({
         id: `slip-sent-${s.id}`,
         title: 'Thank You Slip Sent',
@@ -228,7 +463,7 @@ export function MyReport() {
       });
     });
 
-    receivedThankYouSlips.forEach(s => {
+    filteredReceivedThankYouSlips.forEach(s => {
       list.push({
         id: `slip-recv-${s.id}`,
         title: 'Thank You Slip Received',
@@ -240,7 +475,7 @@ export function MyReport() {
 
     // Sort by timestamp desc
     return list.sort((a, b) => b.time - a.time).slice(0, 10);
-  }, [passedReferrals, receivedReferrals, oneToOnesStats, guestInvitations, sentThankYouSlips, receivedThankYouSlips]);
+  }, [filteredPassedReferrals, filteredReceivedReferrals, oneToOnesStats.list, filteredGuestInvitations, filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
   // 7. Month-Over-Month Performance Chart Data
   const monthlyChartData = useMemo(() => {
@@ -374,13 +609,35 @@ export function MyReport() {
           </p>
         </div>
 
-        <div className="bg-[#111827] border border-white/5 p-4 rounded-[16px] flex items-center gap-3 shadow-md shrink-0 w-full sm:w-auto">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 text-white flex items-center justify-center font-bold">
-            <Trophy size={18} />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          {/* Period Filter Dropdown */}
+          <div className="relative shrink-0">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="w-full sm:w-[170px] bg-[#111827] border border-white/10 text-white text-xs font-bold px-4 py-3 rounded-[16px] focus:outline-none focus:border-red-500/50 cursor-pointer shadow-md appearance-none transition-all pr-10"
+            >
+              <option value="Monthly">Monthly (Default)</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="Half Yearly">Half Yearly</option>
+              <option value="Yearly">Yearly</option>
+              <option value="Lifetime">Lifetime</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-neutral-400">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+              </svg>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest leading-none">Global Standing</p>
-            <p className="text-sm font-bold text-white mt-1">Ecosystem Platinum Partner</p>
+
+          <div className="bg-[#111827] border border-white/5 p-4 rounded-[16px] flex items-center gap-3 shadow-md shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 text-white flex items-center justify-center font-bold">
+              <Trophy size={18} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest leading-none">Global Standing</p>
+              <p className="text-sm font-bold text-white mt-1">Ecosystem Platinum Partner</p>
+            </div>
           </div>
         </div>
       </div>
@@ -391,7 +648,7 @@ export function MyReport() {
         {/* Dynamic Growth Score Radial Gauge */}
         <div className="lg:col-span-4 bg-gradient-to-b from-[#111827] to-[#0B1220] rounded-[24px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/5 flex flex-col items-center justify-between min-h-[320px]">
           <div className="w-full flex items-center justify-between mb-4">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Growth Index</span>
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Growth Score</span>
             <div className="flex items-center gap-1 bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-emerald-500/10">
               <TrendingUp size={10} /> Active Growth
             </div>
@@ -435,139 +692,204 @@ export function MyReport() {
               <p className="text-xs text-neutral-400">Analysis of transactional conversion and networking reach.</p>
             </div>
             <div className="p-2 bg-neutral-800 rounded-lg text-neutral-400 text-xs font-bold shrink-0">
-              MOM Analytics
+              Ecosystem KPIs
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-auto">
-            <div className="p-4 bg-gradient-to-br from-[#1c2538] to-[#0E1524] rounded-[18px] border border-white/5 flex flex-col justify-between h-[120px]">
-              <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Ecosystem Reach</span>
-                <Users size={16} className="text-blue-400" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+            {/* 1. Thank You Slips Received */}
+            <motion.div
+              onClick={() => setActiveModal('revenue')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(16,185,129,0.3)', boxShadow: '0 12px 30px rgba(16,185,129,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/10 shrink-0">
+                  <ArrowDownLeft size={18} />
+                </div>
+                <div className="bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-emerald-500/10">
+                  {parsedDatesWithMeta.slipsRecv.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.slipsRecv.trend}% MoM
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-black text-white">{oneToOnesStats.completed + guestInvitations.length}</p>
-                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-0.5">Partners Connected</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">₹{revenueStats.businessReceived.toLocaleString()}</p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">TY Slips Received</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>{filteredReceivedThankYouSlips.length} Slips</span>
+                  <span>Today: ₹{parsedDatesWithMeta.slipsRecv.today.toLocaleString()}</span>
+                </div>
               </div>
-            </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: ₹{parsedDatesWithMeta.slipsRecv.monthly.toLocaleString()}</span>
+                <span>{parsedDatesWithMeta.slipsRecv.lastUpdated ? `Updated: ${parsedDatesWithMeta.slipsRecv.lastUpdated.toLocaleDateString()}` : 'No slips'}</span>
+              </div>
+            </motion.div>
 
-            <div className="p-4 bg-gradient-to-br from-[#1c2538] to-[#0E1524] rounded-[18px] border border-white/5 flex flex-col justify-between h-[120px]">
-              <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Referral Conversion</span>
-                <Award size={16} className="text-emerald-400" />
+            {/* 2. Thank You Slips Sent */}
+            <motion.div
+              onClick={() => setActiveModal('revenue')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(239,68,68,0.3)', boxShadow: '0 12px 30px rgba(239,68,68,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-red-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-red-500/10 rounded-xl text-red-400 border border-red-500/10 shrink-0">
+                  <ArrowUpRight size={18} />
+                </div>
+                <div className="bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-red-500/10">
+                  {parsedDatesWithMeta.slipsSent.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.slipsSent.trend}% MoM
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-black text-white">{referralsStats.conversionRate}%</p>
-                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5">Success Rate</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">₹{revenueStats.businessGiven.toLocaleString()}</p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">TY Slips Sent</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>{filteredSentThankYouSlips.length} Slips</span>
+                  <span>Today: ₹{parsedDatesWithMeta.slipsSent.today.toLocaleString()}</span>
+                </div>
               </div>
-            </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: ₹{parsedDatesWithMeta.slipsSent.monthly.toLocaleString()}</span>
+                <span>{parsedDatesWithMeta.slipsSent.lastUpdated ? `Updated: ${parsedDatesWithMeta.slipsSent.lastUpdated.toLocaleDateString()}` : 'No slips'}</span>
+              </div>
+            </motion.div>
 
-            <div className="p-4 bg-gradient-to-br from-[#1c2538] to-[#0E1524] rounded-[18px] border border-white/5 flex flex-col justify-between h-[120px]">
-              <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Total Logs</span>
-                <CheckSquare size={16} className="text-[#DC143C]" />
+            {/* 3. Referrals Sent */}
+            <motion.div
+              onClick={() => setActiveModal('referrals')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(245,158,11,0.3)', boxShadow: '0 12px 30px rgba(245,158,11,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/10 shrink-0">
+                  <Share2 size={18} />
+                </div>
+                <div className="bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-amber-500/10">
+                  {parsedDatesWithMeta.refSent.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.refSent.trend}% MoM
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-black text-white">{passedReferrals.length + receivedReferrals.length + oneToOnesStats.total + guestInvitations.length}</p>
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mt-0.5">Activities Registered</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">{filteredPassedReferrals.length} Sent</p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Referrals Sent</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>Conversion: {referralsStats.conversionRate}%</span>
+                  <span>Today: {parsedDatesWithMeta.refSent.today}</span>
+                </div>
               </div>
-            </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: {parsedDatesWithMeta.refSent.monthly} Sent</span>
+                <span>{parsedDatesWithMeta.refSent.lastUpdated ? `Updated: ${parsedDatesWithMeta.refSent.lastUpdated.toLocaleDateString()}` : 'No referrals'}</span>
+              </div>
+            </motion.div>
+
+            {/* 4. Referrals Received */}
+            <motion.div
+              onClick={() => setActiveModal('referrals')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(59,130,246,0.3)', boxShadow: '0 12px 30px rgba(59,130,246,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/10 shrink-0">
+                  <Users size={18} />
+                </div>
+                <div className="bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-blue-500/10">
+                  {parsedDatesWithMeta.refRecv.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.refRecv.trend}% MoM
+                </div>
+              </div>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">{filteredReceivedReferrals.length} Received</p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Referrals Received</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>
+                    Conversion:{' '}
+                    {(() => {
+                      const converted = filteredReceivedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED').length;
+                      return filteredReceivedReferrals.length > 0 ? Math.round((converted / filteredReceivedReferrals.length) * 100) : 0;
+                    })()}%
+                  </span>
+                  <span>Today: {parsedDatesWithMeta.refRecv.today}</span>
+                </div>
+              </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: {parsedDatesWithMeta.refRecv.monthly} Recv</span>
+                <span>{parsedDatesWithMeta.refRecv.lastUpdated ? `Updated: ${parsedDatesWithMeta.refRecv.lastUpdated.toLocaleDateString()}` : 'No referrals'}</span>
+              </div>
+            </motion.div>
+
+            {/* 5. Attendance */}
+            <motion.div
+              onClick={() => setActiveModal('attendance')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(168,85,247,0.3)', boxShadow: '0 12px 30px rgba(168,85,247,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/10 shrink-0">
+                  <Calendar size={18} />
+                </div>
+                <div className="bg-purple-500/15 text-purple-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-purple-500/10">
+                  {parsedDatesWithMeta.attendance.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.attendance.trend}% MoM
+                </div>
+              </div>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">{attendanceData.rate}%</p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Attendance Rate</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>Present: {attendanceData.attended} | Absent: {attendanceData.absent}</span>
+                  <span>Today: {parsedDatesWithMeta.attendance.today}</span>
+                </div>
+              </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: {parsedDatesWithMeta.attendance.monthly}%</span>
+                <span>{parsedDatesWithMeta.attendance.lastUpdated ? `Updated: ${parsedDatesWithMeta.attendance.lastUpdated.toLocaleDateString()}` : 'No meetings'}</span>
+              </div>
+            </motion.div>
+
+            {/* 6. One-to-One Meetings */}
+            <motion.div
+              onClick={() => setActiveModal('onetoones')}
+              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(236,72,153,0.3)', boxShadow: '0 12px 30px rgba(236,72,153,0.15)' }}
+              whileTap={{ scale: 0.98 }}
+              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-pink-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-pink-500/10 transition-all duration-300" />
+              <div className="flex items-start justify-between">
+                <div className="p-2.5 bg-pink-500/10 rounded-xl text-pink-400 border border-pink-500/10 shrink-0">
+                  <Handshake size={18} />
+                </div>
+                <div className="bg-pink-500/15 text-pink-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-pink-500/10">
+                  {parsedDatesWithMeta.oto.trend >= 0 ? '+' : ''}{parsedDatesWithMeta.oto.trend}% MoM
+                </div>
+              </div>
+              <div className="mt-2 space-y-1">
+                <p className="text-2xl font-black text-white tracking-tight">
+                  {oneToOnesStats.total > 0 ? Math.round((oneToOnesStats.completed / oneToOnesStats.total) * 100) : 100}%
+                </p>
+                <p className="text-xs font-bold text-neutral-300 uppercase tracking-wider">1-to-1 Completion</p>
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium pt-1">
+                  <span>Comp: {oneToOnesStats.completed} | Sch: {oneToOnesStats.upcoming}</span>
+                  <span>Today: {parsedDatesWithMeta.oto.today}</span>
+                </div>
+              </div>
+              <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] text-neutral-500 font-medium">
+                <span>Monthly: {parsedDatesWithMeta.oto.monthly} Completed</span>
+                <span>{parsedDatesWithMeta.oto.lastUpdated ? `Updated: ${parsedDatesWithMeta.oto.lastUpdated.toLocaleDateString()}` : 'No syncs'}</span>
+              </div>
+            </motion.div>
           </div>
 
           <div className="border-t border-white/5 pt-4 mt-4 flex items-center gap-2 text-xs text-neutral-400 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            Audit status matches Chapter compliance. Ensure all slips are fully registered to maximize score.
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+            Audit status matches Chapter compliance. Click any card to drill down into logs.
           </div>
-        </div>
-      </div>
-
-      {/* CORE INTERACTIVE ANALYTICS CARDS (Click to drill down) */}
-      <div className="space-y-4">
-        <h2 className="text-white text-lg font-bold tracking-tight">Interactive Key Performance Indicators</h2>
-        <p className="text-xs text-neutral-400 -mt-2">Click any card to audit detailed analytics, historical logs, insights and charts.</p>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Card 1: Attendance */}
-          <motion.div 
-            onClick={() => setActiveModal('attendance')}
-            whileHover={{ y: -6, scale: 1.02, borderColor: 'rgba(168,85,247,0.3)', boxShadow: '0 12px 30px rgba(168,85,247,0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-[#111827] border border-white/5 rounded-[20px] p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-[160px] relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-all" />
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/20">
-                <Calendar size={18} />
-              </div>
-              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-widest group-hover:underline">Audit Details →</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-black text-white">{attendanceData.rate}%</p>
-              <h4 className="text-xs font-bold text-neutral-400 mt-1 uppercase tracking-wider">Attendance Integrity</h4>
-            </div>
-          </motion.div>
-
-          {/* Card 2: Referrals Activity */}
-          <motion.div 
-            onClick={() => setActiveModal('referrals')}
-            whileHover={{ y: -6, scale: 1.02, borderColor: 'rgba(245,158,11,0.3)', boxShadow: '0 12px 30px rgba(245,158,11,0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-[#111827] border border-white/5 rounded-[20px] p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-[160px] relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-all" />
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-amber-500/10 rounded-xl text-amber-400 border border-amber-500/20">
-                <Share2 size={18} />
-              </div>
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest group-hover:underline">Audit Details →</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-black text-white">{referralsStats.passed} Passed</p>
-              <h4 className="text-xs font-bold text-neutral-400 mt-1 uppercase tracking-wider">Referrals Output</h4>
-            </div>
-          </motion.div>
-
-          {/* Card 3: Revenue Generated */}
-          <motion.div 
-            onClick={() => setActiveModal('revenue')}
-            whileHover={{ y: -6, scale: 1.02, borderColor: 'rgba(16,185,129,0.3)', boxShadow: '0 12px 30px rgba(16,185,129,0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-[#111827] border border-white/5 rounded-[20px] p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-[160px] relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-all" />
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
-                <DollarSign size={18} />
-              </div>
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest group-hover:underline">Audit Details →</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-black text-white">₹{(revenueStats.businessReceived / 1000).toFixed(1)}k</p>
-              <h4 className="text-xs font-bold text-neutral-400 mt-1 uppercase tracking-wider">Revenue Received</h4>
-            </div>
-          </motion.div>
-
-          {/* Card 4: 1-to-1 Syncs */}
-          <motion.div 
-            onClick={() => setActiveModal('onetoones')}
-            whileHover={{ y: -6, scale: 1.02, borderColor: 'rgba(59,130,246,0.3)', boxShadow: '0 12px 30px rgba(59,130,246,0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-[#111827] border border-white/5 rounded-[20px] p-5 cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-[160px] relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-all" />
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
-                <Handshake size={18} />
-              </div>
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest group-hover:underline">Audit Details →</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-black text-white">{oneToOnesStats.completed} Syncs</p>
-              <h4 className="text-xs font-bold text-neutral-400 mt-1 uppercase tracking-wider">1-to-1 Meetings</h4>
-            </div>
-          </motion.div>
-
         </div>
       </div>
 
