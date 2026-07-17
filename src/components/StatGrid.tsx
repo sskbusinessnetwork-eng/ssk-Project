@@ -1,83 +1,190 @@
 import React from 'react';
-import { Users, Calendar, Target, TrendingUp, Share2, Briefcase } from 'lucide-react';
+import { Users, Calendar, Target, TrendingUp, Share2, Briefcase, Handshake, UserCheck, Star, Activity, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface StatGridProps {
+  role?: string;
+  totalChaptersCount?: number;
+  totalMembersCount?: number;
   activePartnersCount?: number;
   businessGeneratedTotal?: number;
   referralsPassedCount?: number;
+  thankYouSlipsCount?: number;
   upcomingSyncsCount?: number;
+  oneToOneMeetingsCount?: number;
+  visitorsAttendedCount?: number;
+  weeklyMeetingAttendance?: number;
+  growthScore?: number;
+  newMembersThisMonthCount?: number;
 }
 
 export default function StatGrid({
+  role = 'MEMBER',
+  totalChaptersCount = 1,
+  totalMembersCount = 1,
   activePartnersCount = 1,
-  businessGeneratedTotal = 4200000,
-  referralsPassedCount = 845,
-  upcomingSyncsCount = 12,
+  businessGeneratedTotal = 0,
+  referralsPassedCount = 0,
+  thankYouSlipsCount = 0,
+  upcomingSyncsCount = 0,
+  oneToOneMeetingsCount = 0,
+  visitorsAttendedCount = 0,
+  weeklyMeetingAttendance = 0,
+  growthScore = 0,
+  newMembersThisMonthCount = 0,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
-    if (label === 'Active Partners') return String(val);
-    if (label === 'Referrals Passed') return String(val);
-    if (label === 'Upcoming Syncs') return String(val);
     if (label === 'Business Generated') {
       const num = Number(val);
-      if (num >= 10000000) {
-        return `₹${(num / 10000000).toFixed(2)}Cr+`;
-      }
-      if (num >= 100000) {
-        return `₹${(num / 100000).toFixed(2)}L+`;
-      }
+      if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr+`;
+      if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L+`;
       return `₹${num.toLocaleString()}`;
+    }
+    if (label === 'Weekly Meeting Attendance' || label === 'Growth Score') {
+      return `${val}%`;
     }
     return String(val);
   };
 
-  const stats = [
-    {
-      label: 'Active Partners',
-      value: formatValue('Active Partners', activePartnersCount),
-      trend: 'Active',
-      trendLabel: 'In chapter',
-      icon: Users,
-      color: 'text-red-500', 
-      bg: 'bg-red-500/10 border-red-500/20',
-      trendColor: 'text-emerald-400',
-      path: "M0,35 Q10,25 20,28 T40,20 T60,15 T80,5 T100,2"
-    },
-    {
-      label: 'Business Generated',
-      value: formatValue('Business Generated', businessGeneratedTotal),
-      trend: 'Lifetime',
-      trendLabel: 'Chapter Total',
-      icon: Briefcase,
-      color: 'text-purple-500', 
-      bg: 'bg-purple-500/10 border-purple-500/20',
-      trendColor: 'text-emerald-400',
-      path: "M0,25 Q15,10 30,30 T60,20 T80,10 T100,5"
-    },
-    {
-      label: 'Referrals Passed',
-      value: formatValue('Referrals Passed', referralsPassedCount),
-      trend: 'Total',
-      trendLabel: 'Slips Passed',
-      icon: Share2, 
-      color: 'text-emerald-400', 
-      bg: 'bg-emerald-400/10 border-emerald-400/20',
-      trendColor: 'text-emerald-400',
-      path: "M0,30 Q20,30 30,20 T50,25 T70,10 T100,5"
-    },
-    {
-      label: 'Upcoming Syncs',
-      value: formatValue('Upcoming Syncs', upcomingSyncsCount),
-      trend: 'Scheduled',
-      trendLabel: 'Meetings & Syncs',
-      icon: Calendar,
-      color: 'text-orange-400', 
-      bg: 'bg-orange-400/10 border-orange-400/20',
-      trendColor: 'text-orange-400',
-      path: "M0,20 Q20,5 40,20 T60,15 T80,25 T100,10"
+  const getStatsForRole = () => {
+    const commonStats = [
+      {
+        label: 'Active Members',
+        value: formatValue('Active Members', activePartnersCount),
+        trend: 'Active',
+        trendLabel: 'In chapter',
+        icon: Users,
+        color: 'text-red-500', 
+        bg: 'bg-red-500/10 border-red-500/20',
+      },
+      {
+        label: 'Business Generated',
+        value: formatValue('Business Generated', businessGeneratedTotal),
+        trend: 'Lifetime',
+        trendLabel: 'Total',
+        icon: Briefcase,
+        color: 'text-purple-500', 
+        bg: 'bg-purple-500/10 border-purple-500/20',
+      },
+      {
+        label: 'Referrals Passed',
+        value: formatValue('Referrals Passed', referralsPassedCount),
+        trend: 'Total',
+        trendLabel: 'Passed',
+        icon: Share2, 
+        color: 'text-emerald-400', 
+        bg: 'bg-emerald-400/10 border-emerald-400/20',
+      }
+    ];
+
+    const meetingsSyncsStats = [
+      {
+        label: 'Upcoming Meetings',
+        value: formatValue('Upcoming Meetings', upcomingSyncsCount),
+        trend: 'Scheduled',
+        trendLabel: 'Meetings',
+        icon: Calendar,
+        color: 'text-orange-400', 
+        bg: 'bg-orange-400/10 border-orange-400/20',
+      },
+      {
+        label: 'One-to-One Meetings',
+        value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
+        trend: 'Total',
+        trendLabel: 'Completed',
+        icon: Handshake,
+        color: 'text-blue-500',
+        bg: 'bg-blue-500/10 border-blue-500/20',
+      },
+      {
+        label: 'Visitors Attended',
+        value: formatValue('Visitors Attended', visitorsAttendedCount),
+        trend: 'Total',
+        trendLabel: 'Attended',
+        icon: UserCheck,
+        color: 'text-pink-500',
+        bg: 'bg-pink-500/10 border-pink-500/20',
+      }
+    ];
+
+    if (role === 'MEMBER') {
+      return [...commonStats, ...meetingsSyncsStats];
     }
-  ];
+
+    const adminStats = [
+      {
+        label: 'Total Members',
+        value: formatValue('Total Members', totalMembersCount),
+        trend: 'Total',
+        trendLabel: 'In chapter',
+        icon: Users,
+        color: 'text-indigo-400', 
+        bg: 'bg-indigo-400/10 border-indigo-400/20',
+      },
+      commonStats[0], // Active Members
+      commonStats[1], // Business Generated
+      commonStats[2], // Referrals Passed
+      {
+        label: 'Thank You Slips',
+        value: formatValue('Thank You Slips', thankYouSlipsCount),
+        trend: 'Total',
+        trendLabel: 'Slips',
+        icon: Star,
+        color: 'text-yellow-400', 
+        bg: 'bg-yellow-400/10 border-yellow-400/20',
+      },
+      meetingsSyncsStats[1], // One-to-One Meetings
+      meetingsSyncsStats[2], // Visitors Attended
+      {
+        label: 'Weekly Meeting Attendance',
+        value: formatValue('Weekly Meeting Attendance', weeklyMeetingAttendance),
+        trend: 'Average',
+        trendLabel: 'Attendance',
+        icon: Target,
+        color: 'text-cyan-400', 
+        bg: 'bg-cyan-400/10 border-cyan-400/20',
+      },
+      {
+        label: 'Growth Score',
+        value: formatValue('Growth Score', growthScore),
+        trend: 'Score',
+        trendLabel: 'Performance',
+        icon: Activity,
+        color: 'text-green-500', 
+        bg: 'bg-green-500/10 border-green-500/20',
+      },
+      meetingsSyncsStats[0], // Upcoming Meetings
+    ];
+
+    if (role === 'CHAPTER_ADMIN') {
+      return adminStats;
+    }
+
+    // MASTER_ADMIN
+    return [
+      {
+        label: 'Total Chapters',
+        value: formatValue('Total Chapters', totalChaptersCount),
+        trend: 'Total',
+        trendLabel: 'Chapters',
+        icon: Users,
+        color: 'text-violet-400', 
+        bg: 'bg-violet-400/10 border-violet-400/20',
+      },
+      ...adminStats,
+      {
+        label: 'New Members This Month',
+        value: formatValue('New Members This Month', newMembersThisMonthCount),
+        trend: 'Monthly',
+        trendLabel: 'New Members',
+        icon: Plus,
+        color: 'text-rose-400', 
+        bg: 'bg-rose-400/10 border-rose-400/20',
+      }
+    ];
+  };
+
+  const stats = getStatsForRole();
 
   return (
     <motion.div 
@@ -92,7 +199,7 @@ export default function StatGrid({
           }
         }
       }}
-      className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5"
+      className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5"
     >
       {stats.map((stat, idx) => {
         const Icon = stat.icon;
@@ -106,62 +213,39 @@ export default function StatGrid({
               show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
             }}
             whileHover={{ 
-              y: -8, 
-              scale: 1.02, 
-              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+               y: -8, 
+               scale: 1.02, 
+               boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
               borderColor: "rgba(255, 255, 255, 0.15)"
             }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex justify-between gap-3 h-[140px] sm:h-[160px] cursor-pointer transition-all duration-300 group col-span-1"
+            className="bg-[#111827] rounded-[20px] p-3 sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col justify-center items-center text-center h-[140px] sm:h-[160px] cursor-pointer transition-all duration-300 group col-span-1 w-full gap-1.5 sm:gap-2"
           >
-            {/* Left Column: Icon and Trend */}
-            <div className="flex flex-col justify-between h-full min-w-0">
-              <motion.div 
-                animate={{ y: [0, -3, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: idx * 0.4 }}
-                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-[14px] flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}
-              >
-                <Icon size={14} className="sm:size-[18px]" strokeWidth={2.5} />
-              </motion.div>
-              
-              <div className="flex flex-col mt-2 min-w-0">
-                <span className={`text-[10px] sm:text-[12px] font-black flex items-center gap-0.5 ${isScheduled ? 'text-orange-400' : 'text-emerald-400'} truncate`}>
-                  {!isScheduled && <TrendingUp size={10} className="sm:size-[11px]" strokeWidth={3} />}
-                  {stat.trend}
-                </span>
-                <span className="text-[8px] sm:text-[9.5px] font-bold text-[#9CA3AF] leading-none uppercase mt-1 truncate">
-                  {stat.trendLabel}
-                </span>
-              </div>
+            <motion.div 
+              animate={{ y: [0, -3, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: idx * 0.4 }}
+              className={`w-7 h-7 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-[14px] flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}
+            >
+              <Icon size={14} className="sm:size-[18px]" strokeWidth={2.5} />
+            </motion.div>
+            
+            <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full">
+              {stat.label}
+            </span>
+
+            <div className="text-[16px] sm:text-[24px] font-black text-white leading-none tracking-tight truncate w-full">
+              {stat.value}
             </div>
 
-            {/* Right Column: Label, Value, and Sparkline Graph */}
-            <div className="flex flex-col justify-between items-end h-full flex-1 min-w-0">
-              <div className="text-right w-full min-w-0">
-                <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] block uppercase tracking-wider leading-none truncate">
-                  {stat.label}
-                </span>
-                <div className="text-[16px] sm:text-[24px] font-black text-white leading-none tracking-tight mt-1.5 truncate">
-                  {stat.value}
-                </div>
-              </div>
+            <div className="flex flex-col items-center justify-center gap-0.5 w-full">
+              <span className={`text-[10px] sm:text-[12px] font-black flex items-center gap-0.5 justify-center ${isScheduled ? 'text-orange-400' : 'text-emerald-400'} truncate w-full`}>
+                {!isScheduled && <TrendingUp size={10} className="sm:size-[11px]" strokeWidth={3} />}
+                {stat.trend}
+              </span>
 
-              <div className="w-14 sm:w-20 h-5 sm:h-8 relative opacity-75 group-hover:opacity-100 transition-opacity mt-auto">
-                <svg viewBox="0 0 100 40" className="w-full h-full" preserveAspectRatio="none">
-                  <motion.path 
-                    d={stat.path}
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="3.5" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                    className={stat.color}
-                    initial={{ strokeDashoffset: 120, strokeDasharray: 120 }}
-                    animate={{ strokeDashoffset: 0 }}
-                    transition={{ duration: 1.2, delay: idx * 0.1, ease: "easeOut" }}
-                  />
-                </svg>
-              </div>
+              <span className="text-[8px] sm:text-[9.5px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                {stat.trendLabel}
+              </span>
             </div>
           </motion.div>
         );

@@ -385,7 +385,7 @@ export function Connections() {
       )}
 
       {/* Members List */}
-      <div className="bg-white rounded-[14px] card-shadow border border-border overflow-hidden">
+      <div className="bg-white dark:bg-[#1F2937] rounded-[14px] card-shadow border border-border overflow-hidden">
         {filteredMembers.length > 0 ? (
           <div className="divide-y divide-border">
             {filteredMembers.map((member, i) => (
@@ -395,9 +395,9 @@ export function Connections() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: i * 0.02 }}
                 onClick={() => navigate(`/profile?id=${member.uid}`)}
-                className="p-4 flex items-center gap-4 hover:bg-muted transition-colors cursor-pointer group"
+                className="p-4 flex items-center gap-4 hover:bg-muted dark:hover:bg-gray-800 transition-colors cursor-pointer group"
               >
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border shrink-0">
                   <img
                     src={member.photoURL || `https://picsum.photos/seed/${member.uid}/100/100`}
                     className="w-full h-full object-cover"
@@ -405,21 +405,26 @@ export function Connections() {
                   />
                 </div>
                 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold text-text-primary truncate max-w-[150px] sm:max-w-none">
+                    <h3 className="text-[16px] sm:text-[18px] font-bold text-[#111827] dark:text-white truncate max-w-[150px] sm:max-w-none">
                       {member.name}
                     </h3>
                     {getPositionText(member.uid)}
                   </div>
-                  <p className="text-[10px] sm:text-[11px] font-medium text-text-secondary truncate">
+                  <p className="text-[13px] sm:text-[14px] font-medium text-[#6B7280] dark:text-[#D1D5DB] truncate">
                     {member.role === 'CHAPTER_ADMIN' 
                       ? 'Chapter Admin' 
                       : `${member.category || 'Member'} | Admin ${adminNames[member.associatedChapterAdminId || member.adminId || ''] || 'SSK'}`}
                   </p>
+                  {member.businessName && (
+                    <p className="text-[12px] font-medium text-[#4B5563] dark:text-[#9CA3AF] truncate mt-0.5">
+                      {member.businessName}
+                    </p>
+                  )}
                 </div>
 
-                <ChevronRight size={18} className="text-text-secondary group-hover:text-primary transition-colors" />
+                <ChevronRight size={18} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
               </motion.div>
             ))}
           </div>

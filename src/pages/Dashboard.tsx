@@ -82,11 +82,12 @@ export function Analytics() {
   }, [profile]);
 
   const chapterHeading = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') return 'Organization Analytics';
     if (!resolvedChapterName) return 'Chapter Analytics';
     return resolvedChapterName.toLowerCase().includes('chapter') 
       ? `${resolvedChapterName} Analytics`
       : `${resolvedChapterName} Chapter Analytics`;
-  }, [resolvedChapterName]);
+  }, [resolvedChapterName, profile]);
 
   // Unified dynamic subscriptions
   useEffect(() => {
@@ -129,7 +130,7 @@ export function Analytics() {
 
     // 5. Subscribe to guest invitations
     const unsubGuests = firestoreService.subscribe<any>('guest_invitations', [], (data) => {
-      setGuestInvitations(profile.role === 'MEMBER' ? data.filter(g => g.createdBy === profile.uid) : data);
+      setGuestInvitations(data);
     });
 
     // 6. Subscribe to meetings
@@ -203,6 +204,93 @@ export function Analytics() {
     return (upcomingMeetingsCount + upcomingOneToOnesCount) || 12;
   }, [meetings, oneToOnes, chapterUserIds, profile]);
 
+  const oneToOneMeetingsCount = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return oneToOnes.filter(m => m.status === 'COMPLETED').length;
+    }
+    const chapterOneToOnes = oneToOnes.filter(m => 
+      chapterUserIds.includes(m.creatorId) || 
+      (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
+    );
+    return chapterOneToOnes.filter(m => m.status === 'COMPLETED').length || 0;
+  }, [oneToOnes, chapterUserIds, profile]);
+
+  const visitorsAttendedCount = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return guestInvitations.filter(g => g.status === 'Attended').length;
+    }
+    const chapterGuests = guestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
+    return chapterGuests.filter(g => g.status === 'Attended').length || 0;
+  }, [guestInvitations, chapterUserIds, profile]);
+
+  const thankYouSlipsCount = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return allSlips.length;
+    }
+    const chapterSlips = allSlips.filter(slip => 
+      chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
+    );
+    return chapterSlips.length;
+  }, [allSlips, chapterUserIds, profile]);
+
+  const totalMembersCount = useMemo(() => {
+    return chapterUsers.length;
+  }, [chapterUsers]);
+
+  const totalChaptersCount = useMemo(() => {
+    const adminIds = chapterUsers.map(u => u.associatedChapterAdminId || u.adminId).filter(Boolean);
+    return new Set(adminIds).size || 1;
+  }, [chapterUsers]);
+
+  const weeklyMeetingAttendance = useMemo(() => {
+    const chapterMeetings = profile?.role === 'MASTER_ADMIN' 
+      ? meetings 
+      : meetings.filter(m => m.adminId === (profile?.associatedChapterAdminId || profile?.adminId || profile?.uid));
+    const completedMeetings = chapterMeetings.filter(m => m.isCompleted);
+    if (completedMeetings.length === 0) return 0;
+    
+    let totalPresent = 0;
+    let totalRecords = 0;
+    completedMeetings.forEach(m => {
+      if (m.attendance) {
+        Object.values(m.attendance).forEach(status => {
+          totalRecords++;
+          if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(status))) {
+            totalPresent++;
+          }
+        });
+      }
+    });
+    return totalRecords === 0 ? 0 : Math.round((totalPresent / totalRecords) * 100);
+  }, [meetings, profile]);
+
+  const newMembersThisMonthCount = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    return chapterUsers.filter(u => u.createdAt >= startOfMonth).length;
+  }, [chapterUsers]);
+
+  const topPerformingChapters = useMemo(() => {
+    if (profile?.role !== 'MASTER_ADMIN') return [];
+    
+    const chapterBusinessMap: Record<string, number> = {};
+    
+    allSlips.forEach(slip => {
+      const user = chapterUsers.find(u => u.uid === slip.fromUserId);
+      if (user && user.chapterName) {
+        if (!chapterBusinessMap[user.chapterName]) {
+          chapterBusinessMap[user.chapterName] = 0;
+        }
+        chapterBusinessMap[user.chapterName] += (Number(slip.businessValue) || 0);
+      }
+    });
+
+    return Object.entries(chapterBusinessMap)
+      .map(([name, business]) => ({ name, business }))
+      .sort((a, b) => b.business - a.business)
+      .slice(0, 5);
+  }, [allSlips, chapterUsers, profile]);
+
   // Derived Checklist Status
   const hasAttendedMeeting = useMemo(() => {
     if (!profile) return false;
@@ -223,8 +311,8 @@ export function Analytics() {
   }, [receivedReferrals]);
 
   const hasInvitedGuest = useMemo(() => {
-    return guestInvitations.some(g => g.createdAt && isToday(g.createdAt) && g.status !== 'Cancelled' && g.status !== 'Invalid');
-  }, [guestInvitations]);
+    return guestInvitations.some(g => g.createdBy === profile?.uid && g.createdAt && isToday(g.createdAt) && g.status !== 'Cancelled' && g.status !== 'Invalid');
+  }, [guestInvitations, profile]);
 
   const completedFocusCount = useMemo(() => {
     return (hasAttendedMeeting ? 1 : 0) + 
@@ -390,16 +478,16 @@ export function Analytics() {
 
   // Dynamic Growth Score
   const dynamicGrowthScore = useMemo(() => {
-    if (profile?.role !== 'MEMBER') return 92;
+    if (profile?.role !== 'MEMBER') return weeklyMeetingAttendance || 0;
     if (todayTasks.length === 0) return 100;
     const completed = todayTasks.filter(t => t.isDone).length;
     return Math.round((completed / todayTasks.length) * 100);
-  }, [todayTasks, profile]);
+  }, [todayTasks, profile, weeklyMeetingAttendance]);
 
   // Count up animation to dynamicGrowthScore
   useEffect(() => {
     let start = 0;
-    const end = profile?.role === 'MEMBER' ? dynamicGrowthScore : 92;
+    const end = dynamicGrowthScore;
     const duration = 1500; // 1.5 seconds
     const startTime = performance.now();
 
@@ -663,16 +751,27 @@ export function Analytics() {
           {chapterHeading}
         </h2>
         <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
-          Real-time analytics and business performance for your chapter.
+          {profile?.role === 'MASTER_ADMIN' 
+            ? 'Real-time analytics across all chapters.' 
+            : 'Real-time analytics and business performance for your chapter.'}
         </p>
       </div>
 
       {/* KPI CARDS ROW */}
       <StatGrid 
+        role={profile?.role}
+        totalChaptersCount={totalChaptersCount}
+        totalMembersCount={totalMembersCount}
         activePartnersCount={activePartnersCount}
         businessGeneratedTotal={businessGeneratedTotal}
         referralsPassedCount={referralsPassedCount}
+        thankYouSlipsCount={thankYouSlipsCount}
         upcomingSyncsCount={upcomingSyncsCount}
+        oneToOneMeetingsCount={oneToOneMeetingsCount}
+        visitorsAttendedCount={visitorsAttendedCount}
+        weeklyMeetingAttendance={weeklyMeetingAttendance}
+        growthScore={dynamicGrowthScore}
+        newMembersThisMonthCount={newMembersThisMonthCount}
       />
 
       {/* COMPANION / REPORTS VIEW BASED ON ROLE */}
@@ -727,16 +826,17 @@ export function Analytics() {
         <MasterAdminCompanionView
           profile={profile}
           networkHealthScore={92}
-          globalMemberCount={158}
-          globalChapterCount={4}
-          globalBusinessGenerated={4200000}
-          globalReferralsCount={845}
+          globalMemberCount={totalMembersCount}
+          globalChapterCount={totalChaptersCount}
+          globalBusinessGenerated={businessGeneratedTotal}
+          globalReferralsCount={referralsPassedCount}
           finalRecentActivities={[
             { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
             { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
             { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
           ]}
           setActiveTab={() => {}}
+          topPerformingChapters={topPerformingChapters}
         />
       )}
 

@@ -21,6 +21,7 @@ interface MasterAdminCompanionViewProps {
   globalReferralsCount: number;
   finalRecentActivities: any[];
   setActiveTab: (tab: 'companion' | 'reports') => void;
+  topPerformingChapters?: { name: string; business: number }[];
 }
 
 export function MasterAdminCompanionView({
@@ -32,6 +33,7 @@ export function MasterAdminCompanionView({
   globalReferralsCount,
   finalRecentActivities,
   setActiveTab,
+  topPerformingChapters = [],
 }: MasterAdminCompanionViewProps) {
   
   const containerVariants = {
@@ -326,15 +328,21 @@ export function MasterAdminCompanionView({
                 </div>
               </div>
 
-              <div className="flex-1 space-y-5 text-[15px] font-medium">
-                <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                  <span className="text-neutral-500 font-semibold uppercase text-[11px] tracking-[0.15em]">Fastest Growing</span>
-                  <span className="font-semibold text-primary">SSK Founders</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500 font-semibold uppercase text-[11px] tracking-[0.15em]">Top Performing</span>
-                  <span className="font-semibold text-[#111827]">SSK Elite</span>
-                </div>
+              <div className="flex-1 space-y-3 text-[15px] font-medium">
+                {topPerformingChapters.slice(0, 3).map((chapter, index) => (
+                  <div key={index} className="flex items-center justify-between pb-2 border-b border-neutral-100 last:border-0 last:pb-0">
+                    <span className="text-neutral-500 font-semibold uppercase text-[10px] tracking-[0.1em] truncate mr-2">
+                      {index === 0 ? 'Top Performing' : `#${index + 1} Chapter`}
+                    </span>
+                    <span className="font-semibold text-primary text-[12px] truncate">{chapter.name}</span>
+                  </div>
+                ))}
+                {topPerformingChapters.length === 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-semibold uppercase text-[11px] tracking-[0.15em]">Top Performing</span>
+                    <span className="font-semibold text-neutral-400">No data</span>
+                  </div>
+                )}
               </div>
             </div>
 
