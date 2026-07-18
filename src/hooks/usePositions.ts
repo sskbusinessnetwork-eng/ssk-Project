@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  collection, query, onSnapshot  } from '../lib/database';
+import { db } from '../lib/database';
 import { Position } from '../types';
 
 export function usePositions() {

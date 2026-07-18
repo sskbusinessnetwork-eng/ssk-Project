@@ -9,8 +9,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
-import { where } from 'firebase/firestore';
-import { firestoreService } from '../services/firestoreService';
+import {  where  } from '../lib/database';
+import { databaseService } from '../services/databaseService';
 import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
@@ -65,7 +65,7 @@ export function Analytics() {
         }
         const adminId = profile.associatedChapterAdminId || profile.adminId;
         if (adminId) {
-          const adminProfile = await firestoreService.get<any>('users', adminId);
+          const adminProfile = await databaseService.get<any>('users', adminId);
           if (adminProfile && adminProfile.chapterName) {
             setResolvedChapterName(adminProfile.chapterName);
           } else {
@@ -103,15 +103,15 @@ export function Analytics() {
         userConstraints = [where('associatedChapterAdminId', '==', adminId)];
       }
     }
-    const unsubUsers = firestoreService.subscribe<any>('users', userConstraints, (data) => {
+    const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
       setChapterUsers(data.filter(u => u.role === 'MEMBER'));
     });
 
     // 2. Subscribe to thank you slips
-    const unsubSlips = firestoreService.subscribe<any>('thank_you_slips', [], setAllSlips);
+    const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], setAllSlips);
 
     // 3. Subscribe to referrals
-    const unsubReferrals = firestoreService.subscribe<any>('referrals', [], (data) => {
+    const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
       setAllReferrals(data);
       if (profile.role === 'MEMBER') {
         setPassedReferrals(data.filter(r => r.fromUserId === profile.uid));
@@ -120,7 +120,7 @@ export function Analytics() {
     });
 
     // 4. Subscribe to 1-to-1s
-    const unsub1to1s = firestoreService.subscribe<any>('one_to_one_meetings', [], (data) => {
+    const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
       setOneToOnes(data);
       if (profile.role === 'MEMBER') {
         setCreatedOneToOnes(data.filter(m => m.creatorId === profile.uid));
@@ -129,12 +129,12 @@ export function Analytics() {
     });
 
     // 5. Subscribe to guest invitations
-    const unsubGuests = firestoreService.subscribe<any>('guest_invitations', [], (data) => {
+    const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
       setGuestInvitations(data);
     });
 
     // 6. Subscribe to meetings
-    const unsubMeetings = firestoreService.subscribe<any>('meetings', [], setMeetings);
+    const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
 
     return () => {
       unsubUsers();

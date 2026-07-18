@@ -26,7 +26,7 @@ import {
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile, Category, GuestInvitation } from '../types';
 import { Modal } from '../components/Modal';
 import { MemberTable } from '../components/members/MemberTable';
@@ -34,8 +34,8 @@ import { AddMemberModal } from '../components/members/AddMemberModal';
 import { EditMemberModal } from '../components/members/EditMemberModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
 import { PositionManagement } from '../components/positions/PositionManagement';
-import { where, doc, setDoc, collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  where, doc, setDoc, collection, query, getDocs, orderBy  } from '../lib/database';
+import { db } from '../lib/database';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
@@ -67,7 +67,7 @@ export function Members() {
       ? [where('associatedChapterAdminId', '==', profile.uid)]
       : [];
 
-    const unsubscribe = firestoreService.subscribe<UserProfile>('users', constraints, (data) => {
+    const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
       // Filter for MEMBER role if needed, or show all if admin
       const filteredData = profile.role === 'CHAPTER_ADMIN' 
         ? data.filter(u => u.role === 'MEMBER')
@@ -77,7 +77,7 @@ export function Members() {
     });
 
     if (profile.role === 'MASTER_ADMIN' || profile.role === 'CHAPTER_ADMIN') {
-      firestoreService.list<Category>('categories').then(setCategories);
+      databaseService.list<Category>('categories').then(setCategories);
       
       // Fetch all admins for the adminMap
       const adminsQuery = query(collection(db, 'users'), where('role', 'in', ['MASTER_ADMIN', 'CHAPTER_ADMIN']));
@@ -92,7 +92,7 @@ export function Members() {
           where('createdByRole', '==', 'MEMBER'),
           orderBy('createdAt', 'desc')
         ];
-        firestoreService.subscribe<GuestInvitation>('guest_invitations', invitesConstraints, (data) => {
+        databaseService.subscribe<GuestInvitation>('guest_invitations', invitesConstraints, (data) => {
           setMemberInvites(data);
         });
       }
@@ -304,7 +304,7 @@ export function Members() {
         address: editMemberData.address
       };
 
-      await firestoreService.update('users', selectedMember.uid, updates);
+      await databaseService.update('users', selectedMember.uid, updates);
       setIsEditModalOpen(false);
       setSelectedMember(null);
       setSuccessMessage('Member updated successfully!');
@@ -348,7 +348,7 @@ export function Members() {
 
     setError(null);
     try {
-      await firestoreService.update('users', selectedMember.uid, {
+      await databaseService.update('users', selectedMember.uid, {
         subscriptionStart: new Date(subDates.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(subDates.subscriptionEnd).toISOString(),
       });
@@ -363,7 +363,7 @@ export function Members() {
 
   const updateStatus = async (uid: string, membershipStatus: UserProfile['membershipStatus']) => {
     try {
-      await firestoreService.update('users', uid, { membershipStatus });
+      await databaseService.update('users', uid, { membershipStatus });
       setSuccessMessage(`Status updated to ${membershipStatus} successfully!`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {

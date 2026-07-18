@@ -10,8 +10,8 @@ import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil } from '../utils/authUtils';
 import { differenceInDays } from 'date-fns';
-import { firestoreService } from '../services/firestoreService';
-import { where } from 'firebase/firestore';
+import { databaseService } from '../services/databaseService';
+import {  where  } from '../lib/database';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);

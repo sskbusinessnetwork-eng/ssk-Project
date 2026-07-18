@@ -8,7 +8,7 @@ import {
   Briefcase, ArrowRight, Trophy, Flame, Zap, DollarSign, Eye, Play, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Meeting, Referral, OneToOneMeeting, GuestInvitation, ThankYouSlip, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { 
@@ -42,47 +42,47 @@ export function MyReport() {
     setLoading(true);
     
     // Subscriptions to get live data from Firestore
-    const unsubMeetings = firestoreService.subscribe<Meeting>('meetings', [], (data) => {
+    const unsubMeetings = databaseService.subscribe<Meeting>('meetings', [], (data) => {
       setMeetings(data);
     });
 
-    const unsubPassedRefs = firestoreService.subscribe<Referral>('referrals', [
+    const unsubPassedRefs = databaseService.subscribe<Referral>('referrals', [
       ['fromUserId', '==', profile.uid]
     ], (data) => {
       setPassedReferrals(data);
     });
 
-    const unsubReceivedRefs = firestoreService.subscribe<Referral>('referrals', [
+    const unsubReceivedRefs = databaseService.subscribe<Referral>('referrals', [
       ['toUserId', '==', profile.uid]
     ], (data) => {
       setReceivedReferrals(data);
     });
 
-    const unsubCreated1to1s = firestoreService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
+    const unsubCreated1to1s = databaseService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
       ['creatorId', '==', profile.uid]
     ], (data) => {
       setCreatedOneToOnes(data);
     });
 
-    const unsubParticipated1to1s = firestoreService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
+    const unsubParticipated1to1s = databaseService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
       ['participantIds', 'array-contains', profile.uid]
     ], (data) => {
       setParticipatedOneToOnes(data);
     });
 
-    const unsubGuests = firestoreService.subscribe<GuestInvitation>('guest_invitations', [
+    const unsubGuests = databaseService.subscribe<GuestInvitation>('guest_invitations', [
       ['createdBy', '==', profile.uid]
     ], (data) => {
       setGuestInvitations(data);
     });
 
-    const unsubSentSlips = firestoreService.subscribe<ThankYouSlip>('thank_you_slips', [
+    const unsubSentSlips = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
       ['fromUserId', '==', profile.uid]
     ], (data) => {
       setSentThankYouSlips(data);
     });
 
-    const unsubReceivedSlips = firestoreService.subscribe<ThankYouSlip>('thank_you_slips', [
+    const unsubReceivedSlips = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
       ['toUserId', '==', profile.uid]
     ], (data) => {
       setReceivedThankYouSlips(data);

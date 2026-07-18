@@ -1,13 +1,12 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogIn, Phone, ShieldCheck, Lock, AlertCircle, Eye, EyeOff, ChevronDown, KeyRound, CheckCircle2, ArrowLeft, Sparkles } from 'lucide-react';
-import { auth, db } from '../lib/firebase';
-import { signOut, sendPasswordResetEmail, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath } from '../utils/authUtils';
-import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import {  db, doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit  } from '../lib/database';
 import { UserProfile } from '../types';
 
 export function Login() {
@@ -19,7 +18,7 @@ export function Login() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [mode, setMode] = React.useState<'login' | 'forgot'>('login');
   const [forgotStep, setForgotStep] = React.useState<'identifier' | 'otp' | 'reset'>('identifier');
-  const [confirmationResult, setConfirmationResult] = React.useState<ConfirmationResult | null>(null);
+  const [confirmationResult, setConfirmationResult] = React.useState<any | null>(null);
   const [resetToken, setResetToken] = React.useState<string | null>(null);
 
   // Clear stale session on mount if not authenticated
@@ -136,7 +135,15 @@ export function Login() {
         throw new Error("reCAPTCHA not initialized. Please try again.");
       }
 
-      const result = await signInWithPhoneNumber(auth, normalizedPhone, appVerifier);
+      
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalizedPhone });
+      if (otpError) throw otpError;
+      const result = { confirm: async (code) => {
+        const { data, error } = await supabase.auth.verifyOtp({ phone: normalizedPhone, token: code, type: 'sms' });
+        if (error) throw error;
+        return { user: { uid: data.user?.id } };
+      } };
+
       setConfirmationResult(result);
       (window as any).confirmationResult = result;
       
@@ -166,10 +173,10 @@ export function Login() {
       }
       
       const result = await confirmationResult.confirm(otpCode);
-      const idToken = await result.user.getIdToken();
+      const idToken = result.user.uid;
       setResetToken(idToken);
       
-      await signOut(auth);
+      await supabase.auth.signOut();
       setForgotStep('reset');
       setSuccess('Identity verified! Please set your new password.');
     } catch (err: any) {
@@ -203,7 +210,10 @@ export function Login() {
       const normalizedPhone = normalizePhoneNumber(formData.identifier);
       const email = `${normalizedPhone.replace('+', '')}@ssk.internal`;
       
-      await sendPasswordResetEmail(auth, email);
+      
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+      if (resetError) throw resetError;
+
 
       setSuccess('Password reset email sent! Please check your inbox.');
       setMode('login');

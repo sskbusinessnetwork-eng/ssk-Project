@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../firebase';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/database';
+import {  doc, getDoc, updateDoc, setDoc  } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
 import { Lock, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
 import { getDashboardPath } from '../utils/authUtils';

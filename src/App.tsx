@@ -26,13 +26,12 @@ import { OneToOneMeetings } from './pages/OneToOneMeetings';
 import { Connections } from './pages/Connections';
 import { Notifications } from './pages/Notifications';
 import { SubscriptionExpired } from './pages/SubscriptionExpired';
-import { checkDatabaseConnection } from './firebase';
 
 import { AuthProvider } from './contexts/AuthContext';
 
 export default function App() {
   useEffect(() => {
-    // checkDatabaseConnection();
+    // Promise.resolve(true);
   }, []);
 
   return (

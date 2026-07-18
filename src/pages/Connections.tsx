@@ -20,12 +20,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  collection, query, where, getDocs  } from '../lib/database';
+import { db } from '../lib/database';
 import { UserProfile, Category, Referral } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Modal } from '../components/Modal';
 
 export function Connections() {
@@ -82,7 +82,7 @@ export function Connections() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('referrals', newReferral);
+      await databaseService.create('referrals', newReferral);
       
       setSuccessMessage(`Referral sent to ${selectedMember.name} successfully!`);
       setIsModalOpen(false);
@@ -115,7 +115,7 @@ export function Connections() {
         }
 
         // Fetch Categories
-        const cats = await firestoreService.list<Category>('categories');
+        const cats = await databaseService.list<Category>('categories');
         setCategories(cats);
 
         // Fetch All Active Members (MEMBER and CHAPTER_ADMIN)
@@ -138,7 +138,7 @@ export function Connections() {
         if (adminIds.length > 0) {
           const adminData: Record<string, string> = {};
           await Promise.all(adminIds.map(async (id) => {
-            const adminDoc = await firestoreService.get<UserProfile>('users', id);
+            const adminDoc = await databaseService.get<UserProfile>('users', id);
             if (adminDoc) {
               adminData[id] = adminDoc.name || adminDoc.displayName || 'Unknown Admin';
             }

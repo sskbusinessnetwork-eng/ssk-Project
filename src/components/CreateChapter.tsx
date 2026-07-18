@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, query, getDocs, doc, writeBatch, where } from 'firebase/firestore';
+import { db } from '../lib/database';
+import {  collection, query, getDocs, doc, writeBatch, where  } from '../lib/database';
 import { UserProfile } from '../types';
 import { Building, MapPin, CheckCircle2, User } from 'lucide-react';
 

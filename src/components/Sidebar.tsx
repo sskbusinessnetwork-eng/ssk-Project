@@ -10,9 +10,9 @@ import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil } from '../utils/authUtils';
 import { differenceInDays } from 'date-fns';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
-import { where } from 'firebase/firestore';
+import {  where  } from '../lib/database';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -29,7 +29,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   useEffect(() => {
     if (!profile?.uid) return;
-    const unsubscribe = firestoreService.subscribe(
+    const unsubscribe = databaseService.subscribe(
       'notifications',
       [
         where('userId', '==', profile.uid),

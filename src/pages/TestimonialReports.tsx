@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  collection, query, onSnapshot, getDocs, doc, getDoc  } from '../lib/database';
+import { db } from '../lib/database';
 import { Testimonial, UserProfile } from '../types';
 import { format } from 'date-fns';
 import { Star } from 'lucide-react';

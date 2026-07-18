@@ -14,11 +14,11 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { ThankYouSlip, Referral, UserProfile, Category } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
-import { where, orderBy } from 'firebase/firestore';
+import {  where, orderBy  } from '../lib/database';
 import { cn } from '../lib/utils';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 
@@ -70,7 +70,7 @@ export function ThankYouSlips() {
   useEffect(() => {
     if (!profile) return;
 
-    const unsubscribeSent = firestoreService.subscribe<ThankYouSlip>('thank_you_slips', [
+    const unsubscribeSent = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
       where('toUserId', '==', profile.uid),
       orderBy('createdAt', 'desc')
     ], (data) => {
@@ -78,7 +78,7 @@ export function ThankYouSlips() {
       setLoading(false);
     });
 
-    const unsubscribeReceived = firestoreService.subscribe<ThankYouSlip>('thank_you_slips', [
+    const unsubscribeReceived = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
       where('fromUserId', '==', profile.uid),
       orderBy('createdAt', 'desc')
     ], (data) => {
@@ -89,12 +89,12 @@ export function ThankYouSlips() {
     if (isMasterAdmin || isChapterAdmin) {
       const constraints = [orderBy('createdAt', 'desc')];
 
-      unsubscribeAll = firestoreService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
+      unsubscribeAll = databaseService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
         setAllSlips(data);
       });
 
       // Fetch users to resolve names
-      firestoreService.list<UserProfile>('users', []).then(users => {
+      databaseService.list<UserProfile>('users', []).then(users => {
         setAllUsers(users);
         const names: Record<string, string> = {};
         users.forEach(u => {
@@ -104,11 +104,11 @@ export function ThankYouSlips() {
       });
 
       // Fetch categories
-      firestoreService.list<Category>('categories', []).then(setAllCategories);
+      databaseService.list<Category>('categories', []).then(setAllCategories);
     }
 
     // Fetch members to show names
-    firestoreService.list<UserProfile>('users', []).then(users => {
+    databaseService.list<UserProfile>('users', []).then(users => {
       const names: Record<string, string> = {};
       users.forEach(u => {
         names[u.uid] = u.name || u.displayName || 'Unknown Member';
@@ -117,7 +117,7 @@ export function ThankYouSlips() {
     });
 
     // Fetch converted referrals for the form
-    firestoreService.list<Referral>('referrals', [
+    databaseService.list<Referral>('referrals', [
       where('toUserId', '==', profile.uid),
       where('status', '==', 'CONVERTED')
     ]).then(setReferrals);
@@ -149,10 +149,10 @@ export function ThankYouSlips() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('thank_you_slips', newSlip);
+      await databaseService.create('thank_you_slips', newSlip);
       
       // Close the referral status
-      await firestoreService.update('referrals', formData.referralId, { status: 'CLOSED' });
+      await databaseService.update('referrals', formData.referralId, { status: 'CLOSED' });
       
       const receiver = allUsers.find(u => u.uid === selectedReferral.fromUserId) || null;
       setTestimonialReceiver(receiver);

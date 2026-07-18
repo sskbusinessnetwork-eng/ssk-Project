@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, MessageSquare } from 'lucide-react';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { UserProfile } from '../types';
 
@@ -27,7 +27,7 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: Wri
 
     setIsSubmitting(true);
     try {
-      await firestoreService.create('testimonials', {
+      await databaseService.create('testimonials', {
         receiverMemberId: receiver.uid,
         authorMemberId: author.uid,
         chapterId: receiver.associatedChapterAdminId || receiver.adminId || author.associatedChapterAdminId || author.adminId,

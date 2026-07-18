@@ -20,13 +20,13 @@ import {
   BookUser
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { GuestInvitation, GuestRegistration, Category, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
-import { where, orderBy, collection, getDocs, query, or, limit } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  where, orderBy, collection, getDocs, query, or, limit  } from '../lib/database';
+import { db } from '../lib/database';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -79,7 +79,7 @@ export function Guests() {
     if (!selectedGuest) return;
     try {
       const collectionName = selectedGuest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
-      await firestoreService.update(collectionName, selectedGuest.id, editMeetingData);
+      await databaseService.update(collectionName, selectedGuest.id, editMeetingData);
       setSelectedGuest({ ...selectedGuest, ...editMeetingData });
       alert("Meeting details updated successfully");
     } catch (error) {
@@ -127,7 +127,7 @@ export function Guests() {
     const fetchMeeting = async () => {
       try {
         const now = new Date().toISOString();
-        const meetings = await firestoreService.list<any>('meetings', [
+        const meetings = await databaseService.list<any>('meetings', [
           where('adminId', '==', regFormData.adminId),
           where('isCompleted', '==', false),
           where('date', '>=', now),
@@ -177,7 +177,7 @@ export function Guests() {
       constraints.push(where('createdBy', '==', profile.uid));
     }
 
-    const unsubInvitations = firestoreService.subscribe<GuestInvitation>('guest_invitations', constraints, (data) => {
+    const unsubInvitations = databaseService.subscribe<GuestInvitation>('guest_invitations', constraints, (data) => {
       setInvitations(data);
       setLoading(false);
     });
@@ -200,18 +200,18 @@ export function Guests() {
       }
     }
 
-    const unsubRegistrations = firestoreService.subscribe<GuestRegistration>('guest_registrations', regConstraints, (data) => {
+    const unsubRegistrations = databaseService.subscribe<GuestRegistration>('guest_registrations', regConstraints, (data) => {
       setRegistrations(data);
     });
 
     // Fetch all users to resolve member names
-    firestoreService.list<UserProfile>('users').then(setAllUsers);
+    databaseService.list<UserProfile>('users').then(setAllUsers);
 
     // Fetch categories
-    firestoreService.list<Category>('categories').then(setCategories);
+    databaseService.list<Category>('categories').then(setCategories);
 
     // Fetch Chapter Admins
-    firestoreService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setChapterAdmins);
+    databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setChapterAdmins);
 
     return () => {
       unsubInvitations();
@@ -275,7 +275,7 @@ export function Guests() {
         isCalled: false
       };
 
-      const id = await firestoreService.create('guest_invitations', newInvitationData);
+      const id = await databaseService.create('guest_invitations', newInvitationData);
       
       // Send notification to Chapter Admin if created by a Member
       if (profile.role === 'MEMBER' && profile.adminId) {
@@ -298,7 +298,7 @@ export function Guests() {
       // Send SMS via Firebase Trigger SMS Extension
       const inviteText = generateInviteText(createdInvitation);
       try {
-        await firestoreService.create('messages', {
+        await databaseService.create('messages', {
           to: normalizedPhone,
           body: inviteText,
           uid: profile.uid,
@@ -339,7 +339,7 @@ export function Guests() {
     try {
       const adminId = profile.role === 'CHAPTER_ADMIN' ? profile.uid : regFormData.adminId;
       
-      await firestoreService.create('guest_registrations', {
+      await databaseService.create('guest_registrations', {
         ...regFormData,
         adminId,
         createdAt: new Date().toISOString(),
@@ -405,7 +405,7 @@ export function Guests() {
     if (!guest.isWhatsAppShared) {
       try {
         const collectionName = guest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
-        await firestoreService.update(collectionName, guest.id, { isWhatsAppShared: true });
+        await databaseService.update(collectionName, guest.id, { isWhatsAppShared: true });
       } catch (error) {
         console.error("Error updating WhatsApp status:", error);
       }
@@ -422,7 +422,7 @@ export function Guests() {
     if (!guest.isCalled) {
       try {
         const collectionName = guest.source === 'Created by Admin' ? 'guest_invitations' : 'guest_registrations';
-        await firestoreService.update(collectionName, guest.id, { isCalled: true });
+        await databaseService.update(collectionName, guest.id, { isCalled: true });
       } catch (error) {
         console.error("Error updating call status:", error);
       }

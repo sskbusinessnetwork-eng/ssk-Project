@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/database';
+import {  collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot  } from '../lib/database';
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
@@ -267,7 +267,7 @@ export function Positions() {
                           <select
                             value={currentPos}
                             onChange={(e) => handleAssignPosition(member.uid, e.target.value as ChapterPosition)}
-                            disabled={updatingId === member.uid || (!isMasterAdmin && e.target.value === 'chapter_admin' && currentPos !== 'chapter_admin')}
+                            disabled={updatingId === member.uid}
                             className="h-9 px-3 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-xs font-semibold text-white cursor-pointer disabled:opacity-50 min-w-[140px] appearance-none transition-colors"
                           >
                             {POSITIONS.map(pos => {

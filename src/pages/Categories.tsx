@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Plus, Trash2, Search, Tags, Edit2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
 
@@ -16,7 +16,7 @@ export function Categories() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = firestoreService.subscribe<Category>('categories', [], setCategories);
+    const unsubscribe = databaseService.subscribe<Category>('categories', [], setCategories);
     return () => unsubscribe();
   }, []);
 
@@ -39,10 +39,10 @@ export function Categories() {
     setError(null);
     try {
       if (editingCategory) {
-        await firestoreService.update('categories', editingCategory.id, { name: categoryName.trim() });
+        await databaseService.update('categories', editingCategory.id, { name: categoryName.trim() });
         setSuccess('Category updated successfully!');
       } else {
-        await firestoreService.create('categories', { name: categoryName.trim() });
+        await databaseService.create('categories', { name: categoryName.trim() });
         setSuccess('Category created successfully!');
       }
       setCategoryName('');
@@ -60,7 +60,7 @@ export function Categories() {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this category?')) return;
     try {
-      await firestoreService.delete('categories', id);
+      await databaseService.delete('categories', id);
     } catch (err: any) {
       alert(err.message || 'Failed to delete category');
     }
@@ -70,7 +70,7 @@ export function Categories() {
     const currentStatus = (cat as any).status || 'Active';
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
     try {
-      await firestoreService.update('categories', cat.id, { status: newStatus });
+      await databaseService.update('categories', cat.id, { status: newStatus });
     } catch (err: any) {
       alert(err.message || 'Failed to update category status');
     }

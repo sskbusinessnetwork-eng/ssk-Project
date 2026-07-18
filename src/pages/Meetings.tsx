@@ -20,9 +20,9 @@ import {
   Info
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
-import { where, orderBy, limit } from 'firebase/firestore';
+import {  where, orderBy, limit  } from '../lib/database';
 import { format, startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore } from 'date-fns';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
@@ -120,7 +120,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
 }) {
   if (!adminId) return;
 
-  const allMeetings = await firestoreService.list<Meeting>('meetings', [
+  const allMeetings = await databaseService.list<Meeting>('meetings', [
     where('adminId', '==', adminId)
   ]);
 
@@ -133,7 +133,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
       new Date(m.date) >= startOfDay(now)
     );
     for (const m of toDelete) {
-      await firestoreService.delete('meetings', m.id);
+      await databaseService.delete('meetings', m.id);
     }
     return;
   }
@@ -145,7 +145,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
     const existingMeeting = allMeetings.find(m => isSameDay(new Date(m.date), occurrenceDate));
 
     if (existingMeeting) {
-      await firestoreService.update('meetings', existingMeeting.id, {
+      await databaseService.update('meetings', existingMeeting.id, {
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
@@ -165,7 +165,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
         isCompleted: false,
         isRecurring: true
       };
-      const newId = await firestoreService.create('meetings', newMeeting);
+      const newId = await databaseService.create('meetings', newMeeting);
       if (newId) {
         occurrenceIdsToPreserve.add(newId);
       }
@@ -180,7 +180,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
   );
 
   for (const m of obsoleteMeetings) {
-    await firestoreService.delete('meetings', m.id);
+    await databaseService.delete('meetings', m.id);
   }
 }
 
@@ -243,9 +243,9 @@ export function Meetings() {
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      firestoreService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setAdminAdmins);
+      databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setAdminAdmins);
     } else if (profile?.role === 'MEMBER' && profile.adminId) {
-      firestoreService.get<UserProfile>('users', profile.adminId).then(admin => {
+      databaseService.get<UserProfile>('users', profile.adminId).then(admin => {
         if (admin) setAdminAdmins([admin]);
       });
     } else if (profile?.role === 'CHAPTER_ADMIN') {
@@ -270,7 +270,7 @@ export function Meetings() {
 
     const loadAndSyncSetup = async () => {
       try {
-        const adminProfile = await firestoreService.get<UserProfile & { defaultMeetingSetup?: any }>('users', chapterId);
+        const adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', chapterId);
         if (adminProfile && adminProfile.defaultMeetingSetup) {
           const setup = {
             adminId: chapterId,
@@ -332,7 +332,7 @@ export function Meetings() {
       ? (selectedAdminId ? [where('adminId', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
       : [where('adminId', '==', chapterId), orderBy('date', 'desc'), limit(50)];
 
-    const unsubscribe = firestoreService.subscribe<Meeting>('meetings', constraints, (data) => {
+    const unsubscribe = databaseService.subscribe<Meeting>('meetings', constraints, (data) => {
       setMeetings(data);
 
       const now = new Date();
@@ -392,12 +392,12 @@ export function Meetings() {
       }
 
       try {
-        const data = await firestoreService.list<UserProfile>('users', constraints);
+        const data = await databaseService.list<UserProfile>('users', constraints);
         let activeMembers = data;
         
         // If chapterId is set, we also need to fetch the Chapter Admin themselves
         if (chapterId) {
-          const admin = await firestoreService.get<UserProfile>('users', chapterId);
+          const admin = await databaseService.get<UserProfile>('users', chapterId);
           if (admin && !activeMembers.find(m => m.uid === admin.uid)) {
             activeMembers = [admin, ...activeMembers];
           }
@@ -443,7 +443,7 @@ export function Meetings() {
         isCompleted: false
       };
 
-      await firestoreService.create('meetings', newMeeting);
+      await databaseService.create('meetings', newMeeting);
       
       setSuccess('Meeting scheduled successfully!');
       setTimeout(() => {
@@ -480,7 +480,7 @@ export function Meetings() {
       };
 
       // Save to Chapter Admin's user profile document inside users collection
-      await firestoreService.update('users', adminId, {
+      await databaseService.update('users', adminId, {
         defaultMeetingSetup: defaultSetupDoc
       });
 
@@ -525,7 +525,7 @@ export function Meetings() {
         }
       }
 
-      await firestoreService.update('meetings', selectedMeeting.id, { 
+      await databaseService.update('meetings', selectedMeeting.id, { 
         attendance: tempAttendance,
         amountCollected: tempAmount,
         memberNotes: tempMemberNotes,
@@ -553,7 +553,7 @@ export function Meetings() {
       const now = new Date();
       const shouldComplete = meetingDate < now;
 
-      await firestoreService.update('meetings', selectedMeeting.id, { 
+      await databaseService.update('meetings', selectedMeeting.id, { 
         notes: tempNotes,
         isCompleted: shouldComplete || selectedMeeting.isCompleted,
         updatedAt: new Date().toISOString()

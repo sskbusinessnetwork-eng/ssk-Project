@@ -22,7 +22,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { Category, UserProfile, Referral, UserRole } from '../types';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
@@ -85,12 +85,12 @@ export function Profile() {
       setLoading(true);
       try {
         if (isViewMode && targetUserId) {
-          const fetchedProfile = await firestoreService.get<UserProfile>('users', targetUserId);
+          const fetchedProfile = await databaseService.get<UserProfile>('users', targetUserId);
           if (fetchedProfile) {
             setTargetProfile(fetchedProfile);
             const adminId = fetchedProfile.associatedChapterAdminId || fetchedProfile.adminId;
             if (fetchedProfile.role === 'MEMBER' && adminId) {
-              const admin = await firestoreService.get<UserProfile>('users', adminId);
+              const admin = await databaseService.get<UserProfile>('users', adminId);
               if (admin) setAdminData(admin);
             }
           }
@@ -113,13 +113,13 @@ export function Profile() {
 
           const adminId = currentUserProfile.associatedChapterAdminId || currentUserProfile.adminId;
           if (currentUserProfile.role === 'MEMBER' && adminId) {
-            const admin = await firestoreService.get<UserProfile>('users', adminId);
+            const admin = await databaseService.get<UserProfile>('users', adminId);
             if (admin) setAdminData(admin);
           }
         }
 
         if (!isViewMode) {
-          const cats = await firestoreService.list<Category>('categories');
+          const cats = await databaseService.list<Category>('categories');
           setCategories(cats);
         }
       } catch (error) {
@@ -161,7 +161,7 @@ export function Profile() {
     
     try {
       setIsUpdatingSubscription(true);
-      await firestoreService.update('users', targetProfile.uid, {
+      await databaseService.update('users', targetProfile.uid, {
         subscriptionEnd: new Date(newSubscriptionEnd).toISOString(),
         membershipStatus: new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED'
       });
@@ -208,7 +208,7 @@ export function Profile() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('referrals', newReferral);
+      await databaseService.create('referrals', newReferral);
       
       setSuccessMessage(`Referral sent to ${targetProfile.name} successfully!`);
       setIsModalOpen(false);
@@ -244,7 +244,7 @@ export function Profile() {
         delete (dataToUpdate as any).category;
       }
 
-      await firestoreService.update('users', currentUserProfile.uid, dataToUpdate);
+      await databaseService.update('users', currentUserProfile.uid, dataToUpdate);
       setSuccessMessage("Profile updated successfully!");
       setShowSuccess(true);
       setTimeout(() => {

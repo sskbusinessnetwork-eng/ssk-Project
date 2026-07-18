@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Star, MessageSquare, Plus } from 'lucide-react';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile, Testimonial } from '../types';
-import { where, orderBy } from 'firebase/firestore';
+import {  where, orderBy  } from '../lib/database';
 import { format } from 'date-fns';
 import { WriteTestimonialModal } from './WriteTestimonialModal';
 import { Link } from 'react-router-dom';
@@ -22,7 +22,7 @@ export function MemberTestimonials({ currentUser, targetUser }: MemberTestimonia
   useEffect(() => {
     const fetchTestimonials = async () => {
       try {
-        const data = await firestoreService.list('testimonials', [
+        const data = await databaseService.list('testimonials', [
           where('receiverMemberId', '==', targetUser.uid)
         ]);
         
@@ -36,7 +36,7 @@ export function MemberTestimonials({ currentUser, targetUser }: MemberTestimonia
         // Load authors
         if (sorted.length > 0) {
           const authorIds = Array.from(new Set(sorted.map(t => t.authorMemberId)));
-          const allUsers = await firestoreService.list<UserProfile>('users');
+          const allUsers = await databaseService.list<UserProfile>('users');
           const authorMap: Record<string, UserProfile> = {};
           allUsers.forEach(u => {
             if (authorIds.includes(u.uid)) {

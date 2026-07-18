@@ -1,11 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Phone, ShieldCheck, Lock, User, AlertCircle, Eye, EyeOff, Building2, CheckCircle2 } from 'lucide-react';
-import { auth, db } from '../lib/firebase';
-import { doc, setDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { db } from '../lib/database';
+import {  doc, setDoc, collection, getDocs, query, where, limit  } from '../lib/database';
 import { UserRole } from '../types';
 import { Link } from 'react-router-dom';
-import { handleFirestoreError, OperationType } from '../utils/firebaseUtils';
 
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 

@@ -1,4 +1,4 @@
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
 
 export const seedDemoData = async () => {
@@ -27,10 +27,10 @@ export const seedDemoData = async () => {
       'Fashion Design'
     ];
 
-    const existingCategories = await firestoreService.list<Category>('categories');
+    const existingCategories = await databaseService.list<Category>('categories');
     for (const catName of categories) {
       if (!existingCategories.find(c => c.name === catName)) {
-        await firestoreService.create('categories', { name: catName });
+        await databaseService.create('categories', { name: catName });
       }
     }
 
@@ -72,7 +72,7 @@ export const seedDemoData = async () => {
         photoURL: `https://i.pravatar.cc/150?u=${member.uid}`
       };
 
-      await firestoreService.create('users', profile, member.uid);
+      await databaseService.create('users', profile, member.uid);
     }
 
     console.log('Demo data seeded successfully');

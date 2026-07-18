@@ -15,12 +15,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format, isAfter, parseISO } from 'date-fns';
-import { where, orderBy, collection, getDocs, query, or } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  where, orderBy, collection, getDocs, query, or  } from '../lib/database';
+import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 
@@ -73,7 +73,7 @@ export function OneToOneMeetings() {
           orderBy('date', 'desc')
         ];
 
-    const unsubscribe = firestoreService.subscribe<OneToOneMeeting>(
+    const unsubscribe = databaseService.subscribe<OneToOneMeeting>(
       'one_to_one_meetings',
       meetingsConstraints,
       (data) => {
@@ -136,7 +136,7 @@ export function OneToOneMeetings() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('one_to_one_meetings', newMeeting);
+      await databaseService.create('one_to_one_meetings', newMeeting);
       
       setShowSuccess(true);
       setFormData({ 
@@ -165,7 +165,7 @@ export function OneToOneMeetings() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await firestoreService.update('one_to_one_meetings', updatingMeeting.id, {
+      await databaseService.update('one_to_one_meetings', updatingMeeting.id, {
         status,
         notes: updateFormData.notes,
         attendance: updateFormData.attendance,

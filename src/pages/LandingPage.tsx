@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
-import { where, orderBy, limit } from 'firebase/firestore';
+import {  where, orderBy, limit  } from '../lib/database';
 import { format } from 'date-fns';
 
 // Reusable animation variants
@@ -53,7 +53,7 @@ export function LandingPage() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    const unsubscribe = firestoreService.subscribe<Category>('categories', [], (data) => {
+    const unsubscribe = databaseService.subscribe<Category>('categories', [], (data) => {
       // Filter Active/Enabled categories (case-insensitive checks, checking active status/enabled/isActive if present)
       const activeCats = data.filter(cat => {
         if ((cat as any).active === false) return false;
@@ -71,7 +71,7 @@ export function LandingPage() {
 
   useEffect(() => {
     const fetchAdmins = async () => {
-      const admins = await firestoreService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]);
+      const admins = await databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]);
       setChapterAdmins(admins);
     };
     fetchAdmins();
@@ -87,7 +87,7 @@ export function LandingPage() {
     const fetchMeeting = async () => {
       try {
         const now = new Date().toISOString();
-        const meetings = await firestoreService.list<any>('meetings', [
+        const meetings = await databaseService.list<any>('meetings', [
           where('adminId', '==', formData.adminId),
           where('isCompleted', '==', false),
           where('date', '>=', now),
@@ -131,7 +131,7 @@ export function LandingPage() {
     setIsSubmitting(true);
     setFormError(null);
     try {
-      const guestId = await firestoreService.create('guest_registrations', {
+      const guestId = await databaseService.create('guest_registrations', {
         ...formData,
         createdAt: new Date().toISOString(),
         status: 'PENDING',
@@ -144,7 +144,7 @@ export function LandingPage() {
         const selectedAdmin = chapterAdmins.find(a => a.uid === formData.adminId);
         const chapterName = selectedAdmin?.chapterName || 'your chapter';
         
-        await firestoreService.create('notifications', {
+        await databaseService.create('notifications', {
           userId: formData.adminId,
           role: 'CHAPTER_ADMIN',
           type: 'GUEST_REGISTRATION',

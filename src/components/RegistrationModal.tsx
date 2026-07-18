@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Phone, User, Briefcase, Calendar, Building2, MapPin } from 'lucide-react';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile } from '../types';
 
 interface RegistrationModalProps {
@@ -38,7 +38,7 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
     e.preventDefault();
     setLoading(true);
     try {
-      await firestoreService.create('applications', {
+      await databaseService.create('applications', {
         ...formData,
         status: 'pending',
         createdAt: new Date().toISOString()

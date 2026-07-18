@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Plus, Shield, Phone, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../hooks/useAuth';
@@ -38,7 +38,7 @@ export function Admins() {
   });
 
   useEffect(() => {
-    const unsubscribeUsers = firestoreService.subscribe<UserProfile>('users', [], (data) => {
+    const unsubscribeUsers = databaseService.subscribe<UserProfile>('users', [], (data) => {
       setUsers(data);
       setLoading(false);
     });
@@ -117,7 +117,7 @@ export function Admins() {
         });
 
         // 2. Update Firestore Profile
-        await firestoreService.update('users', editingAdmin.uid, {
+        await databaseService.update('users', editingAdmin.uid, {
           name: formData.name,
           phone: normalizedPhone,
           email: formData.email,
@@ -155,7 +155,7 @@ export function Admins() {
           membershipStatus: formData.membershipStatus,
           createdAt: new Date().toISOString()
         };
-        await firestoreService.create('users', newAdmin, uid);
+        await databaseService.create('users', newAdmin, uid);
         setSuccess('Admin created successfully!');
       }
 
@@ -184,7 +184,7 @@ export function Admins() {
       });
 
       // 2. Delete from Firestore
-      await firestoreService.delete('users', uid);
+      await databaseService.delete('users', uid);
 
       setDeleteConfirmId(null);
     } catch (error: any) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../../firebase';
-import { collection, query, where, getDocs, doc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { db } from '../../lib/database';
+import {  collection, query, where, getDocs, doc, onSnapshot, writeBatch  } from '../../lib/database';
 import { UserProfile, ChapterPosition } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../lib/utils';

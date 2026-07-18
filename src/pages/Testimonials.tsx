@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { UserProfile, Testimonial } from '../types';
-import { where, orderBy } from 'firebase/firestore';
+import {  where, orderBy  } from '../lib/database';
 import { MessageSquare, Star, Search, Filter, Plus, Trash2, CheckCircle2, Clock, MapPin, Building2, User, X, Check, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -24,7 +24,7 @@ export function Testimonials() {
     // Load users
     const loadUsers = async () => {
       try {
-        const allUsers = await firestoreService.list<UserProfile>('users');
+        const allUsers = await databaseService.list<UserProfile>('users');
         const userMap: Record<string, UserProfile> = {};
         allUsers.forEach(u => { userMap[u.uid] = u; });
         setUsers(userMap);
@@ -53,7 +53,7 @@ export function Testimonials() {
       }
     }
     
-    const unsubscribe = firestoreService.subscribe(
+    const unsubscribe = databaseService.subscribe(
       'testimonials',
       constraints,
       (data: any[]) => {
@@ -68,7 +68,7 @@ export function Testimonials() {
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this testimonial?')) {
       try {
-        await firestoreService.delete('testimonials', id);
+        await databaseService.delete('testimonials', id);
       } catch (error) {
         console.error("Delete error", error);
         alert('Failed to delete.');

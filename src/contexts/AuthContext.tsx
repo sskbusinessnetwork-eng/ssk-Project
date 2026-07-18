@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setDoc } from '../lib/database';
 import { UserProfile } from '../types';
-import { handleFirestoreError, OperationType } from '../utils/firebaseUtils';
+
+export const auth = {}; // dummy
+export const db = {}; // dummy
 
 interface AuthContextType {
   user: any | null;
@@ -67,11 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error("Firebase signOut error:", err);
-    }
+    try { await import("../lib/supabaseClient").then(m => m.supabase.auth.signOut()); } catch(e) {}
     setUser(null);
     setProfile(null);
     localStorage.removeItem('user');

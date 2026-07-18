@@ -17,12 +17,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, Link } from 'react-router-dom';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Referral, UserProfile, ThankYouSlip } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
-import { where, orderBy, onSnapshot, collection } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  where, orderBy, onSnapshot, collection  } from '../lib/database';
+import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
@@ -86,7 +86,7 @@ export function Referrals() {
       constraints.unshift(where(filter === 'passed' ? 'fromUserId' : 'toUserId', '==', profile.uid));
     }
 
-    const unsubscribe = firestoreService.subscribe<Referral>('referrals', constraints, (data) => {
+    const unsubscribe = databaseService.subscribe<Referral>('referrals', constraints, (data) => {
       setReferrals(data);
       setLoading(false);
       clearTimeout(timeoutId);
@@ -103,7 +103,7 @@ export function Referrals() {
     });
 
     // Fetch members/users
-    firestoreService.list<UserProfile>('users', []).then(data => {
+    databaseService.list<UserProfile>('users', []).then(data => {
       if (isAdmin || isChapterAdmin) {
         setMembers(data);
       } else {
@@ -141,7 +141,7 @@ export function Referrals() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('referrals', newReferral);
+      await databaseService.create('referrals', newReferral);
       
       // Create notifications
       await notificationService.createNotification(
@@ -187,7 +187,7 @@ export function Referrals() {
 
   const updateStatus = async (id: string, status: Referral['status']) => {
     try {
-      await firestoreService.update('referrals', id, { 
+      await databaseService.update('referrals', id, { 
         status,
         updatedAt: new Date().toISOString()
       });
@@ -222,7 +222,7 @@ export function Referrals() {
 
     try {
       // Double check latest status from Firestore for safety
-      const latestRef = await firestoreService.get<Referral>('referrals', selectedReferral.id);
+      const latestRef = await databaseService.get<Referral>('referrals', selectedReferral.id);
       if (latestRef && (latestRef.status === 'COMPLETED' || latestRef.status === 'NOT_CONVERTED')) {
         setErrorMessage("Already submitted.");
         setIsThankYouModalOpen(false);
@@ -240,7 +240,7 @@ export function Referrals() {
         createdAt: new Date().toISOString()
       };
 
-      await firestoreService.create('thank_you_slips', newSlip);
+      await databaseService.create('thank_you_slips', newSlip);
       
       // Create notifications
       await notificationService.createNotification(
@@ -253,7 +253,7 @@ export function Referrals() {
       await notificationService.notifyMasterAdmins('THANKYOU', `${profile.name} submitted a Thank You slip to ${selectedReferral.fromUserName}.`);
       
       // Mark referral as completed after submitting thank you slip
-      await firestoreService.update('referrals', selectedReferral.id, { 
+      await databaseService.update('referrals', selectedReferral.id, { 
         status: 'COMPLETED',
         updatedAt: new Date().toISOString()
       });
@@ -289,7 +289,7 @@ export function Referrals() {
 
     try {
       // Double check latest status from Firestore for safety
-      const latestRef = await firestoreService.get<Referral>('referrals', selectedReferral.id);
+      const latestRef = await databaseService.get<Referral>('referrals', selectedReferral.id);
       if (latestRef && (latestRef.status === 'COMPLETED' || latestRef.status === 'NOT_CONVERTED')) {
         setErrorMessage("Already submitted.");
         setIsNotConvertedModalOpen(false);
@@ -297,7 +297,7 @@ export function Referrals() {
         return;
       }
 
-      await firestoreService.update('referrals', selectedReferral.id, { 
+      await databaseService.update('referrals', selectedReferral.id, { 
         status: 'NOT_CONVERTED',
         notConvertedReason: notConvertedReason,
         updatedAt: new Date().toISOString()

@@ -1,12 +1,12 @@
-import { firestoreService } from './firestoreService';
+import { databaseService } from './databaseService';
 import { UserRole } from '../types';
-import { where } from 'firebase/firestore';
+import {  where  } from '../lib/database';
 
 export type NotificationType = 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE' | 'TESTIMONIAL';
 
 export const notificationService = {
   async createNotification(userId: string, role: UserRole, type: NotificationType, message: string, relatedUserId?: string) {
-    return firestoreService.create('notifications', {
+    return databaseService.create('notifications', {
       userId,
       role,
       type,
@@ -18,7 +18,7 @@ export const notificationService = {
   },
 
   async notifyMasterAdmins(type: NotificationType, message: string, relatedUserId?: string) {
-    const masterAdmins = await firestoreService.list<any>('users', [
+    const masterAdmins = await databaseService.list<any>('users', [
       where('role', '==', 'MASTER_ADMIN')
     ]);
     

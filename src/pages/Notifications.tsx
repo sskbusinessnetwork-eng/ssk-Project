@@ -10,10 +10,10 @@ import {
   UserPlus
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { firestoreService } from '../services/firestoreService';
+import { databaseService } from '../services/databaseService';
 import { Notification } from '../types';
-import { where, orderBy, limit, query, collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import {  where, orderBy, limit, query, collection, getDocs, deleteDoc, doc, updateDoc  } from '../lib/database';
+import { db } from '../lib/database';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 
@@ -34,7 +34,7 @@ export function Notifications() {
       limit(50)
     ];
     
-    const unsubscribe = firestoreService.subscribe<Notification>('notifications', constraints, (data) => {
+    const unsubscribe = databaseService.subscribe<Notification>('notifications', constraints, (data) => {
       setNotifications(data);
       setLoading(false);
     }, (error) => {
