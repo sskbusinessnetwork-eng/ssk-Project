@@ -95,38 +95,84 @@ export function Login() {
 
       const normalizedPhone = normalizePhoneNumber(phone);
       
-      const q = query(collection(db, 'users'), where('phone', '==', normalizedPhone), limit(1));
-      const querySnapshot = await getDocs(q);
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        phone: normalizedPhone,
+        password: password,
+      });
 
-      if (querySnapshot.empty) {
-        throw new Error('User not found. Please check your phone number.');
+      if (authError) {
+         if (authError.message.toLowerCase().includes("invalid login credentials") || authError.message.toLowerCase().includes("credentials")) {
+             throw new Error("Incorrect password or mobile number not registered.");
+         }
+         throw new Error(authError.message || "Unable to sign in. Please try again.");
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data() as UserProfile & { password?: string };
-      const uid = userDoc.id;
+      if (!authData.user) {
+        throw new Error("Unable to sign in. Please try again.");
+      }
 
-      let storedPassword = userData.password;
+      // 1. Check if user is Master Admin
+      const { data: masterAdmin } = await supabase
+        .from('master_admins')
+        .select('*')
+        .eq('auth_user_id', authData.user.id)
+        .single();
 
-      if (!storedPassword) {
-        const authDoc = await getDoc(doc(db, 'auth_data', uid));
-        if (authDoc.exists()) {
-          storedPassword = authDoc.data().password;
+      if (masterAdmin) {
+        if (masterAdmin.status !== 'ACTIVE') {
+          await supabase.auth.signOut();
+          throw new Error("Your account has been disabled.");
         }
+
+        login({
+          uid: masterAdmin.auth_user_id,
+          name: masterAdmin.full_name,
+          phone: masterAdmin.phone_number,
+          role: 'MASTER_ADMIN',
+          membershipStatus: 'ACTIVE',
+          createdAt: masterAdmin.created_at
+        });
+
+        navigate('/master-admin/dashboard', { replace: true });
+        return;
       }
 
-      if (!storedPassword || storedPassword !== password) {
-        throw new Error('Wrong password. Please try again.');
+      // 2. Check if user is a regular member / chapter admin
+      const { data: regularUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (regularUser) {
+        if (regularUser.status !== 'ACTIVE') {
+          await supabase.auth.signOut();
+          throw new Error("Your account has been disabled.");
+        }
+
+        login({
+          uid: regularUser.id,
+          name: regularUser.name,
+          phone: regularUser.phone,
+          role: regularUser.role,
+          position: regularUser.position,
+          membershipStatus: regularUser.status,
+          createdAt: regularUser.created_at,
+          chapter_id: regularUser.chapter_id,
+          must_change_password: regularUser.must_change_password
+        });
+        
+        if (regularUser.must_change_password) {
+          navigate('/set-password');
+        } else {
+          const dashboardPath = getDashboardPath(regularUser.role || 'MEMBER');
+          navigate(dashboardPath, { replace: true });
+        }
+        return;
       }
 
-      login({ uid, ...userData } as UserProfile);
-      
-      if (userData.must_change_password) {
-        navigate('/set-password');
-      } else {
-        const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
-        navigate(dashboardPath);
-      }
+      await supabase.auth.signOut();
+      throw new Error("User profile not found.");
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || 'An unexpected error occurred.');
