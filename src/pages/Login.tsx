@@ -20,6 +20,26 @@ export function Login() {
   const [forgotStep, setForgotStep] = React.useState<'identifier' | 'otp' | 'reset'>('identifier');
   const [confirmationResult, setConfirmationResult] = React.useState<any | null>(null);
   const [resetToken, setResetToken] = React.useState<string | null>(null);
+  const [supabaseConnected, setSupabaseConnected] = React.useState<boolean | null>(null);
+
+  // Check Supabase Connection
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const { error } = await supabase.from('users').select('id').limit(1);
+        if (error) {
+          console.error("Supabase connection error:", error);
+          setSupabaseConnected(false);
+        } else {
+          setSupabaseConnected(true);
+        }
+      } catch (err) {
+        console.error("Supabase connection check failed:", err);
+        setSupabaseConnected(false);
+      }
+    };
+    checkConnection();
+  }, []);
 
   // Clear stale session on mount if not authenticated
   useEffect(() => {
@@ -429,64 +449,6 @@ export function Login() {
                     </>
                   )}
                 </button>
-
-                {/* Quick Demo Segment Divider */}
-                <div className="relative flex items-center gap-3 pt-2">
-                  <div className="flex-1 h-[1px] bg-neutral-900" />
-                  <span className="text-[8px] font-black text-neutral-600 uppercase tracking-[0.25em]">Quick Command login</span>
-                  <div className="flex-1 h-[1px] bg-neutral-900" />
-                </div>
-
-                {/* Quick Roles Grid */}
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('9999999999', 'password123')}
-                    disabled={loading}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-900/30 hover:bg-primary/5 border border-neutral-900 hover:border-primary/20 text-left transition-all active:scale-[0.99] group disabled:opacity-50 cursor-pointer"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">Master Admin</span>
-                        <span className="text-[7px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black">1-TAP</span>
-                      </div>
-                      <span className="text-xs font-bold text-neutral-300 block mt-0.5">Sunil Sharma (Super Admin)</span>
-                    </div>
-                    <span className="text-[9px] font-mono font-medium text-neutral-600 group-hover:text-primary transition-colors">9999999999</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('9844955100', 'Welcome@123')}
-                    disabled={loading}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-900/30 hover:bg-primary/5 border border-neutral-900 hover:border-primary/20 text-left transition-all active:scale-[0.99] group disabled:opacity-50 cursor-pointer"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">Chapter Admin</span>
-                        <span className="text-[7px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black">1-TAP</span>
-                      </div>
-                      <span className="text-xs font-bold text-neutral-300 block mt-0.5">Sunil S.R (Chapter Lead)</span>
-                    </div>
-                    <span className="text-[9px] font-mono font-medium text-neutral-600 group-hover:text-primary transition-colors">9844955100</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleQuickLogin('9945275995', '9945275995')}
-                    disabled={loading}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-900/30 hover:bg-primary/5 border border-neutral-900 hover:border-primary/20 text-left transition-all active:scale-[0.99] group disabled:opacity-50 cursor-pointer"
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-primary">Regular Member</span>
-                        <span className="text-[7px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-black">1-TAP</span>
-                      </div>
-                      <span className="text-xs font-bold text-neutral-300 block mt-0.5">Sudarshan Vagale (Real Estate)</span>
-                    </div>
-                    <span className="text-[9px] font-mono font-medium text-neutral-600 group-hover:text-primary transition-colors">9945275995</span>
-                  </button>
-                </div>
               </motion.form>
             ) : (
               <motion.div
@@ -649,6 +611,22 @@ export function Login() {
           transition={{ delay: 0.3 }}
           className="mt-8 text-center space-y-4"
         >
+          {supabaseConnected !== null && (
+            <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
+              {supabaseConnected ? (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-emerald-500/80">Supabase Connected</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-red-500/80">Supabase Disconnected</span>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="pt-4 border-t border-neutral-900/50">
             <Link to="/" className="inline-flex items-center gap-2 text-neutral-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors">
               <ArrowLeft size={12} /> ESCAPE TO MAIN PORTAL
