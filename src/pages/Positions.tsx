@@ -171,36 +171,36 @@ export function Positions() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-[24px] shadow-sm border border-neutral-200 space-y-6">
+      <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 space-y-6">
         
         {/* Top Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           {isMasterAdmin && (
             <div className="flex-1">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 mb-2 block">Select Chapter</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 mb-2 block">Select Chapter</label>
               <select
                 value={selectedChapterId}
                 onChange={(e) => setSelectedChapterId(e.target.value)}
-                className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-semibold text-neutral-900 cursor-pointer"
+                className="w-full h-[50px] px-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none transition-all text-sm font-semibold text-white cursor-pointer appearance-none"
               >
-                <option value="">Choose a Chapter...</option>
+                <option value="" className="bg-[#161B22] text-white">Choose a Chapter...</option>
                 {chapters.map(chapter => (
-                  <option key={chapter.id} value={chapter.id}>{chapter.chapter_name}</option>
+                  <option key={chapter.id} value={chapter.id} className="bg-[#161B22] text-white">{chapter.chapter_name}</option>
                 ))}
               </select>
             </div>
           )}
           
           <div className="flex-1">
-            <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 mb-2 block">Search Member</label>
+            <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 mb-2 block">Search Member</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
               <input
                 type="text"
                 placeholder="Search by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full h-11 pl-9 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm"
+                className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-sm transition-all"
               />
             </div>
           </div>
@@ -215,49 +215,49 @@ export function Positions() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-200">
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider w-12">Profile</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Member Name</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Email</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Phone</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Current Position</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Assign Position</th>
+                <tr className="bg-[#0F172A] border-b border-white/[0.06]">
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] w-12">Profile</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Member Name</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Email</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Phone</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Current Position</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Assign Position</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody className="divide-y divide-white/[0.06]">
                 {filteredMembers.map(member => {
                   const currentPos = member.position || 'member';
                   return (
-                    <tr key={member.uid} className="hover:bg-neutral-50/50 transition-colors">
+                    <tr key={member.uid} className="hover:bg-white/5 even:bg-white/[0.02] border-b border-white/[0.06] transition-colors">
                       <td className="p-4">
-                        <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center border border-neutral-200 overflow-hidden">
+                        <div className="w-10 h-10 rounded-full bg-[#0F172A] flex items-center justify-center border border-white/10 overflow-hidden">
                           {member.photoURL ? (
                             <img src={member.photoURL} alt={member.name} className="w-full h-full object-cover" />
                           ) : (
-                            <User size={18} className="text-neutral-400" />
+                            <User size={18} className="text-neutral-400 group-hover:text-primary transition-colors" />
                           )}
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="font-bold text-neutral-900 text-sm">{member.name || member.displayName}</div>
-                        <div className="text-xs text-neutral-500">{member.businessName}</div>
+                        <div className="font-bold text-white text-sm">{member.name || member.displayName}</div>
+                        <div className="text-xs text-neutral-400">{member.businessName}</div>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5 text-sm text-neutral-600">
-                          <Mail size={14} className="text-neutral-400" />
+                        <div className="flex items-center gap-1.5 text-sm text-neutral-400">
+                          <Mail size={14} className="text-neutral-500" />
                           {member.email || 'N/A'}
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5 text-sm text-neutral-600">
-                          <Phone size={14} className="text-neutral-400" />
+                        <div className="flex items-center gap-1.5 text-sm text-neutral-400">
+                          <Phone size={14} className="text-neutral-500" />
                           {member.phone || 'N/A'}
                         </div>
                       </td>
                       <td className="p-4">
                         <span className={cn(
-                          "inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                          currentPos === 'member' ? "bg-neutral-100 text-neutral-600" : "bg-primary/10 text-primary border border-primary/20"
+                          "inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.5px]",
+                          currentPos === 'member' ? "bg-[#0F172A] text-neutral-400 border border-white/10" : "bg-primary/10 text-primary border border-primary/20"
                         )}>
                           {currentPos.replace('_', ' ')}
                         </span>
@@ -268,14 +268,14 @@ export function Positions() {
                             value={currentPos}
                             onChange={(e) => handleAssignPosition(member.uid, e.target.value as ChapterPosition)}
                             disabled={updatingId === member.uid || (!isMasterAdmin && e.target.value === 'chapter_admin' && currentPos !== 'chapter_admin')}
-                            className="h-9 px-3 bg-white border border-neutral-200 rounded-lg focus:border-primary outline-none text-xs font-semibold cursor-pointer disabled:opacity-50 min-w-[140px]"
+                            className="h-9 px-3 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-xs font-semibold text-white cursor-pointer disabled:opacity-50 min-w-[140px] appearance-none transition-colors"
                           >
                             {POSITIONS.map(pos => {
                               if (!isMasterAdmin && pos.key === 'chapter_admin' && currentPos !== 'chapter_admin') {
                                 return null;
                               }
                               return (
-                                <option key={pos.key} value={pos.key}>{pos.label}</option>
+                                <option key={pos.key} value={pos.key} className="bg-[#161B22] text-white">{pos.label}</option>
                               );
                             })}
                           </select>
@@ -301,41 +301,41 @@ export function Positions() {
       </div>
 
       {selectedChapterId && (
-        <div className="bg-white p-6 rounded-[24px] shadow-sm border border-neutral-200 space-y-6 mt-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={20} className="text-neutral-400" />
-            <h2 className="text-lg font-bold text-neutral-900">Position History</h2>
+        <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 space-y-6 mt-8">
+          <div className="flex items-center gap-2 mb-4 border-b border-white/[0.08] pb-4">
+            <Clock size={20} className="text-primary" />
+            <h2 className="text-lg font-bold text-white uppercase tracking-[0.5px]">Position History</h2>
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
-                <tr className="bg-neutral-50 border-b border-neutral-200">
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Date</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Changed By</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Member</th>
-                  <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Change</th>
+                <tr className="bg-[#0F172A] border-b border-white/[0.06]">
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Date</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Changed By</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Member</th>
+                  <th className="p-4 text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px]">Change</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200">
+              <tbody className="divide-y divide-white/[0.06]">
                 {history.map(item => (
-                  <tr key={item.id} className="hover:bg-neutral-50/50 transition-colors">
-                    <td className="p-4 text-sm text-neutral-600 whitespace-nowrap">
+                  <tr key={item.id} className="hover:bg-white/5 even:bg-white/[0.02] border-b border-white/[0.06] transition-colors">
+                    <td className="p-4 text-sm text-neutral-400 whitespace-nowrap">
                       {format(new Date(item.date), 'dd MMM yyyy, h:mm a')}
                     </td>
-                    <td className="p-4 text-sm font-medium text-neutral-900">
+                    <td className="p-4 text-sm font-medium text-white">
                       {item.changedByName}
                     </td>
-                    <td className="p-4 text-sm font-medium text-neutral-900">
+                    <td className="p-4 text-sm font-medium text-white">
                       {item.memberName}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded capitalize">
+                        <span className="text-xs font-medium text-neutral-400 bg-[#0F172A] border border-white/10 px-2 py-0.5 rounded capitalize">
                           {item.oldPosition.replace('_', ' ')}
                         </span>
-                        <ArrowRight size={14} className="text-neutral-400" />
-                        <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded capitalize">
+                        <ArrowRight size={14} className="text-neutral-500" />
+                        <span className="text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded capitalize">
                           {item.newPosition.replace('_', ' ')}
                         </span>
                       </div>

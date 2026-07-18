@@ -105,15 +105,17 @@ export function CreateChapter() {
   };
 
   const memberOptions = members.map(m => (
-    <option key={m.uid} value={m.uid}>{m.name || m.displayName} {m.businessName ? `(${m.businessName})` : ''}</option>
+    <option key={m.uid} value={m.uid} className="bg-[#161B22] text-white">
+      {m.name || m.displayName} {m.businessName ? `(${m.businessName})` : ''}
+    </option>
   ));
 
   return (
-    <div className="bg-white p-6 sm:p-8 rounded-[24px] shadow-sm border border-neutral-200">
-      <h2 className="text-xl font-bold text-neutral-900 mb-6">Create New Chapter</h2>
+    <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 sm:p-8">
+      <h2 className="text-xl font-bold text-white mb-6">Create New Chapter</h2>
       
       {success && (
-        <div className="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-2 text-sm font-semibold">
+        <div className="mb-6 p-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center gap-2 text-sm font-semibold">
           <CheckCircle2 size={18} />
           Chapter created successfully. Leadership positions have been assigned.
         </div>
@@ -123,35 +125,35 @@ export function CreateChapter() {
         
         {/* Basic Info */}
         <div className="space-y-4">
-          <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-widest border-b border-neutral-100 pb-2">
+          <h3 className="text-sm font-bold text-white uppercase tracking-[0.5px] border-b border-white/[0.08] pb-2">
             Chapter Details
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block">Chapter Name *</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Chapter Name *</label>
               <div className="relative">
-                <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <input
                   required
                   type="text"
                   placeholder="e.g., Bangalore Central"
                   value={formData.chapter_name}
                   onChange={(e) => setFormData(f => ({ ...f, chapter_name: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-sm transition-all"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block">Meeting Venue *</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Meeting Venue *</label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <input
                   required
                   type="text"
                   placeholder="e.g., Koramangala Community Hall"
                   value={formData.meeting_venue}
                   onChange={(e) => setFormData(f => ({ ...f, meeting_venue: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-sm transition-all"
                 />
               </div>
             </div>
@@ -160,70 +162,70 @@ export function CreateChapter() {
 
         {/* Leadership */}
         <div className="space-y-4">
-          <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-widest border-b border-neutral-100 pb-2">
+          <h3 className="text-sm font-bold text-white uppercase tracking-[0.5px] border-b border-white/[0.08] pb-2">
             Assign Leadership (Mandatory)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block text-[#E53935]">Chapter Admin *</label>
+              <label className="text-xs font-semibold text-primary uppercase tracking-[0.5px] ml-1 block">Chapter Admin *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <select
                   required
                   value={formData.chapter_admin_id}
                   onChange={(e) => setFormData(f => ({ ...f, chapter_admin_id: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm appearance-none"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white text-sm transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Member...</option>
+                  <option value="" className="bg-[#161B22] text-white">Select Member...</option>
                   {memberOptions}
                 </select>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block">President *</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">President *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <select
                   required
                   value={formData.president_id}
                   onChange={(e) => setFormData(f => ({ ...f, president_id: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm appearance-none"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white text-sm transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Member...</option>
+                  <option value="" className="bg-[#161B22] text-white">Select Member...</option>
                   {memberOptions}
                 </select>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block">Vice President *</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Vice President *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <select
                   required
                   value={formData.vice_president_id}
                   onChange={(e) => setFormData(f => ({ ...f, vice_president_id: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm appearance-none"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white text-sm transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Member...</option>
+                  <option value="" className="bg-[#161B22] text-white">Select Member...</option>
                   {memberOptions}
                 </select>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 block">Treasurer *</label>
+              <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Treasurer *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
                 <select
                   required
                   value={formData.treasurer_id}
                   onChange={(e) => setFormData(f => ({ ...f, treasurer_id: e.target.value }))}
-                  className="w-full h-11 pl-10 pr-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm appearance-none"
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white text-sm transition-all appearance-none cursor-pointer"
                 >
-                  <option value="">Select Member...</option>
+                  <option value="" className="bg-[#161B22] text-white">Select Member...</option>
                   {memberOptions}
                 </select>
               </div>
@@ -236,7 +238,7 @@ export function CreateChapter() {
           <button
             type="submit"
             disabled={loading}
-            className="px-8 py-3 bg-primary text-white font-bold text-sm uppercase tracking-widest rounded-xl hover:bg-primary/90 transition-colors shadow-md disabled:opacity-70 flex items-center gap-2"
+            className="px-8 py-3 bg-primary text-white font-bold text-sm uppercase tracking-widest rounded-[14px] hover:bg-[#DC2626] hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-300 disabled:opacity-70 flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
             {loading ? 'Creating...' : 'Create Chapter'}
