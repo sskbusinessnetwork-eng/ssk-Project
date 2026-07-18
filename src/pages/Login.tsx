@@ -95,37 +95,26 @@ export function Login() {
 
       const normalizedPhone = normalizePhoneNumber(phone);
       
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        phone: normalizedPhone,
-        password: password,
-      });
-
-      if (authError) {
-         if (authError.message.toLowerCase().includes("invalid login credentials") || authError.message.toLowerCase().includes("credentials")) {
-             throw new Error("Incorrect password or mobile number not registered.");
-         }
-         throw new Error(authError.message || "Unable to sign in. Please try again.");
-      }
-
-      if (!authData.user) {
-        throw new Error("Unable to sign in. Please try again.");
-      }
-
-      // 1. Check if user is Master Admin
-      const { data: masterAdmin } = await supabase
+      // 1. Check Master Admins first
+      const { data: masterAdmins, error: masterAdminError } = await supabase
         .from('master_admins')
         .select('*')
-        .eq('auth_user_id', authData.user.id)
-        .single();
+        .eq('phone_number', normalizedPhone)
+        .limit(1);
 
-      if (masterAdmin) {
+      if (masterAdmins && masterAdmins.length > 0) {
+        const masterAdmin = masterAdmins[0];
+        
+        if (masterAdmin.password !== password) {
+          throw new Error("Incorrect password.");
+        }
+
         if (masterAdmin.status !== 'ACTIVE') {
-          await supabase.auth.signOut();
           throw new Error("Your account has been disabled.");
         }
 
         login({
-          uid: masterAdmin.auth_user_id,
+          uid: masterAdmin.id,
           name: masterAdmin.full_name,
           phone: masterAdmin.phone_number,
           role: 'MASTER_ADMIN',
@@ -137,42 +126,46 @@ export function Login() {
         return;
       }
 
-      // 2. Check if user is a regular member / chapter admin
-      const { data: regularUser } = await supabase
+      // 2. Check regular users
+      const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', authData.user.id)
-        .single();
+        .eq('phone', normalizedPhone)
+        .limit(1);
 
-      if (regularUser) {
-        if (regularUser.status !== 'ACTIVE') {
-          await supabase.auth.signOut();
+      if (users && users.length > 0) {
+        const user = users[0];
+        
+        if (user.password !== password) {
+          throw new Error("Incorrect password.");
+        }
+
+        if (user.status !== 'ACTIVE') {
           throw new Error("Your account has been disabled.");
         }
 
         login({
-          uid: regularUser.id,
-          name: regularUser.name,
-          phone: regularUser.phone,
-          role: regularUser.role,
-          position: regularUser.position,
-          membershipStatus: regularUser.status,
-          createdAt: regularUser.created_at,
-          chapter_id: regularUser.chapter_id,
-          must_change_password: regularUser.must_change_password
+          uid: user.id,
+          name: user.name,
+          phone: user.phone,
+          role: user.role,
+          position: user.position,
+          membershipStatus: user.status,
+          createdAt: user.created_at,
+          chapter_id: user.chapter_id,
+          must_change_password: user.must_change_password
         });
         
-        if (regularUser.must_change_password) {
+        if (user.must_change_password) {
           navigate('/set-password');
         } else {
-          const dashboardPath = getDashboardPath(regularUser.role || 'MEMBER');
+          const dashboardPath = getDashboardPath(user.role || 'MEMBER');
           navigate(dashboardPath, { replace: true });
         }
         return;
       }
 
-      await supabase.auth.signOut();
-      throw new Error("User profile not found.");
+      throw new Error("Mobile number not registered.");
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || 'An unexpected error occurred.');
