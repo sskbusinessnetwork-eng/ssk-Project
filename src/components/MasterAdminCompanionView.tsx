@@ -213,7 +213,7 @@ export function MasterAdminCompanionView({
             <div className="relative border-l-2 border-neutral-100 pl-6 ml-3 space-y-8 pt-2">
               {finalRecentActivities.length > 0 ? (
                 finalRecentActivities.map((act, index) => {
-                  const IconComponent = act.icon;
+                  const IconComponent = act.icon || Activity;
                   return (
                     <motion.div 
                       key={act.id} 
