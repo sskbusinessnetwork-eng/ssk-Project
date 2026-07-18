@@ -99,7 +99,7 @@ export function Login() {
       const { data: masterAdmins, error: masterAdminError } = await supabase
         .from('master_admins')
         .select('*')
-        .eq('phone_number', normalizedPhone)
+        .in('phone_number', [phone, normalizedPhone])
         .limit(1);
 
       if (masterAdmins && masterAdmins.length > 0) {
@@ -130,7 +130,7 @@ export function Login() {
       const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('phone', normalizedPhone)
+        .in('phone', [phone, normalizedPhone])
         .limit(1);
 
       if (users && users.length > 0) {
