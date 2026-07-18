@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
-  role TEXT DEFAULT 'MEMBER' CHECK (role IN ('MASTER_ADMIN', 'CHAPTER_ADMIN', 'SALES_ADMIN', 'MEMBER')),
+  role TEXT DEFAULT 'MEMBER' CHECK (role IN ('MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER')),
+  position TEXT DEFAULT 'member' CHECK (position IN ('member', 'chapter_admin', 'president', 'vice_president', 'treasurer')),
   company TEXT,
   designation TEXT,
   chapter_id UUID, -- Will link to chapters table

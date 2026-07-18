@@ -30,12 +30,10 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
-import { usePositions } from '../hooks/usePositions';
 import { MemberTestimonials } from '../components/MemberTestimonials';
 
 export function Profile() {
   const { profile: currentUserProfile } = useAuth();
-  const { getPositionForUser } = usePositions();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const targetUserId = searchParams.get('id');
@@ -262,12 +260,12 @@ export function Profile() {
     }
   };
 
-  const getPositionText = (userId: string) => {
-    const position = getPositionForUser(userId);
-    if (!position) return null;
+  const getPositionText = (member: UserProfile) => {
+    const position = member.position;
+    if (!position || position === 'member') return null;
     return (
       <span className="text-[10px] font-bold text-primary uppercase tracking-tight bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
-        {position}
+        {position.replace('_', ' ')}
       </span>
     );
   };
@@ -330,7 +328,7 @@ export function Profile() {
             <div>
               <div className="flex items-center justify-center gap-2 flex-wrap px-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white break-words">{targetProfile.name}</h2>
-                {getPositionText(targetProfile.uid)}
+                {getPositionText(targetProfile)}
               </div>
               <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
                 {targetProfile.role === 'MASTER_ADMIN' ? 'Master Admin' : targetProfile.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (targetProfile.category || 'Member')}
@@ -648,7 +646,7 @@ export function Profile() {
           <div>
             <div className="flex items-center justify-center gap-2 flex-wrap px-2">
               <h2 className="text-lg sm:text-xl font-bold text-white break-words">{formData.name || 'Your Name'}</h2>
-              {currentUserProfile && getPositionText(currentUserProfile.uid)}
+              {currentUserProfile && getPositionText(currentUserProfile)}
             </div>
             <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
               {formData.role === 'MASTER_ADMIN' ? 'Master Admin' : formData.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (formData.category || 'Member')}

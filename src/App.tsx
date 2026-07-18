@@ -11,6 +11,7 @@ import { MyReport } from './pages/MyReport';
 import { Referrals } from './pages/Referrals';
 import { ThankYouSlips } from './pages/ThankYouSlips';
 import { Testimonials } from './pages/Testimonials';
+import { TestimonialReports } from './pages/TestimonialReports';
 import { Profile } from './pages/Profile';
 import { Categories } from './pages/Categories';
 import { Admins } from './pages/Admins';
@@ -49,7 +50,8 @@ export default function App() {
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/refer" element={<Referrals />} />
               <Route path="/thank-you-slips" element={<ThankYouSlips />} />
-              <Route path="/testimonials" element={<Testimonials />} />
+              <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN']}><Testimonials /></ProtectedRoute>} />
+              <Route path="/testimonial-reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TestimonialReports /></ProtectedRoute>} />
               <Route path="/guests" element={<Guests />} />
               <Route path="/one-to-one" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><OneToOneMeetings /></ProtectedRoute>} />
               <Route path="/network" element={<Connections />} />

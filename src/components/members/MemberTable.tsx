@@ -21,7 +21,6 @@ import {
 import { UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
 import { differenceInDays, format } from 'date-fns';
-import { usePositions } from '../../hooks/usePositions';
 import { useNavigate } from 'react-router-dom';
 
 interface MemberTableProps {
@@ -48,15 +47,14 @@ export function MemberTable({
   onDeleteMember
 }: MemberTableProps) {
   const navigate = useNavigate();
-  const { getPositionForUser } = usePositions();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  const getPositionText = (userId: string) => {
-    const position = getPositionForUser(userId);
-    if (!position) return null;
+  const getPositionText = (member: UserProfile) => {
+    const position = member.position;
+    if (!position || position === 'member') return null;
     return (
       <span className="text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10">
-        {position}
+        {position.replace('_', ' ')}
       </span>
     );
   };
@@ -114,7 +112,7 @@ export function MemberTable({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
                             <p className="font-bold text-white text-sm leading-tight truncate">{member.name || member.displayName}</p>
-                            {getPositionText(member.uid)}
+                            {getPositionText(member)}
                           </div>
                           <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-medium">
                             <Phone size={10} className="text-neutral-400" />
@@ -259,7 +257,7 @@ export function MemberTable({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="font-bold text-white text-sm leading-tight truncate">{member.name || member.displayName}</p>
-                      {getPositionText(member.uid)}
+                      {getPositionText(member)}
                     </div>
                     <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-medium mt-1">
                       <Phone size={10} className="text-neutral-400" />

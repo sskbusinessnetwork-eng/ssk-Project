@@ -27,12 +27,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { firestoreService } from '../services/firestoreService';
 import { Modal } from '../components/Modal';
-import { usePositions } from '../hooks/usePositions';
 
 export function Connections() {
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const { getPositionForUser } = usePositions();
   const [activeTab, setActiveTab] = useState<'chapter' | 'all'>('chapter');
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [adminNames, setAdminNames] = useState<Record<string, string>>({});
@@ -227,12 +225,12 @@ export function Connections() {
     );
   }
 
-  const getPositionText = (userId: string) => {
-    const position = getPositionForUser(userId);
-    if (!position) return null;
+  const getPositionText = (member: UserProfile) => {
+    const position = member.position;
+    if (!position || position === 'member') return null;
     return (
       <span className="text-[10px] font-bold text-primary uppercase tracking-tight bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
-        {position}
+        {position.replace('_', ' ')}
       </span>
     );
   };
@@ -410,7 +408,7 @@ export function Connections() {
                     <h3 className="text-[16px] sm:text-[18px] font-bold text-[#111827] dark:text-white truncate max-w-[150px] sm:max-w-none">
                       {member.name}
                     </h3>
-                    {getPositionText(member.uid)}
+                    {getPositionText(member)}
                   </div>
                   <p className="text-[13px] sm:text-[14px] font-medium text-[#6B7280] dark:text-[#D1D5DB] truncate">
                     {member.role === 'CHAPTER_ADMIN' 

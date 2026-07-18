@@ -3,6 +3,8 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING';
 export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE';
 
+export type ChapterPosition = 'member' | 'chapter_admin' | 'president' | 'vice_president' | 'treasurer';
+
 export interface UserProfile {
   uid: string;
   name: string;
@@ -16,6 +18,7 @@ export interface UserProfile {
   area?: string;
   address?: string;
   role: UserRole;
+  position?: ChapterPosition;
   membershipStatus: UserStatus;
   subscriptionStart?: string;
   subscriptionEnd?: string;
