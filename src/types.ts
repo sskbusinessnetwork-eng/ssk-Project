@@ -29,10 +29,23 @@ export interface UserProfile {
   bio?: string;
   adminId?: string;
   associatedChapterAdminId?: string;
+  chapter_id?: string;
   must_change_password?: boolean;
   memberId?: string;
   whatsappNumber?: string;
   status?: string;
+}
+
+export interface Chapter {
+  id: string;
+  chapter_name: string;
+  meeting_venue: string;
+  chapter_admin_id: string;
+  president_id: string;
+  vice_president_id: string;
+  treasurer_id: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 export interface Meeting {

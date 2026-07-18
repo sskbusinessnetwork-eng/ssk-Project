@@ -13,6 +13,7 @@ import { ThankYouSlips } from './pages/ThankYouSlips';
 import { Testimonials } from './pages/Testimonials';
 import { TestimonialReports } from './pages/TestimonialReports';
 import { Positions } from './pages/Positions';
+import { ManageChapter } from './pages/ManageChapter';
 import { OnboardMember } from './pages/OnboardMember';
 import { SetPassword } from './pages/SetPassword';
 import { Profile } from './pages/Profile';
@@ -55,7 +56,7 @@ export default function App() {
               <Route path="/thank-you-slips" element={<ThankYouSlips />} />
               <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN']}><Testimonials /></ProtectedRoute>} />
               <Route path="/testimonial-reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TestimonialReports /></ProtectedRoute>} />
-              <Route path="/positions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Positions /></ProtectedRoute>} />
+              <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
               <Route path="/onboard" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><OnboardMember /></ProtectedRoute>} />
               <Route path="/set-password" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><SetPassword /></ProtectedRoute>} />
               <Route path="/guests" element={<Guests />} />

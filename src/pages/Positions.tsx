@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, doc, onSnapshot, writeBatch, addDoc } from 'firebase/firestore';
-import { UserProfile, ChapterPosition, PositionHistory } from '../types';
+import { collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot } from 'firebase/firestore';
+import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { Search, User, Phone, Mail, Clock, ArrowRight } from 'lucide-react';
@@ -19,27 +19,38 @@ export function Positions() {
   const { profile } = useAuth();
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   
-  const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
-  const [selectedAdminId, setSelectedAdminId] = useState<string>(isMasterAdmin ? '' : (profile?.uid || ''));
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
+  
   const [members, setMembers] = useState<UserProfile[]>([]);
-  const [history, setHistory] = useState<PositionHistory[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const effectiveAdminId = isMasterAdmin ? selectedAdminId : profile?.uid;
-
+  // Load chapters
   useEffect(() => {
     if (isMasterAdmin) {
-      const q = query(collection(db, 'users'), where('role', '==', 'CHAPTER_ADMIN'));
+      const q = query(collection(db, 'chapters'));
       getDocs(q).then(snap => {
-        setChapterAdmins(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+        setChapters(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter)));
+      });
+    } else if (profile?.uid) {
+      // For Chapter Admin
+      const q = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
+      getDocs(q).then(snap => {
+        const found = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter));
+        setChapters(found);
+        if (found.length > 0) {
+          setSelectedChapterId(found[0].id);
+        }
       });
     }
-  }, [isMasterAdmin]);
+  }, [isMasterAdmin, profile?.uid]);
 
+  // Load members of selected chapter
   useEffect(() => {
-    if (!effectiveAdminId) {
+    if (!selectedChapterId) {
       setMembers([]);
       setHistory([]);
       return;
@@ -47,28 +58,17 @@ export function Positions() {
 
     setLoading(true);
     
-    // Subscribe to all members under this chapter admin, OR the admin themselves
-    const q1 = query(collection(db, 'users'), where('associatedChapterAdminId', '==', effectiveAdminId));
-    const q2 = query(collection(db, 'users'), where('uid', '==', effectiveAdminId));
-
-    const unsub1 = onSnapshot(q1, (snap1) => {
-      getDocs(q2).then(snap2 => {
-        const adminData = snap2.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
-        const membersData = snap1.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
-        
-        const combined = [...adminData, ...membersData];
-        const unique = Array.from(new Map(combined.map(item => [item.uid, item])).values());
-        
-        setMembers(unique);
-        setLoading(false);
-      });
+    // Subscribe to members
+    const qMembers = query(collection(db, 'users'), where('chapter_id', '==', selectedChapterId));
+    const unsub1 = onSnapshot(qMembers, (snap) => {
+      setMembers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      setLoading(false);
     });
 
-    // Fetch History
-    const historyQ = query(collection(db, 'position_history'), where('chapterAdminId', '==', effectiveAdminId));
-    const unsubHistory = onSnapshot(historyQ, (snap) => {
-      const hist = snap.docs.map(d => ({ id: d.id, ...d.data() } as PositionHistory));
-      // Sort by date desc
+    // Subscribe to history
+    const qHistory = query(collection(db, 'position_history'), where('chapter_id', '==', selectedChapterId));
+    const unsubHistory = onSnapshot(qHistory, (snap) => {
+      const hist = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
       hist.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setHistory(hist);
     });
@@ -77,12 +77,11 @@ export function Positions() {
       unsub1();
       unsubHistory();
     };
-  }, [effectiveAdminId]);
+  }, [selectedChapterId]);
 
   const handleAssignPosition = async (userId: string, newPosition: ChapterPosition) => {
-    if (!effectiveAdminId || !profile) return;
+    if (!selectedChapterId || !profile) return;
     
-    // Validate chapter admin permissions
     if (!isMasterAdmin && newPosition === 'chapter_admin') {
       alert("Only Master Admin can assign a new Chapter Admin.");
       return;
@@ -120,7 +119,7 @@ export function Positions() {
             memberName: currentHolder.name || currentHolder.displayName || 'Unknown',
             oldPosition: newPosition,
             newPosition: 'member',
-            chapterAdminId: effectiveAdminId
+            chapter_id: selectedChapterId
           });
         }
       }
@@ -129,8 +128,19 @@ export function Positions() {
       batch.update(doc(db, 'users', userId), {
         position: newPosition,
         ...(newPosition === 'chapter_admin' ? { role: 'CHAPTER_ADMIN' } : 
-            (oldPosition === 'chapter_admin' ? { role: 'MEMBER' } : {}))
+             (oldPosition === 'chapter_admin' ? { role: 'MEMBER' } : {}))
       });
+
+      // 3. Update chapter record if applicable
+      const chapterRef = doc(db, 'chapters', selectedChapterId);
+      const updates: any = {};
+      if (newPosition === 'chapter_admin') updates.chapter_admin_id = userId;
+      if (newPosition === 'president') updates.president_id = userId;
+      if (newPosition === 'vice_president') updates.vice_president_id = userId;
+      if (newPosition === 'treasurer') updates.treasurer_id = userId;
+      if (Object.keys(updates).length > 0) {
+        batch.update(chapterRef, updates);
+      }
 
       // Log assignment history
       await addDoc(collection(db, 'position_history'), {
@@ -141,7 +151,7 @@ export function Positions() {
         memberName: selectedUser.name || selectedUser.displayName || 'Unknown',
         oldPosition: oldPosition,
         newPosition: newPosition,
-        chapterAdminId: effectiveAdminId
+        chapter_id: selectedChapterId
       });
 
       await batch.commit();
@@ -160,12 +170,7 @@ export function Positions() {
   );
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-neutral-900">Chapter Position Management</h1>
-        <p className="text-sm text-neutral-500">Manage and assign roles within your chapter.</p>
-      </div>
-
+    <div className="space-y-6">
       <div className="bg-white p-6 rounded-[24px] shadow-sm border border-neutral-200 space-y-6">
         
         {/* Top Filters */}
@@ -174,13 +179,13 @@ export function Positions() {
             <div className="flex-1">
               <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1 mb-2 block">Select Chapter</label>
               <select
-                value={selectedAdminId}
-                onChange={(e) => setSelectedAdminId(e.target.value)}
+                value={selectedChapterId}
+                onChange={(e) => setSelectedChapterId(e.target.value)}
                 className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-semibold text-neutral-900 cursor-pointer"
               >
                 <option value="">Choose a Chapter...</option>
-                {chapterAdmins.map(admin => (
-                  <option key={admin.uid} value={admin.uid}>{admin.name} ({admin.businessName || 'No Business'})</option>
+                {chapters.map(chapter => (
+                  <option key={chapter.id} value={chapter.id}>{chapter.chapter_name}</option>
                 ))}
               </select>
             </div>
@@ -202,7 +207,7 @@ export function Positions() {
         </div>
 
         {/* Table */}
-        {!effectiveAdminId ? (
+        {!selectedChapterId ? (
           <div className="py-12 text-center text-neutral-500">
             {isMasterAdmin ? "Select a chapter to view members." : "Loading..."}
           </div>
@@ -266,7 +271,6 @@ export function Positions() {
                             className="h-9 px-3 bg-white border border-neutral-200 rounded-lg focus:border-primary outline-none text-xs font-semibold cursor-pointer disabled:opacity-50 min-w-[140px]"
                           >
                             {POSITIONS.map(pos => {
-                              // Chapter Admin cannot assign another Chapter Admin
                               if (!isMasterAdmin && pos.key === 'chapter_admin' && currentPos !== 'chapter_admin') {
                                 return null;
                               }
@@ -296,7 +300,7 @@ export function Positions() {
         )}
       </div>
 
-      {effectiveAdminId && (
+      {selectedChapterId && (
         <div className="bg-white p-6 rounded-[24px] shadow-sm border border-neutral-200 space-y-6 mt-8">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={20} className="text-neutral-400" />
