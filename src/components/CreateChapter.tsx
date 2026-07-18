@@ -4,7 +4,10 @@ import {  collection, query, getDocs, doc, writeBatch, where  } from '../lib/dat
 import { UserProfile } from '../types';
 import { Building, MapPin, CheckCircle2, User } from 'lucide-react';
 
+import { useAuth } from "../hooks/useAuth";
+
 export function CreateChapter() {
+  const { user } = useAuth();
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -12,7 +15,6 @@ export function CreateChapter() {
   const [formData, setFormData] = useState({
     chapter_name: '',
     meeting_venue: '',
-    chapter_admin_id: '',
     president_id: '',
     vice_president_id: '',
     treasurer_id: ''
@@ -58,7 +60,7 @@ export function CreateChapter() {
         id: chapterId,
         chapter_name: formData.chapter_name,
         meeting_venue: formData.meeting_venue,
-        chapter_admin_id: formData.chapter_admin_id,
+        chapter_admin_id: user?.uid || null,
         president_id: formData.president_id,
         vice_president_id: formData.vice_president_id,
         treasurer_id: formData.treasurer_id,
@@ -68,7 +70,6 @@ export function CreateChapter() {
 
       // 2. Assign positions to the selected members
       const assignments = [
-        { id: formData.chapter_admin_id, pos: 'chapter_admin', role: 'CHAPTER_ADMIN' },
         { id: formData.president_id, pos: 'president', role: 'MEMBER' },
         { id: formData.vice_president_id, pos: 'vice_president', role: 'MEMBER' },
         { id: formData.treasurer_id, pos: 'treasurer', role: 'MEMBER' }
@@ -88,7 +89,6 @@ export function CreateChapter() {
       setFormData({
         chapter_name: '',
         meeting_venue: '',
-        chapter_admin_id: '',
         president_id: '',
         vice_president_id: '',
         treasurer_id: ''
@@ -168,18 +168,14 @@ export function CreateChapter() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-primary uppercase tracking-[0.5px] ml-1 block">Chapter Admin *</label>
+              <label className="text-xs font-semibold text-primary uppercase tracking-[0.5px] ml-1 block">Chapter Name *</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
-                <select
-                  required
-                  value={formData.chapter_admin_id}
-                  onChange={(e) => setFormData(f => ({ ...f, chapter_admin_id: e.target.value }))}
-                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white text-sm transition-all appearance-none cursor-pointer"
-                >
-                  <option value="" className="bg-[#161B22] text-white">Select Member...</option>
-                  {memberOptions}
-                </select>
+                <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
+                <input
+                  readOnly
+                  value={formData.chapter_name || 'Auto-filled from Chapter Details'}
+                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A]/50 border border-white/10 rounded-[14px] text-white/70 text-sm cursor-not-allowed select-none"
+                />
               </div>
             </div>
 
