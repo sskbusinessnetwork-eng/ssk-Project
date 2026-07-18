@@ -29,6 +29,10 @@ export interface UserProfile {
   bio?: string;
   adminId?: string;
   associatedChapterAdminId?: string;
+  must_change_password?: boolean;
+  memberId?: string;
+  whatsappNumber?: string;
+  status?: string;
 }
 
 export interface Meeting {
@@ -163,4 +167,16 @@ export interface Testimonial {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PositionHistory {
+  id: string;
+  date: string;
+  changedById: string;
+  changedByName: string;
+  memberId: string;
+  memberName: string;
+  oldPosition: ChapterPosition;
+  newPosition: ChapterPosition;
+  chapterAdminId: string;
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types';
 import { getDashboardPath } from '../utils/authUtils';
@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, loading } = useAuth();
+  const location = useLocation();
   const savedUser = localStorage.getItem('user');
 
   // 1. If we are still determining auth state OR we have a user but no profile yet, show loading
@@ -30,6 +31,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // 2. If Firebase says no user AND we don't have a saved user in localStorage, redirect to login
   if (!user && !savedUser) {
     return <Navigate to="/login" replace />;
+  }
+  
+  if (profile?.must_change_password && location.pathname !== '/set-password') {
+    return <Navigate to="/set-password" replace />;
   }
 
   if (profile && allowedRoles && !allowedRoles.includes(profile.role)) {

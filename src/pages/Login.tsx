@@ -102,8 +102,12 @@ export function Login() {
 
       login({ uid, ...userData } as UserProfile);
       
-      const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
-      navigate(dashboardPath);
+      if (userData.must_change_password) {
+        navigate('/set-password');
+      } else {
+        const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
+        navigate(dashboardPath);
+      }
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || 'An unexpected error occurred.');
@@ -245,8 +249,12 @@ export function Login() {
 
       login({ uid, ...userData } as UserProfile);
       
-      const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
-      navigate(dashboardPath);
+      if (userData.must_change_password) {
+        navigate('/set-password');
+      } else {
+        const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
+        navigate(dashboardPath);
+      }
     } catch (err: any) {
       console.error("Quick login error:", err);
       setError(err.message || 'An unexpected error occurred.');

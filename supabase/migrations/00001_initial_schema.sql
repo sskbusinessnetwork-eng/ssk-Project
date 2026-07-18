@@ -252,3 +252,21 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
+
+-- 11. Position History
+CREATE TABLE IF NOT EXISTS public.position_history (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  changed_by_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  changed_by_name TEXT,
+  member_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  member_name TEXT,
+  old_position TEXT,
+  new_position TEXT,
+  chapter_admin_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL
+);
+
+ALTER TABLE public.position_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Enable read access for all authenticated users" ON public.position_history FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Enable insert for authenticated users only" ON public.position_history FOR INSERT TO authenticated WITH CHECK (auth.uid() = changed_by_id);
