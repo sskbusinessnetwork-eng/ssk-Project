@@ -31,6 +31,7 @@ import { Modal } from '../components/Modal';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { usePositions } from '../hooks/usePositions';
+import { MemberTestimonials } from '../components/MemberTestimonials';
 
 export function Profile() {
   const { profile: currentUserProfile } = useAuth();
@@ -461,6 +462,8 @@ export function Profile() {
               </div>
             )}
           </div>
+
+          <MemberTestimonials currentUser={currentUserProfile} targetUser={targetProfile} />
 
           {/* Associated Chapter Admin Section */}
           {targetProfile.role === 'MEMBER' && (

@@ -120,7 +120,7 @@ export interface Notification {
   id: string;
   userId: string;
   role: UserRole;
-  type: 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE';
+  type: 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE' | 'TESTIMONIAL';
   message: string;
   read?: boolean;
   relatedUserId?: string;
@@ -147,4 +147,17 @@ export interface GuestRegistration {
   createdAt: string;
   isWhatsAppShared?: boolean;
   isCalled?: boolean;
+}
+
+export interface Testimonial {
+  id: string;
+  receiverMemberId: string;
+  authorMemberId: string;
+  chapterId: string;
+  rating: number; // 1-5
+  title?: string;
+  testimonial: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  updatedAt: string;
 }

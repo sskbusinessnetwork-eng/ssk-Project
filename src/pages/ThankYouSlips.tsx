@@ -20,6 +20,7 @@ import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
 import { where, orderBy } from 'firebase/firestore';
 import { cn } from '../lib/utils';
+import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 
 export function ThankYouSlips() {
   const { profile } = useAuth();
@@ -32,6 +33,9 @@ export function ThankYouSlips() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showTestimonialPrompt, setShowTestimonialPrompt] = useState(false);
+  const [showWriteModal, setShowWriteModal] = useState(false);
+  const [testimonialReceiver, setTestimonialReceiver] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
@@ -150,12 +154,18 @@ export function ThankYouSlips() {
       // Close the referral status
       await firestoreService.update('referrals', formData.referralId, { status: 'CLOSED' });
       
+      const receiver = allUsers.find(u => u.uid === selectedReferral.fromUserId) || null;
+      setTestimonialReceiver(receiver);
+      
       setShowSuccess(true);
       setFormData({ referralId: '', customerName: '', businessValue: '', notes: '' });
       
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
+        if (receiver) {
+          setShowTestimonialPrompt(true);
+        }
       }, 2000);
     } catch (err: any) {
       console.error("Error creating thank you slip:", err);
@@ -887,6 +897,55 @@ export function ThankYouSlips() {
           </form>
         )}
       </Modal>
+
+      {/* Testimonial Prompt Modal */}
+      <Modal isOpen={showTestimonialPrompt} onClose={() => setShowTestimonialPrompt(false)} title="Testimonial">
+        <div className="p-6 text-center space-y-6">
+          <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+            <Award size={32} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-white mb-2">Would you like to write a testimonial?</h3>
+            <p className="text-[#9CA3AF] text-sm">
+              Sharing a testimonial is a great way to show your appreciation and help others build trust in their services.
+            </p>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowTestimonialPrompt(false)}
+              className="flex-1 px-4 py-3 rounded-xl font-bold text-white bg-[#1F2937] hover:bg-[#374151] transition-colors"
+            >
+              Maybe Later
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowTestimonialPrompt(false);
+                // We need another state to open the WriteTestimonialModal, let's just use `setIsWritingTestimonial(true)`
+                // which I'll add or use.
+                // Wait, I didn't add setIsWritingTestimonial, so let's just use a trick or add it.
+                // Better to dispatch a custom event or something? No, just add it.
+                document.getElementById('write-testimonial-btn')?.click();
+              }}
+              className="flex-1 px-4 py-3 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 transition-colors"
+            >
+              Write Testimonial
+            </button>
+            <button id="write-testimonial-btn" className="hidden" onClick={() => setShowWriteModal(true)} />
+          </div>
+        </div>
+      </Modal>
+
+      {testimonialReceiver && (
+        <WriteTestimonialModal
+          isOpen={showWriteModal}
+          onClose={() => setShowWriteModal(false)}
+          author={profile}
+          receiver={testimonialReceiver}
+        />
+      )}
     </div>
   );
 }
