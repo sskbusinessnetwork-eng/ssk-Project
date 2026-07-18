@@ -125,11 +125,19 @@ export async function deleteDoc(docRef: any) {
 }
 
 export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
-  // Perform initial fetch
-  getDocs(queryRef).then(callback);
+  const fetchAndCallback = () => {
+    getDocs(queryRef).then(callback);
+  };
   
-  // Return dummy unsubscribe (Supabase realtime needs setup if required, but polling/refetch is easier for this scale if not configured)
-  return () => {};
+  // Perform initial fetch
+  fetchAndCallback();
+  
+  // Listen for manual re-fetch events
+  window.addEventListener('dashboard-refresh', fetchAndCallback);
+  
+  return () => {
+    window.removeEventListener('dashboard-refresh', fetchAndCallback);
+  };
 }
 
 export function writeBatch(db?: any) {

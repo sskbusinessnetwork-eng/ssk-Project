@@ -104,7 +104,7 @@ export function Analytics() {
       }
     }
     const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
-      setChapterUsers(data.filter(u => u.role === 'MEMBER'));
+      setChapterUsers(data.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role)));
     });
 
     // 2. Subscribe to thank you slips

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setDoc } from '../lib/database';
 import { UserProfile } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 export const auth = {}; // dummy
 export const db = {}; // dummy
@@ -67,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    try { await import("../lib/supabaseClient").then(m => m.supabase.auth.signOut()); } catch(e) {}
+    try { await supabase.auth.signOut(); } catch(e) {}
     setUser(null);
     setProfile(null);
     localStorage.removeItem('user');

@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/database';
-import { collection, doc, writeBatch, query, getDocs, where } from '../lib/database';
 import { UserProfile } from '../types';
-import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock } from 'lucide-react';
+import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock, AlertCircle, X } from 'lucide-react';
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
-import { createClient } from '@supabase/supabase-js';
-
-const tempClient = createClient(
-  import.meta.env.VITE_SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4',
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+import { supabase } from '../lib/supabaseClient';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LeaderForm {
   fullName: string;
@@ -23,7 +16,8 @@ interface LeaderForm {
 export function CreateChapter() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [successPopup, setSuccessPopup] = useState(false);
+  const [errorPopup, setErrorPopup] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     chapter_name: '',
@@ -37,252 +31,276 @@ export function CreateChapter() {
     treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' } as LeaderForm,
   });
 
-  const handleLeaderChange = (position: keyof typeof leaders, field: keyof LeaderForm, value: string) => {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleLeaderChange = (pos: keyof typeof leaders, field: keyof LeaderForm, value: string) => {
     setLeaders(prev => ({
       ...prev,
-      [position]: {
-        ...prev[position],
-        [field]: value
-      }
+      [pos]: { ...prev[pos], [field]: value }
     }));
+    // Clear error for this field if exists
+    if (errors[`${String(pos)}_${field}`]) {
+      setErrors(prev => ({ ...prev, [`${String(pos)}_${field}`]: '' }));
+    }
+  };
+
+  const closeForm = () => {
+    setFormData({ chapter_name: '', meeting_venue: '' });
+    setLeaders({
+      chapter_admin: { fullName: '', mobile: '', whatsapp: '', email: '' },
+      president: { fullName: '', mobile: '', whatsapp: '', email: '' },
+      vice_president: { fullName: '', mobile: '', whatsapp: '', email: '' },
+      treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' },
+    });
+    setSuccessPopup(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+    setErrorPopup(null);
+    let newErrors: Record<string, string> = {};
 
-    if (!formData.chapter_name.trim() || !formData.meeting_venue.trim()) {
-      alert("Chapter Name and Meeting Venue are mandatory.");
-      return;
-    }
+    if (!formData.chapter_name.trim()) newErrors.chapter_name = "Chapter name is required.";
+    if (!formData.meeting_venue.trim()) newErrors.meeting_venue = "Meeting venue is required.";
 
     const positions = ['chapter_admin', 'president', 'vice_president', 'treasurer'] as const;
     
-    // Validate required fields
     for (const pos of positions) {
       const l = leaders[pos];
-      if (!l.fullName.trim() || !l.mobile.trim()) {
-        alert(`Full Name and Mobile Number are required for ${pos.replace('_', ' ').toUpperCase()}.`);
-        return;
+      if (!l.fullName.trim()) newErrors[`${String(pos)}_fullName`] = "Full Name is required.";
+      if (!l.mobile.trim()) newErrors[`${String(pos)}_mobile`] = "Mobile number is required.";
+      else if (l.mobile.trim().length < 10) newErrors[`${String(pos)}_mobile`] = "Please enter a valid 10-digit phone number.";
+      
+      if (l.email.trim() && !/^\S+@\S+\.\S+$/.test(l.email.trim())) {
+        newErrors[`${String(pos)}_email`] = "Invalid email address.";
       }
     }
 
-    // Check duplicates in form
-    const mobiles = positions.map(p => normalizePhoneNumber(leaders[p].mobile));
-    if (new Set(mobiles).size !== mobiles.length) {
-      alert("Mobile numbers must be unique across all leadership roles.");
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setErrorPopup("Please fill in all required fields correctly.");
       return;
+    }
+
+    const mobiles = positions.map(p => normalizePhoneNumber(leaders[p].mobile));
+    const uniqueMobiles = new Set(mobiles);
+    if (uniqueMobiles.size !== mobiles.length) {
+       setErrorPopup("Mobile numbers must be unique across all leadership roles.");
+       return;
     }
 
     const emails = positions.map(p => leaders[p].email.trim().toLowerCase()).filter(Boolean);
     if (new Set(emails).size !== emails.length) {
-      alert("Email addresses must be unique across all leadership roles.");
-      return;
+       setErrorPopup("Email addresses must be unique across all leadership roles.");
+       return;
     }
 
     setLoading(true);
     try {
-      // Check existing users in DB
+      // 0. Check for existing chapter name
+      const { data: existingChapter, error: chapterCheckError } = await supabase
+        .from('chapters')
+        .select('id')
+        .ilike('chapter_name', formData.chapter_name.trim())
+        .limit(1);
+        
+      if (chapterCheckError) throw chapterCheckError;
+      if (existingChapter && existingChapter.length > 0) {
+        newErrors.chapter_name = "A chapter with this name already exists.";
+        setErrors(newErrors);
+        throw new Error("A chapter with this name already exists.");
+      }
+
+      // 1. Check for existing users
       for (const pos of positions) {
         const phone = normalizePhoneNumber(leaders[pos].mobile);
-        const q = query(collection(db, 'users'), where('phone', '==', phone));
-        const existing = await getDocs(q);
-        if (!existing.empty) {
+        const { data: existing, error: checkError } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
+        if (checkError) throw checkError;
+        if (existing && existing.length > 0) {
+          newErrors[`${String(pos)}_mobile`] = "This phone number is already registered.";
+          setErrors(newErrors);
           throw new Error(`An account with mobile ${phone} already exists (used by ${pos.replace('_', ' ').toUpperCase()}).`);
         }
       }
 
-      const batch = writeBatch(db);
-      const chapterRef = doc(collection(db, 'chapters'));
-      const chapterId = chapterRef.id;
-
-      // Prepare user UIDs
+      const chapterId = crypto.randomUUID();
       const leaderUIDs = {
-        chapter_admin: doc(collection(db, 'users')).id,
-        president: doc(collection(db, 'users')).id,
-        vice_president: doc(collection(db, 'users')).id,
-        treasurer: doc(collection(db, 'users')).id,
+        chapter_admin: crypto.randomUUID(),
+        president: crypto.randomUUID(),
+        vice_president: crypto.randomUUID(),
+        treasurer: crypto.randomUUID(),
       };
 
       // 1. Create chapter
-      batch.set(chapterRef, {
+      const chapterData = {
         id: chapterId,
         chapter_name: formData.chapter_name,
         meeting_venue: formData.meeting_venue,
-        chapter_admin_id: leaderUIDs.chapter_admin,
-        president_id: leaderUIDs.president,
-        vice_president_id: leaderUIDs.vice_president,
-        treasurer_id: leaderUIDs.treasurer,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      });
+      };
 
-      // 2. Create users
-      for (const pos of positions) {
-        const leader = leaders[pos];
-        const phone = normalizePhoneNumber(leader.mobile);
-        const uid = leaderUIDs[pos];
-        const defaultPassword = 'Welcometosskbusiness';
-
-        const userProfile = {
-          uid,
-          name: leader.fullName.trim(),
-          phone: phone,
-          whatsapp: leader.whatsapp.trim() || phone,
-          email: leader.email.trim() || undefined,
-          password: defaultPassword,
-          role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
-          membershipStatus: 'ACTIVE',
-          chapterName: formData.chapter_name,
-          chapter_id: chapterId,
-          position: pos,
-          must_change_password: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        batch.set(doc(db, 'users', uid), userProfile);
-        
-        batch.set(doc(db, 'auth_data', uid), {
-          uid,
-          password: defaultPassword,
-          updatedAt: new Date().toISOString()
-        });
-
-        // Create Supabase Auth Account
-        const signupEmail = leader.email.trim() || `${phone}@ssknetwork.com`;
-        await tempClient.auth.signUp({
-          email: signupEmail,
-          password: defaultPassword,
-        }).catch(e => console.error('Supabase auth signup failed, ignoring:', e));
+      const { error: chapterError } = await supabase.from('chapters').insert(chapterData);
+      if (chapterError) {
+        throw new Error(`Failed to create chapter: ${chapterError.message}`);
       }
 
-      await batch.commit();
+      let createdUsers: string[] = [];
 
-      setSuccess(true);
-      setFormData({
-        chapter_name: '',
-        meeting_venue: '',
-      });
-      setLeaders({
-        chapter_admin: { fullName: '', mobile: '', whatsapp: '', email: '' },
-        president: { fullName: '', mobile: '', whatsapp: '', email: '' },
-        vice_president: { fullName: '', mobile: '', whatsapp: '', email: '' },
-        treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' },
-      });
-      
-      setTimeout(() => setSuccess(false), 3000);
+      try {
+        // 2. Create users
+        const usersToInsert = positions.map(pos => {
+          const leader = leaders[pos];
+          const phone = normalizePhoneNumber(leader.mobile);
+          const uid = leaderUIDs[pos];
+          const defaultPassword = 'Welcometosskbusiness';
+          createdUsers.push(uid);
 
-    } catch (error: any) {
-      console.error("Error creating chapter:", error);
-      alert(error.message || "Failed to create chapter.");
+          return {
+            id: uid,
+            name: leader.fullName.trim(),
+            phone: phone,
+            whatsapp_number: leader.whatsapp.trim() || phone,
+            email: leader.email.trim() || null,
+            password: defaultPassword,
+            role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
+            status: 'ACTIVE',
+            chapter_id: chapterId,
+            position: pos,
+            must_change_password: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+        });
+        
+        const { error: usersError } = await supabase.from('users').insert(usersToInsert);
+        if (usersError) {
+          throw new Error(`Failed to create leadership members: ${usersError.message}`);
+        }
+
+        // 3. Update chapter with the valid user IDs
+        const { error: chapterUpdateError } = await supabase.from('chapters').update({
+          chapter_admin_id: leaderUIDs.chapter_admin,
+          president_id: leaderUIDs.president,
+          vice_president_id: leaderUIDs.vice_president,
+          treasurer_id: leaderUIDs.treasurer,
+        }).eq('id', chapterId);
+        
+        if (chapterUpdateError) {
+          throw new Error(`Unable to link members to the chapter: ${chapterUpdateError.message}`);
+        }
+
+        const authDataToInsert = usersToInsert.map(u => ({
+          id: u.id,
+          uid: u.id,
+          password: u.password,
+          updatedAt: new Date().toISOString()
+        }));
+
+        const { error: authError } = await supabase.from('auth_data').insert(authDataToInsert);
+        if (authError) {
+           console.error("Warning: Failed to save to auth_data, but users were created", authError);
+        }
+
+        setSuccessPopup(true);
+        window.dispatchEvent(new Event('dashboard-refresh'));
+        
+      } catch (insertError: any) {
+        await supabase.from('chapters').delete().eq('id', chapterId);
+        if (createdUsers.length > 0) {
+           await supabase.from('users').delete().in('id', createdUsers);
+        }
+        throw insertError;
+      }
+    } catch (err: any) {
+      console.error("Chapter creation error:", err);
+      if (!errorPopup && !Object.keys(newErrors).length) {
+         setErrorPopup(err.message || 'An error occurred while creating the chapter.');
+      } else if (err.message) {
+         setErrorPopup(err.message);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const renderLeaderForm = (title: string, pos: keyof typeof leaders) => (
-    <div className="space-y-4 pt-6 border-t border-white/[0.08]">
-      <h3 className="text-sm font-bold text-primary uppercase tracking-[0.5px]">
-        {title}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Read-only Chapter Name */}
-        <div className="space-y-1">
-          <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Chapter Name *</label>
-          <div className="relative">
-            <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
-            <input
-              readOnly
-              value={formData.chapter_name || 'Auto-filled'}
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A]/50 border border-white/10 rounded-lg text-white/70 text-xs cursor-not-allowed select-none"
-            />
-          </div>
-        </div>
+    <div className="bg-[#0F172A]/50 border border-white/[0.05] rounded-xl p-5 space-y-4">
+      <h4 className="text-sm font-bold text-white border-b border-white/[0.05] pb-2">{title}</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         
+        {/* Full Name */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Full Name *</label>
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={14} />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
-              required
               type="text"
               placeholder="Full Name"
               value={leaders[pos].fullName}
               onChange={(e) => handleLeaderChange(pos, 'fullName', e.target.value)}
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-xs transition-all"
+              className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_fullName`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
             />
           </div>
+          {errors[`${String(pos)}_fullName`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_fullName`]}</p>}
         </div>
-
+        
+        {/* Mobile */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Mobile Number *</label>
           <div className="relative">
-            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={14} />
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
-              required
               type="tel"
               placeholder="e.g. 9876543210"
               value={leaders[pos].mobile}
               onChange={(e) => handleLeaderChange(pos, 'mobile', e.target.value)}
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-xs transition-all"
+              className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_mobile`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
             />
           </div>
+          {errors[`${String(pos)}_mobile`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_mobile`]}</p>}
         </div>
-
+        
+        {/* WhatsApp */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-[0.5px] ml-1 block">WhatsApp (Optional)</label>
           <div className="relative">
-            <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={14} />
+            <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="tel"
               placeholder="Same as mobile if empty"
               value={leaders[pos].whatsapp}
               onChange={(e) => handleLeaderChange(pos, 'whatsapp', e.target.value)}
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:bg-[#0F172A] focus:border-primary outline-none text-white placeholder-white/50 text-xs transition-all"
+              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-white placeholder-white/50 text-xs transition-all"
             />
           </div>
         </div>
-
+        
+        {/* Email */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-[0.5px] ml-1 block">Email (Optional)</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={14} />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="email"
               placeholder="Email address"
               value={leaders[pos].email}
               onChange={(e) => handleLeaderChange(pos, 'email', e.target.value)}
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:bg-[#0F172A] focus:border-primary outline-none text-white placeholder-white/50 text-xs transition-all"
+              className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_email`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
             />
           </div>
+          {errors[`${String(pos)}_email`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_email`]}</p>}
         </div>
-
-        <div className="space-y-1">
-          <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Default Password *</label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
-            <input
-              readOnly
-              value="Welcometosskbusiness"
-              className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A]/50 border border-white/10 rounded-lg text-white/70 text-xs cursor-not-allowed select-none"
-            />
-          </div>
-        </div>
+        
       </div>
     </div>
   );
 
   return (
-    <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 sm:p-8">
+    <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 sm:p-8 relative">
       <h2 className="text-xl font-bold text-white mb-6">Create New Chapter</h2>
       
-      {success && (
-        <div className="mb-6 p-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl flex items-center gap-2 text-sm font-semibold">
-          <CheckCircle2 size={18} />
-          Chapter created successfully. Leadership positions have been created and assigned.
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Basic Info */}
@@ -294,30 +312,36 @@ export function CreateChapter() {
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Chapter Name *</label>
               <div className="relative">
-                <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
+                <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
                 <input
-                  required
                   type="text"
                   placeholder="e.g., Bangalore Central"
                   value={formData.chapter_name}
-                  onChange={(e) => setFormData(f => ({ ...f, chapter_name: e.target.value }))}
-                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-sm transition-all"
+                  onChange={(e) => {
+                    setFormData(f => ({ ...f, chapter_name: e.target.value }));
+                    if (errors.chapter_name) setErrors(e => ({ ...e, chapter_name: '' }));
+                  }}
+                  className={`w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border ${errors.chapter_name ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-[14px] outline-none text-white placeholder-white/50 text-sm transition-all`}
                 />
               </div>
+              {errors.chapter_name && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.chapter_name}</p>}
             </div>
             <div className="space-y-2">
               <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Meeting Venue *</label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-hover:text-primary transition-colors" size={16} />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
                 <input
-                  required
                   type="text"
                   placeholder="e.g., Koramangala Community Hall"
                   value={formData.meeting_venue}
-                  onChange={(e) => setFormData(f => ({ ...f, meeting_venue: e.target.value }))}
-                  className="w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none text-white placeholder-white/50 text-sm transition-all"
+                  onChange={(e) => {
+                    setFormData(f => ({ ...f, meeting_venue: e.target.value }));
+                    if (errors.meeting_venue) setErrors(e => ({ ...e, meeting_venue: '' }));
+                  }}
+                  className={`w-full h-[50px] pl-10 pr-4 bg-[#0F172A] border ${errors.meeting_venue ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-[14px] outline-none text-white placeholder-white/50 text-sm transition-all`}
                 />
               </div>
+              {errors.meeting_venue && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.meeting_venue}</p>}
             </div>
           </div>
         </div>
@@ -333,20 +357,85 @@ export function CreateChapter() {
           {renderLeaderForm('2. President', 'president')}
           {renderLeaderForm('3. Vice President', 'vice_president')}
           {renderLeaderForm('4. Treasurer', 'treasurer')}
-
         </div>
 
         <div className="pt-8 flex justify-end border-t border-white/[0.08]">
           <button
             type="submit"
             disabled={loading}
-            className="px-8 py-3 bg-primary text-white font-bold text-sm uppercase tracking-widest rounded-[14px] hover:bg-[#DC2626] hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(239,68,68,0.4)] transition-all duration-300 disabled:opacity-70 flex items-center gap-2"
+            className="px-8 py-3 bg-primary text-white font-bold text-sm uppercase tracking-widest rounded-[14px] hover:bg-[#DC2626] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-70 flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            {loading ? 'Creating...' : 'Create Chapter'}
+            {loading ? 'Creating Chapter...' : 'Create Chapter'}
           </button>
         </div>
       </form>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {successPopup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#1A1F2B] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-sm w-full relative"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 text-emerald-400">
+                  <CheckCircle2 size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">✅ Chapter Created Successfully</h3>
+                <p className="text-sm text-neutral-400 mb-6">
+                  The chapter and all leadership members have been created successfully.
+                </p>
+                <button
+                  onClick={closeForm}
+                  className="w-full py-3 bg-primary text-white rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-primary/90 transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Error Modal */}
+      <AnimatePresence>
+        {errorPopup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#1A1F2B] border border-white/10 rounded-2xl shadow-2xl p-6 max-w-sm w-full relative"
+            >
+              <button 
+                onClick={() => setErrorPopup(null)}
+                className="absolute top-4 right-4 text-neutral-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+              <div className="flex flex-col items-center text-center mt-2">
+                <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4 text-red-400">
+                  <AlertCircle size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">❌ Creation Failed</h3>
+                <p className="text-sm text-neutral-400 mb-6">
+                  {errorPopup}
+                </p>
+                <button
+                  onClick={() => setErrorPopup(null)}
+                  className="w-full py-3 bg-neutral-800 text-white border border-white/10 rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-neutral-700 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
