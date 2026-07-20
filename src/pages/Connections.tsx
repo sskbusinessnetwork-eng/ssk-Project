@@ -288,6 +288,12 @@ export function Connections() {
   }, [profile]);
 
   useEffect(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      setActiveTab('all');
+    }
+  }, [profile]);
+
+  useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN' && chaptersList.length > 0 && !masterSelectedChapterId) {
       setMasterSelectedChapterId(chaptersList[0].id);
     }
@@ -498,26 +504,28 @@ export function Connections() {
       )}
 
       {/* Tabs / Section Header */}
-      <div className="flex p-1 bg-[#151C2E] rounded-[12px] w-full border border-white/5">
-        <button
-          onClick={() => setActiveTab('chapter')}
-          className={cn(
-            "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
-            activeTab === 'chapter' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
-          )}
-        >
-          My Chapter Members
-        </button>
-        <button
-          onClick={() => setActiveTab('all')}
-          className={cn(
-            "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
-            activeTab === 'all' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
-          )}
-        >
-          All Members
-        </button>
-      </div>
+      {profile?.role !== 'MASTER_ADMIN' && (
+        <div className="flex p-1 bg-[#151C2E] rounded-[12px] w-full border border-white/5">
+          <button
+            onClick={() => setActiveTab('chapter')}
+            className={cn(
+              "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+              activeTab === 'chapter' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
+            )}
+          >
+            My Chapter Members
+          </button>
+          <button
+            onClick={() => setActiveTab('all')}
+            className={cn(
+              "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+              activeTab === 'all' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
+            )}
+          >
+            All Members
+          </button>
+        </div>
+      )}
 
       {profile?.role === 'MASTER_ADMIN' && activeTab === 'chapter' && (
         <div className="p-4 bg-[#161B22] rounded-[16px] border border-white/10 space-y-2">
