@@ -105,6 +105,8 @@ export function Connections() {
   const [masterSelectedChapterId, setMasterSelectedChapterId] = useState<string>('');
   const [selectedChapterIdFilter, setSelectedChapterIdFilter] = useState('');
   const [selectedPositionFilter, setSelectedPositionFilter] = useState('');
+  const [currentUserChapterId, setCurrentUserChapterId] = useState<string | null>(null);
+  const [currentUserChapterName, setCurrentUserChapterName] = useState<string | null>(null);
 
   const handleRefer = (member: UserProfile) => {
     setSelectedMember(member);
@@ -183,6 +185,31 @@ export function Connections() {
           console.error("Error loading chapters:", e);
         }
 
+        // Fetch fresh logged-in user's details directly from Supabase 'users' table
+        const loggedInUserId = profile?.uid || profile?.id;
+        if (loggedInUserId) {
+          const { data: dbUser, error: dbUserErr } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', loggedInUserId)
+            .single();
+
+          if (!dbUserErr && dbUser) {
+            setCurrentUserChapterId(dbUser.chapter_id || null);
+            setCurrentUserChapterName(dbUser.chapter_name || null);
+            console.log("Fresh logged-in user chapter details fetched:", {
+              chapter_id: dbUser.chapter_id,
+              chapter_name: dbUser.chapter_name
+            });
+          } else {
+            console.warn("Could not fetch fresh logged-in user from users table. Fallback to profile:", dbUserErr);
+            const fallbackId = profile.chapter_id || (profile as any).chapterId || null;
+            const fallbackName = profile.chapterName || (profile as any).chapter_name || null;
+            setCurrentUserChapterId(fallbackId);
+            setCurrentUserChapterName(fallbackName);
+          }
+        }
+
         // Fetch All Active Members from Supabase 'users' table
         const { data: usersData, error: usersError } = await supabase
           .from('users')
@@ -214,11 +241,12 @@ export function Connections() {
             photoURL: row.profile_photo,
             createdAt: row.created_at,
             chapter_id: row.chapter_id,
+            chapter_name: row.chapter_name,
             businessName: row.businessName || row.business_name || '',
             state: row.state || '',
             city: row.city || '',
             area: row.area || '',
-            chapterName: chapMap[row.chapter_id || ''] || 'SSK Chapter',
+            chapterName: chapMap[row.chapter_id || ''] || row.chapter_name || 'SSK Chapter',
           }))
           .filter(m => m.role !== 'MASTER_ADMIN');
         
@@ -269,13 +297,34 @@ export function Connections() {
     // 1. Tab Filtering
     if (activeTab === 'chapter') {
       if (profile?.role === 'MASTER_ADMIN') {
-        if (member.chapter_id !== masterSelectedChapterId) return false;
+        const selectedChap = (masterSelectedChapterId || '').trim();
+        if (!selectedChap) return false;
+        const memberChapId = (member.chapter_id || '').trim();
+        if (memberChapId !== selectedChap) return false;
       } else {
-        const myChapterId = profile?.chapter_id;
-        if (!myChapterId) return false;
-        
-        // Show every member of the same chapter
-        if (member.chapter_id !== myChapterId) return false;
+        const myChapId = (currentUserChapterId || '').trim();
+        const myChapName = (currentUserChapterName || '').trim().toLowerCase();
+
+        if (!myChapId && !myChapName) {
+          return false;
+        }
+
+        const memberChapId = (member.chapter_id || '').trim();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim().toLowerCase();
+
+        let isMatch = false;
+        if (myChapId && memberChapId) {
+          if (memberChapId === myChapId) {
+            isMatch = true;
+          }
+        }
+        if (!isMatch && myChapName && memberChapName) {
+          if (memberChapName === myChapName) {
+            isMatch = true;
+          }
+        }
+
+        if (!isMatch) return false;
       }
     }
 
@@ -338,11 +387,37 @@ export function Connections() {
   // Calculate total counts
   const totalChapterCount = members.filter(m => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return m.chapter_id === masterSelectedChapterId;
+      const selectedChap = (masterSelectedChapterId || '').trim();
+      return (m.chapter_id || '').trim() === selectedChap;
     } else {
-      return m.chapter_id === profile?.chapter_id;
+      const myChapId = (currentUserChapterId || '').trim();
+      const myChapName = (currentUserChapterName || '').trim().toLowerCase();
+      if (!myChapId && !myChapName) return false;
+
+      const memberChapId = (m.chapter_id || '').trim();
+      const memberChapName = (m.chapter_name || m.chapterName || '').trim().toLowerCase();
+
+      if (myChapId && memberChapId && memberChapId === myChapId) return true;
+      if (myChapName && memberChapName && memberChapName === myChapName) return true;
+      return false;
     }
   }).length;
+
+  // Log details if no chapter members are found
+  useEffect(() => {
+    if (!loading && activeTab === 'chapter' && totalChapterCount === 0) {
+      console.warn("My Chapter Members - No members found!", {
+        loggedInUserUid: profile?.uid || profile?.id,
+        loggedInUserChapterId: currentUserChapterId,
+        loggedInUserChapterName: currentUserChapterName,
+        allMembersCount: members.length,
+        queryResult: members.map(m => ({ id: m.id, name: m.name, chapter_id: m.chapter_id, chapter_name: m.chapter_name })),
+        reason: !currentUserChapterId && !currentUserChapterName 
+          ? "Logged-in user has null/empty chapter_id and chapter_name."
+          : `No other active users match chapter_id: "${currentUserChapterId}" or chapter_name: "${currentUserChapterName}".`
+      });
+    }
+  }, [loading, activeTab, totalChapterCount, members, profile, currentUserChapterId, currentUserChapterName]);
 
   const totalGlobalCount = members.length;
 
