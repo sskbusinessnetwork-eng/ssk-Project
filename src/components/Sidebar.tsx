@@ -61,7 +61,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: Layers, label: 'One-to-One', path: '/one-to-one', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Share2, label: 'Referrals', path: '/refer', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: FileText, label: 'Directory', path: '/directory', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonial Reports', path: '/testimonial-reports', roles: ['MASTER_ADMIN'] },
@@ -149,7 +149,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
                 {profile?.name || 'User'}
               </span>
               <span className="text-[10px] font-bold text-white bg-[#E53935]/20 text-[#E53935] w-fit px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-[#E53935]/10">
-                Member
+                {profile?.role === 'MASTER_ADMIN' ? 'Master Admin' :
+                 profile?.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
+                 profile?.position === 'president' ? 'President' :
+                 profile?.position === 'vice_president' ? 'Vice President' :
+                 profile?.position === 'treasurer' ? 'Treasurer' :
+                 profile?.position === 'chapter_admin' ? 'Chapter Admin' :
+                 'Associate Member'}
               </span>
             </div>
           )}

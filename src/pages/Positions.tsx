@@ -28,24 +28,31 @@ export function Positions() {
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Load chapters
+    // Load chapters
   useEffect(() => {
-    if (isMasterAdmin) {
-      const q = query(collection(db, 'chapters'));
-      getDocs(q).then(snap => {
-        setChapters(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter)));
-      });
-    } else if (profile?.uid) {
-      // For Chapter Admin
-      const q = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
-      getDocs(q).then(snap => {
-        const found = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter));
-        setChapters(found);
-        if (found.length > 0) {
-          setSelectedChapterId(found[0].id);
-        }
-      });
-    }
+    const fetchChapters = () => {
+      if (isMasterAdmin) {
+        const q = query(collection(db, 'chapters'));
+        getDocs(q).then(snap => {
+          setChapters(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter)));
+        });
+      } else if (profile?.uid) {
+        // For Chapter Admin
+        const q = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
+        getDocs(q).then(snap => {
+          const found = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter));
+          setChapters(found);
+          if (found.length > 0 && !selectedChapterId) {
+            setSelectedChapterId(found[0].id);
+          }
+        });
+      }
+    };
+    fetchChapters();
+    
+    const handleRefresh = () => fetchChapters();
+    window.addEventListener('dashboard-refresh', handleRefresh);
+    return () => window.removeEventListener('dashboard-refresh', handleRefresh);
   }, [isMasterAdmin, profile?.uid]);
 
   // Load members of selected chapter

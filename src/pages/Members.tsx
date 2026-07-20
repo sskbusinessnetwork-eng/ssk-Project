@@ -33,6 +33,7 @@ import { MemberTable } from '../components/members/MemberTable';
 import { AddMemberModal } from '../components/members/AddMemberModal';
 import { EditMemberModal } from '../components/members/EditMemberModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
+import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { PositionManagement } from '../components/positions/PositionManagement';
 import {  where, doc, setDoc, collection, query, getDocs, orderBy  } from '../lib/database';
 import { db } from '../lib/database';
@@ -64,7 +65,7 @@ export function Members() {
 
     // CHAPTER ADMIN MEMBER SECTION: Show ONLY members created by that Chapter Admin
     const constraints = profile.role === 'CHAPTER_ADMIN' 
-      ? [where('associatedChapterAdminId', '==', profile.uid)]
+      ? [where('chapter_id', '==', profile?.chapter_id)]
       : [];
 
     const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
@@ -88,7 +89,7 @@ export function Members() {
       // Fetch member invites for Chapter Admin
       if (profile.role === 'CHAPTER_ADMIN') {
         const invitesConstraints = [
-          where('associatedChapterAdminId', '==', profile.uid),
+          where('chapter_id', '==', profile?.chapter_id),
           where('createdByRole', '==', 'MEMBER'),
           orderBy('createdAt', 'desc')
         ];
@@ -103,6 +104,7 @@ export function Members() {
 
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [createdMemberData, setCreatedMemberData] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deleteConfirmMember, setDeleteConfirmMember] = useState<UserProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -216,7 +218,7 @@ export function Members() {
         role: "MEMBER",
         phone: normalizedPhone,
         membershipStatus: "ACTIVE",
-        associatedChapterAdminId: profile?.uid,
+        chapter_id: profile?.chapter_id,
         createdByName: profile?.name || profile?.displayName || 'Unknown Admin',
         createdByRole: profile?.role || "CHAPTER_ADMIN",
         businessName: newMemberData.businessName,
@@ -244,8 +246,12 @@ export function Members() {
       
       await notificationService.notifyMasterAdmins('MEMBER_ADD', `New member ${newMemberData.name} has been added to the network.`);
       
-      setSuccessMessage(`Member ${newMemberData.name} added successfully!`);
-      setTimeout(() => setSuccessMessage(null), 3000);
+      setCreatedMemberData({
+        name: newMemberData.name,
+        userId: uid,
+        phone: normalizedPhone,
+        password: newMemberData.password
+      });
       setIsAddModalOpen(false);
       setNewMemberData({
         name: '',
@@ -413,7 +419,7 @@ export function Members() {
     if (m.role !== 'MEMBER') return false;
 
     // Chapter Admin can ONLY see members they created
-    if (profile?.role === 'CHAPTER_ADMIN' && m.associatedChapterAdminId !== profile.uid) return false;
+    if (profile?.role === 'CHAPTER_ADMIN' && m.chapter_id !== profile?.chapter_id) return false;
 
     const matchesSearch = 
       (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -633,6 +639,11 @@ export function Members() {
         )}
       </div>
 
+      <MemberSuccessPopup 
+        isOpen={!!createdMemberData} 
+        onClose={() => setCreatedMemberData(null)} 
+        memberData={createdMemberData} 
+      />
       <AddMemberModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}

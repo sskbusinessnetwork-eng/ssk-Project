@@ -35,6 +35,15 @@ interface MemberTableProps {
   onDeleteMember: (member: UserProfile) => void;
 }
 
+const getDisplayPosition = (pos?: string, role?: string) => {
+  if (role === 'MASTER_ADMIN') return 'Master Admin';
+  if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
+  if (pos === 'president') return 'President';
+  if (pos === 'vice_president') return 'Vice President';
+  if (pos === 'treasurer') return 'Treasurer';
+  return 'Associate Member';
+};
+
 export function MemberTable({
   members,
   adminMap,
@@ -110,13 +119,22 @@ export function MemberTable({
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <p className="font-bold text-white text-sm leading-tight truncate">{member.name || member.displayName}</p>
-                            {getPositionText(member)}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-medium">
-                            <Phone size={10} className="text-neutral-400" />
-                            <span>{member.phone || 'No Phone'}</span>
+                          <p className="font-bold text-white text-sm leading-tight truncate mb-1.5">{member.name || member.displayName}</p>
+                          <div className="flex flex-col gap-0.5 text-[11px] font-medium text-neutral-400">
+                            <div>
+                              <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Chapter:</span> 
+                              {member.chapterName || (member.chapter_id ? (adminMap[member.chapter_id] ? adminMap[member.chapter_id].replace(' Admin', '') : 'SSK Chapter') : 'SSK Chapter')}
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Position:</span> 
+                              <span className="text-primary font-bold">
+                                {getDisplayPosition(member.position, member.role)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Phone size={9} className="text-neutral-500" />
+                              <span>{member.phone || 'No Phone'}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -137,7 +155,7 @@ export function MemberTable({
                           <Shield size={11} />
                         </div>
                         <span className="text-xs font-semibold text-neutral-300 truncate max-w-[150px]">
-                          {member.associatedChapterAdminId ? (adminMap[member.associatedChapterAdminId] || 'Unknown Admin') : (member.adminId ? (adminMap[member.adminId] || 'Unknown Admin') : 'Not Assigned')}
+                          {member.chapter_id ? (adminMap[member.chapter_id] || 'Unknown Admin') : (member.adminId ? (adminMap[member.adminId] || 'Unknown Admin') : 'Not Assigned')}
                         </span>
                       </div>
                     </td>
@@ -255,13 +273,22 @@ export function MemberTable({
                     />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-bold text-white text-sm leading-tight truncate">{member.name || member.displayName}</p>
-                      {getPositionText(member)}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] font-medium mt-1">
-                      <Phone size={10} className="text-neutral-400" />
-                      <span>{member.phone || 'No Phone'}</span>
+                    <p className="font-bold text-white text-sm leading-tight truncate mb-1.5">{member.name || member.displayName}</p>
+                    <div className="flex flex-col gap-0.5 text-[11px] font-medium text-neutral-400">
+                      <div>
+                        <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Chapter:</span> 
+                        {member.chapterName || (member.chapter_id ? (adminMap[member.chapter_id] ? adminMap[member.chapter_id].replace(' Admin', '') : 'SSK Chapter') : 'SSK Chapter')}
+                      </div>
+                      <div>
+                        <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Position:</span> 
+                        <span className="text-primary font-bold">
+                          {getDisplayPosition(member.position, member.role)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Phone size={9} className="text-neutral-500" />
+                        <span>{member.phone || 'No Phone'}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -297,7 +324,7 @@ export function MemberTable({
                 <div className="text-right">
                   <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter Admin</p>
                   <p className="text-xs font-bold text-neutral-200 truncate max-w-[140px]">
-                    {member.associatedChapterAdminId ? (adminMap[member.associatedChapterAdminId] || 'Unknown Admin') : (member.adminId ? (adminMap[member.adminId] || 'Unknown Admin') : 'Not Assigned')}
+                    {member.chapter_id ? (adminMap[member.chapter_id] || 'Unknown Admin') : (member.adminId ? (adminMap[member.adminId] || 'Unknown Admin') : 'Not Assigned')}
                   </p>
                 </div>
               </div>

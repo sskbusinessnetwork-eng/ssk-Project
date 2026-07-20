@@ -50,6 +50,7 @@ export function Analytics() {
   const [allSlips, setAllSlips] = useState<any[]>([]);
   const [allReferrals, setAllReferrals] = useState<any[]>([]);
   const [oneToOnes, setOneToOnes] = useState<any[]>([]);
+  const [allTestimonials, setAllTestimonials] = useState<any[]>([]);
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
 
   // Resolve chapter name dynamically
@@ -63,11 +64,10 @@ export function Analytics() {
           setResolvedChapterName(profile.chapterName);
           return;
         }
-        const adminId = profile.associatedChapterAdminId || profile.adminId;
-        if (adminId) {
-          const adminProfile = await databaseService.get<any>('users', adminId);
-          if (adminProfile && adminProfile.chapterName) {
-            setResolvedChapterName(adminProfile.chapterName);
+        if (profile.chapter_id) {
+          const chapter = await databaseService.get<any>('chapters', profile.chapter_id);
+          if (chapter && chapter.chapter_name) {
+            setResolvedChapterName(chapter.chapter_name);
           } else {
             setResolvedChapterName('My Chapter');
           }
@@ -95,12 +95,9 @@ export function Analytics() {
 
     // 1. Subscribe to users (chapter members)
     let userConstraints: any[] = [];
-    if (profile.role === 'CHAPTER_ADMIN') {
-      userConstraints = [where('associatedChapterAdminId', '==', profile.uid)];
-    } else if (profile.role === 'MEMBER') {
-      const adminId = profile.associatedChapterAdminId || profile.adminId;
-      if (adminId) {
-        userConstraints = [where('associatedChapterAdminId', '==', adminId)];
+    if (profile.role === 'CHAPTER_ADMIN' || profile.role === 'MEMBER') {
+      if (profile.chapter_id) {
+         userConstraints = [where('chapter_id', '==', profile.chapter_id)];
       }
     }
     const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
@@ -136,6 +133,9 @@ export function Analytics() {
     // 6. Subscribe to meetings
     const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
 
+    // 7. Subscribe to testimonials
+    const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
+
     return () => {
       unsubUsers();
       unsubSlips();
@@ -143,6 +143,7 @@ export function Analytics() {
       unsub1to1s();
       unsubGuests();
       unsubMeetings();
+      unsubTestimonials();
     };
   }, [profile]);
 
@@ -151,7 +152,7 @@ export function Analytics() {
     const ids = chapterUsers.map(u => u.uid);
     if (profile) {
       ids.push(profile.uid);
-      const adminId = profile.associatedChapterAdminId || profile.adminId;
+      const adminId = profile.chapter_id || profile.adminId;
       if (adminId) ids.push(adminId);
     }
     return Array.from(new Set(ids));
@@ -190,7 +191,7 @@ export function Analytics() {
     const nowStr = new Date().toISOString();
     const chapterMeetings = profile?.role === 'MASTER_ADMIN'
       ? meetings
-      : meetings.filter(m => m.adminId === (profile?.associatedChapterAdminId || profile?.adminId || profile?.uid));
+      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
     const upcomingMeetingsCount = chapterMeetings.filter(m => !m.isCompleted).length;
 
     const chapterOneToOnes = profile?.role === 'MASTER_ADMIN'
@@ -238,14 +239,14 @@ export function Analytics() {
   }, [chapterUsers]);
 
   const totalChaptersCount = useMemo(() => {
-    const adminIds = chapterUsers.map(u => u.associatedChapterAdminId || u.adminId).filter(Boolean);
+    const adminIds = chapterUsers.map(u => u.chapter_id || u.adminId).filter(Boolean);
     return new Set(adminIds).size || 1;
   }, [chapterUsers]);
 
   const weeklyMeetingAttendance = useMemo(() => {
     const chapterMeetings = profile?.role === 'MASTER_ADMIN' 
       ? meetings 
-      : meetings.filter(m => m.adminId === (profile?.associatedChapterAdminId || profile?.adminId || profile?.uid));
+      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
     const completedMeetings = chapterMeetings.filter(m => m.isCompleted);
     if (completedMeetings.length === 0) return 0;
     
@@ -269,6 +270,20 @@ export function Analytics() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     return chapterUsers.filter(u => u.createdAt >= startOfMonth).length;
   }, [chapterUsers]);
+
+  const chapterTestimonialsCount = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return allTestimonials.filter(t => t.status === 'APPROVED').length;
+    }
+    return allTestimonials.filter(t => t.chapter_id === profile?.chapter_id && t.status === 'APPROVED').length;
+  }, [allTestimonials, profile]);
+
+  const chapterMeetingsCount = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return meetings.length;
+    }
+    return meetings.filter(m => m.chapter_id === profile?.chapter_id).length;
+  }, [meetings, profile]);
 
   const topPerformingChapters = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
@@ -294,7 +309,7 @@ export function Analytics() {
   // Derived Checklist Status
   const hasAttendedMeeting = useMemo(() => {
     if (!profile) return false;
-    const relevantMeetings = profile.adminId ? meetings.filter(m => m.adminId === profile.adminId) : meetings;
+    const relevantMeetings = profile.adminId ? meetings.filter(m => m.chapter_id === profile.chapter_id) : meetings;
     return relevantMeetings.some(m => m.isCompleted && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[profile.uid]));
   }, [meetings, profile]);
 
@@ -745,34 +760,39 @@ export function Analytics() {
         )}
       </motion.div>
 
-      {/* Dynamic Chapter Analytics Heading */}
-      <div className="space-y-1 mb-2 mt-8">
-        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-          {chapterHeading}
-        </h2>
-        <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
-          {profile?.role === 'MASTER_ADMIN' 
-            ? 'Real-time analytics across all chapters.' 
-            : 'Real-time analytics and business performance for your chapter.'}
-        </p>
-      </div>
+      {/* Dynamic Chapter Analytics Heading & KPI cards - Shown for Member, Chapter Admin, and Master Admin */}
+      {(profile?.role === 'MASTER_ADMIN' || profile?.role === 'CHAPTER_ADMIN' || profile?.role === 'MEMBER') && (
+        <>
+          <div className="space-y-1 mb-2 mt-8">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
+              {chapterHeading}
+            </h2>
+            <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
+              {profile?.role === 'MASTER_ADMIN' 
+                ? 'Real-time analytics across all chapters.' 
+                : 'Real-time analytics and business performance for your chapter.'}
+            </p>
+          </div>
 
-      {/* KPI CARDS ROW */}
-      <StatGrid 
-        role={profile?.role}
-        totalChaptersCount={totalChaptersCount}
-        totalMembersCount={totalMembersCount}
-        activePartnersCount={activePartnersCount}
-        businessGeneratedTotal={businessGeneratedTotal}
-        referralsPassedCount={referralsPassedCount}
-        thankYouSlipsCount={thankYouSlipsCount}
-        upcomingSyncsCount={upcomingSyncsCount}
-        oneToOneMeetingsCount={oneToOneMeetingsCount}
-        visitorsAttendedCount={visitorsAttendedCount}
-        weeklyMeetingAttendance={weeklyMeetingAttendance}
-        growthScore={dynamicGrowthScore}
-        newMembersThisMonthCount={newMembersThisMonthCount}
-      />
+          <StatGrid 
+            role={profile?.role}
+            totalChaptersCount={totalChaptersCount}
+            totalMembersCount={totalMembersCount}
+            activePartnersCount={activePartnersCount}
+            businessGeneratedTotal={businessGeneratedTotal}
+            referralsPassedCount={referralsPassedCount}
+            thankYouSlipsCount={thankYouSlipsCount}
+            upcomingSyncsCount={upcomingSyncsCount}
+            oneToOneMeetingsCount={oneToOneMeetingsCount}
+            visitorsAttendedCount={visitorsAttendedCount}
+            weeklyMeetingAttendance={weeklyMeetingAttendance}
+            growthScore={dynamicGrowthScore}
+            newMembersThisMonthCount={newMembersThisMonthCount}
+            testimonialsCount={chapterTestimonialsCount}
+            meetingsCount={chapterMeetingsCount}
+          />
+        </>
+      )}
 
       {/* COMPANION / REPORTS VIEW BASED ON ROLE */}
       {profile?.role === 'MEMBER' && (

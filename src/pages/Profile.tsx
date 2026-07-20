@@ -48,6 +48,7 @@ export function Profile() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
   const [newSubscriptionEnd, setNewSubscriptionEnd] = useState<string>('');
+  const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
   
   // Referral Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,6 +63,15 @@ export function Profile() {
   const [loading, setLoading] = useState(true);
 
   const isAdmin = currentUserProfile?.role === 'MASTER_ADMIN' || currentUserProfile?.role === 'CHAPTER_ADMIN';
+
+  const getDisplayPosition = (pos?: string, role?: string) => {
+    if (role === 'MASTER_ADMIN') return 'Master Admin';
+    if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
+    if (pos === 'president') return 'President';
+    if (pos === 'vice_president') return 'Vice President';
+    if (pos === 'treasurer') return 'Treasurer';
+    return 'Associate Member';
+  };
 
   // Form state
   const [formData, setFormData] = useState({
@@ -84,11 +94,13 @@ export function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        let chapterId = '';
         if (isViewMode && targetUserId) {
           const fetchedProfile = await databaseService.get<UserProfile>('users', targetUserId);
           if (fetchedProfile) {
             setTargetProfile(fetchedProfile);
-            const adminId = fetchedProfile.associatedChapterAdminId || fetchedProfile.adminId;
+            chapterId = fetchedProfile.chapter_id || fetchedProfile.adminId || '';
+            const adminId = fetchedProfile.chapter_id || fetchedProfile.adminId;
             if (fetchedProfile.role === 'MEMBER' && adminId) {
               const admin = await databaseService.get<UserProfile>('users', adminId);
               if (admin) setAdminData(admin);
@@ -111,10 +123,22 @@ export function Profile() {
             role: currentUserProfile.role || 'MEMBER'
           });
 
-          const adminId = currentUserProfile.associatedChapterAdminId || currentUserProfile.adminId;
+          chapterId = currentUserProfile.chapter_id || currentUserProfile.adminId || '';
+          const adminId = currentUserProfile.chapter_id || currentUserProfile.adminId;
           if (currentUserProfile.role === 'MEMBER' && adminId) {
             const admin = await databaseService.get<UserProfile>('users', adminId);
             if (admin) setAdminData(admin);
+          }
+        }
+
+        if (chapterId) {
+          try {
+            const chap = await databaseService.get<any>('chapters', chapterId);
+            if (chap && chap.chapter_name) {
+              setResolvedChapterName(chap.chapter_name);
+            }
+          } catch (e) {
+            console.error("Error loading chapter name:", e);
           }
         }
 
@@ -328,15 +352,22 @@ export function Profile() {
             <div>
               <div className="flex items-center justify-center gap-2 flex-wrap px-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white break-words">{targetProfile.name}</h2>
-                {getPositionText(targetProfile)}
               </div>
-              <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
-                {targetProfile.role === 'MASTER_ADMIN' ? 'Master Admin' : targetProfile.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (targetProfile.category || 'Member')}
-              </p>
-              {targetProfile.role === 'CHAPTER_ADMIN' && targetProfile.chapterName && (
-                <p className="text-[10px] sm:text-xs font-bold text-navy uppercase tracking-widest mt-1">{targetProfile.chapterName}</p>
-              )}
-              <p className="text-[10px] sm:text-xs font-medium text-neutral-400 mt-1 break-words px-4">{targetProfile.businessName || 'SSK Business Network'}</p>
+              
+              <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
+                <div>
+                  <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
+                  {targetProfile.chapterName || resolvedChapterName || 'SSK Chapter'}
+                </div>
+                <div>
+                  <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
+                  <span className="text-primary font-bold">
+                    {getDisplayPosition(targetProfile.position, targetProfile.role)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[10px] sm:text-xs font-medium text-neutral-400 mt-2 break-words px-4">{targetProfile.businessName || 'SSK Business Network'}</p>
             </div>
 
             {/* Action Buttons */}
@@ -471,7 +502,7 @@ export function Profile() {
                 {!adminData ? (
                   <div className="p-6 text-center">
                     <p className="text-sm font-bold text-neutral-400">
-                      {!targetProfile.associatedChapterAdminId && !targetProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
+                      {!targetProfile.chapter_id && !targetProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
                     </p>
                   </div>
                 ) : (
@@ -646,14 +677,20 @@ export function Profile() {
           <div>
             <div className="flex items-center justify-center gap-2 flex-wrap px-2">
               <h2 className="text-lg sm:text-xl font-bold text-white break-words">{formData.name || 'Your Name'}</h2>
-              {currentUserProfile && getPositionText(currentUserProfile)}
             </div>
-            <p className="text-xs sm:text-sm font-bold text-primary uppercase tracking-wider">
-              {formData.role === 'MASTER_ADMIN' ? 'Master Admin' : formData.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' : (formData.category || 'Member')}
-            </p>
-            {formData.role === 'CHAPTER_ADMIN' && formData.chapterName && (
-              <p className="text-[10px] sm:text-xs font-bold text-navy uppercase tracking-widest mt-1">{formData.chapterName}</p>
-            )}
+            
+            <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
+              <div>
+                <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
+                {formData.chapterName || resolvedChapterName || 'SSK Chapter'}
+              </div>
+              <div>
+                <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
+                <span className="text-primary font-bold">
+                  {getDisplayPosition(currentUserProfile?.position, currentUserProfile?.role)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -809,7 +846,7 @@ export function Profile() {
                 {!adminData ? (
                   <div className="p-6 text-center">
                     <p className="text-sm font-bold text-neutral-400">
-                      {!currentUserProfile.associatedChapterAdminId && !currentUserProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
+                      {!currentUserProfile.chapter_id && !currentUserProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
                     </p>
                   </div>
                 ) : (

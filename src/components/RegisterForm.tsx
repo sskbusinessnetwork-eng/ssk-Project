@@ -90,7 +90,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         phone: normalizedPhone,
         password: password, // Store plain text password as requested
         role: formData.role,
-        membershipStatus: 'PENDING',
+        membershipStatus: 'ACTIVE',
         chapterName: formData.role === 'CHAPTER_ADMIN' ? formData.chapterName : undefined,
         businessName: formData.role === 'CHAPTER_ADMIN' ? formData.businessName : undefined,
         state: formData.state,

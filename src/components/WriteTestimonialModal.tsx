@@ -30,7 +30,7 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: Wri
       await databaseService.create('testimonials', {
         receiverMemberId: receiver.uid,
         authorMemberId: author.uid,
-        chapterId: receiver.associatedChapterAdminId || receiver.adminId || author.associatedChapterAdminId || author.adminId,
+        chapterId: receiver.chapter_id || receiver.adminId || author.chapter_id || author.adminId,
         rating,
         title,
         testimonial,

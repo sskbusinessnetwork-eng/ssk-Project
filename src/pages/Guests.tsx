@@ -170,7 +170,7 @@ export function Guests() {
       // Chapter Admin sees own + associated members
       constraints.push(or(
         where('createdBy', '==', profile.uid),
-        where('associatedChapterAdminId', '==', profile.uid)
+        where('chapter_id', '==', profile?.chapter_id)
       ));
     } else if (profile.role === 'MEMBER') {
       // Member sees only own
@@ -269,7 +269,7 @@ export function Guests() {
         memberId: profile.uid,
         createdBy: profile.uid,
         createdByRole: profile.role,
-        associatedChapterAdminId: profile.adminId || null,
+        chapter_id: profile?.chapter_id || null,
         createdAt: new Date().toISOString(),
         isWhatsAppShared: false,
         isCalled: false

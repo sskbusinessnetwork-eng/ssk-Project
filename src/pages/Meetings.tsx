@@ -155,6 +155,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
     } else {
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId,
+        chapter_id: adminId, // since adminId is now used loosely, but let's see how adminId is defined.
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
@@ -244,8 +245,8 @@ export function Meetings() {
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
       databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setAdminAdmins);
-    } else if (profile?.role === 'MEMBER' && profile.adminId) {
-      databaseService.get<UserProfile>('users', profile.adminId).then(admin => {
+    } else if (profile?.role === 'MEMBER' && profile.chapter_id) {
+      databaseService.get<UserProfile>('users', profile.chapter_id).then(admin => {
         if (admin) setAdminAdmins([admin]);
       });
     } else if (profile?.role === 'CHAPTER_ADMIN') {
@@ -254,7 +255,7 @@ export function Meetings() {
   }, [profile]);
 
   useEffect(() => {
-    const chapterId = isMasterAdmin ? selectedAdminId : (isChapterAdmin ? profile?.uid : profile?.adminId);
+    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     if (!chapterId) {
       setDefaultSetupData({
         adminId: '',
@@ -319,7 +320,7 @@ export function Meetings() {
       }
     }, 10000);
 
-    const chapterId = isMasterAdmin ? selectedAdminId : (isChapterAdmin ? profile?.uid : profile?.adminId);
+    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     
     if (!isMasterAdmin && !chapterId) {
       setMeetings([]);
@@ -376,7 +377,7 @@ export function Meetings() {
     // Fetch members for attendance/details
     // For Master Admin, we might need all members if no chapter is selected, 
     // but usually we want to filter by the chapter of the meeting being viewed.
-    const chapterId = isMasterAdmin ? selectedAdminId : (isChapterAdmin ? profile?.uid : profile?.adminId);
+    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     
     const fetchMembers = async () => {
       const constraints: any[] = [
@@ -414,7 +415,7 @@ export function Meetings() {
     if (selectedMeeting?.id) {
       setNotes(selectedMeeting.notes || '');
     }
-  }, [selectedMeeting?.id, isMasterAdmin, isChapterAdmin, profile?.uid, selectedAdminId, profile?.adminId]);
+  }, [selectedMeeting?.id, isMasterAdmin, isChapterAdmin, profile?.uid, selectedAdminId, profile?.chapter_id]);
 
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -436,6 +437,7 @@ export function Meetings() {
       
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId,
+        chapter_id: adminId, // since adminId is now used loosely, but let's see how adminId is defined.
         date: meetingDate.toISOString(),
         time: scheduleData.time,
         location: scheduleData.location,
@@ -506,7 +508,7 @@ export function Meetings() {
     setError(null);
     try {
       // Find all active chapter members for this meeting
-      const meetingMembers = members.filter(m => m.adminId === selectedMeeting.adminId || m.uid === selectedMeeting.adminId);
+      const meetingMembers = members.filter(m => m.chapter_id === selectedMeeting.adminId);
       
       // Perform validation
       for (const member of meetingMembers) {
@@ -661,7 +663,7 @@ export function Meetings() {
                 setIsScheduleModalOpen(true);
                 setScheduleData(prev => ({ 
                   ...prev, 
-                  adminId: profile.uid
+                  adminId: profile.chapter_id
                 }));
               }}
               className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10"
@@ -964,7 +966,7 @@ export function Meetings() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {members.filter(m => m.adminId === selectedMeeting?.adminId || m.uid === selectedMeeting?.adminId).map((member) => {
+                  {members.filter(m => m.chapter_id === selectedMeeting?.adminId).map((member) => {
                     const status = tempAttendance[member.uid];
                     const amount = tempAmount[member.uid] || 0;
                     const note = tempMemberNotes[member.uid] || '';

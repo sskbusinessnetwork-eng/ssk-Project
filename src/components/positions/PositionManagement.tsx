@@ -51,7 +51,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
     setLoading(true);
     
     // Subscribe to all members under this chapter admin, OR the admin themselves
-    const q1 = query(collection(db, 'users'), where('associatedChapterAdminId', '==', effectiveAdminId));
+    const q1 = query(collection(db, 'users'), where('chapter_id', '==', effectiveAdminId));
     const q2 = query(collection(db, 'users'), where('uid', '==', effectiveAdminId));
 
     // We can't do an OR query easily on different fields in Firestore without compound queries,

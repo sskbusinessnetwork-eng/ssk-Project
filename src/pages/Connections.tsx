@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import {  collection, query, where, getDocs  } from '../lib/database';
 import { db } from '../lib/database';
+import { supabase } from '../lib/supabaseClient';
 import { UserProfile, Category, Referral } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -35,10 +36,51 @@ export function Connections() {
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [adminNames, setAdminNames] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
+  const [chapterNames, setChapterNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [referringId, setReferringId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const getDisplayPosition = (pos?: string, role?: string) => {
+    if (role === 'MASTER_ADMIN') return 'Master Admin';
+    if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
+    if (pos === 'president') return 'President';
+    if (pos === 'vice_president') return 'Vice President';
+    if (pos === 'treasurer') return 'Treasurer';
+    return 'Associate Member';
+  };
+
+  const getPositionBadge = (member: UserProfile) => {
+    const role = member.role;
+    const pos = member.position?.toLowerCase();
+    
+    let label = 'Associate Member';
+    let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+
+    if (role === 'MASTER_ADMIN') {
+      label = 'Master Admin';
+      classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+    } else if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') {
+      label = 'Chapter Admin';
+      classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+    } else if (pos === 'president') {
+      label = 'President';
+      classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+    } else if (pos === 'vice_president') {
+      label = 'Vice President';
+      classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    } else if (pos === 'treasurer') {
+      label = 'Treasurer';
+      classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+    }
+
+    return (
+      <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border shrink-0", classes)}>
+        {label}
+      </span>
+    );
+  };
   
   // Referral Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,6 +99,12 @@ export function Connections() {
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedArea, setSelectedArea] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Chapter & Position states
+  const [chaptersList, setChaptersList] = useState<any[]>([]);
+  const [masterSelectedChapterId, setMasterSelectedChapterId] = useState<string>('');
+  const [selectedChapterIdFilter, setSelectedChapterIdFilter] = useState('');
+  const [selectedPositionFilter, setSelectedPositionFilter] = useState('');
 
   const handleRefer = (member: UserProfile) => {
     setSelectedMember(member);
@@ -107,9 +155,11 @@ export function Connections() {
       
       try {
         setLoading(true);
+        setErrorMessage(null);
         
-        // Check if user is active
-        if (profile.membershipStatus !== 'ACTIVE' && profile.role !== 'MASTER_ADMIN') {
+        // Check if user is active - bypass check since "no need approval" is requested
+        const needsApproval = false;
+        if (needsApproval && profile.membershipStatus !== 'ACTIVE' && profile.role !== 'MASTER_ADMIN') {
           setLoading(false);
           return;
         }
@@ -118,20 +168,64 @@ export function Connections() {
         const cats = await databaseService.list<Category>('categories');
         setCategories(cats);
 
-        // Fetch All Active Members (MEMBER and CHAPTER_ADMIN)
-        const membersQuery = query(
-          collection(db, 'users'),
-          where('membershipStatus', '==', 'ACTIVE')
-        );
-        const membersSnap = await getDocs(membersQuery);
-        const allActiveUsers = membersSnap.docs
-          .map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile))
-          .filter(m => m.uid !== profile?.uid && (m.role === 'MEMBER' || m.role === 'CHAPTER_ADMIN'));
+        // Fetch Chapters
+        const chapMap: Record<string, string> = {};
+        try {
+          const chaps = await databaseService.list<any>('chapters');
+          setChaptersList(chaps || []);
+          chaps.forEach(c => {
+            if (c.id && c.chapter_name) {
+              chapMap[c.id] = c.chapter_name;
+            }
+          });
+          setChapterNames(chapMap);
+        } catch (e) {
+          console.error("Error loading chapters:", e);
+        }
+
+        // Fetch All Active Members from Supabase 'users' table
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('status', 'ACTIVE');
+
+        if (usersError) {
+          console.error("Supabase load members error:", usersError);
+          setErrorMessage("Unable to load members. Please try again.");
+          setMembers([]);
+          setLoading(false);
+          return;
+        }
+
+        const allActiveUsers: UserProfile[] = (usersData || [])
+          .map((row: any) => ({
+            uid: row.id,
+            id: row.id,
+            name: row.name,
+            phone: row.phone,
+            whatsappNumber: row.whatsapp_number,
+            whatsapp_number: row.whatsapp_number,
+            email: row.email,
+            category: row.category,
+            role: row.role,
+            position: row.position,
+            status: row.status,
+            membershipStatus: row.status,
+            photoURL: row.profile_photo,
+            createdAt: row.created_at,
+            chapter_id: row.chapter_id,
+            businessName: row.businessName || row.business_name || '',
+            state: row.state || '',
+            city: row.city || '',
+            area: row.area || '',
+            chapterName: chapMap[row.chapter_id || ''] || 'SSK Chapter',
+          }))
+          .filter(m => m.role !== 'MASTER_ADMIN');
         
         // Fetch Admin Names for All Members
         const adminIds = Array.from(new Set(
           allActiveUsers
-            .map(m => m.associatedChapterAdminId || m.adminId)
+            .map(m => m.chapter_id || m.adminId)
             .filter(Boolean) as string[]
         ));
 
@@ -149,53 +243,128 @@ export function Connections() {
         setMembers(allActiveUsers);
       } catch (error) {
         console.error("Error fetching connections:", error);
+        setErrorMessage("Unable to load members. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
+
+    // Listen for manual re-fetch events
+    const handleRefresh = () => fetchData();
+    window.addEventListener('dashboard-refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+    };
   }, [profile]);
 
-  const filteredMembers = members.filter(member => {
-    // 1. Tab Filtering - Master Admin sees all members in a single view
-    if (profile?.role !== 'MASTER_ADMIN') {
-      if (activeTab === 'chapter') {
-        const myChapterId = profile?.role === 'CHAPTER_ADMIN' ? profile.uid : profile?.associatedChapterAdminId;
-        
-        if (!myChapterId) return false;
+  useEffect(() => {
+    if (profile?.role === 'MASTER_ADMIN' && chaptersList.length > 0 && !masterSelectedChapterId) {
+      setMasterSelectedChapterId(chaptersList[0].id);
+    }
+  }, [profile, chaptersList, masterSelectedChapterId]);
 
-        // Show members of the same chapter:
-        // 1. Members whose associatedChapterAdminId matches the chapter ID
-        // 2. The Chapter Admin themselves (uid matches the chapter ID)
-        const isSameChapter = member.associatedChapterAdminId === myChapterId || member.uid === myChapterId;
-        if (!isSameChapter) return false;
+  const filteredMembers = members.filter(member => {
+    // 1. Tab Filtering
+    if (activeTab === 'chapter') {
+      if (profile?.role === 'MASTER_ADMIN') {
+        if (member.chapter_id !== masterSelectedChapterId) return false;
       } else {
-        // "All Members" Tab: Show ONLY members (exclude admins)
-        if (member.role !== 'MEMBER') return false;
+        const myChapterId = profile?.chapter_id;
+        if (!myChapterId) return false;
+        
+        // Show every member of the same chapter
+        if (member.chapter_id !== myChapterId) return false;
       }
-    } else {
-      // Master Admin: Show all members and chapter admins
     }
 
-    const matchesSearch = 
-      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.bio?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesCategory = !selectedCategory || member.category === selectedCategory;
-    const matchesState = !selectedState || member.state?.toLowerCase().includes(selectedState.toLowerCase());
-    const matchesCity = !selectedCity || member.city?.toLowerCase().includes(selectedCity.toLowerCase());
-    const matchesArea = !selectedArea || member.area?.toLowerCase().includes(selectedArea.toLowerCase());
+    // 2. Search filtering (covers Name, Business Name, Phone Number, Position, Chapter Name)
+    const term = searchTerm.toLowerCase().trim();
+    if (term) {
+      const displayPos = getDisplayPosition(member.position, member.role).toLowerCase();
+      const chName = (member.chapterName || '').toLowerCase();
+      
+      const nameMatch = (member.name || '').toLowerCase().includes(term);
+      const businessMatch = (member.businessName || '').toLowerCase().includes(term);
+      const phoneMatch = (member.phone || '').includes(term) || (member.whatsappNumber || '').includes(term);
+      const positionMatch = displayPos.includes(term);
+      const chapterMatch = activeTab === 'all' && chName.includes(term);
+      
+      if (!(nameMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
+        return false;
+      }
+    }
 
-    return matchesSearch && matchesCategory && matchesState && matchesCity && matchesArea;
+    // 3. Optional Filters
+    // Business Category Filter
+    if (selectedCategory && member.category !== selectedCategory) return false;
+    
+    // Chapter Filter
+    if (selectedChapterIdFilter && member.chapter_id !== selectedChapterIdFilter) return false;
+    
+    // Position Filter
+    if (selectedPositionFilter) {
+      const role = member.role;
+      const pos = member.position?.toLowerCase();
+      if (selectedPositionFilter === 'chapter_admin') {
+        if (role !== 'CHAPTER_ADMIN' && pos !== 'chapter_admin') return false;
+      } else if (selectedPositionFilter === 'president') {
+        if (pos !== 'president') return false;
+      } else if (selectedPositionFilter === 'vice_president') {
+        if (pos !== 'vice_president') return false;
+      } else if (selectedPositionFilter === 'treasurer') {
+        if (pos !== 'treasurer') return false;
+      } else if (selectedPositionFilter === 'member') {
+        if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'president' || pos === 'vice_president' || pos === 'treasurer') {
+          return false;
+        }
+      }
+    }
+
+    // Location Filters
+    if (selectedState && !member.state?.toLowerCase().includes(selectedState.toLowerCase())) return false;
+    if (selectedCity && !member.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
+    if (selectedArea && !member.area?.toLowerCase().includes(selectedArea.toLowerCase())) return false;
+
+    return true;
   });
 
   // Get unique values for filters
   const uniqueStates = Array.from(new Set(members.map(m => m.state).filter(Boolean)));
   const uniqueCities = Array.from(new Set(members.map(m => m.city).filter(Boolean)));
   const uniqueAreas = Array.from(new Set(members.map(m => m.area).filter(Boolean)));
+
+  // Calculate total counts
+  const totalChapterCount = members.filter(m => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return m.chapter_id === masterSelectedChapterId;
+    } else {
+      return m.chapter_id === profile?.chapter_id;
+    }
+  }).length;
+
+  const totalGlobalCount = members.length;
+
+  // Sorting
+  const getSortWeight = (member: UserProfile) => {
+    const role = member.role;
+    const pos = member.position?.toLowerCase();
+    if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 1;
+    if (pos === 'president') return 2;
+    if (pos === 'vice_president') return 3;
+    if (pos === 'treasurer') return 4;
+    return 5;
+  };
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    if (activeTab === 'chapter') {
+      const wA = getSortWeight(a);
+      const wB = getSortWeight(b);
+      if (wA !== wB) return wA - wB;
+    }
+    return (a.name || '').localeCompare(b.name || '');
+  });
 
   if (loading) {
     return (
@@ -205,7 +374,8 @@ export function Connections() {
     );
   }
 
-  if (profile?.membershipStatus !== 'ACTIVE' && profile?.role !== 'MASTER_ADMIN') {
+  const needsApprovalScreen = false;
+  if (needsApprovalScreen && profile?.membershipStatus !== 'ACTIVE' && profile?.role !== 'MASTER_ADMIN') {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <div className="w-24 h-24 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
@@ -238,81 +408,98 @@ export function Connections() {
   return (
     <div className="space-y-4 max-w-2xl mx-auto pb-24 px-1 sm:px-0">
       {/* Feedback Messages */}
-      {successMessage && (
-        <motion.div 
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 right-4 left-4 z-[100] bg-emerald-500 text-white px-6 py-4 rounded-[16px] shadow-2xl flex items-center gap-3"
-        >
-          <CheckCircle2 size={24} />
-          <span className="font-bold text-sm uppercase tracking-wider">{successMessage}</span>
-        </motion.div>
-      )}
-      <div className="bg-white p-4 rounded-[14px] card-shadow border border-border space-y-4">
-        {/* Tabs - Hidden for Master Admin to show unified list */}
-        {profile?.role !== 'MASTER_ADMIN' && (
-          <div className="flex gap-2 p-1 bg-muted rounded-[12px]">
-            <button 
-              onClick={() => setActiveTab('chapter')}
-              className={cn(
-                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'chapter' ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-white/50"
-              )}
-            >
-              Chapter Member
-            </button>
-            <button 
-              onClick={() => setActiveTab('all')}
-              className={cn(
-                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'all' ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-white/50"
-              )}
-            >
-              All Members
-            </button>
-          </div>
-        )}
-
-        {/* Search Bar */}
-        <div className="relative flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-            <input
-              type="text"
-              placeholder="Search Network..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-11 pl-10 pr-4 bg-muted border border-transparent rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium"
-            />
-          </div>
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(
-              "p-2.5 rounded-[12px] transition-all active:scale-95 border",
-              showFilters ? "bg-primary text-white border-primary" : "bg-white text-text-secondary border-border hover:bg-muted"
-            )}
-          >
-            <Filter size={20} />
-          </button>
+      {successMessage && typeof successMessage === 'string' && (
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-sm font-semibold flex items-center gap-2">
+          <CheckCircle2 size={18} />
+          {successMessage}
         </div>
+      )}
+
+      {errorMessage && typeof errorMessage === 'string' && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-semibold flex items-center gap-2">
+          <AlertCircle size={18} />
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Tabs / Section Header */}
+      <div className="flex p-1 bg-[#151C2E] rounded-[12px] w-full border border-white/5">
+        <button
+          onClick={() => setActiveTab('chapter')}
+          className={cn(
+            "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+            activeTab === 'chapter' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
+          )}
+        >
+          My Chapter Members
+        </button>
+        <button
+          onClick={() => setActiveTab('all')}
+          className={cn(
+            "flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+            activeTab === 'all' ? "bg-primary text-white shadow-sm font-bold" : "text-neutral-400 hover:text-white"
+          )}
+        >
+          All Members
+        </button>
       </div>
 
-      {/* Filters */}
+      {profile?.role === 'MASTER_ADMIN' && activeTab === 'chapter' && (
+        <div className="p-4 bg-[#161B22] rounded-[16px] border border-white/10 space-y-2">
+          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">
+            Currently Selected Chapter (Master Admin View)
+          </label>
+          <select
+            value={masterSelectedChapterId}
+            onChange={(e) => setMasterSelectedChapterId(e.target.value)}
+            className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none text-xs font-semibold text-white cursor-pointer"
+          >
+            {chaptersList.map(chap => (
+              <option key={chap.id} value={chap.id}>{chap.chapter_name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Search & Filter Header */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-500" />
+          <input
+            type="text"
+            placeholder="Search connections..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 h-10 bg-[#161B22] border border-white/10 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-primary"
+          />
+        </div>
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={cn(
+            "h-10 px-4 bg-[#161B22] border border-white/10 rounded-xl text-xs font-semibold flex items-center gap-2 hover:text-white transition-colors",
+            showFilters ? "text-primary border-primary/20" : "text-neutral-400"
+          )}
+        >
+          <Filter size={16} />
+          Filters
+        </button>
+      </div>
+
       {showFilters && (
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 bg-white rounded-[14px] card-shadow border border-border space-y-4"
+          className="p-4 bg-[#161B22] rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-white/10 space-y-4"
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Category</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Category</label>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full h-10 px-3 bg-muted border border-transparent rounded-lg focus:bg-white focus:border-primary outline-none transition-all text-xs font-bold text-text-primary appearance-none cursor-pointer"
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
               >
-                <option value="">All Categories</option>
+                <option value="" className="text-neutral-400">All Categories</option>
                 {categories.map(cat => (
                   <option key={cat.id} value={cat.name}>{cat.name}</option>
                 ))}
@@ -320,13 +507,43 @@ export function Connections() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">State</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter</label>
+              <select
+                value={selectedChapterIdFilter}
+                onChange={(e) => setSelectedChapterIdFilter(e.target.value)}
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
+              >
+                <option value="" className="text-neutral-400">All Chapters</option>
+                {chaptersList.map(chap => (
+                  <option key={chap.id} value={chap.id}>{chap.chapter_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Position</label>
+              <select
+                value={selectedPositionFilter}
+                onChange={(e) => setSelectedPositionFilter(e.target.value)}
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
+              >
+                <option value="" className="text-neutral-400">All Positions</option>
+                <option value="chapter_admin">Chapter Admin</option>
+                <option value="president">President</option>
+                <option value="vice_president">Vice President</option>
+                <option value="treasurer">Treasurer</option>
+                <option value="member">Associate Member</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">State</label>
               <select
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
-                className="w-full h-10 px-3 bg-muted border border-transparent rounded-lg focus:bg-white focus:border-primary outline-none transition-all text-xs font-bold text-text-primary appearance-none cursor-pointer"
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
               >
-                <option value="">All States</option>
+                <option value="" className="text-neutral-400">All States</option>
                 {uniqueStates.map(state => (
                   <option key={state} value={state}>{state}</option>
                 ))}
@@ -334,13 +551,13 @@ export function Connections() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">City</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">City</label>
               <select
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
-                className="w-full h-10 px-3 bg-muted border border-transparent rounded-lg focus:bg-white focus:border-primary outline-none transition-all text-xs font-bold text-text-primary appearance-none cursor-pointer"
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
               >
-                <option value="">All Cities</option>
+                <option value="" className="text-neutral-400">All Cities</option>
                 {uniqueCities.map(city => (
                   <option key={city} value={city}>{city}</option>
                 ))}
@@ -348,13 +565,13 @@ export function Connections() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Area</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Area</label>
               <select
                 value={selectedArea}
                 onChange={(e) => setSelectedArea(e.target.value)}
-                className="w-full h-10 px-3 bg-muted border border-transparent rounded-lg focus:bg-white focus:border-primary outline-none transition-all text-xs font-bold text-text-primary appearance-none cursor-pointer"
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
               >
-                <option value="">All Areas</option>
+                <option value="" className="text-neutral-400">All Areas</option>
                 {uniqueAreas.map(area => (
                   <option key={area} value={area}>{area}</option>
                 ))}
@@ -362,19 +579,21 @@ export function Connections() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-border">
-            <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">
+          <div className="flex items-center justify-between pt-3 border-t border-white/10">
+            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
               {filteredMembers.length} Members Found
             </p>
             <button 
               onClick={() => {
                 setSelectedCategory('');
+                setSelectedChapterIdFilter('');
+                setSelectedPositionFilter('');
                 setSelectedState('');
                 setSelectedCity('');
                 setSelectedArea('');
                 setSearchTerm('');
               }}
-              className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider transition-all"
+              className="text-[10px] font-bold text-primary hover:text-white uppercase tracking-wider transition-colors"
             >
               Reset Filters
             </button>
@@ -382,20 +601,34 @@ export function Connections() {
         </motion.div>
       )}
 
+      {/* Total Counts Header Banner */}
+      <div className="flex items-center justify-between px-2 py-1">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+          {activeTab === 'chapter' ? 'My Chapter Members' : 'All Members'}
+        </h2>
+        <div className="text-[11px] font-bold text-neutral-300 bg-[#161B22] border border-white/10 px-3 py-1 rounded-full flex items-center gap-1">
+          {activeTab === 'chapter' ? (
+            <span>Total Chapter Members: <strong className="text-primary font-extrabold text-xs">{totalChapterCount}</strong></span>
+          ) : (
+            <span>Total Global Members: <strong className="text-primary font-extrabold text-xs">{totalGlobalCount}</strong></span>
+          )}
+        </div>
+      </div>
+
       {/* Members List */}
-      <div className="bg-white dark:bg-[#1F2937] rounded-[14px] card-shadow border border-border overflow-hidden">
-        {filteredMembers.length > 0 ? (
-          <div className="divide-y divide-border">
-            {filteredMembers.map((member, i) => (
+      <div className="bg-[#161B22] rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-white/10 overflow-hidden">
+        {sortedMembers.length > 0 ? (
+          <div className="divide-y divide-white/5">
+            {sortedMembers.map((member, i) => (
               <motion.div
                 key={member.uid}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.02 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
                 onClick={() => navigate(`/profile?id=${member.uid}`)}
-                className="p-4 flex items-center gap-4 hover:bg-muted dark:hover:bg-gray-800 transition-colors cursor-pointer group"
+                className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-all duration-300 cursor-pointer group"
               >
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center overflow-hidden border border-border shrink-0">
+                <div className="w-12 h-12 rounded-full bg-[#0F172A] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-inner">
                   <img
                     src={member.photoURL || `https://picsum.photos/seed/${member.uid}/100/100`}
                     className="w-full h-full object-cover"
@@ -403,34 +636,60 @@ export function Connections() {
                   />
                 </div>
                 
-                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-[16px] sm:text-[18px] font-bold text-[#111827] dark:text-white truncate max-w-[150px] sm:max-w-none">
+                    <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
                       {member.name}
                     </h3>
-                    {getPositionText(member)}
+                    {getPositionBadge(member)}
                   </div>
-                  <p className="text-[13px] sm:text-[14px] font-medium text-[#6B7280] dark:text-[#D1D5DB] truncate">
-                    {member.role === 'CHAPTER_ADMIN' 
-                      ? 'Chapter Admin' 
-                      : `${member.category || 'Member'} | Admin ${adminNames[member.associatedChapterAdminId || member.adminId || ''] || 'SSK'}`}
-                  </p>
+                  
+                  <div className="flex flex-col gap-1 text-[13px] font-medium text-neutral-400">
+                    <div className="flex items-center gap-1">
+                      <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
+                      <span className="text-neutral-200 font-medium">
+                        {member.chapterName || chapterNames[member.chapter_id || ''] || 'SSK Chapter'}
+                      </span>
+                    </div>
+                  </div>
+
                   {member.businessName && (
-                    <p className="text-[12px] font-medium text-[#4B5563] dark:text-[#9CA3AF] truncate mt-0.5">
+                    <p className="text-[12px] font-medium text-neutral-500 truncate">
                       {member.businessName}
                     </p>
                   )}
                 </div>
-
-                <ChevronRight size={18} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
+                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+                  <ChevronRight size={18} className="text-neutral-500 group-hover:text-primary transition-colors" />
+                </div>
               </motion.div>
             ))}
           </div>
         ) : (
-          <div className="p-12 text-center">
-            <Users size={48} className="mx-auto text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-bold text-text-primary">No members found</h3>
-            <p className="text-sm text-text-secondary mt-1">Try adjusting your search or filters.</p>
+          <div className="p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4 text-neutral-600">
+              <Users size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">No Members Found</h3>
+            <p className="text-sm text-neutral-400 max-w-sm mb-6">
+              No members match your current search or filter criteria.
+            </p>
+            {(searchTerm || selectedCategory || selectedChapterIdFilter || selectedPositionFilter || selectedState || selectedCity || selectedArea) && (
+              <button
+                onClick={() => {
+                  setSelectedCategory('');
+                  setSelectedChapterIdFilter('');
+                  setSelectedPositionFilter('');
+                  setSelectedState('');
+                  setSelectedCity('');
+                  setSelectedArea('');
+                  setSearchTerm('');
+                }}
+                className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border border-white/10"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -454,48 +713,48 @@ export function Connections() {
             </div>
           )}
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em] ml-1">Customer Name</label>
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Customer Name</label>
             <input
               required
               type="text"
               value={referralForm.customerName}
               onChange={(e) => setReferralForm(prev => ({ ...prev, customerName: e.target.value }))}
               placeholder="Enter customer name"
-              className="w-full px-6 py-4 bg-[#F9FAFB] border-2 border-slate-50 rounded-[16px] focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-6 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em] ml-1">Mobile Number</label>
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Mobile Number</label>
             <input
               required
               type="tel"
               value={referralForm.mobileNumber}
               onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
               placeholder="Enter mobile number"
-              className="w-full px-6 py-4 bg-[#F9FAFB] border-2 border-slate-50 rounded-[16px] focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-6 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em] ml-1">Requirement</label>
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Requirement</label>
             <input
               type="text"
               value={referralForm.requirement}
               onChange={(e) => setReferralForm(prev => ({ ...prev, requirement: e.target.value }))}
               placeholder="What is the requirement?"
-              className="w-full px-6 py-4 bg-[#F9FAFB] border-2 border-slate-50 rounded-[16px] focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300"
+              className="w-full px-6 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.2em] ml-1">Notes</label>
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Notes</label>
             <textarea
               value={referralForm.notes}
               onChange={(e) => setReferralForm(prev => ({ ...prev, notes: e.target.value }))}
               placeholder="Add any additional notes..."
               rows={3}
-              className="w-full px-6 py-4 bg-[#F9FAFB] border-2 border-slate-50 rounded-[16px] focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-navy placeholder:text-slate-300 resize-none"
+              className="w-full px-6 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm resize-none"
             />
           </div>
 

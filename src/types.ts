@@ -28,7 +28,6 @@ export interface UserProfile {
   website?: string;
   bio?: string;
   adminId?: string;
-  associatedChapterAdminId?: string;
   chapter_id?: string;
   must_change_password?: boolean;
   memberId?: string;
@@ -51,6 +50,7 @@ export interface Chapter {
 export interface Meeting {
   id: string;
   adminId?: string;
+  chapter_id?: string;
   date: string;
   time?: string;
   location?: string;
@@ -95,7 +95,7 @@ export interface GuestInvitation {
   memberId: string;
   createdBy: string;
   createdByRole: UserRole;
-  associatedChapterAdminId?: string;
+  chapter_id?: string;
   guestName: string;
   guestPhone: string;
   guestEmail: string;

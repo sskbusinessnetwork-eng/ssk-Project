@@ -39,13 +39,13 @@ export function Testimonials() {
     if (profile.role === 'MASTER_ADMIN') {
       // no constraint
     } else if (profile.role === 'CHAPTER_ADMIN') {
-      const adminId = profile.associatedChapterAdminId || profile.uid;
+      const adminId = profile.chapter_id || profile.uid;
       constraints = [where('chapterId', '==', adminId)];
     } else {
       // For MEMBER, we only fetch what they wrote or received, BUT wait,
       // "View public testimonials" - maybe members can see all chapter testimonials?
       // Let's fetch all chapter testimonials if member, to allow search.
-      const adminId = profile.associatedChapterAdminId || profile.adminId;
+      const adminId = profile.chapter_id || profile.adminId;
       if (adminId) {
         constraints = [where('chapterId', '==', adminId)];
       } else {

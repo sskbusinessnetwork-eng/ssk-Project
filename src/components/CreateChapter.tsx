@@ -13,7 +13,17 @@ interface LeaderForm {
   email: string;
 }
 
-export function CreateChapter() {
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return generateId();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [successPopup, setSuccessPopup] = useState(false);
@@ -44,7 +54,7 @@ export function CreateChapter() {
     }
   };
 
-  const closeForm = () => {
+    const closeForm = () => {
     setFormData({ chapter_name: '', meeting_venue: '' });
     setLeaders({
       chapter_admin: { fullName: '', mobile: '', whatsapp: '', email: '' },
@@ -53,6 +63,7 @@ export function CreateChapter() {
       treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' },
     });
     setSuccessPopup(false);
+    if (onSuccess) onSuccess();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,12 +135,12 @@ export function CreateChapter() {
         }
       }
 
-      const chapterId = crypto.randomUUID();
+      const chapterId = generateId();
       const leaderUIDs = {
-        chapter_admin: crypto.randomUUID(),
-        president: crypto.randomUUID(),
-        vice_president: crypto.randomUUID(),
-        treasurer: crypto.randomUUID(),
+        chapter_admin: generateId(),
+        president: generateId(),
+        vice_president: generateId(),
+        treasurer: generateId(),
       };
 
       // 1. Create chapter

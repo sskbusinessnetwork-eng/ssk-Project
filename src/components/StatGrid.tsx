@@ -16,6 +16,8 @@ interface StatGridProps {
   weeklyMeetingAttendance?: number;
   growthScore?: number;
   newMembersThisMonthCount?: number;
+  testimonialsCount?: number;
+  meetingsCount?: number;
 }
 
 export default function StatGrid({
@@ -32,6 +34,8 @@ export default function StatGrid({
   weeklyMeetingAttendance = 0,
   growthScore = 0,
   newMembersThisMonthCount = 0,
+  testimonialsCount = 0,
+  meetingsCount = 0,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
     if (label === 'Business Generated') {
@@ -40,7 +44,7 @@ export default function StatGrid({
       if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L+`;
       return `₹${num.toLocaleString()}`;
     }
-    if (label === 'Weekly Meeting Attendance' || label === 'Growth Score') {
+    if (label === 'Weekly Meeting Attendance' || label === 'Growth Score' || label === 'Attendance') {
       return `${val}%`;
     }
     return String(val);
@@ -107,11 +111,85 @@ export default function StatGrid({
       }
     ];
 
-    if (role === 'MEMBER') {
-      return [...commonStats, ...meetingsSyncsStats];
+    if (role === 'MEMBER' || role === 'CHAPTER_ADMIN') {
+      return [
+        {
+          label: 'Total Members',
+          value: formatValue('Total Members', totalMembersCount),
+          trend: 'Total',
+          trendLabel: 'In chapter',
+          icon: Users,
+          color: 'text-indigo-400', 
+          bg: 'bg-indigo-400/10 border-indigo-400/20',
+        },
+        {
+          label: 'Active Members',
+          value: formatValue('Active Members', activePartnersCount),
+          trend: 'Active',
+          trendLabel: 'In chapter',
+          icon: Users,
+          color: 'text-red-500', 
+          bg: 'bg-red-500/10 border-red-500/20',
+        },
+        {
+          label: 'Meetings',
+          value: formatValue('Meetings', meetingsCount),
+          trend: 'Total',
+          trendLabel: 'Chapter Meetings',
+          icon: Calendar,
+          color: 'text-orange-400', 
+          bg: 'bg-orange-400/10 border-orange-400/20',
+        },
+        {
+          label: 'Attendance',
+          value: formatValue('Attendance', weeklyMeetingAttendance),
+          trend: 'Average',
+          trendLabel: 'Attendance',
+          icon: Target,
+          color: 'text-cyan-400', 
+          bg: 'bg-cyan-400/10 border-cyan-400/20',
+        },
+        {
+          label: 'Referrals',
+          value: formatValue('Referrals', referralsPassedCount),
+          trend: 'Total',
+          trendLabel: 'Passed',
+          icon: Share2, 
+          color: 'text-emerald-400', 
+          bg: 'bg-emerald-400/10 border-emerald-400/20',
+        },
+        {
+          label: 'One-to-One Meetings',
+          value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
+          trend: 'Total',
+          trendLabel: 'Completed',
+          icon: Handshake,
+          color: 'text-blue-500',
+          bg: 'bg-blue-500/10 border-blue-500/20',
+        },
+        {
+          label: 'Guest Invites',
+          value: formatValue('Guest Invites', visitorsAttendedCount),
+          trend: 'Total',
+          trendLabel: 'Invites',
+          icon: UserCheck,
+          color: 'text-pink-500',
+          bg: 'bg-pink-500/10 border-pink-500/20',
+        },
+        {
+          label: 'Testimonials',
+          value: formatValue('Testimonials', testimonialsCount),
+          trend: 'Total',
+          trendLabel: 'Approved',
+          icon: Star,
+          color: 'text-yellow-400', 
+          bg: 'bg-yellow-400/10 border-yellow-400/20',
+        }
+      ];
     }
 
-    const adminStats = [
+    // MASTER_ADMIN gets original adminStats layout + extra global stats
+    const globalAdminStats = [
       {
         label: 'Total Members',
         value: formatValue('Total Members', totalMembersCount),
@@ -156,11 +234,6 @@ export default function StatGrid({
       meetingsSyncsStats[0], // Upcoming Meetings
     ];
 
-    if (role === 'CHAPTER_ADMIN') {
-      return adminStats;
-    }
-
-    // MASTER_ADMIN
     return [
       {
         label: 'Total Chapters',
@@ -171,7 +244,7 @@ export default function StatGrid({
         color: 'text-violet-400', 
         bg: 'bg-violet-400/10 border-violet-400/20',
       },
-      ...adminStats,
+      ...globalAdminStats,
       {
         label: 'New Members This Month',
         value: formatValue('New Members This Month', newMembersThisMonthCount),

@@ -6,6 +6,7 @@ import { User, Phone, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { UserProfile, ChapterPosition } from '../types';
+import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 
 export function OnboardMember() {
   const { profile } = useAuth();
@@ -15,6 +16,7 @@ export function OnboardMember() {
   const [chapters, setChapters] = useState<UserProfile[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [createdMemberData, setCreatedMemberData] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export function OnboardMember() {
           phone: formData.phone,
           whatsappNumber: formData.whatsapp,
           email: formData.email,
-          associatedChapterAdminId: formData.chapterId,
+          chapter_id: formData.chapterId,
           membershipStatus: formData.status
         });
         
@@ -97,7 +99,7 @@ export function OnboardMember() {
           phone: formData.phone,
           whatsappNumber: formData.whatsapp,
           email: formData.email,
-          associatedChapterAdminId: formData.chapterId,
+          chapter_id: formData.chapterId,
           role: 'MEMBER',
           position: 'member' as ChapterPosition,
           membershipStatus: formData.status as 'ACTIVE' | 'SUSPENDED' | 'PENDING',
@@ -110,6 +112,13 @@ export function OnboardMember() {
         await setDoc(doc(db, 'auth_data', uid), {
           password: 'Welcometosskbusiness',
           phone: formData.phone
+        });
+        
+        setCreatedMemberData({
+          name: formData.fullName,
+          userId: memberId,
+          phone: formData.phone,
+          password: 'Welcometosskbusiness'
         });
       }
 
@@ -177,7 +186,7 @@ export function OnboardMember() {
       (m.memberId || '').toLowerCase().includes(searchTerm.toLowerCase());
       
     const statusMatch = statusFilter === 'ALL' || m.membershipStatus === statusFilter;
-    const chapterMatch = chapterFilter === 'ALL' || m.associatedChapterAdminId === chapterFilter;
+    const chapterMatch = chapterFilter === 'ALL' || m.chapter_id === chapterFilter;
     const categoryMatch = categoryFilter === 'ALL' || m.category === categoryFilter;
     
     // Only show members (not master admins)
@@ -281,7 +290,7 @@ export function OnboardMember() {
                     </div>
                   </td>
                   <td className="p-4 text-sm text-neutral-600">
-                    {chapters.find(c => c.uid === member.associatedChapterAdminId)?.name || 'None'}
+                    {chapters.find(c => c.uid === member.chapter_id)?.name || 'None'}
                   </td>
                   <td className="p-4">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-600">
@@ -307,7 +316,7 @@ export function OnboardMember() {
                             phone: member.phone || '',
                             whatsapp: member.whatsappNumber || '',
                             email: member.email || '',
-                            chapterId: member.associatedChapterAdminId || '',
+                            chapterId: member.chapter_id || '',
                             status: member.membershipStatus
                           });
                           setIsModalOpen(true);
@@ -355,6 +364,11 @@ export function OnboardMember() {
       </div>
 
       {/* Create Member Modal */}
+      <MemberSuccessPopup 
+        isOpen={!!createdMemberData} 
+        onClose={() => setCreatedMemberData(null)} 
+        memberData={createdMemberData} 
+      />
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-xl overflow-hidden flex flex-col max-h-[90vh]">

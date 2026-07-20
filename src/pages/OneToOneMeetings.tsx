@@ -89,7 +89,7 @@ export function OneToOneMeetings() {
       if (isChapterAdmin) {
         q = query(
           collection(db, 'users'), 
-          where('associatedChapterAdminId', '==', profile.uid),
+          where('chapter_id', '==', profile?.chapter_id),
           where('membershipStatus', '==', 'ACTIVE')
         );
       } else {

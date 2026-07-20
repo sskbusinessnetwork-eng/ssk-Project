@@ -26,6 +26,7 @@ import { OneToOneMeetings } from './pages/OneToOneMeetings';
 import { Connections } from './pages/Connections';
 import { Notifications } from './pages/Notifications';
 import { SubscriptionExpired } from './pages/SubscriptionExpired';
+import { Reports } from './pages/Reports';
 
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -61,8 +62,10 @@ export default function App() {
               <Route path="/guests" element={<Guests />} />
               <Route path="/one-to-one" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><OneToOneMeetings /></ProtectedRoute>} />
               <Route path="/network" element={<Connections />} />
+              <Route path="/directory" element={<Connections />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/categories" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Categories /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Reports /></ProtectedRoute>} />
               <Route path="/profile" element={<Profile />} />
             </Route>
 

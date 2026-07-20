@@ -146,11 +146,6 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-4 sm:gap-6">
-            <button className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-primary to-[#FF6B6B] hover:opacity-90 text-white px-4 py-2.5 rounded-full text-[13px] font-bold transition-all shadow-[0_4px_12px_rgba(220,38,38,0.25)]">
-              <Plus size={16} strokeWidth={3} />
-              Quick Add
-            </button>
-
             <div className="flex items-center gap-4">
               <Link to="/notifications" className="relative group">
                 <div className="p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5">
