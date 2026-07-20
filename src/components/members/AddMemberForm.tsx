@@ -5,6 +5,7 @@ import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, RefreshCw } from 'l
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
+import { supabase } from '../../lib/supabaseClient';
 
 export function AddMemberForm() {
   const { profile } = useAuth();
@@ -14,12 +15,8 @@ export function AddMemberForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Chapters list for Master Admin selection
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
-
   // Resolved Chapter for Chapter Admin
-  const [adminChapter, setAdminChapter] = useState<Chapter | null>(null);
+  const [adminChapter, setAdminChapter] = useState<{ id: string; chapter_name: string } | null>(null);
 
   // Success Popup State
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
@@ -38,29 +35,24 @@ export function AddMemberForm() {
     password: ''
   });
 
-  // Fetch chapters for Master Admin
-  useEffect(() => {
-    if (isMasterAdmin) {
-      getDocs(query(collection(db, 'chapters'))).then(snap => {
-        setChapters(snap.docs.map(d => ({ id: d.id, ...d.data() } as Chapter)));
-      });
-    }
-  }, [isMasterAdmin]);
-
-  // Fetch/Resolve chapter for Chapter Admin
+  // Fetch/Resolve chapter for Chapter Admin securely from authenticated user record
   useEffect(() => {
     const loadAdminChapter = async () => {
-      if (!isMasterAdmin && profile?.uid) {
+      const adminId = profile?.uid || profile?.id;
+      if (adminId) {
         try {
-          const q = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            setAdminChapter({ id: snap.docs[0].id, ...snap.docs[0].data() } as Chapter);
-          } else if (profile.chapter_id) {
-            const chapDoc = await getDoc(doc(db, 'chapters', profile.chapter_id));
-            if (chapDoc.exists()) {
-              setAdminChapter({ id: chapDoc.id, ...chapDoc.data() } as Chapter);
-            }
+          // Fetch fresh from Supabase users table
+          const { data: dbUser, error: dbUserErr } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', adminId)
+            .single();
+
+          if (!dbUserErr && dbUser && dbUser.chapter_id) {
+            setAdminChapter({
+              id: dbUser.chapter_id,
+              chapter_name: dbUser.chapter_name || 'SSK Chapter'
+            });
           }
         } catch (err) {
           console.error("Error loading chapter for admin:", err);
@@ -68,7 +60,7 @@ export function AddMemberForm() {
       }
     };
     loadAdminChapter();
-  }, [isMasterAdmin, profile]);
+  }, [profile]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -106,25 +98,32 @@ export function AddMemberForm() {
     }
 
     try {
-      let finalChapterId = '';
-      let finalChapterName = '';
+      const adminId = profile?.uid || profile?.id;
+      if (!adminId) {
+        throw new Error('You must be logged in as a Chapter Admin to create members.');
+      }
 
-      if (isMasterAdmin) {
-        if (!selectedChapterId) {
-          throw new Error('Please select a chapter.');
-        }
-        const matched = chapters.find(c => c.id === selectedChapterId);
-        if (!matched) {
-          throw new Error('Selected chapter is invalid.');
-        }
-        finalChapterId = matched.id;
-        finalChapterName = matched.chapter_name;
-      } else {
-        if (!adminChapter) {
-          throw new Error('Your chapter could not be resolved. Please contact Master Admin.');
-        }
-        finalChapterId = adminChapter.id;
-        finalChapterName = adminChapter.chapter_name;
+      // Fetch the logged-in Chapter Admin's profile from the database to guarantee it is secure and authentic
+      const { data: adminProfile, error: profileErr } = await supabase
+        .from('users')
+        .select('chapter_id, chapter_name, role')
+        .eq('id', adminId)
+        .single();
+
+      if (profileErr || !adminProfile) {
+        throw new Error('Failed to verify Chapter Admin profile.');
+      }
+
+      // Enforce security role check
+      if (adminProfile.role !== 'CHAPTER_ADMIN') {
+        throw new Error('Unauthorized. Only Chapter Admins are allowed to create regular members.');
+      }
+
+      const finalChapterId = adminProfile.chapter_id;
+      const finalChapterName = adminProfile.chapter_name;
+
+      if (!finalChapterId) {
+        throw new Error('Your Chapter Admin profile does not have an assigned Chapter ID. Please contact support.');
       }
 
       // 1. Mobile number duplicate check across all members
@@ -154,7 +153,7 @@ export function AddMemberForm() {
         position: 'member' as any, // translates to 'Associate Member' in display
         membershipStatus: 'ACTIVE' as any,
         must_change_password: true,
-        created_by: profile?.uid || '',
+        created_by: adminId,
         createdAt: new Date().toISOString()
       };
 
@@ -184,7 +183,6 @@ export function AddMemberForm() {
         email: '',
         password: ''
       });
-      setSelectedChapterId('');
 
       // 7. Dispatch Global Event to refresh active screens instantly without page reloads
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
@@ -219,26 +217,8 @@ export function AddMemberForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Chapter Selection (Master Admin Only) */}
-          {isMasterAdmin && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter *</label>
-              <select
-                value={selectedChapterId}
-                onChange={(e) => setSelectedChapterId(e.target.value)}
-                className="w-full h-11 px-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
-                required
-              >
-                <option value="">Select a Chapter</option>
-                {chapters.map(chap => (
-                  <option key={chap.id} value={chap.id}>{chap.chapter_name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Chapter Name Auto-filled for Chapter Admin */}
-          {!isMasterAdmin && adminChapter && (
+          {adminChapter && (
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter</label>
               <input

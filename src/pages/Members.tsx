@@ -41,6 +41,7 @@ import { format } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
 import { safeFetch } from '../utils/apiUtils';
+import { supabase } from '../lib/supabaseClient';
 
 export function Members() {
   const { profile } = useAuth();
@@ -184,6 +185,34 @@ export function Members() {
 
     setIsSubmitting(true);
     try {
+      const adminId = profile?.uid || profile?.id;
+      if (!adminId) {
+        throw new Error('You must be logged in to create members.');
+      }
+
+      // Fetch the logged-in Chapter Admin's profile from the database to guarantee it is secure and authentic
+      const { data: adminProfile, error: profileErr } = await supabase
+        .from('users')
+        .select('chapter_id, chapter_name, role, name')
+        .eq('id', adminId)
+        .single();
+
+      if (profileErr || !adminProfile) {
+        throw new Error('Failed to verify Chapter Admin profile.');
+      }
+
+      // Enforce security role check
+      if (adminProfile.role !== 'CHAPTER_ADMIN') {
+        throw new Error('Unauthorized. Only Chapter Admins are allowed to create regular members.');
+      }
+
+      const finalChapterId = adminProfile.chapter_id;
+      const finalChapterName = adminProfile.chapter_name;
+
+      if (!finalChapterId) {
+        throw new Error('Your Chapter Admin profile does not have an assigned Chapter ID. Please contact support.');
+      }
+
       const normalizedPhone = normalizePhoneNumber(newMemberData.phone);
       
       // 1. DUPLICATE PHONE CHECK
@@ -204,7 +233,7 @@ export function Members() {
           password: newMemberData.password,
           displayName: newMemberData.name,
           role: 'MEMBER',
-          adminUid: profile?.uid,
+          adminUid: adminId,
           phone: normalizedPhone
         })
       });
@@ -218,16 +247,18 @@ export function Members() {
         role: "MEMBER",
         phone: normalizedPhone,
         membershipStatus: "ACTIVE",
-        chapter_id: profile?.chapter_id,
-        createdByName: profile?.name || profile?.displayName || 'Unknown Admin',
-        createdByRole: profile?.role || "CHAPTER_ADMIN",
+        chapter_id: finalChapterId,
+        chapterName: finalChapterName,
+        createdByName: adminProfile.name || 'Chapter Admin',
+        createdByRole: "CHAPTER_ADMIN",
         businessName: newMemberData.businessName,
         category: newMemberData.category,
         state: newMemberData.state,
         city: newMemberData.city,
         area: newMemberData.area,
         address: newMemberData.address,
-        adminId: profile?.uid,
+        adminId: adminId,
+        created_by: adminId,
         createdAt: new Date().toISOString(),
         subscriptionStart: new Date(newMemberData.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString()

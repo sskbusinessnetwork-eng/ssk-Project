@@ -44,22 +44,24 @@ export function ManageChapter() {
             Create Chapter
           </button>
         )}
-        <button
-          onClick={() => setActiveTab('add_member')}
-          className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
-            activeTab === 'add_member'
-              ? 'bg-primary text-white shadow-[0_0_15px_rgba(229,57,53,0.3)]'
-              : 'text-white/70 hover:text-white'
-          }`}
-        >
-          <PlusCircle size={16} />
-          Add Member
-        </button>
+        {!isMasterAdmin && (
+          <button
+            onClick={() => setActiveTab('add_member')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${
+              activeTab === 'add_member'
+                ? 'bg-primary text-white shadow-[0_0_15px_rgba(229,57,53,0.3)]'
+                : 'text-white/70 hover:text-white'
+            }`}
+          >
+            <PlusCircle size={16} />
+            Add Member
+          </button>
+        )}
       </div>
 
       {activeTab === 'positions' && <Positions />}
       {activeTab === 'create' && isMasterAdmin && <CreateChapter onSuccess={() => setActiveTab('positions')} />}
-      {activeTab === 'add_member' && <AddMemberForm />}
+      {activeTab === 'add_member' && !isMasterAdmin && <AddMemberForm />}
     </div>
   );
 }
