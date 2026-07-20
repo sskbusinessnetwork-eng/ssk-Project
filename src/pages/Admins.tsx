@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { PositionManagement } from '../components/positions/PositionManagement';
 import { safeFetch } from '../utils/apiUtils';
+import { supabase } from '../lib/supabaseClient';
 
 export function Admins() {
   const { profile } = useAuth();
@@ -92,10 +93,17 @@ export function Admins() {
     try {
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       
-      // Check if phone number already exists in Firestore (excluding current admin if editing)
-      const existingUser = users.find(u => u.phone?.replace(/\D/g, '') === normalizedPhone && u.uid !== editingAdmin?.uid);
-      if (existingUser) {
-        throw new Error('An account with this phone number already exists.');
+      // Check if phone number already exists in Supabase (excluding current admin if editing)
+      const { data: dbExisting, error: dbErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', normalizedPhone)
+        .limit(1);
+
+      if (dbErr) throw dbErr;
+      const isDuplicate = dbExisting && dbExisting.length > 0 && dbExisting[0].id !== editingAdmin?.uid;
+      if (isDuplicate) {
+        throw new Error('This phone number is already registered. Please use a different phone number.');
       }
 
       if (editingAdmin) {

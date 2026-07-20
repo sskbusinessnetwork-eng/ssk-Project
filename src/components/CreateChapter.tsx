@@ -118,9 +118,9 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         
       if (chapterCheckError) throw chapterCheckError;
       if (existingChapter && existingChapter.length > 0) {
-        newErrors.chapter_name = "A chapter with this name already exists.";
+        newErrors.chapter_name = "A chapter with this name already exists. Please choose a different chapter name.";
         setErrors(newErrors);
-        throw new Error("A chapter with this name already exists.");
+        throw new Error("A chapter with this name already exists. Please choose a different chapter name.");
       }
 
       // 1. Check for existing users
@@ -129,9 +129,9 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         const { data: existing, error: checkError } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
         if (checkError) throw checkError;
         if (existing && existing.length > 0) {
-          newErrors[`${String(pos)}_mobile`] = "This phone number is already registered.";
+          newErrors[`${String(pos)}_mobile`] = "This phone number is already registered. Please use a different phone number.";
           setErrors(newErrors);
-          throw new Error(`An account with mobile ${phone} already exists (used by ${pos.replace('_', ' ').toUpperCase()}).`);
+          throw new Error("This phone number is already registered. Please use a different phone number.");
         }
       }
 

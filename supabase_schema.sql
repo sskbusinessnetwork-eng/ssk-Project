@@ -12,7 +12,7 @@ CREATE TYPE testimonial_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 -- 1. Chapters Table
 CREATE TABLE chapters (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    chapter_name VARCHAR(255) NOT NULL,
+    chapter_name VARCHAR(255) UNIQUE NOT NULL,
     meeting_venue TEXT,
     chapter_admin_id UUID, -- Will be linked later after users table
     president_id UUID,

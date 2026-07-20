@@ -128,10 +128,15 @@ export function AddMemberForm() {
 
       // 1. Mobile number duplicate check across all members
       const cleanPhone = normalizePhoneNumber(formData.phone);
-      const phoneQuery = query(collection(db, 'users'), where('phone', '==', cleanPhone));
-      const phoneSnap = await getDocs(phoneQuery);
-      if (!phoneSnap.empty) {
-        throw new Error('This mobile number is already registered.');
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .limit(1);
+
+      if (checkError) throw checkError;
+      if (existingUser && existingUser.length > 0) {
+        throw new Error('This phone number is already registered. Please use a different phone number.');
       }
 
       // 2. Generate unique Member ID

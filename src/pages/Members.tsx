@@ -216,11 +216,17 @@ export function Members() {
       const normalizedPhone = normalizePhoneNumber(newMemberData.phone);
       
       // 1. DUPLICATE PHONE CHECK
-      const q = query(collection(db, "users"), where("phone", "==", normalizedPhone));
-      const snapshot = await getDocs(q);
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', normalizedPhone)
+        .limit(1);
 
-      if (!snapshot.empty) {
-        setError("Phone number already exists");
+      if (checkError) {
+        throw checkError;
+      }
+      if (existingUser && existingUser.length > 0) {
+        setError("This phone number is already registered. Please use a different phone number.");
         setIsSubmitting(false);
         return;
       }

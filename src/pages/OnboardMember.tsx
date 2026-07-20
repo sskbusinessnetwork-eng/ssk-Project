@@ -7,6 +7,8 @@ import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { UserProfile, ChapterPosition } from '../types';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
+import { supabase } from '../lib/supabaseClient';
+import { normalizePhoneNumber } from '../utils/phoneUtils';
 
 export function OnboardMember() {
   const { profile } = useAuth();
@@ -64,8 +66,18 @@ export function OnboardMember() {
 
     try {
       // Validation
-      const phoneExists = members.some(m => m.phone === formData.phone && m.uid !== editingId);
-      if (phoneExists) throw new Error('Phone number already exists.');
+      const cleanPhone = normalizePhoneNumber(formData.phone);
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .limit(1);
+
+      if (checkError) throw checkError;
+      const isDuplicate = existingUser && existingUser.length > 0 && existingUser[0].id !== editingId;
+      if (isDuplicate) {
+        throw new Error('This phone number is already registered. Please use a different phone number.');
+      }
       
       if (formData.email) {
         const emailExists = members.some(m => m.email === formData.email && m.uid !== editingId);

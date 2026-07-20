@@ -5,6 +5,7 @@ import { db } from '../lib/database';
 import {  doc, setDoc, collection, getDocs, query, where, limit  } from '../lib/database';
 import { UserRole } from '../types';
 import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabaseClient';
 
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 
@@ -73,10 +74,15 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
       const normalizedPhone = normalizePhoneNumber(formData.phone);
       
       // Check if user already exists
-      const q = query(collection(db, 'users'), where('phone', '==', normalizedPhone), limit(1));
-      const existingUsers = await getDocs(q);
-      if (!existingUsers.empty) {
-        throw new Error('An account with this phone number already exists.');
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', normalizedPhone)
+        .limit(1);
+
+      if (checkError) throw checkError;
+      if (existingUser && existingUser.length > 0) {
+        throw new Error('This phone number is already registered. Please use a different phone number.');
       }
 
       // Generate a new UID manually since we're not using Firebase Auth
