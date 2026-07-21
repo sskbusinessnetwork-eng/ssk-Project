@@ -122,6 +122,33 @@ export function Referrals() {
     e.preventDefault();
     if (!profile) return;
 
+    // Manual validation to highlight and scroll
+    const requiredFields = [
+      { id: 'toUserId', value: formData.toUserId, name: 'Member' },
+      { id: 'contactName', value: formData.contactName, name: 'Contact Name' },
+      { id: 'contactPhone', value: formData.contactPhone, name: 'Contact Phone' },
+      { id: 'requirement', value: formData.requirement, name: 'Requirement' }
+    ];
+
+    for (const field of requiredFields) {
+      if (!field.value.trim()) {
+        const el = document.getElementById(`referral-${field.id}`);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-red-500', 'border-red-500');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-red-500', 'border-red-500'), 3000);
+        }
+        
+        let validationMsg = `${field.name} is required.`;
+        if (field.id === 'toUserId') {
+          validationMsg = "Receiver not selected.";
+        }
+        setErrorMessage(validationMsg);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -129,18 +156,49 @@ export function Referrals() {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
 
       const toUser = members.find(m => m.uid === formData.toUserId);
+      
+      const currentUserId = profile.uid || null;
+      const currentChapterId = profile.chapter_id || null;
+      const selectedReceiverId = formData.toUserId || null;
+
+      console.log("Current User ID:", currentUserId);
+      console.log("Current Chapter ID:", currentChapterId);
+      console.log("Selected Receiver ID:", selectedReceiverId);
+      
+      if (!currentUserId) throw new Error("sender_id is missing.");
+      if (!currentChapterId) throw new Error("chapter_id is missing.");
+      if (!selectedReceiverId) throw new Error("Receiver not selected.");
       if (!toUser) throw new Error("Selected member not found");
 
-      const newReferral: Omit<Referral, 'id'> = {
-        ...formData,
+      // Verify foreign keys in the database
+      const [senderProfile, receiverProfile, chapterProfile] = await Promise.all([
+        databaseService.get<any>('users', currentUserId),
+        databaseService.get<any>('users', selectedReceiverId),
+        databaseService.get<any>('chapters', currentChapterId)
+      ]);
+
+      if (!senderProfile) {
+        throw new Error("Foreign key violation: sender_id does not exist in users table.");
+      }
+      if (!receiverProfile) {
+        throw new Error("Foreign key violation: receiver_id does not exist in users table.");
+      }
+      if (!chapterProfile) {
+        throw new Error("Foreign key violation: chapter_id does not exist in chapters table.");
+      }
+
+      const newReferral = {
+        toUserId: formData.toUserId,
+        contactName: formData.contactName,
         contactPhone: normalizedPhone,
+        requirement: formData.requirement,
+        notes: formData.notes || '',
         fromUserId: profile.uid,
-        fromUserName: profile.name || profile.displayName || 'Unknown',
-        fromUserRole: profile.role,
         status: 'PENDING',
         createdAt: new Date().toISOString()
       };
 
+      // Create referral
       await databaseService.create('referrals', newReferral);
       
       // Create notifications
@@ -173,13 +231,31 @@ export function Referrals() {
 
       await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${toUser.name}.`);
 
-      setSuccessMessage("Referral passed successfully!");
+      setSuccessMessage("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
-    } catch (error) {
-      console.error("Error passing referral:", error);
-      setErrorMessage("Failed to pass referral. Please try again.");
+
+      // Refresh Given and Received referral lists & update analytics immediately
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    } catch (error: any) {
+      console.error("Referral Insert Error:", error);
+      
+      let errorMsg = error?.message || "Failed to send referral. Please try again.";
+      
+      if (errorMsg === "Receiver not selected." || errorMsg === "sender_id is missing." || errorMsg === "chapter_id is missing.") {
+        setErrorMessage(errorMsg);
+      } else if (error?.code === '42501' || errorMsg.includes('row-level security') || errorMsg.toLowerCase().includes('permission denied') || errorMsg.toLowerCase().includes('violates row-level security policy')) {
+        setErrorMessage("Permission denied.");
+      } else if (error?.code === '23503' || errorMsg.includes('foreign key') || errorMsg.toLowerCase().includes('foreign key violation')) {
+        setErrorMessage("Foreign key violation.");
+      } else if (error?.code === '23505' || errorMsg.includes('duplicate') || errorMsg.toLowerCase().includes('duplicate referral')) {
+        setErrorMessage("Duplicate referral.");
+      } else if (errorMsg.includes('Failed to fetch') || errorMsg.toLowerCase().includes('connection failed') || errorMsg.toLowerCase().includes('supabase connection failed')) {
+        setErrorMessage("Supabase connection failed.");
+      } else {
+        setErrorMessage(errorMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -250,7 +326,10 @@ export function Referrals() {
         `${profile.name} has submitted a Thank You slip for the referral you passed.`
       );
 
-      await notificationService.notifyMasterAdmins('THANKYOU', `${profile.name} submitted a Thank You slip to ${selectedReferral.fromUserName}.`);
+      const fromUser = members.find(m => m.uid === selectedReferral.fromUserId);
+      const fromName = selectedReferral.fromUserName || fromUser?.name || 'Member';
+
+      await notificationService.notifyMasterAdmins('THANKYOU', `${profile.name} submitted a Thank You slip to ${fromName}.`);
       
       // Mark referral as completed after submitting thank you slip
       await databaseService.update('referrals', selectedReferral.id, { 
@@ -634,6 +713,7 @@ export function Referrals() {
           <div className="space-y-2">
             <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Select Member</label>
             <select
+              id="referral-toUserId"
               required
               value={formData.toUserId}
               onChange={(e) => setFormData({ ...formData, toUserId: e.target.value })}
@@ -650,6 +730,7 @@ export function Referrals() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Contact Name</label>
               <input
+                id="referral-contactName"
                 required
                 type="text"
                 value={formData.contactName}
@@ -661,6 +742,7 @@ export function Referrals() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Contact Phone</label>
               <input
+                id="referral-contactPhone"
                 required
                 type="tel"
                 value={formData.contactPhone}
@@ -674,6 +756,7 @@ export function Referrals() {
           <div className="space-y-2">
             <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Business Requirement</label>
             <textarea
+              id="referral-requirement"
               required
               value={formData.requirement}
               onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
