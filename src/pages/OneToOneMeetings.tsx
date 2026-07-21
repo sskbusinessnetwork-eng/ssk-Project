@@ -101,9 +101,8 @@ export function OneToOneMeetings() {
         .map(doc => ({ uid: doc.id, ...(doc.data() as any) } as UserProfile))
         .filter(m => 
           m.uid !== profile.uid && 
-          m.role !== 'MASTER_ADMIN' &&
-          (m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE')
-        ); // Exclude self, Master Admin, and only keep ACTIVE
+          m.role !== 'MASTER_ADMIN'
+        );
 
       setMembers(memberList);
     };
@@ -193,7 +192,7 @@ export function OneToOneMeetings() {
   const filteredMembers = members.filter(m => {
     const search = searchTerm.toLowerCase();
     const nameMatch = m.name?.toLowerCase().includes(search) || false;
-    const phoneMatch = m.phone?.toLowerCase().includes(search) || m.whatsapp_number?.toLowerCase().includes(search) || false;
+    const phoneMatch = m.phone?.toLowerCase().includes(search) || m.whatsappNumber?.toLowerCase().includes(search) || false;
     const positionMatch = m.position?.toLowerCase().includes(search) || m.role?.toLowerCase().includes(search) || false;
     
     return nameMatch || phoneMatch || positionMatch;
@@ -524,7 +523,15 @@ export function OneToOneMeetings() {
                     <Users size={18} className="text-neutral-400 group-hover:text-primary transition-colors shrink-0" />
                     {formData.participantId ? (
                       <span className="text-sm font-bold text-white truncate">
-                        {members.find(m => m.uid === formData.participantId)?.name}
+                        {(() => {
+                          const m = members.find(m => m.uid === formData.participantId);
+                          if (!m) return '';
+                          const role = m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
+                                       m.position === 'president' ? 'President' :
+                                       m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
+                                       m.position === 'treasurer' ? 'Treasurer' : 'Member';
+                          return `${m.name} (${role})`;
+                        })()}
                       </span>
                     ) : (
                       <span className="text-sm font-medium text-neutral-400">Select a member...</span>
@@ -591,7 +598,7 @@ export function OneToOneMeetings() {
                                   </span>
                                 </div>
                                 <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">
-                                  {member.category || 'General'} • {member.phone || member.whatsapp_number || 'No Phone'}
+                                  {member.category || 'General'} • {member.phone || member.whatsappNumber || 'No Phone'}
                                 </p>
                               </div>
                             </div>
