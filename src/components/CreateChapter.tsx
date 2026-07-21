@@ -15,7 +15,7 @@ interface LeaderForm {
 
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return generateId();
+    return crypto.randomUUID();
   }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -91,6 +91,14 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setErrorPopup("Please fill in all required fields correctly.");
+      setTimeout(() => {
+        const firstErrorKey = Object.keys(newErrors)[0];
+        const errorElement = document.querySelector(`[name="${firstErrorKey}"]`) as HTMLElement;
+        if (errorElement) {
+          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorElement.focus();
+        }
+      }, 100);
       return;
     }
 
@@ -248,6 +256,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             <User className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="text"
+              name={`${String(pos)}_fullName`}
               placeholder="Full Name"
               value={leaders[pos].fullName}
               onChange={(e) => handleLeaderChange(pos, 'fullName', e.target.value)}
@@ -264,6 +273,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="tel"
+              name={`${String(pos)}_mobile`}
               placeholder="e.g. 9876543210"
               value={leaders[pos].mobile}
               onChange={(e) => handleLeaderChange(pos, 'mobile', e.target.value)}
@@ -280,6 +290,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="tel"
+              name={`${String(pos)}_whatsapp`}
               placeholder="Same as mobile if empty"
               value={leaders[pos].whatsapp}
               onChange={(e) => handleLeaderChange(pos, 'whatsapp', e.target.value)}
@@ -295,6 +306,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
             <input
               type="email"
+              name={`${String(pos)}_email`}
               placeholder="Email address"
               value={leaders[pos].email}
               onChange={(e) => handleLeaderChange(pos, 'email', e.target.value)}
@@ -326,6 +338,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
                 <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
                 <input
                   type="text"
+                  name="chapter_name"
                   placeholder="e.g., Bangalore Central"
                   value={formData.chapter_name}
                   onChange={(e) => {
@@ -343,6 +356,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
                 <input
                   type="text"
+                  name="meeting_venue"
                   placeholder="e.g., Koramangala Community Hall"
                   value={formData.meeting_venue}
                   onChange={(e) => {
