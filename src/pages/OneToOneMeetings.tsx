@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -60,7 +61,6 @@ export function OneToOneMeetings() {
 
   useEffect(() => {
     if (!profile) return;
-    if (profile.role !== 'MEMBER' && profile.role !== 'MASTER_ADMIN' && profile.role !== 'CHAPTER_ADMIN') return;
 
     // Fetch meetings
     const meetingsConstraints = (isAdmin || isChapterAdmin)
@@ -85,26 +85,38 @@ export function OneToOneMeetings() {
     // Fetch all members for selection
     const fetchMembers = async () => {
       if (!profile) return;
-      let q;
-      if (isAdmin) {
-        q = query(
-          collection(db, 'users')
-        );
-      } else {
-        q = query(
-          collection(db, 'users'), 
-          where('chapter_id', '==', profile?.chapter_id)
-        );
+      
+      try {
+        let queryBuilder = supabase.from('users').select('*');
+        
+        if (!isAdmin && profile.chapter_id) {
+          queryBuilder = queryBuilder.eq('chapter_id', profile.chapter_id);
+        }
+        
+        const { data, error } = await queryBuilder;
+        
+        if (error) {
+          console.error("Error fetching members:", error);
+          return;
+        }
+        
+        if (data) {
+          const memberList = data
+            .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile))
+            .filter(m => 
+              m.uid !== profile.uid && 
+              m.role !== 'MASTER_ADMIN'
+            );
+          
+          console.log('Current User:', { id: profile.uid, chapter_id: profile.chapter_id, role: profile.role });
+          console.log('Fetched Members Count:', memberList.length);
+          console.log('Fetched Members:', memberList);
+            
+          setMembers(memberList);
+        }
+      } catch (err) {
+        console.error("Fetch members error:", err);
       }
-      const snap = await getDocs(q);
-      const memberList = snap.docs
-        .map(doc => ({ uid: doc.id, ...(doc.data() as any) } as UserProfile))
-        .filter(m => 
-          m.uid !== profile.uid && 
-          m.role !== 'MASTER_ADMIN'
-        );
-
-      setMembers(memberList);
     };
     fetchMembers();
 
@@ -282,14 +294,6 @@ export function OneToOneMeetings() {
     return true;
   });
 
-  if (profile?.role !== 'MEMBER' && profile?.role !== 'MASTER_ADMIN' && profile?.role !== 'CHAPTER_ADMIN') {
-    return (
-      <div className="p-6 text-center">
-        <h2 className="text-xl font-bold text-neutral-900">Access Denied</h2>
-        <p className="text-neutral-500 mt-2">This feature is only available for Members, Chapter Admins and Master Admin.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8">
@@ -511,6 +515,8 @@ export function OneToOneMeetings() {
                 {error}
               </div>
             )}
+            
+            
             {/* Member Selection - Searchable Dropdown */}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Select Member</label>
