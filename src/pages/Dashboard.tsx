@@ -1,3 +1,4 @@
+import { format, addYears } from 'date-fns';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
@@ -86,11 +87,54 @@ export function Analytics() {
   const [guestInvitations, setGuestInvitations] = useState<any[]>([]);
   const [isChecklistHighlighted, setIsChecklistHighlighted] = useState(false);
 
+  const handleApproveRenewal = async (requestId: string, memberId: string) => {
+    try {
+      const newStart = new Date().toISOString();
+      const newEnd = addYears(new Date(), 1).toISOString();
+      
+      await supabase.from('users').update({
+        subscriptionStart: newStart,
+        subscriptionStartDate: newStart,
+        subscriptionEnd: newEnd,
+        subscriptionEndDate: newEnd,
+        subscriptionStatus: 'Active',
+        membershipStatus: 'ACTIVE',
+        renewalRequested: false
+      }).eq('id', memberId);
+
+      await supabase.from('subscription_requests').update({
+        status: 'APPROVED',
+        processed_date: new Date().toISOString(),
+        processed_by: profile?.uid
+      }).eq('id', requestId);
+    } catch (e) {
+      console.error('Error approving', e);
+    }
+  };
+
+  const handleRejectRenewal = async (requestId: string, memberId: string) => {
+    try {
+      await supabase.from('subscription_requests').update({
+        status: 'REJECTED',
+        processed_date: new Date().toISOString(),
+        processed_by: profile?.uid
+      }).eq('id', requestId);
+      
+      await supabase.from('users').update({
+        renewalRequested: false
+      }).eq('id', memberId);
+    } catch (e) {
+      console.error('Error rejecting', e);
+    }
+  };
+
+
   // Chapter-specific telemetry states
   const [chapterUsers, setChapterUsers] = useState<any[]>([]);
   const [allSlips, setAllSlips] = useState<any[]>([]);
   const [allReferrals, setAllReferrals] = useState<any[]>([]);
   const [oneToOnes, setOneToOnes] = useState<any[]>([]);
+  const [subscriptionRequests, setSubscriptionRequests] = useState<any[]>([]);
   const [allTestimonials, setAllTestimonials] = useState<any[]>([]);
   const [allChapters, setAllChapters] = useState<any[]>([]);
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
@@ -154,6 +198,7 @@ export function Analytics() {
 
     // 2. Subscribe to thank you slips
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], setAllSlips);
+    const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
 
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
@@ -190,6 +235,7 @@ export function Analytics() {
     return () => {
       unsubUsers();
       unsubSlips();
+      unsubSubRequests();
       unsubReferrals();
       unsub1to1s();
       unsubGuests();
@@ -896,6 +942,7 @@ export function Analytics() {
     return tasks;
   }, [chapterUsers, profile]);
 
+
   const chapterAdminTasks = useMemo(() => {
     if (profile?.role !== 'CHAPTER_ADMIN' && profile?.position !== 'chapter_admin') return [];
     const tasks: any[] = [];
@@ -906,20 +953,34 @@ export function Analytics() {
     
     const members = chapterUsers.filter(u => u.chapter_id === profile?.chapter_id && u.role !== 'MASTER_ADMIN' && u.role !== 'CHAPTER_ADMIN' && u.position !== 'chapter_admin');
 
-    const renewalRequests = members.filter(u => u.renewalRequested);
-    if (renewalRequests.length > 0) {
-      tasks.push({
-        key: 'member_renewal_requests',
-        label: `${renewalRequests.length} Member(s) Requested Renewal`,
-        isDone: false,
-        link: '/subscriptions',
-        linkText: 'REVIEW',
-        iconColor: 'text-amber-400',
-        bgColor: 'bg-amber-500/10',
-        icon: Shield,
-        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-      });
-    }
+    // Subscription requests from new table
+    const pendingRequests = subscriptionRequests.filter(r => r.chapter_id === profile?.chapter_id && r.status === 'PENDING');
+    pendingRequests.forEach(req => {
+       const member = members.find(m => m.id === req.member_id || m.uid === req.member_id);
+       if (!member) return;
+       tasks.push({
+         key: `req_${req.id}`,
+         label: `Renewal Request: ${member.name}`,
+         isDone: false,
+         iconColor: 'text-amber-400',
+         bgColor: 'bg-amber-500/10',
+         icon: Shield,
+         activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]',
+         details: {
+           phone: member.phone || 'N/A',
+           position: member.position || member.role || 'Member',
+           chapterName: resolvedChapterName || 'Chapter',
+           endDate: req.current_subscription_end_date ? format(new Date(req.current_subscription_end_date), 'MMM d, yyyy') : 'N/A',
+           requestDate: format(new Date(req.request_date), 'MMM d, yyyy h:mm a'),
+           status: 'Pending'
+         },
+         customActions: [
+           { label: 'View Member', className: 'text-neutral-400 border-neutral-600 hover:bg-neutral-800', onClick: () => window.location.href='/subscriptions' },
+           { label: 'Approve & Renew', className: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20', onClick: () => handleApproveRenewal(req.id, member.uid || member.id) },
+           { label: 'Reject', className: 'text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20', onClick: () => handleRejectRenewal(req.id, member.uid || member.id) }
+         ]
+       });
+    });
 
     const expiringMembers = members.filter(u => {
       const endStr = u.subscriptionEndDate || u.subscriptionEnd;
@@ -980,7 +1041,8 @@ export function Analytics() {
     }
 
     return tasks;
-  }, [chapterUsers, profile]);
+  }, [chapterUsers, profile, subscriptionRequests, resolvedChapterName]);
+
 
   // Dynamic Growth Score
   const dynamicGrowthScore = useMemo(() => {

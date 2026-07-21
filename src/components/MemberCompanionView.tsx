@@ -146,50 +146,46 @@ export function MemberCompanionView({
 
   const handleRequestRenewal = async () => {
     if (!profile) return;
+
     setIsSubmitting(true);
     setSuccessMsg('');
+
     try {
-      // 1. Update user profile to request renewal
+      const chapterId = (profile as any).chapterId || (profile as any).chapter_id;
+      
+      let chapterAdminId = null;
+      if (chapterId) {
+        const { data: admins } = await supabase
+          .from('users')
+          .select('id, uid')
+          .eq('chapter_id', chapterId)
+          .in('role', ['CHAPTER_ADMIN']);
+        
+        if (admins && admins.length > 0) {
+          chapterAdminId = admins[0].id || admins[0].uid;
+        }
+      }
+
+      // Insert into subscription_requests
+      const endDate = profile.subscriptionEndDate || profile.subscriptionEnd;
+      
+      await supabase.from('subscription_requests').insert({
+        member_id: profile.uid,
+        chapter_id: chapterId,
+        chapter_admin_id: chapterAdminId,
+        current_subscription_end_date: endDate,
+        status: 'PENDING'
+      });
+
+      // Update user flag as well for backward compatibility in UI
       await databaseService.update('users', profile.uid, {
         renewalRequested: true,
         renewalRequestedAt: new Date().toISOString()
       });
 
-      // 2. Notify Chapter Admins
-      const chapterId = (profile as any).chapterId || (profile as any).chapter_id;
-      if (chapterId) {
-        const { data: admins, error } = await supabase
-          .from('users')
-          .select('id')
-          .eq('chapter_id', chapterId)
-          .eq('role', 'CHAPTER_ADMIN');
-        
-        if (!error && admins && admins.length > 0) {
-          for (const admin of admins) {
-            await notificationService.createNotification(
-              admin.id,
-              'CHAPTER_ADMIN',
-              'SUBSCRIPTION',
-              `${profile.name} has requested renewal of his membership.`,
-              profile.uid
-            );
-          }
-        }
-      }
-
-      // 3. Confirm for user
-      await notificationService.createNotification(
-        profile.uid,
-        profile.role,
-        'SUBSCRIPTION',
-        'Your membership renewal request has been submitted.',
-        profile.uid
-      );
-
-      await refreshProfile();
-      setSuccessMsg('Your renewal request has been submitted successfully.');
-    } catch (err) {
-      console.error('Error submitting renewal:', err);
+      setSuccessMsg('Request Sent');
+    } catch (err: any) {
+      console.error('Error submitting renewal request:', err);
     } finally {
       setIsSubmitting(false);
     }

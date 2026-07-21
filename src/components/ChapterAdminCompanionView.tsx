@@ -226,7 +226,7 @@ export function ChapterAdminCompanionView({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
               whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-              className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full h-[84px] min-h-[84px] overflow-hidden"
+              className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] py-4"
             >
               {/* Left Column: Icon Indicator & Title */}
               <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -254,16 +254,29 @@ export function ChapterAdminCompanionView({
 
               {/* Right Column: CTA Button */}
               <motion.div
-                whileHover={{ y: -2, scale: 1.02 }}
-                whileTap={{ scale: 0.95 }}
-                className="shrink-0 w-[95px] sm:w-[105px]"
+                className="shrink-0 flex flex-col gap-1.5"
               >
-                <Link 
-                  to={task.link} 
-                  className="h-9 sm:h-10 w-full flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0"
-                >
-                  {task.linkText}
-                </Link>
+                {task.customActions ? (
+                  task.customActions.map((act: any, i: number) => (
+                    <button
+                      key={i}
+                      onClick={act.onClick}
+                      className={cn(
+                        "h-7 w-full px-3 flex items-center justify-center text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-[8px] transition-all border",
+                        act.className
+                      )}
+                    >
+                      {act.label}
+                    </button>
+                  ))
+                ) : (
+                  <Link 
+                    to={task.link} 
+                    className="h-9 sm:h-10 w-[95px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0"
+                  >
+                    {task.linkText}
+                  </Link>
+                )}
               </motion.div>
             </motion.div>
           ))}
