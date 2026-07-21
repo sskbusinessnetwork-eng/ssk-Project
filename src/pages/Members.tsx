@@ -681,7 +681,7 @@ export function Members() {
               </div>
             </div>
 
-            <MemberTable
+            <MemberTable currentUserId={profile?.uid}
               members={filteredMembers}
               adminMap={allAdmins.reduce((acc, user) => {
                 acc[user.uid] = user.name || user.displayName || 'Unknown Admin';

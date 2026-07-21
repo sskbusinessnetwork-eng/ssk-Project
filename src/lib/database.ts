@@ -521,8 +521,31 @@ export async function updateDoc(docRef: any, partialData: any) {
   }
   
   const snakeData = keysToSnake(cleanData);
-  const { error } = await supabase.from(path).update(snakeData).eq('id', id);
-  if (error) console.error("updateDoc error:", error);
+  if (path === 'users') {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (token) {
+      const res = await fetch('/api/users/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ uid: id, updates: snakeData })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("updateDoc users error:", data.error);
+        throw new Error(data.error || 'Failed to update user');
+      }
+    } else {
+      const { error } = await supabase.from(path).update(snakeData).eq('id', id);
+      if (error) console.error("updateDoc error:", error);
+    }
+  } else {
+    const { error } = await supabase.from(path).update(snakeData).eq('id', id);
+    if (error) console.error("updateDoc error:", error);
+  }
   
   if (path === 'one_to_one_meetings' && participantIds !== undefined) {
     await supabase.from('meeting_participants').delete().eq('meeting_id', id);

@@ -283,9 +283,13 @@ export function Profile() {
         setShowSuccess(false);
         setSuccessMessage(null);
       }, 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating profile:", error);
-      setErrorMessage("Failed to update profile. Please try again.");
+      if (error.message === "You can only edit your own profile.") {
+        setErrorMessage("You can only edit your own profile.");
+      } else {
+        setErrorMessage("Failed to update profile. Please try again.");
+      }
       setTimeout(() => setErrorMessage(null), 5000);
     } finally {
       setIsSaving(false);

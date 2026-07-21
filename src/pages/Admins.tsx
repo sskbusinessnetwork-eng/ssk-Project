@@ -484,7 +484,8 @@ export function Admins() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Enter admin's full name"
-                className="w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                 disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                className={`w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
               />
             </div>
 
@@ -497,7 +498,8 @@ export function Admins() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="e.g. 9876543210"
-                  className="w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                   disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                  className={`w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
                 />
               </div>
               <div className="space-y-2">
@@ -507,7 +509,8 @@ export function Admins() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="admin@example.com"
-                  className="w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                   disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                  className={`w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
                 />
               </div>
             </div>
@@ -531,7 +534,8 @@ export function Admins() {
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
                 placeholder="Enter business name"
-                className="w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                 disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                className={`w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
               />
             </div>
 

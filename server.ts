@@ -39,6 +39,39 @@ async function startServer() {
   });
 
   // Update User endpoint (e.g. password resets, display names)
+  
+  app.post("/api/users/update", async (req, res) => {
+    try {
+      const token = req.headers.authorization?.split(" ")[1];
+      if (!token) return res.status(401).json({ error: "Unauthorized" });
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) return res.status(401).json({ error: "Invalid token" });
+
+      const { uid, updates } = req.body;
+      
+      if (user.id !== uid) {
+        const personalFields = ['name', 'email', 'phone', 'whatsapp_number', 'profile_photo', 'business_name', 'businessName', 'address', 'bio', 'photoURL', 'category', 'state', 'city', 'area', 'pincode', 'website', 'professionDesignation', 'profession_designation'];
+        const hasPersonalFields = Object.keys(updates).some(k => personalFields.includes(k));
+        
+        if (hasPersonalFields) {
+          return res.status(403).json({ error: "You can only edit your own profile." });
+        }
+        
+        const { data: caller } = await supabase.from('users').select('role').eq('id', user.id).single();
+        if (!caller || (caller.role !== 'MASTER_ADMIN' && caller.role !== 'CHAPTER_ADMIN')) {
+          return res.status(403).json({ error: "Unauthorized to edit other users." });
+        }
+      }
+
+      const { error: updateError } = await supabase.from('users').update(updates).eq('id', uid);
+      if (updateError) throw updateError;
+      
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/admin/update-user", async (req, res) => {
     const { uid, password, displayName } = req.body;
     if (!uid) {
@@ -49,9 +82,10 @@ async function startServer() {
       if (password) {
         updates.password = bcrypt.hashSync(password, 10);
       }
-      if (displayName) {
-        updates.name = displayName;
-      }
+      // Profile permissions: Admins cannot change another user's personal info
+      // if (displayName) {
+      //   updates.name = displayName;
+      // }
 
       if (Object.keys(updates).length > 0) {
         const { error } = await supabase

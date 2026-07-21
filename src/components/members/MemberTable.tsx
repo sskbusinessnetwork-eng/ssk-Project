@@ -26,6 +26,7 @@ import { differenceInDays, format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 interface MemberTableProps {
+  currentUserId?: string;
   members: UserProfile[];
   adminMap: Record<string, string>;
   loading: boolean;
@@ -48,6 +49,7 @@ const getDisplayPosition = (pos?: string, role?: string) => {
 };
 
 export function MemberTable({
+  currentUserId,
   members,
   adminMap,
   loading,
@@ -205,13 +207,13 @@ export function MemberTable({
                                 <Eye size={12} className="text-neutral-400" />
                                 View Profile
                               </button>
-                              <button
+                              {currentUserId === member.uid && (<button
                                 onClick={() => onEditMember(member)}
                                 className="w-full px-4 py-2 text-left text-xs font-bold text-neutral-200 hover:bg-[#1C2538] flex items-center gap-2"
                               >
                                 <Edit2 size={12} className="text-neutral-400" />
                                 Edit Profile
-                              </button>
+                              </button>)}
                               <button
                                 onClick={() => onResetPassword(member)}
                                 className="w-full px-4 py-2 text-left text-xs font-bold text-neutral-200 hover:bg-[#1C2538] flex items-center gap-2"
@@ -357,13 +359,13 @@ export function MemberTable({
                     <Eye size={10} />
                     View
                   </button>
-                  <button
+                  {currentUserId === member.uid && (<button
                     onClick={() => onEditMember(member)}
                     className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
                   >
                     <Edit2 size={10} />
                     Edit
-                  </button>
+                  </button>)}
                   <button
                     onClick={() => onResetPassword(member)}
                     className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"

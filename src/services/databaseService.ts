@@ -107,6 +107,7 @@ export const databaseService = {
       await updateDoc(doc(db, path, id), data);
     } catch (error) {
       console.error('Database update error:', error);
+      throw error;
     }
   },
 

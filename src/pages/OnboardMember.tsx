@@ -319,7 +319,7 @@ export function OnboardMember() {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button 
+                      {profile?.uid === member.uid && <button 
                         onClick={() => {
                           setEditingId(member.uid);
                           setFormData({
@@ -337,7 +337,7 @@ export function OnboardMember() {
                         title="Edit Member"
                       >
                         <Edit2 size={16} />
-                      </button>
+                      </button>}
                       <button 
                         onClick={() => handleToggleStatus(member)}
                         className="p-2 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
