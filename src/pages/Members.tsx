@@ -123,6 +123,7 @@ export function Members() {
   const [deleting, setDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<UserProfile | null>(null);
   const [resetPasswordMember, setResetPasswordMember] = useState<UserProfile | null>(null);
@@ -136,13 +137,8 @@ export function Members() {
   const [newMemberData, setNewMemberData] = useState({
     name: '',
     phone: '',
-    businessName: '',
-    category: '',
+    whatsapp: '',
     password: '',
-    state: '',
-    city: '',
-    area: '',
-    address: '',
     subscriptionStart: new Date().toISOString().split('T')[0],
     subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
   });
@@ -182,6 +178,29 @@ export function Members() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    const newErrors: Record<string, string> = {};
+    if (!newMemberData.name.trim()) newErrors.name = 'Full Name is required.';
+    if (!newMemberData.whatsapp.trim()) newErrors.whatsapp = 'WhatsApp Number is required.';
+    if (!newMemberData.phone.trim()) newErrors.phone = 'Mobile Number is required.';
+    if (!newMemberData.password.trim()) newErrors.password = 'Default Password is required.';
+    if (!newMemberData.subscriptionStart) newErrors.subscriptionStart = 'Subscription Start Date is required.';
+    if (!newMemberData.subscriptionEnd) newErrors.subscriptionEnd = 'Subscription End Date is required.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      
+      // Scroll to the first field with an error
+      setTimeout(() => {
+        const firstErrorField = document.querySelector(`[name="${Object.keys(newErrors)[0]}"]`);
+        if (firstErrorField) {
+          firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      return;
+    } else {
+      setErrors({});
+    }
     
     if (newMemberData.password.length < 6) {
       setError('Password must be at least 6 characters long');
@@ -277,12 +296,7 @@ export function Members() {
         chapterName: finalChapterName,
         createdByName: adminProfile.name || 'Chapter Admin',
         createdByRole: "CHAPTER_ADMIN",
-        businessName: newMemberData.businessName,
-        category: newMemberData.category,
-        state: newMemberData.state,
-        city: newMemberData.city,
-        area: newMemberData.area,
-        address: newMemberData.address,
+        whatsappNumber: normalizePhoneNumber(newMemberData.whatsapp),
         adminId: adminId,
         created_by: adminId,
         createdAt: new Date().toISOString(),
@@ -290,7 +304,7 @@ export function Members() {
         subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString(),
         subscriptionStartDate: new Date(newMemberData.subscriptionStart).toISOString().split('T')[0],
         subscriptionEndDate: new Date(newMemberData.subscriptionEnd).toISOString().split('T')[0],
-        subscriptionStatus: "Active",
+        subscriptionStatus: new Date(newMemberData.subscriptionEnd) > new Date() ? "Active" : "Expired",
         subscriptionType: "Annual",
         renewalRequested: false
       };
@@ -318,13 +332,8 @@ export function Members() {
       setNewMemberData({
         name: '',
         phone: '',
-        businessName: '',
-        category: '',
+        whatsapp: '',
         password: '',
-        state: '',
-        city: '',
-        area: '',
-        address: '',
         subscriptionStart: new Date().toISOString().split('T')[0],
         subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
       });
@@ -755,6 +764,7 @@ export function Members() {
         categories={categories}
         profile={profile}
         error={error}
+        errors={errors}
       />
 
       <EditMemberModal

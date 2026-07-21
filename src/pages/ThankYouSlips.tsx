@@ -29,7 +29,7 @@ export function ThankYouSlips() {
   const [allSlips, setAllSlips] = useState<ThankYouSlip[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'sent' | 'received' | 'all'>('sent');
+  const [activeTab, setActiveTab] = useState<'sent' | 'received' | 'chapter'>('sent');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -212,7 +212,7 @@ export function ThankYouSlips() {
   const totalNetworkBusiness = filteredSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
 
   const downloadReport = () => {
-    const dataToExport = isMasterAdmin || isChapterAdmin ? filteredSlips : (activeTab === 'sent' ? slips : receivedSlips);
+    const dataToExport = isMasterAdmin || activeTab === 'chapter' ? filteredSlips : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips);
     
     const headers = ['Date', 'Customer', 'From Member', 'To Member', 'Business Value (₹)', 'Notes'];
     const rows = dataToExport.map(slip => [
@@ -545,7 +545,7 @@ export function ThankYouSlips() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {!isMasterAdmin && !isChapterAdmin ? (
+        {!isMasterAdmin ? (
           <>
             <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-emerald-500/20 transition-colors duration-500" />
@@ -634,7 +634,7 @@ export function ThankYouSlips() {
       </div>
 
       {/* Tabs / Section Header */}
-      {!isMasterAdmin && !isChapterAdmin ? (
+      {!isMasterAdmin ? (
         <div className="flex p-1.5 bg-[#151C2E] rounded-[12px] w-full md:w-fit border border-white/5">
           <button
             onClick={() => setActiveTab('sent')}
@@ -703,7 +703,7 @@ export function ThankYouSlips() {
                     <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
                       {format(new Date(slip.createdAt), 'dd MMM yyyy')}
                     </span>
-                    {activeTab === 'all' && (
+                    {activeTab === 'chapter' && (
                       <span className="text-[10px] font-semibold text-primary uppercase tracking-wider bg-primary/5 px-2.5 py-1 rounded-full border border-primary/10">
                         {allUsers.find(u => u.uid === slip.toUserId)?.category || 'General'}
                       </span>

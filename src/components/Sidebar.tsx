@@ -66,14 +66,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonial Reports', path: '/testimonial-reports', roles: ['MASTER_ADMIN'] },
     { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN'] },
+    { icon: Users, label: 'Manage Members', path: '/members', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
-    { icon: UserPlus, label: 'Add Member', path: '/add-member', roles: ['CHAPTER_ADMIN'] },
-    { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+        { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Settings, label: 'Settings', path: '/settings', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
   ];
 
   const userRole = profile?.role || 'MEMBER';
-  const isChapterAdmin = profile?.position === 'chapter_admin';
+  const isChapterAdmin = profile?.position === 'chapter_admin' || profile?.role === 'CHAPTER_ADMIN';
   const visibleMenuItems = menuItems.filter(item => {
     if (userRole === 'MASTER_ADMIN') {
       return item.roles.includes('MASTER_ADMIN');

@@ -328,12 +328,19 @@ export function MemberCompanionView({
                   </div>
                   
                   {/* Title (max 2 lines, ellipsis) */}
-                  <h4 className={cn(
-                    "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 min-w-0 flex-1 break-words pr-2",
-                    task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
-                  )}>
-                    {task.label}
-                  </h4>
+                  <div className="flex flex-col flex-1 min-w-0 pr-2">
+                    <h4 className={cn(
+                      "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words",
+                      task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
+                    )}>
+                      {task.label}
+                    </h4>
+                    {task.desc && (
+                      <p className={cn("text-[10px] sm:text-[11px] leading-snug mt-0.5 opacity-75 hidden sm:line-clamp-1", task.isDone ? "text-gray-500" : "text-[#9CA3AF]")}>
+                        {task.desc}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Right Column: CTA Button */}

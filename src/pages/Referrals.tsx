@@ -321,7 +321,7 @@ export function Referrals() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isPending = profile?.membershipStatus === 'PENDING' && !isAdmin && !isChapterAdmin;
 
-  if (isAdmin || isChapterAdmin) {
+  if (isAdmin || filter === 'chapter' || filter === 'all') {
     const associatedMemberIds = isChapterAdmin 
       ? [...members.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid]
       : [];
@@ -549,8 +549,8 @@ export function Referrals() {
             <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
             <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Referrals...</p>
           </div>
-        ) : referrals.length > 0 ? (
-          referrals.map((ref, i) => {
+        ) : (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).length > 0 ? (
+          (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).map((ref, i) => {
             const fromUser = members.find(m => m.uid === ref.fromUserId);
             const toUser = members.find(m => m.uid === ref.toUserId);
             const otherUser = filter === 'received' ? fromUser : toUser;

@@ -14,6 +14,7 @@ interface AddMemberModalProps {
   categories: Category[];
   profile: any;
   error?: string | null;
+  errors?: Record<string, string>;
 }
 
 export function AddMemberModal({
@@ -26,7 +27,8 @@ export function AddMemberModal({
   isMasterAdmin,
   categories,
   profile,
-  error
+  error,
+  errors = {}
 }: AddMemberModalProps) {
   return (
     <Modal
@@ -57,184 +59,118 @@ export function AddMemberModal({
         </div>
 
         <div className="space-y-2">
-          <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Full Name</label>
+          <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Full Name *</label>
           <input
-            required
+            
             type="text"
-            placeholder="John Doe"
+            name="name"
+            placeholder="Enter full name"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
           />
+          {errors.name && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.name}</p>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Phone Number</label>
+            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">WhatsApp Number *</label>
             <div className="relative">
               <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input
-                required
+                
                 type="tel"
-                placeholder="+91 99999 99999"
+                name="whatsapp"
+                placeholder="e.g. 9876543210"
+                value={formData.whatsapp}
+                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+              />
+            </div>
+            {errors.whatsapp && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.whatsapp}</p>}
+          </div>
+          <div className="space-y-2">
+            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Mobile Number *</label>
+            <div className="relative">
+              <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                
+                type="tel"
+                name="phone"
+                placeholder="e.g. 9876543210"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
             </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Login Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <input
-                required
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
-              />
-            </div>
+            {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Business Name</label>
-            <div className="relative">
-              <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <input
-                required
-                type="text"
-                placeholder="Acme Corp"
-                value={formData.businessName}
-                onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Industry Category</label>
-            <div className="relative">
-              <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <select
-                required
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white appearance-none cursor-pointer"
-              >
-                <option value="" className="bg-[#151C2E] text-white">Select Category</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">State</label>
-            <div className="relative">
-              <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <input
-                required
-                type="text"
-                placeholder="Karnataka"
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">City</label>
-            <div className="relative">
-              <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <input
-                required
-                type="text"
-                placeholder="Bengaluru"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Area</label>
+        <div className="space-y-2">
+          <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Default Password *</label>
+          <div className="relative">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
             <input
-              required
+              
               type="text"
-              placeholder="Indiranagar"
-              value={formData.area}
-              onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-              className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+              name="password"
+              placeholder="Set initial password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Complete Address</label>
-            <input
-              required
-              type="text"
-              placeholder="123, 100 Feet Rd"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full h-11 px-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
-            />
-          </div>
+          {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password}</p>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono">Subscription Start</label>
+            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Subscription Start Date *</label>
             <div className="relative">
               <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input
-                required
+                
                 type="date"
+                name="subscriptionStart"
                 value={formData.subscriptionStart}
                 onChange={(e) => setFormData({ ...formData, subscriptionStart: e.target.value })}
                 className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white"
               />
             </div>
+            {errors.subscriptionStart && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.subscriptionStart}</p>}
           </div>
           <div className="space-y-2">
-            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono">Subscription End</label>
+            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Subscription End Date *</label>
             <div className="relative">
               <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input
-                required
+                
                 type="date"
+                name="subscriptionEnd"
                 value={formData.subscriptionEnd}
                 onChange={(e) => setFormData({ ...formData, subscriptionEnd: e.target.value })}
                 className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white"
               />
             </div>
+            {errors.subscriptionEnd && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.subscriptionEnd}</p>}
           </div>
         </div>
 
-        <div className="pt-4">
+        <div className="pt-4 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 h-11 bg-[#151C2E] text-white rounded-[12px] font-bold text-xs uppercase tracking-wider hover:bg-white/5 transition-all"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full h-12 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2 hover:bg-primary/90"
+            className="flex-2 h-11 bg-primary text-white rounded-[12px] font-bold text-xs uppercase tracking-wider hover:bg-primary/90 transition-all shadow-[0_4px_20px_rgba(229,57,53,0.3)] disabled:opacity-50"
           >
-            {isSubmitting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Creating Member...</span>
-              </>
-            ) : (
-              <>
-                <UserPlus size={16} />
-                <span>Create Member Account</span>
-              </>
-            )}
+            {isSubmitting ? 'Creating...' : 'Create Account'}
           </button>
         </div>
       </form>

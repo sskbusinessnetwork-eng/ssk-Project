@@ -17,6 +17,7 @@ export interface UserProfile {
   city?: string;
   area?: string;
   address?: string;
+  pincode?: string;
   role: UserRole;
   position?: ChapterPosition;
   membershipStatus: UserStatus;
@@ -108,6 +109,7 @@ export interface GuestInvitation {
   guestEmail: string;
   guestBusiness: string;
   address?: string;
+  pincode?: string;
   state?: string;
   city?: string;
   fullAddress?: string;

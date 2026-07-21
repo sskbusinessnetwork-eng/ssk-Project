@@ -308,7 +308,7 @@ export function OneToOneMeetings() {
             </p>
           </div>
         </div>
-        {!isAdmin && !isChapterAdmin && (
+        {!isAdmin && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center justify-center gap-2 px-6 h-11 bg-primary text-white rounded-[12px] font-bold uppercase tracking-wider transition-all active:scale-95 text-xs shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90"

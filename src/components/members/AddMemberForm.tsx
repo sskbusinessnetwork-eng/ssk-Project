@@ -13,6 +13,7 @@ export function AddMemberForm() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
 
   // Resolved Chapter for Chapter Admin
@@ -31,8 +32,9 @@ export function AddMemberForm() {
     fullName: '',
     phone: '',
     whatsapp: '',
-    email: '',
-    password: ''
+    password: '',
+    subscriptionStart: new Date().toISOString().split('T')[0],
+    subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
   });
 
   // Fetch/Resolve chapter for Chapter Admin securely from authenticated user record
@@ -76,25 +78,26 @@ export function AddMemberForm() {
     setSuccess(null);
 
     // Form Validation
-    if (!formData.fullName.trim()) {
-      setError('Full Name is required.');
+    const newErrors: Record<string, string> = {};
+    if (!formData.fullName.trim()) newErrors.fullName = 'Full Name is required.';
+    if (!formData.whatsapp.trim()) newErrors.whatsapp = 'WhatsApp Number is required.';
+    if (!formData.phone.trim()) newErrors.phone = 'Mobile Number is required.';
+    if (!formData.password.trim()) newErrors.password = 'Default Password is required.';
+    if (!formData.subscriptionStart) newErrors.subscriptionStart = 'Subscription Start Date is required.';
+    if (!formData.subscriptionEnd) newErrors.subscriptionEnd = 'Subscription End Date is required.';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       setLoading(false);
+      
+      // Scroll to the first field with an error
+      const firstErrorField = document.querySelector(`[name="${Object.keys(newErrors)[0]}"]`);
+      if (firstErrorField) {
+        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
-    }
-    if (!formData.phone.trim()) {
-      setError('Mobile Number is required.');
-      setLoading(false);
-      return;
-    }
-    if (!formData.whatsapp.trim()) {
-      setError('WhatsApp Number is required.');
-      setLoading(false);
-      return;
-    }
-    if (!formData.password.trim()) {
-      setError('Default Password is required.');
-      setLoading(false);
-      return;
+    } else {
+      setErrors({});
     }
 
     try {
@@ -151,12 +154,17 @@ export function AddMemberForm() {
         name: formData.fullName.trim(),
         phone: cleanPhone,
         whatsappNumber: normalizePhoneNumber(formData.whatsapp),
-        email: formData.email.trim() || '',
+        
         chapter_id: finalChapterId,
         chapterName: finalChapterName,
         role: 'MEMBER',
         position: 'member' as any, // translates to 'Associate Member' in display
         membershipStatus: 'ACTIVE' as any,
+        subscriptionStart: new Date(formData.subscriptionStart).toISOString(),
+        subscriptionEnd: new Date(formData.subscriptionEnd).toISOString(),
+        subscriptionStartDate: formData.subscriptionStart,
+        subscriptionEndDate: formData.subscriptionEnd,
+        subscriptionStatus: new Date(formData.subscriptionEnd) > new Date() ? 'Active' : 'Expired',
         must_change_password: true,
         created_by: adminId,
         createdAt: new Date().toISOString()
@@ -185,7 +193,7 @@ export function AddMemberForm() {
         fullName: '',
         phone: '',
         whatsapp: '',
-        email: '',
+    
         password: ''
       });
 
@@ -221,123 +229,122 @@ export function AddMemberForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Chapter Name Auto-filled for Chapter Admin */}
-          {adminChapter && (
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter</label>
-              <input
-                type="text"
-                value={adminChapter.chapter_name}
-                disabled
-                className="w-full h-11 px-4 bg-[#0F172A]/50 border border-white/5 rounded-xl text-sm font-medium text-neutral-400 cursor-not-allowed"
-              />
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Full Name *</label>
+          <div className="relative">
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+            <input
+              type="text"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              placeholder="Enter member's full name"
+              className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
+              
+            />
+          </div>
+          {errors.fullName && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.fullName}</p>}
+        </div>
 
-          {/* Full Name */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Full Name *</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">WhatsApp Number *</label>
             <div className="relative">
-              <User size={16} className="absolute left-4 top-3.5 text-neutral-500" />
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
               <input
-                type="text"
-                name="fullName"
-                value={formData.fullName}
+                type="tel"
+                name="whatsapp"
+                value={formData.whatsapp}
                 onChange={handleChange}
-                placeholder="Enter member's full name"
+                placeholder="e.g. 9876543210"
                 className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                required
+                
               />
             </div>
+          {errors.whatsapp && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.whatsapp}</p>}
           </div>
 
-          {/* Phone & WhatsApp Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Phone Number */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Mobile Number *</label>
-              <div className="relative">
-                <Phone size={16} className="absolute left-4 top-3.5 text-neutral-500" />
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="e.g. 9876543210"
-                  className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* WhatsApp Number */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">WhatsApp Number *</label>
-              <div className="relative">
-                <Phone size={16} className="absolute left-4 top-3.5 text-neutral-500" />
-                <input
-                  type="tel"
-                  name="whatsapp"
-                  value={formData.whatsapp}
-                  onChange={handleChange}
-                  placeholder="e.g. 9876543210"
-                  className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Email ID (Optional)</label>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Mobile Number *</label>
             <div className="relative">
-              <Mail size={16} className="absolute left-4 top-3.5 text-neutral-500" />
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
               <input
-                type="email"
-                name="email"
-                value={formData.email}
+                type="tel"
+                name="phone"
+                value={formData.phone}
                 onChange={handleChange}
-                placeholder="Enter member's email address"
+                placeholder="e.g. 9876543210"
                 className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
+                
               />
             </div>
+          {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
           </div>
+        </div>
 
-          {/* Default Password */}
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Default Password *</label>
-            <div className="relative">
-              <Lock size={16} className="absolute left-4 top-3.5 text-neutral-500" />
-              <input
-                type="text"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Set initial password"
-                className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                required
-              />
-            </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Default Password *</label>
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
+            <input
+              type="text"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Set initial password"
+              className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
+              
+            />
           </div>
+          <p className="text-[10px] text-neutral-500 ml-1">Member will be prompted to change this on first login.</p>
+        {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password}</p>}
+        </div>
 
-          {/* Submit Button */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Subscription Start Date *</label>
+            <input
+              type="date"
+              name="subscriptionStart"
+              value={formData.subscriptionStart}
+              onChange={handleChange}
+              className="w-full h-11 px-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
+              
+            />
+          </div>
+          {errors.subscriptionStart && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.subscriptionStart}</p>}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Subscription End Date *</label>
+            <input
+              type="date"
+              name="subscriptionEnd"
+              value={formData.subscriptionEnd}
+              onChange={handleChange}
+              className="w-full h-11 px-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
+              
+            />
+          </div>
+          {errors.subscriptionEnd && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.subscriptionEnd}</p>}
+        </div>
+
+        <div className="pt-4">
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-12 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-bold shadow-[0_0_20px_rgba(239,68,68,0.2)] hover:shadow-[0_0_25px_rgba(239,68,68,0.35)] transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-primary text-white rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-primary/90 transition-all shadow-[0_4px_20px_rgba(229,57,53,0.3)] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
-                <RefreshCw size={16} className="animate-spin" />
+                <RefreshCw size={18} className="animate-spin" />
                 Creating Account...
               </>
             ) : (
               'Create Member Account'
             )}
           </button>
-        </form>
+        </div>
+      </form>
       </div>
 
       {/* Success Popup displaying credentials */}

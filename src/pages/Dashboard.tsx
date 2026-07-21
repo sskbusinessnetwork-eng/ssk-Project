@@ -20,6 +20,7 @@ import StatGrid from '../components/StatGrid';
 import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
+import { calculateProfileCompletion } from '../utils/profileUtils';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -668,9 +669,27 @@ export function Analytics() {
   }, [completedFocusCount]);
 
   const todayTasks = useMemo(() => {
-    if (!profile || profile.role !== 'MEMBER') return [];
-
+    if (!profile || (profile.role !== 'MEMBER' && profile.role !== 'CHAPTER_ADMIN')) return [];
     const tasks: any[] = [];
+    
+    // 0. Profile Completion Task
+    const profileStatus = calculateProfileCompletion(profile);
+    if (!profileStatus.isComplete) {
+      tasks.push({
+        key: 'completeProfile',
+        label: `Complete Your Profile (${profileStatus.completedCount}/${profileStatus.totalRequired})`,
+        desc: "Welcome to SSK Business Network! Please complete your profile to activate all member features.",
+        isDone: false,
+        link: '/profile',
+        linkText: 'Complete',
+        iconColor: 'text-amber-400',
+        bgColor: 'bg-amber-500/10',
+        icon: UserPlus,
+        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+      });
+    }
+    
+    if (profile.role !== 'MEMBER') return tasks;
 
     // 1. Weekly Meeting
     const todayWeeklyMeeting = meetings.find(m => 
@@ -2006,6 +2025,19 @@ export function Analytics() {
         />
       )}
  
+      
+      {(profile?.role === 'CHAPTER_ADMIN' || profile?.position === 'chapter_admin') && (
+        <ChapterAdminCompanionView
+          profile={profile}
+          chapterHealthScore={dynamicNetworkHealthScore}
+          chapterMemberCount={totalMembersCount}
+          chapterReferrals={referralsPassedCount}
+          chapterBusiness={businessGeneratedTotal}
+          finalRecentActivities={filteredRecentActivities}
+          tasks={chapterAdminTasks}
+        />
+      )}
+      
       {profile?.role === 'MASTER_ADMIN' && (
         <MasterAdminCompanionView
           tasks={masterAdminTasks}
