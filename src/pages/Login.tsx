@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
-import { getDashboardPath } from '../utils/authUtils';
+import { getDashboardPath, getCleanFullName } from '../utils/authUtils';
 import {  db, doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit  } from '../lib/database';
 import { UserProfile } from '../types';
 
@@ -117,7 +117,7 @@ export function Login() {
 
         login({
           uid: masterAdmin.id,
-          name: masterAdmin.full_name,
+          name: getCleanFullName(masterAdmin.full_name),
           phone: masterAdmin.phone_number,
           role: 'MASTER_ADMIN',
           membershipStatus: 'ACTIVE',
@@ -149,7 +149,7 @@ export function Login() {
 
         login({
           uid: user.id,
-          name: user.name,
+          name: getCleanFullName(user.name),
           phone: user.phone,
           role: user.role,
           position: user.position,

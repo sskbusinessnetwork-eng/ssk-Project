@@ -8,6 +8,7 @@ import {
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
+import { getCleanFullName } from '../utils/authUtils';
 import { cn } from '../lib/utils';
 import {  where  } from '../lib/database';
 import { databaseService } from '../services/databaseService';
@@ -15,27 +16,12 @@ import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
 import StatGrid from '../components/StatGrid';
+import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 
 export function cleanHeroName(name: string): string {
-  if (!name) return '';
-  // Case insensitive patterns for leadership roles
-  const patterns = [
-    /\bchapter[_\-\s]*admin\b/gi,
-    /\bvice[_\-\s]*president\b/gi,
-    /\bpresident\b/gi,
-    /\btreasurer\b/gi
-  ];
-  let cleaned = name;
-  for (const pattern of patterns) {
-    cleaned = cleaned.replace(pattern, '');
-  }
-  // Also handle cases where underscores were used instead of spaces (like test_chapter_admin -> test)
-  cleaned = cleaned.replace(/_+/g, ' ');
-  // Clean up extra spaces
-  cleaned = cleaned.trim().replace(/\s+/g, ' ');
-  return cleaned || name; // Fallback to original name if empty
+  return getCleanFullName(name);
 }
 
 const isToday = (dateStr: string) => {
@@ -107,6 +93,7 @@ export function Analytics() {
   const [oneToOnes, setOneToOnes] = useState<any[]>([]);
   const [allTestimonials, setAllTestimonials] = useState<any[]>([]);
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
+  const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
 
   // Resolve chapter name dynamically
   useEffect(() => {
@@ -215,12 +202,86 @@ export function Analytics() {
 
   // Derive chapter statistics
   const activePartnersCount = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      // For master admin, show total active partners across all chapters
-      return chapterUsers.length || 158;
-    }
-    return chapterUsers.filter(u => u.membershipStatus === 'ACTIVE').length || 1;
-  }, [chapterUsers, profile]);
+    const now = new Date();
+    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    const active = members.filter(u => {
+      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
+      return isSubActive && isPwdChanged;
+    });
+    return active.length;
+  }, [chapterUsers]);
+
+  const inactiveMembersCount = useMemo(() => {
+    const now = new Date();
+    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    const inactive = members.filter(u => {
+      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
+      return !isSubActive || !isPwdChanged;
+    });
+    return inactive.length;
+  }, [chapterUsers]);
+
+  const inactiveMembersList = useMemo(() => {
+    const now = new Date();
+    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    return members.filter(u => {
+      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
+      return !isSubActive || !isPwdChanged;
+    }).map(u => {
+      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
+
+      let subStatus: 'Active' | 'Expired' | 'Inactive' = 'Inactive';
+      if (isSubActive) {
+        subStatus = 'Active';
+      } else {
+        const endDate = u.subscriptionEndDate || u.subscriptionEnd;
+        if (endDate && new Date(endDate) <= now) {
+          subStatus = 'Expired';
+        } else {
+          subStatus = 'Inactive';
+        }
+      }
+
+      const pwdStatus = isPwdChanged ? 'Changed' : 'Default Password Not Changed';
+
+      let inactiveReason = '';
+      if (!isSubActive && !isPwdChanged) {
+        inactiveReason = 'Both';
+      } else if (!isSubActive) {
+        inactiveReason = 'Subscription Expired';
+      } else {
+        inactiveReason = 'Default Password Not Changed';
+      }
+
+      const getDisplayPosition = (pos?: string, r?: string) => {
+        if (r === 'MASTER_ADMIN') return 'Master Admin';
+        if (r === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
+        if (pos === 'president') return 'President';
+        if (pos === 'vice_president') return 'Vice President';
+        if (pos === 'treasurer') return 'Treasurer';
+        return 'Associate Member';
+      };
+
+      return {
+        uid: u.uid,
+        name: u.name || 'N/A',
+        phone: u.phone || 'N/A',
+        chapterName: u.chapterName || u.chapter_name || 'N/A',
+        position: getDisplayPosition(u.position, u.role),
+        subscriptionStatus: subStatus,
+        passwordStatus: pwdStatus,
+        inactiveReason: inactiveReason
+      };
+    });
+  }, [chapterUsers]);
 
   const businessGeneratedTotal = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -882,6 +943,7 @@ export function Analytics() {
             totalChaptersCount={totalChaptersCount}
             totalMembersCount={totalMembersCount}
             activePartnersCount={activePartnersCount}
+            inactiveMembersCount={inactiveMembersCount}
             businessGeneratedTotal={businessGeneratedTotal}
             referralsPassedCount={referralsPassedCount}
             thankYouSlipsCount={thankYouSlipsCount}
@@ -893,6 +955,11 @@ export function Analytics() {
             newMembersThisMonthCount={newMembersThisMonthCount}
             testimonialsCount={chapterTestimonialsCount}
             meetingsCount={chapterMeetingsCount}
+            onCardClick={(label) => {
+              if (label === 'Inactive Members') {
+                setIsInactiveModalOpen(true);
+              }
+            }}
           />
         </>
       )}
@@ -962,6 +1029,73 @@ export function Analytics() {
           topPerformingChapters={topPerformingChapters}
         />
       )}
+
+      <Modal 
+        isOpen={isInactiveModalOpen} 
+        onClose={() => setIsInactiveModalOpen(false)} 
+        title="Inactive Members"
+        maxWidth="max-w-6xl"
+      >
+        <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="border-b border-white/10 bg-[#1E293B]">
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Position</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Subscription Status</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Password Status</th>
+                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Inactive Reason</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {inactiveMembersList.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                    No Inactive Members Found
+                  </td>
+                </tr>
+              ) : (
+                inactiveMembersList.map((m) => (
+                  <tr key={m.uid} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.chapterName}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.position}</td>
+                    <td className="p-4 text-sm whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        m.subscriptionStatus === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        m.subscriptionStatus === 'Expired' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                        'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                      }`}>
+                        {m.subscriptionStatus}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        m.passwordStatus === 'Changed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {m.passwordStatus}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        m.inactiveReason === 'Both' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                        m.inactiveReason === 'Subscription Expired' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {m.inactiveReason}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
     </div>
   );

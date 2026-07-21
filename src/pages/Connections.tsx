@@ -23,6 +23,7 @@ import { useAuth } from '../hooks/useAuth';
 import {  collection, query, where, getDocs  } from '../lib/database';
 import { db } from '../lib/database';
 import { supabase } from '../lib/supabaseClient';
+import { getCleanFullName } from '../utils/authUtils';
 import { UserProfile, Category, Referral } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -228,7 +229,7 @@ export function Connections() {
           .map((row: any) => ({
             uid: row.id,
             id: row.id,
-            name: row.name,
+            name: getCleanFullName(row.name),
             phone: row.phone,
             whatsappNumber: row.whatsapp_number,
             whatsapp_number: row.whatsapp_number,

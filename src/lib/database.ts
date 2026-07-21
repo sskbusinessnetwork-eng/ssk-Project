@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getCleanFullName } from '../utils/authUtils';
 
 export interface QueryConstraint {
   type: string;
@@ -210,6 +211,7 @@ export async function getDocs(queryRef: any) {
       const camelExtra = keysToCamel(extraData);
       return {
         ...r,
+        name: getCleanFullName(r.name),
         photoURL: photo,
         ...camelExtra
       };
@@ -312,7 +314,7 @@ export async function getDoc(docRef: any) {
       } catch (e) {}
     }
     const camelExtra = keysToCamel(extraData);
-    Object.assign(camelData, { photoURL: photo }, camelExtra);
+    Object.assign(camelData, { photoURL: photo, name: getCleanFullName(camelData.name) }, camelExtra);
   }
   
   if (path === 'one_to_one_meetings') {

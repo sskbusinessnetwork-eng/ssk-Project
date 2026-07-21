@@ -7,6 +7,7 @@ interface StatGridProps {
   totalChaptersCount?: number;
   totalMembersCount?: number;
   activePartnersCount?: number;
+  inactiveMembersCount?: number;
   businessGeneratedTotal?: number;
   referralsPassedCount?: number;
   thankYouSlipsCount?: number;
@@ -18,6 +19,7 @@ interface StatGridProps {
   newMembersThisMonthCount?: number;
   testimonialsCount?: number;
   meetingsCount?: number;
+  onCardClick?: (label: string) => void;
 }
 
 export default function StatGrid({
@@ -25,6 +27,7 @@ export default function StatGrid({
   totalChaptersCount = 1,
   totalMembersCount = 1,
   activePartnersCount = 1,
+  inactiveMembersCount = 0,
   businessGeneratedTotal = 0,
   referralsPassedCount = 0,
   thankYouSlipsCount = 0,
@@ -36,6 +39,7 @@ export default function StatGrid({
   newMembersThisMonthCount = 0,
   testimonialsCount = 0,
   meetingsCount = 0,
+  onCardClick,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
     if (label === 'Business Generated') {
@@ -200,6 +204,15 @@ export default function StatGrid({
         bg: 'bg-indigo-400/10 border-indigo-400/20',
       },
       commonStats[0], // Active Members
+      {
+        label: 'Inactive Members',
+        value: formatValue('Inactive Members', inactiveMembersCount),
+        trend: 'Inactive',
+        trendLabel: 'Needs attention',
+        icon: Users,
+        color: 'text-red-400', 
+        bg: 'bg-red-400/10 border-red-400/20',
+      },
       commonStats[1], // Business Generated
       commonStats[2], // Referrals Passed
       {
@@ -281,6 +294,7 @@ export default function StatGrid({
         return (
           <motion.div 
             key={idx}
+            onClick={() => onCardClick?.(stat.label)}
             variants={{
               hidden: { opacity: 0, y: 15 },
               show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
