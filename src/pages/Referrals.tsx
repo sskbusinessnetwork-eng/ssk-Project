@@ -107,7 +107,7 @@ export function Referrals() {
       if (isAdmin || isChapterAdmin) {
         setMembers(data);
       } else {
-        setMembers(data.filter(m => m.uid !== profile.uid && m.membershipStatus === 'ACTIVE'));
+        setMembers(data.filter(m => m.uid !== profile.uid && (m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE')));
       }
     });
 

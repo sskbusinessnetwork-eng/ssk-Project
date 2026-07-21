@@ -86,22 +86,25 @@ export function OneToOneMeetings() {
     const fetchMembers = async () => {
       if (!profile) return;
       let q;
-      if (isChapterAdmin) {
+      if (isAdmin) {
         q = query(
-          collection(db, 'users'), 
-          where('chapter_id', '==', profile?.chapter_id),
-          where('membershipStatus', '==', 'ACTIVE')
+          collection(db, 'users')
         );
       } else {
         q = query(
           collection(db, 'users'), 
-          where('membershipStatus', '==', 'ACTIVE')
+          where('chapter_id', '==', profile?.chapter_id)
         );
       }
       const snap = await getDocs(q);
       const memberList = snap.docs
         .map(doc => ({ uid: doc.id, ...(doc.data() as any) } as UserProfile))
-        .filter(m => m.uid !== profile.uid); // Strictly exclude self
+        .filter(m => 
+          m.uid !== profile.uid && 
+          m.role !== 'MASTER_ADMIN' &&
+          (m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE')
+        ); // Exclude self, Master Admin, and only keep ACTIVE
+
       setMembers(memberList);
     };
     fetchMembers();
@@ -187,11 +190,14 @@ export function OneToOneMeetings() {
     { label: `${selectedMember?.name}'s Address: ${selectedMember?.address || 'N/A'}`, value: selectedMember?.address || '' }
   ].filter(opt => opt.value);
 
-  const filteredMembers = members.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.area?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = members.filter(m => {
+    const search = searchTerm.toLowerCase();
+    const nameMatch = m.name?.toLowerCase().includes(search) || false;
+    const phoneMatch = m.phone?.toLowerCase().includes(search) || m.whatsapp_number?.toLowerCase().includes(search) || false;
+    const positionMatch = m.position?.toLowerCase().includes(search) || m.role?.toLowerCase().includes(search) || false;
+    
+    return nameMatch || phoneMatch || positionMatch;
+  });
 
   // Analytics for Master Admin and Chapter Admin
   const stats = React.useMemo(() => {
@@ -534,7 +540,7 @@ export function OneToOneMeetings() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
                         <input
                           type="text"
-                          placeholder="Search across all chapters..."
+                          placeholder={isAdmin ? "Search across all chapters..." : "Search in your chapter..."}
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           className="w-full pl-9 pr-4 py-2 text-xs rounded-[12px] border border-white/5 bg-[#111827] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
@@ -566,11 +572,26 @@ export function OneToOneMeetings() {
                                 referrerPolicy="no-referrer"
                               />
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-white uppercase tracking-tight">
-                                  {member.name}
-                                </p>
-                                <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate">
-                                  {member.category || 'General'} • {member.area || 'Global'}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-xs font-bold text-white uppercase tracking-tight">
+                                    {member.name}
+                                  </p>
+                                  <span className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full",
+                                    member.role === 'CHAPTER_ADMIN' || member.position === 'chapter_admin' ? "bg-red-500/20 text-red-400 border border-red-500/20" :
+                                    member.position === 'president' ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
+                                    member.position === 'vice_president' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
+                                    member.position === 'treasurer' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" :
+                                    "bg-neutral-500/20 text-neutral-400 border border-neutral-500/20"
+                                  )}>
+                                    {member.role === 'CHAPTER_ADMIN' || member.position === 'chapter_admin' ? 'Chapter Admin' :
+                                     member.position === 'president' ? 'President' :
+                                     member.position === 'vice_president' ? 'Vice President' :
+                                     member.position === 'treasurer' ? 'Treasurer' : 'Member'}
+                                  </span>
+                                </div>
+                                <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">
+                                  {member.category || 'General'} • {member.phone || member.whatsapp_number || 'No Phone'}
                                 </p>
                               </div>
                             </div>

@@ -391,10 +391,7 @@ export function Meetings() {
     const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     
     const fetchMembers = async () => {
-      const constraints: any[] = [
-        where('membershipStatus', '==', 'ACTIVE')
-      ];
-
+      const constraints: any[] = [];
       if (chapterId) {
         // If we have a chapterId, we want members of that chapter
         constraints.push(where('chapter_id', '==', chapterId));
@@ -402,19 +399,20 @@ export function Meetings() {
         // If no chapterId (Master Admin "All Chapters"), we want all members and admins
         constraints.push(where('role', '==', 'MEMBER'));
       }
-
       try {
-        const data = await databaseService.list<UserProfile>('users', constraints);
-        let activeMembers = data;
+        let data = await databaseService.list<UserProfile>('users', constraints);
         
         // If chapterId is set, we also need to fetch the Chapter Admin themselves
         if (chapterId) {
           const admin = await databaseService.get<UserProfile>('users', chapterId);
-          if (admin && !activeMembers.find(m => m.uid === admin.uid)) {
-            activeMembers = [admin, ...activeMembers];
+          if (admin && !data.find(m => m.uid === admin.uid)) {
+            data = [...data, admin];
           }
         }
-        
+
+        // Filter ACTIVE in memory
+        const activeMembers = data.filter(m => m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE');
+
         setMembers(activeMembers);
       } catch (err) {
         console.error("Error fetching members:", err);
