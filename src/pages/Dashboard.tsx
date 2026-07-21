@@ -92,6 +92,7 @@ export function Analytics() {
   const [allReferrals, setAllReferrals] = useState<any[]>([]);
   const [oneToOnes, setOneToOnes] = useState<any[]>([]);
   const [allTestimonials, setAllTestimonials] = useState<any[]>([]);
+  const [allChapters, setAllChapters] = useState<any[]>([]);
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
 
@@ -180,6 +181,9 @@ export function Analytics() {
     // 7. Subscribe to testimonials
     const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
 
+    // 8. Subscribe to chapters
+    const unsubChapters = databaseService.subscribe<any>('chapters', [], setAllChapters);
+
     return () => {
       unsubUsers();
       unsubSlips();
@@ -188,6 +192,7 @@ export function Analytics() {
       unsubGuests();
       unsubMeetings();
       unsubTestimonials();
+      unsubChapters();
     };
   }, [profile]);
 
@@ -205,9 +210,9 @@ export function Analytics() {
   // Derive chapter statistics
   const activePartnersCount = useMemo(() => {
     const now = new Date();
-    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     const active = members.filter(u => {
-      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
         (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
       const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
       return isSubActive && isPwdChanged;
@@ -217,9 +222,9 @@ export function Analytics() {
 
   const inactiveMembersCount = useMemo(() => {
     const now = new Date();
-    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     const inactive = members.filter(u => {
-      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
         (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
       const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
       return !isSubActive || !isPwdChanged;
@@ -229,14 +234,14 @@ export function Analytics() {
 
   const inactiveMembersList = useMemo(() => {
     const now = new Date();
-    const members = chapterUsers.filter(u => u.role === 'MEMBER');
+    const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     return members.filter(u => {
-      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
         (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
       const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
       return !isSubActive || !isPwdChanged;
     }).map(u => {
-      const isSubActive = u.membershipStatus === 'ACTIVE' && 
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
         (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
       const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
 
@@ -331,13 +336,13 @@ export function Analytics() {
 
   const oneToOneMeetingsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return oneToOnes.filter(m => m.status === 'COMPLETED').length;
+      return oneToOnes.length;
     }
     const chapterOneToOnes = oneToOnes.filter(m => 
       chapterUserIds.includes(m.creatorId) || 
       (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
     );
-    return chapterOneToOnes.filter(m => m.status === 'COMPLETED').length || 0;
+    return chapterOneToOnes.length;
   }, [oneToOnes, chapterUserIds, profile]);
 
   const visitorsAttendedCount = useMemo(() => {
@@ -359,12 +364,59 @@ export function Analytics() {
   }, [allSlips, chapterUserIds, profile]);
 
   const totalMembersCount = useMemo(() => {
-    return chapterUsers.length;
+    return chapterUsers.filter(u => u.role !== 'MASTER_ADMIN').length;
   }, [chapterUsers]);
 
   const totalChaptersCount = useMemo(() => {
-    const adminIds = chapterUsers.map(u => u.chapter_id || u.adminId).filter(Boolean);
-    return new Set(adminIds).size || 0;
+    return allChapters.length || 0;
+  }, [allChapters]);
+
+  const subscriptionStats = useMemo(() => {
+    const now = new Date();
+    const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
+    
+    const active = members.filter(u => {
+      return (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+    }).length;
+
+    const expired = members.filter(u => {
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      return !isSubActive;
+    }).length;
+
+    const renewalsDue = members.filter(u => {
+      const endDateStr = u.subscriptionEndDate || u.subscriptionEnd;
+      if (!endDateStr) return false;
+      const endDate = new Date(endDateStr);
+      const diffTime = endDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 30;
+    }).length;
+
+    const renewed = members.filter(u => !!u.renewedAt || !!u.renewed_at || !!u.renewedBy || !!u.renewed_by).length;
+
+    return {
+      active,
+      expired,
+      renewalsDue,
+      renewed
+    };
+  }, [chapterUsers]);
+
+  const leadershipStats = useMemo(() => {
+    const chapterAdmins = chapterUsers.filter(u => u.role === 'CHAPTER_ADMIN' || u.position === 'chapter_admin').length;
+    const presidents = chapterUsers.filter(u => u.position === 'president').length;
+    const vicePresidents = chapterUsers.filter(u => u.position === 'vice_president' || u.position === 'vice-president').length;
+    const treasurers = chapterUsers.filter(u => u.position === 'treasurer').length;
+
+    return {
+      chapterAdmins,
+      presidents,
+      vicePresidents,
+      treasurers
+    };
   }, [chapterUsers]);
 
   const weeklyMeetingAttendance = useMemo(() => {
@@ -388,6 +440,18 @@ export function Analytics() {
     });
     return totalRecords === 0 ? 0 : Math.round((totalPresent / totalRecords) * 100);
   }, [meetings, profile]);
+
+  const dynamicNetworkHealthScore = useMemo(() => {
+    const total = totalMembersCount;
+    if (total === 0) return 100;
+    const active = activePartnersCount;
+    const ratioScore = Math.round((active / total) * 100);
+    const attendanceScore = weeklyMeetingAttendance || 0;
+    if (attendanceScore > 0) {
+      return Math.round(ratioScore * 0.7 + attendanceScore * 0.3);
+    }
+    return ratioScore;
+  }, [totalMembersCount, activePartnersCount, weeklyMeetingAttendance]);
 
   const newMembersThisMonthCount = useMemo(() => {
     const now = new Date();
@@ -1103,7 +1167,7 @@ export function Analytics() {
       {profile?.role === 'MASTER_ADMIN' && (
         <MasterAdminCompanionView
           profile={profile}
-          networkHealthScore={92}
+          networkHealthScore={dynamicNetworkHealthScore}
           globalMemberCount={totalMembersCount}
           globalChapterCount={totalChaptersCount}
           globalBusinessGenerated={businessGeneratedTotal}
@@ -1113,6 +1177,8 @@ export function Analytics() {
           topPerformingChapters={topPerformingChapters}
           allSlips={allSlips}
           allReferrals={allReferrals}
+          subscriptionStats={subscriptionStats}
+          leadershipStats={leadershipStats}
         />
       )}
 

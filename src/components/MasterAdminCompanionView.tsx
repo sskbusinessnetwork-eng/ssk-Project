@@ -22,6 +22,18 @@ interface MasterAdminCompanionViewProps {
   topPerformingChapters?: { name: string; business: number }[];
   allSlips?: any[];
   allReferrals?: any[];
+  subscriptionStats?: {
+    active: number;
+    expired: number;
+    renewalsDue: number;
+    renewed: number;
+  };
+  leadershipStats?: {
+    chapterAdmins: number;
+    presidents: number;
+    vicePresidents: number;
+    treasurers: number;
+  };
 }
 
 export function MasterAdminCompanionView({
@@ -36,6 +48,8 @@ export function MasterAdminCompanionView({
   topPerformingChapters = [],
   allSlips = [],
   allReferrals = [],
+  subscriptionStats = { active: 0, expired: 0, renewalsDue: 0, renewed: 0 },
+  leadershipStats = { chapterAdmins: 0, presidents: 0, vicePresidents: 0, treasurers: 0 },
 }: MasterAdminCompanionViewProps) {
   
   const formatRevenueLabel = (val: number) => {
@@ -488,6 +502,115 @@ export function MasterAdminCompanionView({
           </div>
         </div>
       </motion.div>
+
+      {/* Subscription & Leadership Statistics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-6 w-full">
+        {/* Subscription Statistics Panel */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
+          }}
+          initial="hidden"
+          animate="show"
+          className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[12px] bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <Shield size={16} />
+              </div>
+              Subscription Statistics
+            </h3>
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-emerald-500/20">
+              Live Database
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Active Subscriptions</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[28px] font-black text-white">{subscriptionStats.active}</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+              </div>
+              <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mt-1">Status: Active</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Expired Subscriptions</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[28px] font-black text-white">{subscriptionStats.expired}</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+              </div>
+              <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest mt-1">Needs Renewal</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Renewals Due (30d)</span>
+              <span className="text-[28px] font-black text-white">{subscriptionStats.renewalsDue}</span>
+              <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mt-1">Critical Window</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Renewed Members</span>
+              <span className="text-[28px] font-black text-white">{subscriptionStats.renewed}</span>
+              <span className="text-[9px] font-bold text-violet-400 uppercase tracking-widest mt-1">Processed</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Leadership Statistics Panel */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 20 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
+          }}
+          initial="hidden"
+          animate="show"
+          className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[12px] bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <Crown size={16} />
+              </div>
+              Leadership Statistics
+            </h3>
+            <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-purple-500/20">
+              Live Database
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Chapter Admins</span>
+              <span className="text-[28px] font-black text-white">{leadershipStats.chapterAdmins}</span>
+              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">Administrators</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Presidents</span>
+              <span className="text-[28px] font-black text-white">{leadershipStats.presidents}</span>
+              <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-widest mt-1">Leaders</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Vice Presidents</span>
+              <span className="text-[28px] font-black text-white">{leadershipStats.vicePresidents}</span>
+              <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest mt-1">Support Leadership</span>
+            </div>
+
+            <div className="bg-[#0B1220]/60 border border-white/5 p-4 rounded-[18px] flex flex-col justify-between h-[105px]">
+              <span className="text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider">Treasurers</span>
+              <span className="text-[28px] font-black text-white">{leadershipStats.treasurers}</span>
+              <span className="text-[9px] font-bold text-amber-400 uppercase tracking-widest mt-1">Financial Officers</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
 
       {/* 5. Upgrade Banner */}
       <motion.div 

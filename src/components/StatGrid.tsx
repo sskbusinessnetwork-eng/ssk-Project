@@ -198,7 +198,7 @@ export default function StatGrid({
         label: 'Total Members',
         value: formatValue('Total Members', totalMembersCount),
         trend: 'Total',
-        trendLabel: 'In chapter',
+        trendLabel: 'In network',
         icon: Users,
         color: 'text-indigo-400', 
         bg: 'bg-indigo-400/10 border-indigo-400/20',
@@ -216,16 +216,23 @@ export default function StatGrid({
       commonStats[1], // Business Generated
       commonStats[2], // Referrals Passed
       {
-        label: 'Thank You Slips',
-        value: formatValue('Thank You Slips', thankYouSlipsCount),
+        label: 'Meetings',
+        value: formatValue('Meetings', meetingsCount),
         trend: 'Total',
-        trendLabel: 'Slips',
-        icon: Star,
-        color: 'text-yellow-400', 
-        bg: 'bg-yellow-400/10 border-yellow-400/20',
+        trendLabel: 'Meetings',
+        icon: Calendar,
+        color: 'text-orange-400', 
+        bg: 'bg-orange-400/10 border-orange-400/20',
       },
-      meetingsSyncsStats[1], // One-to-One Meetings
-      meetingsSyncsStats[2], // Visitors Attended
+      {
+        label: 'One-to-One Meetings',
+        value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
+        trend: 'Total',
+        trendLabel: 'Completed',
+        icon: Handshake,
+        color: 'text-blue-500',
+        bg: 'bg-blue-500/10 border-blue-500/20',
+      },
       {
         label: 'Weekly Meeting Attendance',
         value: formatValue('Weekly Meeting Attendance', weeklyMeetingAttendance),
@@ -236,15 +243,14 @@ export default function StatGrid({
         bg: 'bg-cyan-400/10 border-cyan-400/20',
       },
       {
-        label: 'Growth Score',
-        value: formatValue('Growth Score', growthScore),
-        trend: 'Score',
-        trendLabel: 'Performance',
-        icon: Activity,
-        color: 'text-green-500', 
-        bg: 'bg-green-500/10 border-green-500/20',
+        label: 'Testimonials',
+        value: formatValue('Testimonials', testimonialsCount),
+        trend: 'Total',
+        trendLabel: 'Approved',
+        icon: Star,
+        color: 'text-yellow-400', 
+        bg: 'bg-yellow-400/10 border-yellow-400/20',
       },
-      meetingsSyncsStats[0], // Upcoming Meetings
     ];
 
     return [
@@ -258,15 +264,6 @@ export default function StatGrid({
         bg: 'bg-violet-400/10 border-violet-400/20',
       },
       ...globalAdminStats,
-      {
-        label: 'New Members This Month',
-        value: formatValue('New Members This Month', newMembersThisMonthCount),
-        trend: 'Monthly',
-        trendLabel: 'New Members',
-        icon: Plus,
-        color: 'text-rose-400', 
-        bg: 'bg-rose-400/10 border-rose-400/20',
-      }
     ];
   };
 
