@@ -161,6 +161,11 @@ export function Admins() {
           businessName: formData.businessName,
           role: 'CHAPTER_ADMIN',
           membershipStatus: formData.membershipStatus,
+          subscriptionStartDate: new Date().toISOString().split('T')[0],
+          subscriptionEndDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+          subscriptionStatus: 'Active',
+          subscriptionType: 'Annual',
+          renewalRequested: false,
           createdAt: new Date().toISOString()
         };
         await databaseService.create('users', newAdmin, uid);

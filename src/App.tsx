@@ -56,7 +56,8 @@ export default function App() {
               <Route path="/thank-you-slips" element={<ThankYouSlips />} />
               <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN']}><Testimonials /></ProtectedRoute>} />
               <Route path="/testimonial-reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TestimonialReports /></ProtectedRoute>} />
-              <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
+              <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
+              <Route path="/add-member" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN']}><Members /></ProtectedRoute>} />
               <Route path="/onboard" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><OnboardMember /></ProtectedRoute>} />
               <Route path="/set-password" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><SetPassword /></ProtectedRoute>} />
               <Route path="/guests" element={<Guests />} />

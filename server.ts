@@ -2,6 +2,9 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -12,8 +15,79 @@ async function startServer() {
   app.set('trust proxy', true);
   app.use(express.json());
 
+  // Initialize Supabase Client
+  const supabaseUrl = process.env.SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co';
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Create User endpoint
+  app.post("/api/admin/create-user", async (req, res) => {
+    const { phone, password, displayName, role, adminUid } = req.body;
+    try {
+      const uid = crypto.randomUUID();
+      // We don't write to DB here because the client-side setDoc writes the member profile.
+      // But if there is any other client profile creation need, we just return the UID.
+      res.json({ uid });
+    } catch (err: any) {
+      console.error("Error creating user:", err);
+      res.status(500).json({ error: err.message || "Failed to generate UID" });
+    }
+  });
+
+  // Update User endpoint (e.g. password resets, display names)
+  app.post("/api/admin/update-user", async (req, res) => {
+    const { uid, password, displayName } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "Missing uid parameter" });
+    }
+    try {
+      const updates: any = {};
+      if (password) {
+        updates.password = bcrypt.hashSync(password, 10);
+      }
+      if (displayName) {
+        updates.name = displayName;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+          .from("users")
+          .update(updates)
+          .eq("id", uid);
+
+        if (error) throw error;
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Error updating user:", err);
+      res.status(500).json({ error: err.message || "Failed to update user" });
+    }
+  });
+
+  // Delete User endpoint
+  app.post("/api/auth/delete-user", async (req, res) => {
+    const { uid } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "Missing uid parameter" });
+    }
+    try {
+      const { error } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", uid);
+
+      if (error) throw error;
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Error deleting user:", err);
+      res.status(500).json({ error: err.message || "Failed to delete user" });
+    }
   });
 
   // Vite middleware for development

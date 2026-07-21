@@ -36,7 +36,16 @@ CREATE TABLE users (
     position chapter_position DEFAULT 'member',
     status user_status DEFAULT 'ACTIVE',
     must_change_password BOOLEAN DEFAULT TRUE,
+    password_changed BOOLEAN DEFAULT FALSE,
     profile_photo TEXT,
+    business_name VARCHAR(255),
+    profession_designation VARCHAR(255),
+    address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    pincode VARCHAR(20),
+    bio TEXT,
+    website VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

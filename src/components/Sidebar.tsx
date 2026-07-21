@@ -65,7 +65,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonial Reports', path: '/testimonial-reports', roles: ['MASTER_ADMIN'] },
-    { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
+    { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN'] },
+    { icon: UserPlus, label: 'Add Member', path: '/add-member', roles: ['CHAPTER_ADMIN'] },
     { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Settings, label: 'Settings', path: '/settings', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
   ];
@@ -247,75 +248,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
       {/* Bottom Cards (Sticky) */}
       <div className="shrink-0 p-3 flex flex-col gap-3 border-t border-[#1F2937]/50 bg-[#11131A] z-20">
-        {/* Upgrade Card (Compact) */}
-        {!isCollapsed && (
-          <div className="rounded-[14px] p-3 relative overflow-hidden bg-gradient-to-br from-[#2D1B4E]/80 to-[#140C27] border border-[#4C2A8A]/30 flex items-center justify-between group cursor-pointer hover:border-[#4C2A8A]/60 transition-colors duration-200">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-[#7C3AED]/20 rounded-full blur-2xl pointer-events-none" />
-            
-            <div className="flex flex-col z-10">
-              <h4 className="text-[12px] font-bold text-white flex items-center gap-1">
-                Upgrade <Crown size={12} className="text-[#FBBF24]" />
-              </h4>
-              <p className="text-[10px] text-[#8B5CF6] font-medium max-w-[120px] truncate">
-                Get priority features
-              </p>
-            </div>
-            
-            <button className="bg-primary/90 hover:bg-primary text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-sm transition-transform duration-200 group-hover:scale-105 z-10">
-              Pro
-            </button>
-          </div>
-        )}
-
-        {/* Network Strength (Compact) */}
-        {!isCollapsed && (
-          <div className="rounded-[14px] p-3 relative overflow-hidden bg-[#1A1D24] border border-[#2D333D] h-[80px] flex items-center gap-3">
-             <div className="relative w-10 h-10 shrink-0">
-               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                 <circle cx="50" cy="50" r="40" stroke="#2D333D" strokeWidth="12" fill="none" strokeDasharray="188 251" strokeLinecap="round" />
-                 <circle cx="50" cy="50" r="40" stroke="#10B981" strokeWidth="12" fill="none" strokeDasharray="140 251" strokeLinecap="round" />
-               </svg>
-               <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-[10px]">
-                 92%
-               </div>
-             </div>
-             
-             <div className="flex flex-col flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-bold text-white">Network</span>
-                  <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider bg-emerald-500/10 px-1.5 py-0.5 rounded">Good</span>
-                </div>
-                {/* Mini Graph */}
-                <div className="flex items-end gap-[2px] h-4 mt-auto">
-                  <div className="w-full bg-[#10B981]/50 rounded-t-[1px]" style={{height: '30%'}} />
-                  <div className="w-full bg-[#10B981]/60 rounded-t-[1px]" style={{height: '50%'}} />
-                  <div className="w-full bg-[#10B981]/70 rounded-t-[1px]" style={{height: '40%'}} />
-                  <div className="w-full bg-[#10B981]/80 rounded-t-[1px]" style={{height: '70%'}} />
-                  <div className="w-full bg-[#10B981]/90 rounded-t-[1px]" style={{height: '60%'}} />
-                  <div className="w-full bg-[#DC2626] rounded-t-[1px] shadow-[0_0_4px_rgba(220,38,38,0.5)]" style={{height: '90%'}} />
-                  <div className="w-full bg-[#10B981] rounded-t-[1px]" style={{height: '40%'}} />
-                </div>
-             </div>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 pt-2 border-t border-[#1F2937]/50 mt-1">
-          <button 
-            onClick={onToggleCollapse} 
-            className="flex items-center gap-3 text-neutral-400 hover:text-white transition-colors p-2 rounded-xl hover:bg-[#1F2937] text-[13px] font-bold w-full justify-start outline-none"
-          >
-            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            {!isCollapsed && <span className="font-semibold text-[#9CA3AF]">Collapse Menu</span>}
+        <div className="flex items-center justify-between px-1.5 pt-2 border-t border-[#1F2937]/50">
+          <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
+            <Settings size={18} />
+          </Link>
+          <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
+            <LogOut size={18} />
           </button>
-          
-          <div className={cn("flex items-center justify-between px-1.5 mt-1", isCollapsed ? "flex-col gap-3" : "")}>
-            <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
-              <Settings size={isCollapsed ? 20 : 18} />
-            </Link>
-            <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
-              <LogOut size={isCollapsed ? 20 : 18} />
-            </button>
-          </div>
         </div>
       </div>
     </div>

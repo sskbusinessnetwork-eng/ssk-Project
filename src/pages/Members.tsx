@@ -42,6 +42,7 @@ import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
 import { safeFetch } from '../utils/apiUtils';
 import { supabase } from '../lib/supabaseClient';
+import bcrypt from 'bcryptjs';
 
 export function Members() {
   const { profile } = useAuth();
@@ -113,6 +114,9 @@ export function Members() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<UserProfile | null>(null);
+  const [resetPasswordMember, setResetPasswordMember] = useState<UserProfile | null>(null);
+  const [resetPasswordVal, setResetPasswordVal] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [subDates, setSubDates] = useState({
     subscriptionStart: '',
     subscriptionEnd: ''
@@ -252,7 +256,11 @@ export function Members() {
         name: newMemberData.name,
         role: "MEMBER",
         phone: normalizedPhone,
+        status: "ACTIVE",
         membershipStatus: "ACTIVE",
+        password: bcrypt.hashSync(newMemberData.password, 10),
+        must_change_password: true,
+        mustChangePassword: true,
         chapter_id: finalChapterId,
         chapterName: finalChapterName,
         createdByName: adminProfile.name || 'Chapter Admin',
@@ -267,7 +275,12 @@ export function Members() {
         created_by: adminId,
         createdAt: new Date().toISOString(),
         subscriptionStart: new Date(newMemberData.subscriptionStart).toISOString(),
-        subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString()
+        subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString(),
+        subscriptionStartDate: new Date(newMemberData.subscriptionStart).toISOString().split('T')[0],
+        subscriptionEndDate: new Date(newMemberData.subscriptionEnd).toISOString().split('T')[0],
+        subscriptionStatus: "Active",
+        subscriptionType: "Annual",
+        renewalRequested: false
       };
 
       // 4. SAVE TO FIRESTORE
@@ -404,6 +417,39 @@ export function Members() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordMember) return;
+    if (resetPasswordVal.length < 6) {
+      alert('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      await safeFetch('/api/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: resetPasswordMember.uid,
+          displayName: resetPasswordMember.name || resetPasswordMember.displayName,
+          password: resetPasswordVal,
+          adminUid: profile?.uid
+        })
+      });
+
+      setResetPasswordMember(null);
+      setResetPasswordVal('');
+      setSuccessMessage('Password reset successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error resetting password:', err);
+      alert(`Failed to reset password: ${err.message}`);
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   const updateStatus = async (uid: string, membershipStatus: UserProfile['membershipStatus']) => {
     try {
       await databaseService.update('users', uid, { membershipStatus });
@@ -504,9 +550,11 @@ export function Members() {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-neutral-900 tracking-tight uppercase">
-                Member Directory
+                {isChapterAdmin ? 'Member Management' : 'Member Directory'}
               </h1>
-              <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.15em] mt-0.5">Manage roster, roles, and status</p>
+              <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.15em] mt-0.5">
+                {isChapterAdmin ? 'Manage chapter roster, roles, and status' : 'Manage roster, roles, and status'}
+              </p>
             </div>
           </div>
           
@@ -515,8 +563,8 @@ export function Members() {
               onClick={handleOpenAddModal}
               className="h-11 px-6 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 flex items-center gap-2 hover:bg-primary/90 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)]"
             >
-              <UserPlus size={16} />
-              Add Member
+              <Plus size={16} />
+              + Add Member
             </button>
           )}
         </div>
@@ -623,6 +671,7 @@ export function Members() {
               onOpenSubModal={openSubModal}
               onEditMember={openEditModal}
               onDeleteMember={setDeleteConfirmMember}
+              onResetPassword={setResetPasswordMember}
             />
           </>
         ) : activeTab === 'invites' ? (
@@ -755,6 +804,64 @@ export function Members() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal
+        isOpen={!!resetPasswordMember}
+        onClose={() => {
+          setResetPasswordMember(null);
+          setResetPasswordVal('');
+        }}
+        title="Reset Password"
+      >
+        <form onSubmit={handleResetPassword} className="space-y-5 py-2">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-neutral-300">
+              Reset login password for <span className="font-bold text-white">{resetPasswordMember?.name || resetPasswordMember?.displayName}</span>.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">New Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input
+                required
+                type="password"
+                placeholder="Enter new password (min 6 chars)"
+                value={resetPasswordVal}
+                onChange={(e) => setResetPasswordVal(e.target.value)}
+                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setResetPasswordMember(null);
+                setResetPasswordVal('');
+              }}
+              className="flex-1 py-3 bg-neutral-800 text-neutral-200 rounded-[12px] font-bold hover:bg-neutral-700 transition-all text-xs uppercase tracking-wider"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isResettingPassword}
+              className="flex-1 py-3 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all text-xs uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
+            >
+              {isResettingPassword ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                'Reset Password'
+              )}
+            </button>
+          </div>
+        </form>
       </Modal>
 
     </div>

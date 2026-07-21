@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import bcrypt from 'bcryptjs';
 import { LogIn, Phone, ShieldCheck, Lock, AlertCircle, Eye, EyeOff, ChevronDown, KeyRound, CheckCircle2, ArrowLeft, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
@@ -105,7 +106,8 @@ export function Login() {
       if (masterAdmins && masterAdmins.length > 0) {
         const masterAdmin = masterAdmins[0];
         
-        if (masterAdmin.password !== password) {
+        const isMasterMatch = masterAdmin.password === password || (masterAdmin.password && masterAdmin.password.startsWith('$2') && bcrypt.compareSync(password, masterAdmin.password));
+        if (!isMasterMatch) {
           throw new Error("Incorrect password.");
         }
 
@@ -136,7 +138,8 @@ export function Login() {
       if (users && users.length > 0) {
         const user = users[0];
         
-        if (user.password !== password) {
+        const isUserMatch = user.password === password || (user.password && user.password.startsWith('$2') && bcrypt.compareSync(password, user.password));
+        if (!isUserMatch) {
           throw new Error("Incorrect password.");
         }
 

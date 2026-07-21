@@ -22,6 +22,13 @@ export interface UserProfile {
   membershipStatus: UserStatus;
   subscriptionStart?: string;
   subscriptionEnd?: string;
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+  subscriptionStatus?: string;
+  subscriptionType?: string;
+  renewalRequested?: boolean;
+  renewedBy?: string;
+  renewedAt?: string;
   createdAt: string;
   photoURL?: string;
   displayName?: string;

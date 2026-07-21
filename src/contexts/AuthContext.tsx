@@ -13,6 +13,7 @@ interface AuthContextType {
   error: string | null;
   login: (profile: UserProfile) => void;
   logout: () => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,7 +22,8 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   error: null,
   login: () => {},
-  logout: () => {}
+  logout: () => {},
+  refreshProfile: async () => {}
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -81,6 +83,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const refreshProfile = async () => {
+    const savedUser = localStorage.getItem('user');
+    if (!savedUser) return;
+    try {
+      const { uid } = JSON.parse(savedUser);
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as UserProfile;
+        const updatedProfile = { uid, ...userData };
+        setProfile(updatedProfile);
+        localStorage.setItem('user', JSON.stringify({
+          uid,
+          phone: userData.phone,
+          profile: updatedProfile
+        }));
+      }
+    } catch (err) {
+      console.error("Error refreshing profile:", err);
+    }
+  };
+
   useEffect(() => {
     const syncProfile = async () => {
       const savedUser = localStorage.getItem('user');
@@ -128,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, error, login, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, error, login, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

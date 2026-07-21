@@ -3,11 +3,16 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Share2, Handshake, UserPlus, Users, Clock, Calendar, 
-  Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown
+  Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown,
+  Loader2, CheckCircle2
 } from 'lucide-react';
 import { Meeting, UserProfile } from '../types';
-
 import { cn } from '../lib/utils';
+import { calculateSubscriptionDetails } from '../utils/timeUtils';
+import { useAuth } from '../hooks/useAuth';
+import { databaseService } from '../services/databaseService';
+import { notificationService } from '../services/notificationService';
+import { supabase } from '../lib/supabaseClient';
 
 interface MemberCompanionViewProps {
   profile: UserProfile | null;
@@ -30,6 +35,7 @@ interface MemberCompanionViewProps {
 }
 
 export function MemberCompanionView({
+  profile,
   completedFocusCount,
   focusProgressPercent,
   activeFocusTasks,
@@ -39,6 +45,60 @@ export function MemberCompanionView({
   chapterName,
   todayTasks = [],
 }: MemberCompanionViewProps) {
+  const { refreshProfile } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const handleRequestRenewal = async () => {
+    if (!profile) return;
+    setIsSubmitting(true);
+    setSuccessMsg('');
+    try {
+      // 1. Update user profile to request renewal
+      await databaseService.update('users', profile.uid, {
+        renewalRequested: true,
+        renewalRequestedAt: new Date().toISOString()
+      });
+
+      // 2. Notify Chapter Admins
+      const chapterId = (profile as any).chapterId || (profile as any).chapter_id;
+      if (chapterId) {
+        const { data: admins, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('chapter_id', chapterId)
+          .eq('role', 'CHAPTER_ADMIN');
+        
+        if (!error && admins && admins.length > 0) {
+          for (const admin of admins) {
+            await notificationService.createNotification(
+              admin.id,
+              'CHAPTER_ADMIN',
+              'SUBSCRIPTION',
+              `${profile.name} has requested renewal of his membership.`,
+              profile.uid
+            );
+          }
+        }
+      }
+
+      // 3. Confirm for user
+      await notificationService.createNotification(
+        profile.uid,
+        profile.role,
+        'SUBSCRIPTION',
+        'Your membership renewal request has been submitted.',
+        profile.uid
+      );
+
+      await refreshProfile();
+      setSuccessMsg('Your renewal request has been submitted successfully.');
+    } catch (err) {
+      console.error('Error submitting renewal:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   
   const displayTasks = todayTasks;
   const completedCount = displayTasks.filter(t => t.isDone).length;
@@ -415,35 +475,119 @@ export function MemberCompanionView({
         </div>
       </motion.div>
 
-      {/* 5. Upgrade Banner */}
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="w-full bg-gradient-to-br from-[#1E123B] via-[#0E071A] to-[#111827] rounded-[20px] p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-purple-500/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6"
-      >
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* 5. Membership Subscription Status Card */}
+      {(() => {
+        const rawEndDate = profile?.subscriptionEndDate || profile?.subscriptionEnd;
+        const resolvedEndDate = rawEndDate || (profile?.createdAt ? new Date(new Date(profile.createdAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : new Date(new Date().getTime() + 300 * 24 * 60 * 60 * 1000).toISOString());
+        const { daysRemaining, monthsRemaining } = calculateSubscriptionDetails(resolvedEndDate);
         
-        <div className="relative z-10 flex-1 text-center md:text-left space-y-2">
-          <h2 className="text-[17px] font-bold text-white flex items-center justify-center md:justify-start gap-1.5">
-            Upgrade to Platinum <Crown size={16} className="text-[#FBBF24] animate-pulse" />
-          </h2>
-          <p className="text-[13px] text-[#9CA3AF] font-medium leading-relaxed max-w-md">
-            Unlock advanced enterprise analytics, global network matching, priority support and higher operations thresholds.
-          </p>
-          <div className="pt-2">
-            <motion.button 
-              whileHover={{ scale: 1.03, y: -2, boxShadow: "0 0 15px rgba(229,57,53,0.3)" }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full md:w-auto bg-gradient-to-r from-red-600 to-[#E53935] hover:opacity-90 text-white px-5 py-2.5 rounded-[16px] font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(229,57,53,0.3)] transition-all"
-            >
-              Upgrade Now
-              <ChevronRight size={14} />
-            </motion.button>
-          </div>
-        </div>
-      </motion.div>
+        const isEligibleForRenewal = daysRemaining <= 30;
+        const isAlreadyRequested = profile?.renewalRequested || false;
+
+        const formatRenewBefore = (dateStr: string) => {
+          try {
+            const date = new Date(dateStr);
+            const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+          } catch (e) {
+            return dateStr;
+          }
+        };
+
+        return (
+          <motion.div 
+            id="subscription-card"
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="w-full bg-gradient-to-br from-[#1E123B] via-[#0E071A] to-[#111827] rounded-[20px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-purple-500/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6"
+          >
+            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="relative z-10 flex-1 text-center md:text-left space-y-3">
+              <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-2">
+                <h2 className="text-[17px] font-bold text-white flex items-center gap-1.5">
+                  Membership Subscription Status <Crown size={16} className="text-[#FBBF24] animate-pulse" />
+                </h2>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border shrink-0",
+                  isAlreadyRequested 
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/10" 
+                    : daysRemaining < 0 
+                      ? "bg-red-500/20 text-red-400 border-red-500/10"
+                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/10"
+                )}>
+                  {isAlreadyRequested ? "Pending Approval" : daysRemaining < 0 ? "Expired" : "Active"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg pt-1">
+                <div className="bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-left">
+                  <span className="text-[10px] font-bold text-[#9CA3AF] block uppercase tracking-wider mb-0.5">Expires In:</span>
+                  <div className="text-[16px] font-extrabold text-white">
+                    {daysRemaining < 0 ? "0 Days" : `${daysRemaining} Days`}
+                    <span className="text-xs font-medium text-[#9CA3AF] ml-1.5">({monthsRemaining} Months)</span>
+                  </div>
+                </div>
+                
+                <div className="bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-left">
+                  <span className="text-[10px] font-bold text-[#9CA3AF] block uppercase tracking-wider mb-0.5">Renew Before:</span>
+                  <div className="text-[15px] font-extrabold text-white">
+                    {formatRenewBefore(resolvedEndDate)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center md:items-end shrink-0 w-full md:w-auto pt-2 md:pt-0">
+              {successMsg ? (
+                <div className="text-emerald-400 text-xs font-bold flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/25 px-4 py-2.5 rounded-xl">
+                  <CheckCircle2 size={16} />
+                  Renewal Request Sent!
+                </div>
+              ) : isAlreadyRequested ? (
+                <div className="text-amber-400 text-xs font-bold flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/25 px-4 py-2.5 rounded-xl">
+                  <Loader2 size={16} className="animate-spin" />
+                  Approval Pending
+                </div>
+              ) : (
+                <div className="flex flex-col items-center md:items-end gap-1.5 w-full">
+                  <motion.button 
+                    onClick={isEligibleForRenewal ? handleRequestRenewal : undefined}
+                    disabled={!isEligibleForRenewal || isSubmitting}
+                    whileHover={isEligibleForRenewal ? { scale: 1.03, y: -2, boxShadow: "0 0 15px rgba(229,57,53,0.3)" } : {}}
+                    whileTap={isEligibleForRenewal ? { scale: 0.97 } : {}}
+                    className={cn(
+                      "w-full md:w-auto text-white px-5 py-2.5 rounded-[16px] font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-lg transition-all",
+                      isEligibleForRenewal 
+                        ? "bg-gradient-to-r from-red-600 to-[#E53935] hover:opacity-90 shadow-red-900/30 cursor-pointer" 
+                        : "bg-[#1F2937]/50 text-[#6B7280] border border-white/5 cursor-not-allowed shadow-none"
+                    )}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Upgrade / Renew Membership
+                        <ChevronRight size={14} />
+                      </>
+                    )}
+                  </motion.button>
+                  {!isEligibleForRenewal && (
+                    <span className="text-[10px] text-[#6B7280] font-medium text-center md:text-right">
+                      Enabled only within 30 days of expiry.
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        );
+      })()}
 
     </div>
   );

@@ -92,15 +92,14 @@ export function Layout() {
       <Sidebar 
         isOpen={isMobileSidebarOpen} 
         onClose={() => setIsMobileSidebarOpen(false)} 
-        isCollapsed={isDesktopCollapsed}
-        onToggleCollapse={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
+        isCollapsed={false}
       />
       
       {/* Main Content Area */}
       <main className={cn(
         "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-all duration-300",
         "pb-[110px] lg:pb-0", // padding for floating mobile bottom nav
-        isDesktopCollapsed ? "lg:ml-[78px]" : "lg:ml-[280px]"
+        "lg:ml-[280px]"
       )}>
         
         {/* Top Header */}
@@ -113,9 +112,6 @@ export function Layout() {
               aria-label={isMobileSidebarOpen ? "Close menu" : "Open menu"}
             >
               {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-            <button className="hidden lg:flex p-2 hover:bg-white/10 rounded-xl transition-all text-white" onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}>
-              <Menu size={20} />
             </button>
             
             {/* Header Logo branding */}

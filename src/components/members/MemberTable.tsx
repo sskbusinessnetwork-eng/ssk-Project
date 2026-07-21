@@ -16,7 +16,9 @@ import {
   Settings,
   MapPin,
   Calendar,
-  MoreVertical
+  MoreVertical,
+  Eye,
+  Lock
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
@@ -33,6 +35,7 @@ interface MemberTableProps {
   onOpenSubModal: (member: UserProfile) => void;
   onEditMember: (member: UserProfile) => void;
   onDeleteMember: (member: UserProfile) => void;
+  onResetPassword: (member: UserProfile) => void;
 }
 
 const getDisplayPosition = (pos?: string, role?: string) => {
@@ -53,7 +56,8 @@ export function MemberTable({
   onUpdateStatus,
   onOpenSubModal,
   onEditMember,
-  onDeleteMember
+  onDeleteMember,
+  onResetPassword
 }: MemberTableProps) {
   const navigate = useNavigate();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -192,14 +196,28 @@ export function MemberTable({
                             <MoreVertical size={16} />
                           </button>
                           
-                          {activeMenuId === member.uid && (
+                           {activeMenuId === member.uid && (
                             <div className="absolute right-0 mt-1 w-48 bg-[#151C2E] rounded-[12px] border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.5)] py-1 z-[999] animate-in fade-in slide-in-from-top-2 duration-150">
+                              <button
+                                onClick={() => navigate(`/profile?id=${member.uid}`)}
+                                className="w-full px-4 py-2 text-left text-xs font-bold text-neutral-200 hover:bg-[#1C2538] flex items-center gap-2"
+                              >
+                                <Eye size={12} className="text-neutral-400" />
+                                View Profile
+                              </button>
                               <button
                                 onClick={() => onEditMember(member)}
                                 className="w-full px-4 py-2 text-left text-xs font-bold text-neutral-200 hover:bg-[#1C2538] flex items-center gap-2"
                               >
                                 <Edit2 size={12} className="text-neutral-400" />
                                 Edit Profile
+                              </button>
+                              <button
+                                onClick={() => onResetPassword(member)}
+                                className="w-full px-4 py-2 text-left text-xs font-bold text-neutral-200 hover:bg-[#1C2538] flex items-center gap-2"
+                              >
+                                <Lock size={12} className="text-neutral-400" />
+                                Reset Password
                               </button>
                               <button
                                 onClick={() => onOpenSubModal(member)}
@@ -331,17 +349,31 @@ export function MemberTable({
 
               {/* Mobile Admin Action bar */}
               {showActions && (
-                <div className="pt-3 border-t border-white/5 flex items-center justify-end gap-2">
+                <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    onClick={() => navigate(`/profile?id=${member.uid}`)}
+                    className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
+                  >
+                    <Eye size={10} />
+                    View
+                  </button>
                   <button
                     onClick={() => onEditMember(member)}
-                    className="h-8 px-3.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
+                    className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
                   >
                     <Edit2 size={10} />
                     Edit
                   </button>
                   <button
+                    onClick={() => onResetPassword(member)}
+                    className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
+                  >
+                    <Lock size={10} />
+                    Reset
+                  </button>
+                  <button
                     onClick={() => onOpenSubModal(member)}
-                    className="h-8 px-3.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
+                    className="h-8 px-2.5 bg-[#151C2E] text-neutral-200 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
                   >
                     <CreditCard size={10} />
                     Sub

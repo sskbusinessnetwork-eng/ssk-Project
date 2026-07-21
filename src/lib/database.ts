@@ -196,6 +196,26 @@ export async function getDocs(queryRef: any) {
   
   let rows = keysToCamel(data || []);
   
+  if (collectionPath === 'users') {
+    rows = rows.map(r => {
+      let photo = r.photoURL || '';
+      let extraData: any = {};
+      if (photo.includes('|||')) {
+        const parts = photo.split('|||');
+        photo = parts[0];
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch (e) {}
+      }
+      const camelExtra = keysToCamel(extraData);
+      return {
+        ...r,
+        photoURL: photo,
+        ...camelExtra
+      };
+    });
+  }
+  
   if (collectionPath === 'one_to_one_meetings' && rows.length > 0) {
     const meetingIds = rows.map(m => m.id);
     const { data: parts, error: partsErr } = await supabase
@@ -227,12 +247,73 @@ export async function getDocs(queryRef: any) {
   return { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
 }
 
+const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
+  business_name: true,
+  profession_designation: true,
+  designation: true,
+  address: true,
+  city: true,
+  state: true,
+  pincode: true,
+  bio: true,
+  website: true,
+  password_changed: true,
+  subscription_start_date: true,
+  subscription_end_date: true,
+  subscription_status: true,
+  subscription_type: true,
+  renewal_requested: true,
+  renewed_by: true,
+  renewed_at: true,
+};
+
+function prepareUserPayload(partialData: any, existingPhoto: string = '') {
+  const cleanData = { ...partialData };
+  const extraToSave: any = {};
+  let photo = cleanData.profile_photo !== undefined ? cleanData.profile_photo : existingPhoto;
+  
+  if (photo && photo.includes('|||')) {
+    const parts = photo.split('|||');
+    photo = parts[0];
+    try {
+      Object.assign(extraToSave, JSON.parse(parts[1] || '{}'));
+    } catch (e) {}
+  }
+
+  Object.keys(EXTRA_USER_FIELDS_MAP).forEach(k => {
+    if (cleanData[k] !== undefined) {
+      extraToSave[k] = cleanData[k];
+      delete cleanData[k];
+    }
+  });
+
+  if (Object.keys(extraToSave).length > 0 || photo) {
+    cleanData.profile_photo = `${photo || ''}|||${JSON.stringify(extraToSave)}`;
+  }
+
+  return cleanData;
+}
+
 export async function getDoc(docRef: any) {
   const { path, id } = docRef;
   const { data, error } = await supabase.from(path).select('*').eq('id', id).single();
   if (error || !data) return { exists: () => false, data: () => ({}), id };
   
   const camelData = keysToCamel(data);
+  
+  if (path === 'users') {
+    let photo = camelData.photoURL || '';
+    let extraData: any = {};
+    if (photo.includes('|||')) {
+      const parts = photo.split('|||');
+      photo = parts[0];
+      try {
+        extraData = JSON.parse(parts[1] || '{}');
+      } catch (e) {}
+    }
+    const camelExtra = keysToCamel(extraData);
+    Object.assign(camelData, { photoURL: photo }, camelExtra);
+  }
   
   if (path === 'one_to_one_meetings') {
     const { data: parts, error: partsErr } = await supabase
@@ -264,6 +345,22 @@ export async function setDoc(docRef: any, data: any, options?: any) {
     delete cleanData.participantIds;
   }
   
+  if (path === 'users') {
+    let existingPhoto = '';
+    try {
+      const { data: existingUser } = await supabase.from('users').select('profile_photo').eq('id', id).single();
+      if (existingUser) {
+        existingPhoto = existingUser.profile_photo || '';
+      }
+    } catch (e) {}
+    
+    const snakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
+    const { error } = await supabase.from('users').upsert({ id, ...preparedSnake }, { onConflict: 'id' });
+    if (error) console.error("setDoc error:", error);
+    return;
+  }
+  
   const snakeData = keysToSnake(cleanData);
   const { error } = await supabase.from(path).upsert({ id, ...snakeData }, { onConflict: 'id' });
   if (error) console.error("setDoc error:", error);
@@ -289,6 +386,17 @@ export async function addDoc(collectionRef: any, data: any) {
   if (collectionPath === 'one_to_one_meetings') {
     participantIds = cleanData.participantIds;
     delete cleanData.participantIds;
+  }
+  
+  if (collectionPath === 'users') {
+    const snakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(snakeData, '');
+    const { data: result, error } = await supabase.from(collectionPath).insert(preparedSnake).select().single();
+    if (error) {
+      console.error("addDoc error:", error);
+      return { id: Math.random().toString(36).substring(2, 15) };
+    }
+    return { id: result?.id || Math.random().toString(36).substring(2, 15) };
   }
   
   const snakeData = keysToSnake(cleanData);
@@ -323,6 +431,22 @@ export async function updateDoc(docRef: any, partialData: any) {
   if (path === 'one_to_one_meetings') {
     participantIds = cleanData.participantIds;
     delete cleanData.participantIds;
+  }
+  
+  if (path === 'users') {
+    let existingPhoto = '';
+    try {
+      const { data: existingUser } = await supabase.from('users').select('profile_photo').eq('id', id).single();
+      if (existingUser) {
+        existingPhoto = existingUser.profile_photo || '';
+      }
+    } catch (e) {}
+    
+    const snakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
+    const { error } = await supabase.from('users').update(preparedSnake).eq('id', id);
+    if (error) console.error("updateDoc error:", error);
+    return;
   }
   
   const snakeData = keysToSnake(cleanData);

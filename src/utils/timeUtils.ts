@@ -70,3 +70,26 @@ export function parseTo12hParts(timeStr: string): { time: string; ampm: 'AM' | '
   const formattedTime = `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   return { time: formattedTime, ampm: period };
 }
+
+export function calculateSubscriptionDetails(endDateStr?: string) {
+  if (!endDateStr) return { daysRemaining: 0, monthsRemaining: 0, isExpired: false, isExpiring30: false };
+  const end = new Date(endDateStr);
+  const today = new Date();
+  
+  // Set time of both to midnight to count pure full calendar days
+  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  const diffTime = endUtc - todayUtc;
+  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  // Months remaining: can be a rough/standard calculation, e.g. days / 30, or calendar months
+  const monthsRemaining = Math.max(0, Math.round(daysRemaining / 30.4));
+  
+  return {
+    daysRemaining,
+    monthsRemaining: daysRemaining < 0 ? 0 : monthsRemaining,
+    isExpired: daysRemaining < 0,
+    isExpiring30: daysRemaining >= 0 && daysRemaining <= 30
+  };
+}

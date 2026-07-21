@@ -42,12 +42,15 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to={dashboardPath} replace />;
   }
 
-  // Check subscription for members
-  if (profile && profile.role === 'MEMBER' && profile.subscriptionEnd) {
-    const expiryDate = new Date(profile.subscriptionEnd);
-    const now = new Date();
-    if (now > expiryDate) {
-      return <Navigate to="/subscription-expired" replace />;
+  // Check subscription for members and chapter admins
+  if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN')) {
+    const endDate = profile.subscriptionEndDate || profile.subscriptionEnd;
+    if (endDate) {
+      const expiryDate = new Date(endDate);
+      const now = new Date();
+      if (now > expiryDate) {
+        return <Navigate to="/subscription-expired" replace />;
+      }
     }
   }
 

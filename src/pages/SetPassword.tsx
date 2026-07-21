@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Lock, ShieldAlert, CheckCircle2, ArrowRight, AlertCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { databaseService } from '../services/databaseService';
 import { getDashboardPath } from '../utils/authUtils';
 import { motion, AnimatePresence } from 'framer-motion';
+import bcrypt from 'bcryptjs';
 
 export function SetPassword() {
   const { profile, login } = useAuth();
@@ -75,26 +77,24 @@ export function SetPassword() {
         throw new Error('User record not found.');
       }
 
-      if (userData.password !== currentPassword) {
+      const isMatch = userData.password === currentPassword || 
+                      (userData.password && userData.password.startsWith('$2') && bcrypt.compareSync(currentPassword, userData.password));
+      if (!isMatch) {
         newErrors.currentPassword = "❌ Incorrect current password. Please try again.";
         setErrors(newErrors);
         setLoading(false);
         return;
       }
 
-      // 2. Update password in users table
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          password: newPassword,
-          must_change_password: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.uid);
+      const hashedPassword = bcrypt.hashSync(newPassword, 10);
 
-      if (updateError) {
-        throw new Error(`Database update failed: ${updateError.message}`);
-      }
+      // 2. Update password in users table
+      await databaseService.update('users', profile.uid, {
+        password: hashedPassword,
+        mustChangePassword: false,
+        passwordChanged: true,
+        updatedAt: new Date().toISOString()
+      });
 
       // 3. Update master_admins table if applicable
       if (profile.role === 'MASTER_ADMIN') {
@@ -103,7 +103,7 @@ export function SetPassword() {
           const { error: masterAdminUpdateError } = await supabase
             .from('master_admins')
             .update({ 
-              password: newPassword,
+              password: hashedPassword,
               updated_at: new Date().toISOString()
             })
             .eq('phone_number', phone);
@@ -115,7 +115,14 @@ export function SetPassword() {
       }
 
       // 4. Update local context context
-      const updatedProfile = { ...profile, must_change_password: false, password: newPassword };
+      const updatedProfile = { 
+        ...profile, 
+        mustChangePassword: false, 
+        must_change_password: false, 
+        passwordChanged: true, 
+        password_changed: true, 
+        password: hashedPassword 
+      };
       login(updatedProfile);
       
       setSuccessPopup(true);

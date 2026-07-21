@@ -80,6 +80,9 @@ export function Profile() {
     chapterName: '',
     category: '',
     phone: '',
+    email: '',
+    pincode: '',
+    professionDesignation: '',
     website: '',
     bio: '',
     state: '',
@@ -113,6 +116,9 @@ export function Profile() {
             chapterName: currentUserProfile.chapterName || '',
             category: currentUserProfile.category || '',
             phone: currentUserProfile.phone || '',
+            email: currentUserProfile.email || '',
+            pincode: currentUserProfile.pincode || '',
+            professionDesignation: currentUserProfile.professionDesignation || currentUserProfile.profession_designation || '',
             website: currentUserProfile.website || '',
             bio: currentUserProfile.bio || '',
             state: currentUserProfile.state || '',
@@ -413,6 +419,18 @@ export function Profile() {
               </div>
             </div>
 
+            {(targetProfile.professionDesignation || targetProfile.profession_designation) && (
+              <div className="p-4 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
+                  <User size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Profession / Designation</p>
+                  <p className="text-sm font-bold text-white">{targetProfile.professionDesignation || targetProfile.profession_designation}</p>
+                </div>
+              </div>
+            )}
+
             <div className="p-4 flex items-start gap-4">
               <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
                 <Phone size={20} />
@@ -423,6 +441,18 @@ export function Profile() {
               </div>
             </div>
 
+            {targetProfile.email && (
+              <div className="p-4 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
+                  <Mail size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Email Address</p>
+                  <p className="text-sm font-bold text-white">{targetProfile.email}</p>
+                </div>
+              </div>
+            )}
+
             <div className="p-4 flex items-start gap-4">
               <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
                 <MapPin size={20} />
@@ -432,7 +462,8 @@ export function Profile() {
                 <p className="text-sm font-bold text-white leading-tight">
                   {targetProfile.address}<br />
                   <span className="text-neutral-400 font-medium">
-                    {targetProfile.area}, {targetProfile.city}, {targetProfile.state}
+                    {targetProfile.area ? `${targetProfile.area}, ` : ''}{targetProfile.city}, {targetProfile.state}
+                    {targetProfile.pincode ? ` - ${targetProfile.pincode}` : ''}
                   </span>
                 </p>
               </div>
@@ -717,6 +748,17 @@ export function Profile() {
               />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Email Address <span className="text-red-500">*</span></label>
+              <input
+                required
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
+              />
+            </div>
+
             {formData.role === 'CHAPTER_ADMIN' && (
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
@@ -731,12 +773,23 @@ export function Profile() {
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : ''}</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : '<span className="text-red-500">*</span>'}</label>
               <input
                 required={formData.role !== 'CHAPTER_ADMIN'}
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Profession / Designation <span className="text-red-500">*</span></label>
+              <input
+                required
+                type="text"
+                value={formData.professionDesignation}
+                onChange={(e) => setFormData({ ...formData, professionDesignation: e.target.value })}
                 className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
               />
             </div>
@@ -766,8 +819,9 @@ export function Profile() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Bio / Tagline</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Bio / Tagline <span className="text-red-500">*</span></label>
               <input
+                required
                 type="text"
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
@@ -777,8 +831,9 @@ export function Profile() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">City</label>
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">City <span className="text-red-500">*</span></label>
                 <input
+                  required
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
@@ -786,8 +841,9 @@ export function Profile() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">State</label>
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">State <span className="text-red-500">*</span></label>
                 <input
+                  required
                   type="text"
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
@@ -796,19 +852,32 @@ export function Profile() {
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Area</label>
-              <input
-                type="text"
-                value={formData.area}
-                onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Area</label>
+                <input
+                  type="text"
+                  value={formData.area}
+                  onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                  className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Pincode <span className="text-red-500">*</span></label>
+                <input
+                  required
+                  type="text"
+                  value={formData.pincode}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                  className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
+                />
+              </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Address</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Address <span className="text-red-500">*</span></label>
               <textarea
+                required
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 rows={3}

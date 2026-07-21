@@ -3,7 +3,7 @@ import {
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
-  CheckSquare
+  CheckSquare, User
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -15,6 +15,28 @@ import { MemberCompanionView } from '../components/MemberCompanionView';
 import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
 import StatGrid from '../components/StatGrid';
+import { supabase } from '../lib/supabaseClient';
+import { calculateSubscriptionDetails } from '../utils/timeUtils';
+
+export function cleanHeroName(name: string): string {
+  if (!name) return '';
+  // Case insensitive patterns for leadership roles
+  const patterns = [
+    /\bchapter[_\-\s]*admin\b/gi,
+    /\bvice[_\-\s]*president\b/gi,
+    /\bpresident\b/gi,
+    /\btreasurer\b/gi
+  ];
+  let cleaned = name;
+  for (const pattern of patterns) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+  // Also handle cases where underscores were used instead of spaces (like test_chapter_admin -> test)
+  cleaned = cleaned.replace(/_+/g, ' ');
+  // Clean up extra spaces
+  cleaned = cleaned.trim().replace(/\s+/g, ' ');
+  return cleaned || name; // Fallback to original name if empty
+}
 
 const isToday = (dateStr: string) => {
   if (!dateStr) return false;
@@ -33,6 +55,39 @@ const isToday = (dateStr: string) => {
 export function Analytics() {
   const { profile } = useAuth();
   const [score, setScore] = useState(0);
+  const [userName, setUserName] = useState<string>('');
+
+  // Fetch fresh user name from Supabase on mount/profile change
+  useEffect(() => {
+    const fetchFreshName = async () => {
+      const userId = profile?.uid || profile?.id;
+      if (!userId) {
+        if (profile?.name) {
+          setUserName(cleanHeroName(profile.name));
+        }
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', userId)
+          .single();
+        if (!error && data && data.name) {
+          setUserName(cleanHeroName(data.name));
+        } else if (profile?.name) {
+          setUserName(cleanHeroName(profile.name));
+        }
+      } catch (err) {
+        console.error("Error fetching fresh name from Supabase:", err);
+        if (profile?.name) {
+          setUserName(cleanHeroName(profile.name));
+        }
+      }
+    };
+
+    fetchFreshName();
+  }, [profile]);
   const [isRocketHovered, setIsRocketHovered] = useState(false);
   const [isReportHovered, setIsReportHovered] = useState(false);
 
@@ -488,6 +543,54 @@ export function Analytics() {
       activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
     });
 
+    // 8. Complete Your Profile Task
+    const isProfileComplete = !!(
+      profile.photoURL &&
+      profile.name &&
+      profile.phone &&
+      profile.email &&
+      profile.businessName &&
+      profile.category &&
+      (profile.professionDesignation || profile.profession_designation) &&
+      profile.address &&
+      profile.city &&
+      profile.state &&
+      profile.pincode &&
+      profile.bio
+    );
+    tasks.push({
+      key: 'completeProfile',
+      label: 'Complete Your Profile',
+      isDone: isProfileComplete,
+      link: '/profile',
+      linkText: 'PROFILE',
+      iconColor: 'text-amber-400',
+      bgColor: 'bg-amber-500/10',
+      icon: User,
+      activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+    });
+
+    // 9. Subscription Renewal Task
+    if (profile && profile.role === 'MEMBER') {
+      const endDate = profile.subscriptionEndDate || profile.subscriptionEnd;
+      if (endDate) {
+        const { daysRemaining } = calculateSubscriptionDetails(endDate);
+        if (daysRemaining <= 30) {
+          tasks.push({
+            key: 'renewMembership',
+            label: '⚠ Renew Your Membership',
+            isDone: !!profile.renewalRequested,
+            link: '#subscription-card',
+            linkText: profile.renewalRequested ? 'PENDING' : 'RENEW',
+            iconColor: 'text-red-500',
+            bgColor: 'bg-red-500/10',
+            icon: Shield,
+            activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+          });
+        }
+      }
+    }
+
     return tasks;
   }, [meetings, oneToOnes, passedReferrals, receivedReferrals, allSlips, chapterUsers, profile, guestInvitations, hasInvitedGuest]);
 
@@ -585,7 +688,7 @@ export function Analytics() {
               {getGreeting()}
             </span>
             <h1 className="text-[34px] md:text-[42px] lg:text-[52px] font-black text-white leading-none tracking-tight">
-              {profile?.name || 'Sudarshan Vagale'}
+              {userName || cleanHeroName(profile?.name) || 'Sudarshan Vagale'}
             </h1>
             <p className="text-[14px] md:text-[16px] lg:text-[18px] font-medium text-[#D1D5DB] max-w-[420px] leading-relaxed">
               Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong> Here is your enterprise operations overview for today.
