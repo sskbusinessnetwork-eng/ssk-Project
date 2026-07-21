@@ -24,9 +24,9 @@ interface StatGridProps {
 
 export default function StatGrid({
   role = 'MEMBER',
-  totalChaptersCount = 1,
-  totalMembersCount = 1,
-  activePartnersCount = 1,
+  totalChaptersCount = 0,
+  totalMembersCount = 0,
+  activePartnersCount = 0,
   inactiveMembersCount = 0,
   businessGeneratedTotal = 0,
   referralsPassedCount = 0,

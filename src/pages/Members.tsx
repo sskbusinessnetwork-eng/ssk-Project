@@ -66,30 +66,40 @@ export function Members() {
     if (!profile) return;
 
     // CHAPTER ADMIN MEMBER SECTION: Show ONLY members created by that Chapter Admin
-    const constraints = profile.role === 'CHAPTER_ADMIN' 
+    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    const constraints = isChapterAdminUser 
       ? [where('chapter_id', '==', profile?.chapter_id)]
       : [];
 
     const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
       // Filter for MEMBER role if needed, or show all if admin
-      const filteredData = profile.role === 'CHAPTER_ADMIN' 
+      const filteredData = isChapterAdminUser 
         ? data.filter(u => u.role === 'MEMBER')
         : data;
       setMembers(filteredData);
       setLoading(false);
     });
 
-    if (profile.role === 'MASTER_ADMIN' || profile.role === 'CHAPTER_ADMIN') {
+    if (profile.role === 'MASTER_ADMIN' || isChapterAdminUser) {
       databaseService.list<Category>('categories').then(setCategories);
       
       // Fetch all admins for the adminMap
-      const adminsQuery = query(collection(db, 'users'), where('role', 'in', ['MASTER_ADMIN', 'CHAPTER_ADMIN']));
-      getDocs(adminsQuery).then(snap => {
-        setAllAdmins(snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+      const adminsQuery = query(collection(db, 'users'), where('role', '==', 'MASTER_ADMIN'));
+      const chapterAdminsQuery = query(collection(db, 'users'), where('position', '==', 'chapter_admin'));
+      Promise.all([getDocs(adminsQuery), getDocs(chapterAdminsQuery)]).then(([snap1, snap2]) => {
+        const list1 = snap1.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+        const list2 = snap2.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+        const combined = [...list1];
+        list2.forEach(item => {
+          if (!combined.some(u => u.uid === item.uid)) {
+            combined.push(item);
+          }
+        });
+        setAllAdmins(combined);
       });
 
       // Fetch member invites for Chapter Admin
-      if (profile.role === 'CHAPTER_ADMIN') {
+      if (isChapterAdminUser) {
         const invitesConstraints = [
           where('chapter_id', '==', profile?.chapter_id),
           where('createdByRole', '==', 'MEMBER'),
@@ -148,7 +158,7 @@ export function Members() {
   });
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
   const handleOpenAddModal = () => {
     setError(null);
@@ -197,7 +207,7 @@ export function Members() {
       // Fetch the logged-in Chapter Admin's profile from the database to guarantee it is secure and authentic
       const { data: adminProfile, error: profileErr } = await supabase
         .from('users')
-        .select('chapter_id, chapter_name, role, name')
+        .select('chapter_id, chapter_name, role, name, position')
         .eq('id', adminId)
         .single();
 
@@ -206,7 +216,8 @@ export function Members() {
       }
 
       // Enforce security role check
-      if (adminProfile.role !== 'CHAPTER_ADMIN') {
+      const isAdminOrChapterAdmin = adminProfile.role === 'CHAPTER_ADMIN' || (adminProfile.role === 'MEMBER' && adminProfile.position === 'chapter_admin');
+      if (!isAdminOrChapterAdmin) {
         throw new Error('Unauthorized. Only Chapter Admins are allowed to create regular members.');
       }
 
@@ -466,7 +477,8 @@ export function Members() {
     const memberUid = member.uid || (member as any).id;
     const adminUid = profile?.uid;
 
-    if (!profile || (profile.role !== 'MASTER_ADMIN' && profile.role !== 'CHAPTER_ADMIN')) {
+    const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+    if (!profile || (profile.role !== 'MASTER_ADMIN' && !isUserChapterAdmin)) {
       return;
     }
 
@@ -502,7 +514,8 @@ export function Members() {
     if (m.role !== 'MEMBER') return false;
 
     // Chapter Admin can ONLY see members they created
-    if (profile?.role === 'CHAPTER_ADMIN' && m.chapter_id !== profile?.chapter_id) return false;
+    const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+    if (isUserChapterAdmin && m.chapter_id !== profile?.chapter_id) return false;
 
     const matchesSearch = 
       (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

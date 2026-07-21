@@ -114,7 +114,7 @@ export function Positions() {
         if (currentHolder && currentHolder.uid !== userId) {
           batch.update(doc(db, 'users', currentHolder.uid), {
             position: 'member',
-            ...(newPosition === 'chapter_admin' ? { role: 'MEMBER' } : {})
+            role: 'MEMBER'
           });
 
           // Log removal history
@@ -134,8 +134,7 @@ export function Positions() {
       // 2. Update the selected user
       batch.update(doc(db, 'users', userId), {
         position: newPosition,
-        ...(newPosition === 'chapter_admin' ? { role: 'CHAPTER_ADMIN' } : 
-             (oldPosition === 'chapter_admin' ? { role: 'MEMBER' } : {}))
+        role: 'MEMBER'
       });
 
       // 3. Update chapter record if applicable

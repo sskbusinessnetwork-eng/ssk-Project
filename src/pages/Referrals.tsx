@@ -79,7 +79,7 @@ export function Referrals() {
     let constraints: any[] = [orderBy('createdAt', 'desc')];
     
     const isAdmin = profile.role === 'MASTER_ADMIN';
-    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN';
+    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
 
     // For Master Admin and Chapter Admin, we don't filter by user ID to show all referrals (we'll filter in UI for Chapter Admin)
     if (!isAdmin && !isChapterAdmin) {
@@ -318,12 +318,12 @@ export function Referrals() {
   };
 
   const isAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isPending = profile?.membershipStatus === 'PENDING' && !isAdmin && !isChapterAdmin;
 
   if (isAdmin || isChapterAdmin) {
     const associatedMemberIds = isChapterAdmin 
-      ? [...members.filter(m => m.adminId === profile?.uid).map(m => m.uid), profile?.uid]
+      ? [...members.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid]
       : [];
 
     const filteredReferrals = isChapterAdmin

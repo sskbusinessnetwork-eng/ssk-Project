@@ -37,13 +37,21 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/set-password" replace />;
   }
 
-  if (profile && allowedRoles && !allowedRoles.includes(profile.role)) {
-    const dashboardPath = getDashboardPath(profile.role);
-    return <Navigate to={dashboardPath} replace />;
+  if (profile && allowedRoles) {
+    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    
+    const hasRole = allowedRoles.includes(profile.role) || 
+      (allowedRoles.includes('CHAPTER_ADMIN') && isChapterAdmin) ||
+      (allowedRoles.includes('MEMBER') && profile.role === 'MEMBER');
+
+    if (!hasRole) {
+      const dashboardPath = getDashboardPath(profile.role, profile.position);
+      return <Navigate to={dashboardPath} replace />;
+    }
   }
 
   // Check subscription for members and chapter admins
-  if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN')) {
+  if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin'))) {
     const endDate = profile.subscriptionEndDate || profile.subscriptionEnd;
     if (endDate) {
       const expiryDate = new Date(endDate);

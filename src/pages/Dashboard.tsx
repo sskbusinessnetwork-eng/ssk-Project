@@ -99,9 +99,10 @@ export function Analytics() {
   useEffect(() => {
     const fetchChapterName = async () => {
       if (!profile) return;
-      if (profile.role === 'CHAPTER_ADMIN' && profile.chapterName) {
+      const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+      if (isChapterAdminUser && profile.chapterName) {
         setResolvedChapterName(profile.chapterName);
-      } else if (profile.role === 'MEMBER') {
+      } else if (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN') {
         if (profile.chapterName) {
           setResolvedChapterName(profile.chapterName);
           return;
@@ -137,13 +138,14 @@ export function Analytics() {
 
     // 1. Subscribe to users (chapter members)
     let userConstraints: any[] = [];
-    if (profile.role === 'CHAPTER_ADMIN' || profile.role === 'MEMBER') {
+    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    if (isChapterAdminUser || profile.role === 'MEMBER') {
       if (profile.chapter_id) {
          userConstraints = [where('chapter_id', '==', profile.chapter_id)];
       }
     }
     const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
-      setChapterUsers(data.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role)));
+      setChapterUsers(data.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role) || u.position === 'chapter_admin'));
     });
 
     // 2. Subscribe to thank you slips
@@ -283,25 +285,31 @@ export function Analytics() {
     });
   }, [chapterUsers]);
 
-  const businessGeneratedTotal = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      return allSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 4200000;
-    }
-    const chapterSlips = allSlips.filter(slip => 
+  const chapterSlips = useMemo(() => {
+    return allSlips.filter(slip => 
       chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
     );
-    return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 1250000;
-  }, [allSlips, chapterUserIds, profile]);
+  }, [allSlips, chapterUserIds]);
+
+  const chapterReferralsList = useMemo(() => {
+    return allReferrals.filter(ref => 
+      chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId)
+    );
+  }, [allReferrals, chapterUserIds]);
+
+  const businessGeneratedTotal = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN') {
+      return allSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
+    }
+    return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
+  }, [allSlips, chapterSlips, profile]);
 
   const referralsPassedCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return allReferrals.length || 845;
+      return allReferrals.length || 0;
     }
-    const chapterRefs = allReferrals.filter(ref => 
-      chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId)
-    );
-    return chapterRefs.length || 189;
-  }, [allReferrals, chapterUserIds, profile]);
+    return chapterReferralsList.length || 0;
+  }, [allReferrals, chapterReferralsList, profile]);
 
   const upcomingSyncsCount = useMemo(() => {
     const nowStr = new Date().toISOString();
@@ -318,7 +326,7 @@ export function Analytics() {
         );
     const upcomingOneToOnesCount = chapterOneToOnes.filter(m => m.status === 'PENDING' || m.status === 'APPROVED').length;
 
-    return (upcomingMeetingsCount + upcomingOneToOnesCount) || 12;
+    return (upcomingMeetingsCount + upcomingOneToOnesCount) || 0;
   }, [meetings, oneToOnes, chapterUserIds, profile]);
 
   const oneToOneMeetingsCount = useMemo(() => {
@@ -356,7 +364,7 @@ export function Analytics() {
 
   const totalChaptersCount = useMemo(() => {
     const adminIds = chapterUsers.map(u => u.chapter_id || u.adminId).filter(Boolean);
-    return new Set(adminIds).size || 1;
+    return new Set(adminIds).size || 0;
   }, [chapterUsers]);
 
   const weeklyMeetingAttendance = useMemo(() => {
@@ -421,6 +429,95 @@ export function Analytics() {
       .sort((a, b) => b.business - a.business)
       .slice(0, 5);
   }, [allSlips, chapterUsers, profile]);
+
+  // Dynamic Recent Activities based on real database records
+  const dynamicRecentActivities = useMemo(() => {
+    const activities: any[] = [];
+
+    // 1. Slips (Revenue)
+    allSlips.forEach(s => {
+      const fromName = s.fromUserName || s.from_user_name || 'Partner';
+      const toName = s.toUserName || s.to_user_name || 'Partner';
+      const val = Number(s.businessValue) || 0;
+      activities.push({
+        id: s.id,
+        title: 'Business Generated',
+        desc: `${fromName} generated ₹${val.toLocaleString('en-IN')} business for ${toName}`,
+        type: 'business',
+        time: new Date(s.createdAt || s.date).getTime(),
+        fromUserId: s.fromUserId,
+        toUserId: s.toUserId,
+      });
+    });
+
+    // 2. Referrals
+    allReferrals.forEach(r => {
+      const fromName = r.fromUserName || 'Partner';
+      const toName = r.toUserName || 'Partner';
+      activities.push({
+        id: r.id,
+        title: 'Referral Passed',
+        desc: `${fromName} passed a referral to ${toName}`,
+        type: 'referral',
+        time: new Date(r.createdAt || r.date).getTime(),
+        fromUserId: r.fromUserId,
+        toUserId: r.toUserId,
+      });
+    });
+
+    // 3. One-to-Ones
+    oneToOnes.forEach(m => {
+      const creatorName = m.creatorName || 'Partner';
+      const participantName = m.participantNames?.[0] || 'Partner';
+      activities.push({
+        id: m.id,
+        title: '1-to-1 Completed',
+        desc: `${creatorName} completed 1-to-1 with ${participantName}`,
+        type: 'onetoone',
+        time: new Date(m.createdAt || m.date).getTime(),
+        fromUserId: m.creatorId,
+        toUserId: m.participantIds?.[0],
+      });
+    });
+
+    // 4. New Members
+    chapterUsers.forEach(u => {
+      activities.push({
+        id: u.uid,
+        title: 'New Partner Joined',
+        desc: `${u.name || 'A partner'} registered as ${u.category || 'Member'}`,
+        type: 'member',
+        time: new Date(u.createdAt).getTime(),
+        fromUserId: u.uid,
+      });
+    });
+
+    // Filter valid entries, sort by time desc
+    const sorted = activities
+      .filter(a => a.time && !isNaN(a.time))
+      .sort((a, b) => b.time - a.time);
+
+    return sorted;
+  }, [allSlips, allReferrals, oneToOnes, chapterUsers]);
+
+  // Filtered recent activities based on role
+  const filteredRecentActivities = useMemo(() => {
+    if (!profile) return [];
+    if (profile.role === 'MASTER_ADMIN') {
+      return dynamicRecentActivities;
+    }
+    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    if (isChapterAdminUser) {
+      return dynamicRecentActivities.filter(a => 
+        chapterUserIds.includes(a.fromUserId) || 
+        (a.toUserId && chapterUserIds.includes(a.toUserId))
+      );
+    }
+    // MEMBER role
+    return dynamicRecentActivities.filter(a => 
+      a.fromUserId === profile.uid || a.toUserId === profile.uid
+    );
+  }, [dynamicRecentActivities, profile, chapterUserIds]);
 
   // Derived Checklist Status
   const hasAttendedMeeting = useMemo(() => {
@@ -748,9 +845,17 @@ export function Analytics() {
             <span className="text-[12px] md:text-[14px] font-extrabold text-[#9CA3AF] uppercase tracking-[3px]">
               {getGreeting()}
             </span>
-            <h1 className="text-[34px] md:text-[42px] lg:text-[52px] font-black text-white leading-none tracking-tight">
-              {userName || cleanHeroName(profile?.name) || 'Sudarshan Vagale'}
-            </h1>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <h1 className="text-[34px] md:text-[42px] lg:text-[52px] font-black text-white leading-none tracking-tight">
+                {userName || cleanHeroName(profile?.name) || 'Sudarshan Vagale'}
+              </h1>
+              {profile?.position && profile.position !== 'member' && (
+                <span className="inline-flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 text-amber-400 font-extrabold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-[0_0_12px_rgba(245,158,11,0.2)]">
+                  <Crown size={12} className="text-amber-500 animate-pulse" />
+                  {profile.position.replace('_', ' ')}
+                </span>
+              )}
+            </div>
             <p className="text-[14px] md:text-[16px] lg:text-[18px] font-medium text-[#D1D5DB] max-w-[420px] leading-relaxed">
               Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong> Here is your enterprise operations overview for today.
             </p>
@@ -965,7 +1070,7 @@ export function Analytics() {
       )}
 
       {/* COMPANION / REPORTS VIEW BASED ON ROLE */}
-      {profile?.role === 'MEMBER' && (
+      {(profile?.role === 'MEMBER' || profile?.role === 'CHAPTER_ADMIN') && (
         <MemberCompanionView
           profile={profile}
           dynamicContext={{ period: 'Weekly', priority: 'Engage', tip: '', badge: '' }}
@@ -981,11 +1086,7 @@ export function Analytics() {
           handleToggleTask={() => {}}
           nextMeeting={null}
           countdown={{ days: 0, hours: 0, minutes: 0 }}
-          finalRecentActivities={[
-            { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
-            { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
-            { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
-          ]}
+          finalRecentActivities={filteredRecentActivities}
           businessGrowthScore={dynamicGrowthScore}
           currentMonthMetrics={{}}
           hasLoggedOneToOne={hasScheduledOneToOne}
@@ -994,24 +1095,11 @@ export function Analytics() {
           isHighlightActive={isChecklistHighlighted}
           chapterName={resolvedChapterName}
           todayTasks={todayTasks}
+          allSlips={allSlips}
+          allReferrals={allReferrals}
         />
       )}
-      
-      {profile?.role === 'CHAPTER_ADMIN' && (
-        <ChapterAdminCompanionView
-          profile={profile}
-          chapterHealthScore={88}
-          chapterMemberCount={activePartnersCount}
-          chapterReferrals={referralsPassedCount}
-          chapterBusiness={businessGeneratedTotal}
-          finalRecentActivities={[
-            { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
-            { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
-            { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
-          ]}
-        />
-      )}
-
+ 
       {profile?.role === 'MASTER_ADMIN' && (
         <MasterAdminCompanionView
           profile={profile}
@@ -1020,13 +1108,11 @@ export function Analytics() {
           globalChapterCount={totalChaptersCount}
           globalBusinessGenerated={businessGeneratedTotal}
           globalReferralsCount={referralsPassedCount}
-          finalRecentActivities={[
-            { id: '1', title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', type: 'member', time: new Date().getTime() },
-            { id: '2', title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', type: 'referral', time: new Date().getTime() - 86400000 },
-            { id: '3', title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', type: 'onetoone', time: new Date().getTime() - 86400000 * 2 }
-          ]}
+          finalRecentActivities={filteredRecentActivities}
           setActiveTab={() => {}}
           topPerformingChapters={topPerformingChapters}
+          allSlips={allSlips}
+          allReferrals={allReferrals}
         />
       )}
 

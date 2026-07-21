@@ -37,7 +37,8 @@ export function SubscriptionExpired() {
       });
 
       // 2. Dispatch notifications to appropriate admins
-      if (profile.role === 'MEMBER') {
+      const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+      if (profile.role === 'MEMBER' && !isChapterAdmin) {
         const chapterId = profile.chapterId || (profile as any).chapter_id;
         if (chapterId) {
           // Find all chapter admins for this chapter
@@ -45,7 +46,7 @@ export function SubscriptionExpired() {
             .from('users')
             .select('id')
             .eq('chapter_id', chapterId)
-            .eq('role', 'CHAPTER_ADMIN');
+            .eq('position', 'chapter_admin');
           
           if (!error && admins && admins.length > 0) {
             for (const admin of admins) {
@@ -59,7 +60,7 @@ export function SubscriptionExpired() {
             }
           }
         }
-      } else if (profile.role === 'CHAPTER_ADMIN') {
+      } else if (isChapterAdmin) {
         // Find all master admins
         const { data: masterAdmins, error } = await supabase
           .from('users')
@@ -98,7 +99,7 @@ export function SubscriptionExpired() {
     }
   };
 
-  const isAdminUser = profile?.role === 'CHAPTER_ADMIN';
+  const isAdminUser = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
   return (
     <div className="min-h-screen bg-[#05070E] flex items-center justify-center p-6 relative overflow-hidden">

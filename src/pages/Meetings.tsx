@@ -228,7 +228,7 @@ export function Meetings() {
     enabled: false
   });
 
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
@@ -244,15 +244,26 @@ export function Meetings() {
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]).then(setAdminAdmins);
-    } else if (profile?.role === 'MEMBER' && profile.chapter_id) {
-      databaseService.get<UserProfile>('users', profile.chapter_id).then(admin => {
-        if (admin) setAdminAdmins([admin]);
-      });
-    } else if (profile?.role === 'CHAPTER_ADMIN') {
+      databaseService.list<UserProfile>('users', [where('position', '==', 'chapter_admin')]).then(setAdminAdmins);
+    } else if (isChapterAdmin) {
       setAdminAdmins([profile]);
+    } else if (profile?.role === 'MEMBER' && profile.chapter_id) {
+      // Find the chapter admin of this member's chapter
+      databaseService.list<UserProfile>('users', [
+        where('chapter_id', '==', profile.chapter_id),
+        where('position', '==', 'chapter_admin')
+      ]).then(admins => {
+        if (admins && admins.length > 0) {
+          setAdminAdmins(admins);
+        } else {
+          // Fallback to old field
+          databaseService.get<UserProfile>('users', profile.chapter_id).then(admin => {
+            if (admin) setAdminAdmins([admin]);
+          });
+        }
+      });
     }
-  }, [profile]);
+  }, [profile, isChapterAdmin]);
 
   useEffect(() => {
     const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
@@ -386,10 +397,10 @@ export function Meetings() {
 
       if (chapterId) {
         // If we have a chapterId, we want members of that chapter
-        constraints.push(where('adminId', '==', chapterId));
+        constraints.push(where('chapter_id', '==', chapterId));
       } else {
         // If no chapterId (Master Admin "All Chapters"), we want all members and admins
-        constraints.push(where('role', 'in', ['MEMBER', 'CHAPTER_ADMIN']));
+        constraints.push(where('role', '==', 'MEMBER'));
       }
 
       try {

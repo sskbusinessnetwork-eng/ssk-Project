@@ -62,7 +62,7 @@ export function Profile() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = currentUserProfile?.role === 'MASTER_ADMIN' || currentUserProfile?.role === 'CHAPTER_ADMIN';
+  const isAdmin = currentUserProfile?.role === 'MASTER_ADMIN' || currentUserProfile?.role === 'CHAPTER_ADMIN' || (currentUserProfile?.role === 'MEMBER' && currentUserProfile?.position === 'chapter_admin');
 
   const getDisplayPosition = (pos?: string, role?: string) => {
     if (role === 'MASTER_ADMIN') return 'Master Admin';
@@ -90,7 +90,8 @@ export function Profile() {
     area: '',
     address: '',
     photoURL: '',
-    role: '' as UserRole
+    role: '' as UserRole,
+    position: 'member'
   });
 
   useEffect(() => {
@@ -126,7 +127,8 @@ export function Profile() {
             area: currentUserProfile.area || '',
             address: currentUserProfile.address || '',
             photoURL: currentUserProfile.photoURL || '',
-            role: currentUserProfile.role || 'MEMBER'
+            role: currentUserProfile.role || 'MEMBER',
+            position: currentUserProfile.position || 'member'
           });
 
           chapterId = currentUserProfile.chapter_id || currentUserProfile.adminId || '';
@@ -759,7 +761,7 @@ export function Profile() {
               />
             </div>
 
-            {formData.role === 'CHAPTER_ADMIN' && (
+            {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') && (
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
                 <input
@@ -773,9 +775,9 @@ export function Profile() {
             )}
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {formData.role === 'CHAPTER_ADMIN' ? '(Optional)' : '<span className="text-red-500">*</span>'}</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') ? '(Optional)' : '<span className="text-red-500">*</span>'}</label>
               <input
-                required={formData.role !== 'CHAPTER_ADMIN'}
+                required={formData.role !== 'CHAPTER_ADMIN' && formData.position !== 'chapter_admin'}
                 type="text"
                 value={formData.businessName}
                 onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}

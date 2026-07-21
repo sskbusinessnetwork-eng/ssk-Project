@@ -71,7 +71,7 @@ export function LandingPage() {
 
   useEffect(() => {
     const fetchAdmins = async () => {
-      const admins = await databaseService.list<UserProfile>('users', [where('role', '==', 'CHAPTER_ADMIN')]);
+      const admins = await databaseService.list<UserProfile>('users', [where('position', '==', 'chapter_admin')]);
       setChapterAdmins(admins);
     };
     fetchAdmins();

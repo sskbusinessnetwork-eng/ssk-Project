@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
+import { format } from 'date-fns';
 
 interface MemberCompanionViewProps {
   profile: UserProfile | null;
@@ -32,6 +33,14 @@ interface MemberCompanionViewProps {
   isHighlightActive?: boolean;
   chapterName?: string;
   todayTasks?: any[];
+
+  // Real dynamic statistics from the database
+  memberRevenue?: number;
+  memberReferrals?: number;
+  memberDeals?: number;
+  memberAttendance?: number;
+  allSlips?: any[];
+  allReferrals?: any[];
 }
 
 export function MemberCompanionView({
@@ -44,10 +53,96 @@ export function MemberCompanionView({
   isHighlightActive,
   chapterName,
   todayTasks = [],
+  finalRecentActivities = [],
+
+  // Dynamic metrics defaults
+  memberRevenue = 0,
+  memberReferrals = 0,
+  memberDeals = 0,
+  memberAttendance = 100,
+  allSlips = [],
+  allReferrals = [],
 }: MemberCompanionViewProps) {
   const { refreshProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  const formatRevenueLabel = (val: number) => {
+    if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+    if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
+    return `₹${Math.round(val)}`;
+  };
+
+  const { revenuePoints, referralsPoints, areaPoints, maxRevenue, maxReferrals, latestRevenue } = React.useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    // Filter to current month slips
+    const monthlySlips = allSlips.filter(s => {
+      const d = new Date(s.createdAt || s.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+
+    // Filter to current month referrals
+    const monthlyRefs = allReferrals.filter(r => {
+      const d = new Date(r.createdAt || r.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+
+    const targetDays = [1, 7, 14, 21, 28, 31];
+    
+    const revenueVals = targetDays.map(day => {
+      const itemsUpToDay = monthlySlips.filter(s => {
+        const d = new Date(s.createdAt || s.date);
+        return d.getDate() <= day;
+      });
+      return itemsUpToDay.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0);
+    });
+
+    const referralVals = targetDays.map(day => {
+      const itemsUpToDay = monthlyRefs.filter(r => {
+        const d = new Date(r.createdAt || r.date);
+        return d.getDate() <= day;
+      });
+      return itemsUpToDay.length;
+    });
+
+    const maxRev = Math.max(...revenueVals, 0);
+    const maxRef = Math.max(...referralVals, 0);
+
+    const xCoords = [60, 200, 340, 480, 620, 760];
+    
+    const scaleY = (val: number, max: number) => {
+      const minY = 200;
+      const maxY = 40;
+      if (max === 0) return 200;
+      return minY - ((val / max) * (minY - maxY));
+    };
+
+    const revY = revenueVals.map(val => scaleY(val, maxRev));
+    const refY = referralVals.map(val => scaleY(val, maxRef));
+
+    const revPath = revY.map((y, idx) => `${idx === 0 ? 'M' : 'L'} ${xCoords[idx]} ${y}`).join(' ');
+    const refPath = refY.map((y, idx) => `${idx === 0 ? 'M' : 'L'} ${xCoords[idx]} ${y}`).join(' ');
+
+    const areaPath = revY.length > 0
+      ? `${revY.map((y, idx) => `${idx === 0 ? 'M' : 'L'} ${xCoords[idx]} ${y}`).join(' ')} L 760 220 L 60 220 Z`
+      : '';
+
+    return {
+      revenuePoints: revPath,
+      referralsPoints: refPath,
+      areaPoints: areaPath,
+      maxRevenue: maxRev,
+      maxReferrals: maxRef,
+      latestRevenue: revenueVals[revenueVals.length - 1] || 0
+    };
+  }, [allSlips, allReferrals]);
+
+  const topLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue) : '0';
+  const midLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 2 / 3) : '0';
+  const lowLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 1 / 3) : '0';
 
   const handleRequestRenewal = async () => {
     if (!profile) return;
@@ -294,33 +389,41 @@ export function MemberCompanionView({
           <span className="text-[11px] font-bold text-red-500 hover:text-red-400 uppercase tracking-wider cursor-pointer transition-all hover:tracking-widest">View All</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative w-full">
-          {[
-             { icon: Target, title: 'New Partner Joined', desc: 'Sudarshan Vagale registered as Real Estate', time: '05:30 AM', color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20' },
-             { icon: Share2, title: 'Referral Passed', desc: 'Commercial lead forwarded to partner', time: 'Yesterday', color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
-             { icon: Calendar, title: 'Meeting Completed', desc: '1-to-1 with Real Estate Chapter', time: '12 Jul', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-             { icon: UserPlus, title: 'New Member Added', desc: 'Amit Patil joined the network', time: '10 Jul', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-             { icon: FileText, title: 'Business Planning Session', desc: 'Virtual meeting scheduled', time: '08 Jul', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
-          ].map((act, idx) => (
-            <motion.div 
-              key={idx} 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.08, duration: 0.4 }}
-              whileHover={{ scale: 1.01, backgroundColor: "rgba(23, 32, 51, 0.8)", borderColor: "rgba(255,255,255,0.12)" }}
-              className="flex flex-col justify-between gap-3 relative z-10 bg-[#0B1220]/40 border border-white/5 p-4 rounded-[18px] min-h-[120px] hover:bg-[#172033] transition-all cursor-pointer"
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className={`w-9 h-9 rounded-[12px] ${act.bg} ${act.color} flex items-center justify-center shrink-0 border border-white/5`}>
-                  <act.icon size={16} />
-                </div>
-                <span className="text-[10px] font-semibold text-[#6B7280]">{act.time}</span>
-              </div>
-              <div className="min-w-0">
-                <h4 className="text-[12px] font-bold text-white truncate leading-tight">{act.title}</h4>
-                <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2">{act.desc}</p>
-              </div>
-            </motion.div>
-          ))}
+          {finalRecentActivities && finalRecentActivities.length > 0 ? (
+            finalRecentActivities.slice(0, 5).map((act, idx) => {
+              const IconComponent = act.icon || Target;
+              return (
+                <motion.div 
+                  key={idx} 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.08, duration: 0.4 }}
+                  whileHover={{ scale: 1.01, backgroundColor: "rgba(23, 32, 51, 0.8)", borderColor: "rgba(255,255,255,0.12)" }}
+                  className="flex flex-col justify-between gap-3 relative z-10 bg-[#0B1220]/40 border border-white/5 p-4 rounded-[18px] min-h-[120px] hover:bg-[#172033] transition-all cursor-pointer"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className={cn(
+                      "w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border border-white/5",
+                      act.bg || "bg-red-500/10 text-red-500 border-red-500/20"
+                    )}>
+                      <IconComponent size={16} />
+                    </div>
+                    <span className="text-[10px] font-semibold text-[#6B7280]">
+                      {act.time ? format(new Date(act.time), 'MMM dd') : 'Just now'}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-[12px] font-bold text-white truncate leading-tight">{act.title}</h4>
+                    <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2">{act.desc}</p>
+                  </div>
+                </motion.div>
+              );
+            })
+          ) : (
+            <div className="col-span-5 text-center py-8 text-neutral-400 text-[13px] font-semibold uppercase tracking-[0.2em] w-full">
+              No recent activity
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -349,19 +452,15 @@ export function MemberCompanionView({
             <span className="text-[11px] font-bold text-[#D1D5DB]">Revenue</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6] shadow-[0_0_8px_rgba(139,92,246,0.7)] animate-pulse" />
             <span className="text-[11px] font-bold text-[#D1D5DB]">Referrals</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)] animate-pulse" />
-            <span className="text-[11px] font-bold text-[#D1D5DB]">Deals</span>
           </div>
         </div>
 
         <div className="flex-1 w-full relative min-h-[220px] mb-4">
           <svg viewBox="0 0 800 220" className="w-full h-full" preserveAspectRatio="none">
             <defs>
-              <linearGradient id="purple-area" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="purple-area-member" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.25"/>
                 <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0"/>
               </linearGradient>
@@ -370,107 +469,111 @@ export function MemberCompanionView({
             <line x1="0" y1="100" x2="800" y2="100" stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="3 3" />
             <line x1="0" y1="160" x2="800" y2="160" stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="3 3" />
             
-            <text x="0" y="45" fill="#4B5563" fontSize="9" fontWeight="bold">60K</text>
-            <text x="0" y="105" fill="#4B5563" fontSize="9" fontWeight="bold">40K</text>
-            <text x="0" y="165" fill="#4B5563" fontSize="9" fontWeight="bold">20K</text>
+            <text x="0" y="45" fill="#4B5563" fontSize="9" fontWeight="bold">{topLabel}</text>
+            <text x="0" y="105" fill="#4B5563" fontSize="9" fontWeight="bold">{midLabel}</text>
+            <text x="0" y="165" fill="#4B5563" fontSize="9" fontWeight="bold">{lowLabel}</text>
 
-            {/* Red line with drawing animation */}
-            <motion.path 
-              d="M 60 180 L 160 160 L 260 140 L 360 100 L 460 120 L 560 80 L 660 90 L 760 40" 
-              fill="none" 
-              stroke="#E53935" 
-              strokeWidth="3.5" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="drop-shadow-[0_2px_8px_rgba(229,57,53,0.5)]" 
-              initial={{ strokeDashoffset: 850, strokeDasharray: 850 }}
-              animate={{ strokeDashoffset: 0 }}
-              transition={{ duration: 1.8, ease: "easeOut", delay: 0.2 }}
-            />
+            {maxRevenue === 0 && maxReferrals === 0 && (
+              <text x="400" y="120" fill="#4B5563" fontSize="14" fontWeight="bold" textAnchor="middle">
+                No data available in the current month
+              </text>
+            )}
+
+            {/* Red line with drawing animation (Revenue) */}
+            {maxRevenue > 0 && revenuePoints && (
+              <motion.path 
+                d={revenuePoints} 
+                fill="none" 
+                stroke="#E53935" 
+                strokeWidth="3.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className="drop-shadow-[0_2px_8px_rgba(229,57,53,0.5)]" 
+                initial={{ strokeDashoffset: 850, strokeDasharray: 850 }}
+                animate={{ strokeDashoffset: 0 }}
+                transition={{ duration: 1.8, ease: "easeOut", delay: 0.2 }}
+              />
+            )}
             
-            {/* Purple area and line with drawing animation */}
-            <motion.path 
-              d="M 60 200 L 160 180 L 260 170 L 360 150 L 460 170 L 560 140 L 660 130 L 760 100 L 760 220 L 60 220 Z" 
-              fill="url(#purple-area)" 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1, delay: 0.8 }}
-            />
+            {/* Purple area and line with drawing animation (Referrals) */}
+            {maxReferrals > 0 && areaPoints && (
+              <motion.path 
+                d={areaPoints} 
+                fill="url(#purple-area-member)" 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1, delay: 0.8 }}
+              />
+            )}
             
-            <motion.path 
-              d="M 60 200 L 160 180 L 260 170 L 360 150 L 460 170 L 560 140 L 660 130 L 760 100" 
-              fill="none" 
-              stroke="#8B5CF6" 
-              strokeWidth="3.5" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="drop-shadow-[0_2px_8px_rgba(139,92,246,0.5)]" 
-              initial={{ strokeDashoffset: 850, strokeDasharray: 850 }}
-              animate={{ strokeDashoffset: 0 }}
-              transition={{ duration: 1.8, ease: "easeOut", delay: 0.4 }}
-            />
+            {maxReferrals > 0 && referralsPoints && (
+              <motion.path 
+                d={referralsPoints} 
+                fill="none" 
+                stroke="#8B5CF6" 
+                strokeWidth="3.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className="drop-shadow-[0_2px_8px_rgba(139,92,246,0.5)]" 
+                initial={{ strokeDashoffset: 850, strokeDasharray: 850 }}
+                animate={{ strokeDashoffset: 0 }}
+                transition={{ duration: 1.8, ease: "easeOut", delay: 0.4 }}
+              />
+            )}
             
-            <motion.circle 
-              cx="560" 
-              cy="140" 
-              r="5" 
-              fill="#8B5CF6" 
-              stroke="#111827" 
-              strokeWidth="2.5" 
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            />
+            {maxReferrals > 0 && (
+              <motion.circle 
+                cx="760" 
+                cy="100" 
+                r="5" 
+                fill="#8B5CF6" 
+                stroke="#111827" 
+                strokeWidth="2.5" 
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              />
+            )}
             
             {/* Tooltip with fade-in and slide up */}
-            <motion.g 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.5, duration: 0.5, type: "spring", stiffness: 100 }}
-            >
-              <rect x="525" y="90" width="70" height="32" rx="8" fill="#0B1220" stroke="rgba(255,255,255,0.15)" strokeWidth="1" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))" />
-              <text x="560" y="103" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">₹24.50L</text>
-              <text x="560" y="115" fill="#9CA3AF" fontSize="8" fontWeight="medium" textAnchor="middle">15 Jul</text>
-            </motion.g>
-            
-            {/* Blue line with drawing animation */}
-            <motion.path 
-              d="M 60 170 L 160 190 L 260 180 L 360 190 L 460 150 L 560 170 L 660 190 L 760 180" 
-              fill="none" 
-              stroke="#3B82F6" 
-              strokeWidth="3" 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              className="drop-shadow-[0_2px_6px_rgba(59,130,246,0.4)]" 
-              initial={{ strokeDashoffset: 850, strokeDasharray: 850 }}
-              animate={{ strokeDashoffset: 0 }}
-              transition={{ duration: 1.8, ease: "easeOut", delay: 0.6 }}
-            />
+            {maxRevenue > 0 && (
+              <motion.g 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.5, duration: 0.5, type: "spring", stiffness: 100 }}
+              >
+                <rect x="525" y="90" width="70" height="32" rx="8" fill="#0B1220" stroke="rgba(255,255,255,0.15)" strokeWidth="1" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))" />
+                <text x="560" y="103" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">{formatRevenueLabel(latestRevenue)}</text>
+                <text x="560" y="115" fill="#9CA3AF" fontSize="8" fontWeight="medium" textAnchor="middle">{format(new Date(), 'dd MMM')}</text>
+              </motion.g>
+            )}
           </svg>
           <div className="flex justify-between px-6 text-[9px] font-bold text-[#4B5563] mt-1">
-            <span>01 Jul</span><span>07 Jul</span><span>14 Jul</span><span>21 Jul</span><span>28 Jul</span><span>31 Jul</span>
+            <span>01 {format(new Date(), 'MMM')}</span><span>07 {format(new Date(), 'MMM')}</span><span>14 {format(new Date(), 'MMM')}</span><span>21 {format(new Date(), 'MMM')}</span><span>28 {format(new Date(), 'MMM')}</span><span>31 {format(new Date(), 'MMM')}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-center md:text-left">
           <div>
             <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Revenue</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">₹24.50L</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> 18%</span>
+            <div className="text-[16px] font-extrabold text-white leading-tight">
+              {memberRevenue >= 100000 ? `₹${(memberRevenue / 100000).toFixed(2)}L` : `₹${memberRevenue.toLocaleString('en-IN')}`}
+            </div>
+            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
           <div>
             <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Referrals</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">842</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> 8%</span>
+            <div className="text-[16px] font-extrabold text-white leading-tight">{memberReferrals}</div>
+            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
           <div>
             <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Deals</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">128 Clsd</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> 24%</span>
+            <div className="text-[16px] font-extrabold text-white leading-tight">{memberDeals} Clsd</div>
+            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
           <div>
             <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Attend</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">76%</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> 16%</span>
+            <div className="text-[16px] font-extrabold text-white leading-tight">{memberAttendance}%</div>
+            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
         </div>
       </motion.div>

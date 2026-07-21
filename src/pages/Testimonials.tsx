@@ -18,6 +18,8 @@ export function Testimonials() {
   const [activeTab, setActiveTab] = useState<'received' | 'written' | 'chapter' | 'all'>('received');
   const [searchQuery, setSearchQuery] = useState('');
   
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+
   useEffect(() => {
     if (!profile) return;
     
@@ -38,7 +40,7 @@ export function Testimonials() {
     let constraints: any[] = [];
     if (profile.role === 'MASTER_ADMIN') {
       // no constraint
-    } else if (profile.role === 'CHAPTER_ADMIN') {
+    } else if (isChapterAdmin) {
       const adminId = profile.chapter_id || profile.uid;
       constraints = [where('chapterId', '==', adminId)];
     } else {
@@ -116,7 +118,7 @@ export function Testimonials() {
       </div>
       
       {/* Analytics (For Admins) */}
-      {(profile?.role === 'MASTER_ADMIN' || profile?.role === 'CHAPTER_ADMIN') && (
+      {(profile?.role === 'MASTER_ADMIN' || isChapterAdmin) && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5">
              <div className="text-[#9CA3AF] text-[10px] font-bold uppercase tracking-wider">Total</div>
@@ -162,7 +164,7 @@ export function Testimonials() {
           >
             Written
           </button>
-          {profile?.role === 'CHAPTER_ADMIN' && (
+          {isChapterAdmin && (
             <button 
               onClick={() => setActiveTab('chapter')}
               className={cn("px-4 py-2 rounded-lg text-sm font-bold transition-colors whitespace-nowrap", activeTab === 'chapter' ? "bg-primary text-white" : "text-[#9CA3AF] hover:text-white")}
@@ -209,7 +211,7 @@ export function Testimonials() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-[#111827] rounded-[20px] p-5 border border-white/5 flex flex-col gap-3 relative group"
             >
-              {(profile?.role === 'MASTER_ADMIN' || profile?.role === 'CHAPTER_ADMIN' || t.authorMemberId === profile?.uid) && (
+              {(profile?.role === 'MASTER_ADMIN' || isChapterAdmin || t.authorMemberId === profile?.uid) && (
                 <button 
                   onClick={() => handleDelete(t.id)}
                   className="absolute top-4 right-4 text-[#9CA3AF] hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"

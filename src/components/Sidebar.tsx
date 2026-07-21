@@ -72,9 +72,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
   ];
 
   const userRole = profile?.role || 'MEMBER';
-  const visibleMenuItems = menuItems.filter(item => 
-    item.roles.includes(userRole)
-  );
+  const isChapterAdmin = profile?.position === 'chapter_admin';
+  const visibleMenuItems = menuItems.filter(item => {
+    if (userRole === 'MASTER_ADMIN') {
+      return item.roles.includes('MASTER_ADMIN');
+    }
+    return item.roles.includes('MEMBER') || (isChapterAdmin && item.roles.includes('CHAPTER_ADMIN'));
+  });
 
   return (
     <div className={cn(

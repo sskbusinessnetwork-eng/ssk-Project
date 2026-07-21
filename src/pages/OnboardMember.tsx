@@ -44,7 +44,7 @@ export function OnboardMember() {
     if (!isMasterAdmin) return;
     
     // Fetch chapters (chapter admins)
-    getDocs(query(collection(db, 'users'), where('role', '==', 'CHAPTER_ADMIN')))
+    getDocs(query(collection(db, 'users'), where('position', '==', 'chapter_admin')))
       .then(snap => setChapters(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile))));
       
     // Subscribe to all members (for simplicity, getting all users)

@@ -27,7 +27,7 @@ import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 export function OneToOneMeetings() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const [meetings, setMeetings] = useState<OneToOneMeeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);

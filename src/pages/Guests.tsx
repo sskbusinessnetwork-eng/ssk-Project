@@ -337,7 +337,8 @@ export function Guests() {
 
     setIsSubmitting(true);
     try {
-      const adminId = profile.role === 'CHAPTER_ADMIN' ? profile.uid : regFormData.adminId;
+      const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+      const adminId = isChapterAdminUser ? profile.uid : regFormData.adminId;
       
       await databaseService.create('guest_registrations', {
         ...regFormData,
@@ -458,6 +459,7 @@ export function Guests() {
   });
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 lg:px-6 py-4 md:py-6">
@@ -1097,7 +1099,7 @@ export function Guests() {
                 </div>
               </div>
               
-              { (profile?.role === 'CHAPTER_ADMIN' || profile?.role === 'MASTER_ADMIN') && (
+              { (isChapterAdmin || isMasterAdmin) && (
                 <div className="col-span-full border-t border-[#F3F4F6] pt-6 mt-2">
                   <h4 className="text-xs font-bold text-navy uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Calendar size={14} className="text-primary" />

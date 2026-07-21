@@ -59,7 +59,7 @@ export function ThankYouSlips() {
   });
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN';
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
   useEffect(() => {
     if (isMasterAdmin || isChapterAdmin) {
@@ -180,7 +180,7 @@ export function ThankYouSlips() {
   
   const filteredSlips = allSlips.filter(slip => {
     if (isChapterAdmin) {
-      const associatedMemberIds = [...allUsers.filter(m => m.adminId === profile?.uid).map(m => m.uid), profile?.uid];
+      const associatedMemberIds = [...allUsers.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid];
       if (!associatedMemberIds.includes(slip.fromUserId) && !associatedMemberIds.includes(slip.toUserId)) return false;
     }
     
