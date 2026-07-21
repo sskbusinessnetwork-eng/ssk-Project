@@ -67,15 +67,16 @@ export function Members() {
 
     // CHAPTER ADMIN MEMBER SECTION: Show ONLY members created by that Chapter Admin
     const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
-    const constraints = isChapterAdminUser 
+    const constraints = profile.role !== 'MASTER_ADMIN'
       ? [where('chapter_id', '==', profile?.chapter_id)]
       : [];
 
     const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
-      // Filter for MEMBER role if needed, or show all if admin
-      const filteredData = isChapterAdminUser 
-        ? data.filter(u => u.role === 'MEMBER')
-        : data;
+      let filteredData = data;
+      if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
+        filteredData = filteredData.filter(u => String(u.chapter_id) === String(profile.chapter_id) || String((u as any).chapterId) === String(profile.chapter_id));
+      }
+      filteredData = filteredData.filter(u => u.role !== 'MASTER_ADMIN');
       setMembers(filteredData);
       setLoading(false);
     });

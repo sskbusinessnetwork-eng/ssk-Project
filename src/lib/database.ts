@@ -188,7 +188,76 @@ export async function getDocs(queryRef: any) {
   
   let builder = supabase.from(collectionPath).select('*');
   builder = applyConstraints(builder, finalConstraints, meetingIdsFiltered);
-  
+
+  // Apply Role-Based and Chapter-Based Analytics Security Filters
+  try {
+    const savedUser = typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('user') : null;
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      const loggedInProfile = parsed.profile || null;
+
+      if (loggedInProfile && loggedInProfile.role !== 'MASTER_ADMIN' && loggedInProfile.chapter_id) {
+        const userChapterId = loggedInProfile.chapter_id;
+
+        // Fetch user IDs belonging to this chapter for nested filters
+        let chapterUserIds: string[] = [];
+        if (['one_to_one_meetings', 'referrals', 'thank_you_slips', 'position_history'].includes(collectionPath)) {
+          const { data: cUsers, error: cUsersErr } = await supabase
+            .from('users')
+            .select('id')
+            .eq('chapter_id', userChapterId)
+            .neq('role', 'MASTER_ADMIN');
+          if (!cUsersErr && cUsers) {
+            chapterUserIds = cUsers.map(u => u.id);
+          }
+        }
+
+        if (collectionPath === 'users') {
+          const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
+          if (!hasSingleIdFilter) {
+            builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
+          }
+        } else if (collectionPath === 'meetings') {
+          builder = builder.eq('chapter_id', userChapterId);
+        } else if (collectionPath === 'testimonials') {
+          builder = builder.eq('chapter_id', userChapterId);
+        } else if (collectionPath === 'guest_invitations') {
+          builder = builder.eq('chapter_id', userChapterId);
+        } else if (collectionPath === 'guest_registrations') {
+          builder = builder.eq('chapter_id', userChapterId);
+        } else if (collectionPath === 'one_to_one_meetings') {
+          if (chapterUserIds.length === 0) {
+            builder = builder.in('creator_id', ['00000000-0000-0000-0000-000000000000']);
+          } else {
+            builder = builder.in('creator_id', chapterUserIds);
+          }
+        } else if (collectionPath === 'referrals') {
+          if (chapterUserIds.length === 0) {
+            builder = builder.in('from_user_id', ['00000000-0000-0000-0000-000000000000']);
+          } else {
+            const idListStr = `(${chapterUserIds.join(',')})`;
+            builder = builder.or(`from_user_id.in.${idListStr},to_user_id.in.${idListStr}`);
+          }
+        } else if (collectionPath === 'thank_you_slips') {
+          if (chapterUserIds.length === 0) {
+            builder = builder.in('from_user_id', ['00000000-0000-0000-0000-000000000000']);
+          } else {
+            const idListStr = `(${chapterUserIds.join(',')})`;
+            builder = builder.or(`from_user_id.in.${idListStr},to_user_id.in.${idListStr}`);
+          }
+        } else if (collectionPath === 'position_history') {
+          if (chapterUserIds.length === 0) {
+            builder = builder.in('member_id', ['00000000-0000-0000-0000-000000000000']);
+          } else {
+            builder = builder.in('member_id', chapterUserIds);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error applying security filter in getDocs:", err);
+  }
+
   const { data, error } = await builder;
   if (error) {
     console.warn(`Supabase getDocs error on ${collectionPath}:`, error.message);

@@ -95,6 +95,7 @@ export function Analytics() {
   const [allChapters, setAllChapters] = useState<any[]>([]);
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
+  const [analyticsModalCategory, setAnalyticsModalCategory] = useState<string | null>(null);
 
   // Resolve chapter name dynamically
   useEffect(() => {
@@ -138,15 +139,17 @@ export function Analytics() {
     if (!profile) return;
 
     // 1. Subscribe to users (chapter members)
-    let userConstraints: any[] = [];
-    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
-    if (isChapterAdminUser || profile.role === 'MEMBER') {
-      if (profile.chapter_id) {
-         userConstraints = [where('chapter_id', '==', profile.chapter_id)];
-      }
+    let chapterConstraints: any[] = [];
+    if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
+      chapterConstraints = [where('chapter_id', '==', profile.chapter_id)];
     }
-    const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
-      setChapterUsers(data.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role) || u.position === 'chapter_admin'));
+
+    const unsubUsers = databaseService.subscribe<any>('users', chapterConstraints, (data) => {
+      let filtered = data;
+      if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
+        filtered = filtered.filter(u => String(u.chapter_id) === String(profile.chapter_id) || String((u as any).chapterId) === String(profile.chapter_id));
+      }
+      setChapterUsers(filtered.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role) || u.position === 'chapter_admin'));
     });
 
     // 2. Subscribe to thank you slips
@@ -171,15 +174,15 @@ export function Analytics() {
     });
 
     // 5. Subscribe to guest invitations
-    const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
+    const unsubGuests = databaseService.subscribe<any>('guest_invitations', chapterConstraints, (data) => {
       setGuestInvitations(data);
     });
 
     // 6. Subscribe to meetings
-    const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
+    const unsubMeetings = databaseService.subscribe<any>('meetings', chapterConstraints, setMeetings);
 
     // 7. Subscribe to testimonials
-    const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
+    const unsubTestimonials = databaseService.subscribe<any>('testimonials', chapterConstraints, setAllTestimonials);
 
     // 8. Subscribe to chapters
     const unsubChapters = databaseService.subscribe<any>('chapters', [], setAllChapters);
@@ -856,6 +859,622 @@ export function Analytics() {
     }
   };
   
+  const renderChaptersDetails = () => {
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Region</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Day</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Time</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {allChapters.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Chapters Available
+                </td>
+              </tr>
+            ) : (
+              allChapters.map((c) => (
+                <tr key={c.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{c.chapterName || c.chapter_name || c.name || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.region || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.meetingDay || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.meetingTime || 'N/A'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderTotalMembersDetails = () => {
+    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Leadership Position</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Business</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Subscription Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Members Available
+                </td>
+              </tr>
+            ) : (
+              list.map((m) => {
+                const now = new Date();
+                const isSubActive = (m.membershipStatus === 'ACTIVE' || m.subscriptionStatus === 'Active') && 
+                  (!m.subscriptionEndDate && !m.subscriptionEnd || new Date(m.subscriptionEndDate || m.subscriptionEnd) > now);
+                return (
+                  <tr key={m.uid || m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
+                       m.position === 'president' ? 'President' :
+                       m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
+                       m.position === 'treasurer' ? 'Treasurer' : 'Associate Member'}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
+                    <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        isSubActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {isSubActive ? 'Active' : 'Expired'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderActiveMembersDetails = () => {
+    const now = new Date();
+    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN' && (() => {
+      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
+        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
+      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
+      return isSubActive && isPwdChanged;
+    })());
+
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Leadership Position</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Business</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Subscription Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Active Members Found
+                </td>
+              </tr>
+            ) : (
+              list.map((m) => (
+                <tr key={m.uid || m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                    {m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
+                     m.position === 'president' ? 'President' :
+                     m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
+                     m.position === 'treasurer' ? 'Treasurer' : 'Associate Member'}
+                  </td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
+                  <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
+                    <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Active
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderInactiveMembersDetails = () => {
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Position</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Subscription Status</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Password Status</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Inactive Reason</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {inactiveMembersList.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Inactive Members Found
+                </td>
+              </tr>
+            ) : (
+              inactiveMembersList.map((m) => (
+                <tr key={m.uid} className="hover:bg-white/[0.02] transition-colors duration-200">
+                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.chapterName}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.position}</td>
+                  <td className="p-4 text-sm whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                      m.subscriptionStatus === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                      m.subscriptionStatus === 'Expired' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                      'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                    }`}>
+                      {m.subscriptionStatus}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                      m.passwordStatus === 'Changed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {m.passwordStatus}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                      m.inactiveReason === 'Both' ? 'bg-red-500/10 text-red-550 border border-red-500/20' :
+                      m.inactiveReason === 'Subscription Expired' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
+                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {m.inactiveReason}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderBusinessDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN' ? allSlips : chapterSlips;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Giver of Business</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Notes</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Business Value</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Business Transactions Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((slip) => {
+                const giver = chapterUsers.find(u => u.uid === slip.fromUserId);
+                const recipient = chapterUsers.find(u => u.uid === slip.toUserId);
+                return (
+                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || slip.fromUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || slip.toUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{slip.customerName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{slip.notes || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {slip.createdAt ? new Date(slip.createdAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
+                      ₹{Number(slip.businessValue || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderReferralsDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN' ? allReferrals : chapterReferralsList;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">From</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">To</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Referrals Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((ref) => {
+                const giver = chapterUsers.find(u => u.uid === ref.fromUserId);
+                const receiver = chapterUsers.find(u => u.uid === ref.toUserId);
+                return (
+                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        ref.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        ref.status === 'APPROVED' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        ref.status === 'REJECTED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {ref.status || 'PENDING'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderMeetingsDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN'
+      ? meetings
+      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Topic</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Time</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Attendance Rate</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Meetings Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((m) => {
+                let attendanceRate = 'N/A';
+                if (m.attendance) {
+                  const values = Object.values(m.attendance);
+                  if (values.length > 0) {
+                    const present = values.filter(status => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(status))).length;
+                    attendanceRate = `${Math.round((present / values.length) * 100)}% (${present}/${values.length})`;
+                  }
+                }
+                return (
+                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.title || m.topic || 'Weekly Sync'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{attendanceRate}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        m.isCompleted ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {m.isCompleted ? 'Completed' : 'Upcoming'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderOneToOnesDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN'
+      ? oneToOnes
+      : oneToOnes.filter(m => 
+          chapterUserIds.includes(m.creatorId) || 
+          (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
+        );
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Initiated By</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Partner</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Topic / Purpose</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Time</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No 1-to-1 Meetings Found
+                </td>
+              </tr>
+            ) : (
+              list.map((m) => {
+                const creator = chapterUsers.find(u => u.uid === m.creatorId);
+                const partnerId = m.participantIds?.find((id: string) => id !== m.creatorId);
+                const partner = chapterUsers.find(u => u.uid === partnerId);
+                return (
+                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{creator?.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{partner?.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{m.topic || m.purpose || 'Synergy Sync'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        m.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        m.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {m.status || 'PENDING'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderAttendanceDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN' 
+      ? meetings.filter(m => m.isCompleted)
+      : meetings.filter(m => m.chapter_id === profile?.chapter_id && m.isCompleted);
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Topic / Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Present</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Late</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Substitute</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Absent</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Attendance Rate</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Attendance Records Found
+                </td>
+              </tr>
+            ) : (
+              list.map((m) => {
+                let present = 0;
+                let late = 0;
+                let sub = 0;
+                let absent = 0;
+                let total = 0;
+                if (m.attendance) {
+                  Object.values(m.attendance).forEach(status => {
+                    total++;
+                    const s = String(status).toUpperCase();
+                    if (s === 'PRESENT' || s === 'YES') present++;
+                    else if (s === 'LATE') late++;
+                    else if (s === 'SUBSTITUTE') sub++;
+                    else absent++;
+                  });
+                }
+                const presentTotal = present + late + sub;
+                const rate = total === 0 ? 0 : Math.round((presentTotal / total) * 100);
+                return (
+                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">
+                      <div>{m.title || m.topic || 'Weekly Sync'}</div>
+                      <div className="text-xs text-[#9CA3AF] font-medium">{m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}</div>
+                    </td>
+                    <td className="p-4 text-sm text-center text-emerald-400 font-bold whitespace-nowrap">{present}</td>
+                    <td className="p-4 text-sm text-center text-amber-400 font-bold whitespace-nowrap">{late}</td>
+                    <td className="p-4 text-sm text-center text-blue-400 font-bold whitespace-nowrap">{sub}</td>
+                    <td className="p-4 text-sm text-center text-red-400 font-bold whitespace-nowrap">{absent}</td>
+                    <td className="p-4 text-sm text-right font-black text-white whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        rate >= 80 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        rate >= 50 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {rate}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderTestimonialsDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN'
+      ? allTestimonials
+      : allTestimonials.filter(t => t.chapter_id === profile?.chapter_id);
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Designation</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Testimonials Found
+                </td>
+              </tr>
+            ) : (
+              list.map((t) => (
+                <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{t.name || 'N/A'}</td>
+                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                    {t.designation || 'N/A'} {t.company ? `(${t.company})` : ''}
+                  </td>
+                  <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
+                    {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
+                  </td>
+                  <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || 'N/A'}</td>
+                  <td className="p-4 text-sm text-right whitespace-nowrap">
+                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                      ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                    }`}>
+                      {t.status || 'PENDING'}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderGuestInvitesDetails = () => {
+    const list = profile?.role === 'MASTER_ADMIN'
+      ? guestInvitations
+      : guestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Guest Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Invited By</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Email</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Guest Invites Found
+                </td>
+              </tr>
+            ) : (
+              list.map((g) => {
+                const inviter = chapterUsers.find(u => u.uid === g.createdBy);
+                return (
+                  <tr key={g.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{g.guestName || g.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{inviter?.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{g.guestEmail || g.email || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{g.guestPhone || g.phone || 'N/A'}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        g.status === 'Attended' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {g.status || 'Invited'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderAnalyticsDetails = () => {
+    if (!analyticsModalCategory) return null;
+    const norm = analyticsModalCategory.toLowerCase();
+    if (norm.includes('chapter')) return renderChaptersDetails();
+    if (norm === 'total members') return renderTotalMembersDetails();
+    if (norm === 'active members') return renderActiveMembersDetails();
+    if (norm === 'inactive members') return renderInactiveMembersDetails();
+    if (norm.includes('business')) return renderBusinessDetails();
+    if (norm.includes('referral')) return renderReferralsDetails();
+    if (norm.includes('one-to-one')) return renderOneToOnesDetails();
+    if (norm === 'meetings' || norm === 'upcoming meetings') return renderMeetingsDetails();
+    if (norm.includes('attendance') || norm.includes('weekly meeting attendance')) return renderAttendanceDetails();
+    if (norm.includes('testimonial')) return renderTestimonialsDetails();
+    if (norm.includes('guest') || norm.includes('visitor')) return renderGuestInvitesDetails();
+    return <div className="p-4 text-center font-bold text-neutral-400 uppercase tracking-widest text-xs">No detail view implemented for this category.</div>;
+  };
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'GOOD MORNING, 👋';
@@ -1125,9 +1744,7 @@ export function Analytics() {
             testimonialsCount={chapterTestimonialsCount}
             meetingsCount={chapterMeetingsCount}
             onCardClick={(label) => {
-              if (label === 'Inactive Members') {
-                setIsInactiveModalOpen(true);
-              }
+              setAnalyticsModalCategory(label);
             }}
           />
         </>
@@ -1181,74 +1798,14 @@ export function Analytics() {
           leadershipStats={leadershipStats}
         />
       )}
-
       <Modal 
-        isOpen={isInactiveModalOpen} 
-        onClose={() => setIsInactiveModalOpen(false)} 
-        title="Inactive Members"
-        maxWidth="max-w-6xl"
-      >
-        <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="border-b border-white/10 bg-[#1E293B]">
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Position</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Subscription Status</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Password Status</th>
-                <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Inactive Reason</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {inactiveMembersList.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                    No Inactive Members Found
-                  </td>
-                </tr>
-              ) : (
-                inactiveMembersList.map((m) => (
-                  <tr key={m.uid} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.chapterName}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.position}</td>
-                    <td className="p-4 text-sm whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        m.subscriptionStatus === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        m.subscriptionStatus === 'Expired' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                        'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                      }`}>
-                        {m.subscriptionStatus}
-                      </span>
-                    </td>
-                    <td className="p-4 text-sm whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        m.passwordStatus === 'Changed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {m.passwordStatus}
-                      </span>
-                    </td>
-                    <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        m.inactiveReason === 'Both' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
-                        m.inactiveReason === 'Subscription Expired' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {m.inactiveReason}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Modal>
-
-    </div>
-  );
+        isOpen={analyticsModalCategory !== null} 
+        onClose={() => setAnalyticsModalCategory(null)} 
+        title={analyticsModalCategory || ''} 
+        maxWidth="max-w-6xl" 
+      > 
+        {renderAnalyticsDetails()} 
+      </Modal> 
+    </div> 
+  ); 
 }

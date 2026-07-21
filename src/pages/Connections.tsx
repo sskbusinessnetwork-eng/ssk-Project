@@ -212,10 +212,19 @@ export function Connections() {
         }
 
         // Fetch All Active Members from Supabase 'users' table
-        const { data: usersData, error: usersError } = await supabase
+        const fallbackId = profile.chapter_id || (profile as any).chapterId || null;
+        const currentChapterId = currentUserChapterId || fallbackId;
+
+        let queryBuilder = supabase
           .from('users')
           .select('*')
           .eq('status', 'ACTIVE');
+
+        if (profile?.role !== 'MASTER_ADMIN' && currentChapterId) {
+          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
+        }
+
+        const { data: usersData, error: usersError } = await queryBuilder;
 
         if (usersError) {
           console.error("Supabase load members error:", usersError);

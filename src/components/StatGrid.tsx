@@ -116,7 +116,7 @@ export default function StatGrid({
     ];
 
     if (role === 'MEMBER' || role === 'CHAPTER_ADMIN') {
-      return [
+      const list = [
         {
           label: 'Total Members',
           value: formatValue('Total Members', totalMembersCount),
@@ -134,6 +134,30 @@ export default function StatGrid({
           icon: Users,
           color: 'text-red-500', 
           bg: 'bg-red-500/10 border-red-500/20',
+        },
+      ];
+
+      if (role === 'CHAPTER_ADMIN') {
+        list.push({
+          label: 'Inactive Members',
+          value: formatValue('Inactive Members', inactiveMembersCount),
+          trend: 'Inactive',
+          trendLabel: 'Needs attention',
+          icon: Users,
+          color: 'text-red-400', 
+          bg: 'bg-red-400/10 border-red-400/20',
+        });
+      }
+
+      list.push(
+        {
+          label: 'Business Generated',
+          value: formatValue('Business Generated', businessGeneratedTotal),
+          trend: 'Lifetime',
+          trendLabel: 'Total',
+          icon: Briefcase,
+          color: 'text-purple-500', 
+          bg: 'bg-purple-500/10 border-purple-500/20',
         },
         {
           label: 'Meetings',
@@ -189,7 +213,9 @@ export default function StatGrid({
           color: 'text-yellow-400', 
           bg: 'bg-yellow-400/10 border-yellow-400/20',
         }
-      ];
+      );
+
+      return list;
     }
 
     // MASTER_ADMIN gets original adminStats layout + extra global stats
