@@ -20,6 +20,7 @@ interface ChapterAdminCompanionViewProps {
   
   chapterSlips?: any[];
   chapterReferralsList?: any[];
+  tasks?: any[];
 }
 
 export function ChapterAdminCompanionView({
@@ -31,6 +32,7 @@ export function ChapterAdminCompanionView({
   finalRecentActivities,
   chapterSlips = [],
   chapterReferralsList = [],
+  tasks = [],
 }: ChapterAdminCompanionViewProps) {
   
   const formatRevenueLabel = (val: number) => {
@@ -110,7 +112,7 @@ export function ChapterAdminCompanionView({
   const midLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 2 / 3) : '0';
   const lowLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 1 / 3) : '0';
 
-  const displayTasks = [
+  const displayTasks = tasks.length > 0 ? tasks : [
     { key: 't1', label: "Schedule Chapter Sync Assemblies", isDone: true, link: "/meetings", linkText: "View" },
     { key: 't2', label: "Moderate Guest Onboarding Protocols", isDone: true, link: "/guests", linkText: "Guests" },
     { key: 't3', label: "Validate Weekly Referral Audits", isDone: false, link: "/reports", linkText: "Audit" },

@@ -38,9 +38,15 @@ export function ManageSubscriptions() {
     const unsubChapters = databaseService.subscribe<Chapter>('chapters', [], setChapters);
 
     // Users
+    
     const fetchUsers = async () => {
       let query = supabase.from('users').select('*');
-      if (profile.role !== 'MASTER_ADMIN') {
+      if (profile.role === 'MASTER_ADMIN') {
+        // Master admin only sees Chapter Admins
+        query = query.in('role', ['CHAPTER_ADMIN']);
+        // Note: Or position === 'chapter_admin', which we will filter in JS to be safe.
+      } else {
+        // Chapter Admin sees their chapter
         query = query.eq('chapter_id', profile.chapter_id);
       }
       
@@ -54,7 +60,7 @@ export function ManageSubscriptions() {
     fetchUsers();
 
     // Listen to changes
-    let constraints = [];
+    let constraints: any[] = [];
     if (profile.role !== 'MASTER_ADMIN') {
       constraints = [{ type: 'where', field: 'chapter_id', operator: '==', value: profile.chapter_id }];
     }
@@ -118,11 +124,19 @@ export function ManageSubscriptions() {
     return { active, expired, expiringSoon, renewedThisMonth, inactive };
   }, [users]);
 
+
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
-      if (u.role === 'MASTER_ADMIN') return false;
+      // Master Admin: Only show Chapter Admins
+      if (profile?.role === 'MASTER_ADMIN') {
+        if (u.role !== 'CHAPTER_ADMIN' && u.position !== 'chapter_admin') return false;
+      } else {
+        // Chapter Admin: Show normal members (excluding Master Admin and Chapter Admin)
+        if (u.role === 'MASTER_ADMIN' || u.role === 'CHAPTER_ADMIN' || u.position === 'chapter_admin') return false;
+      }
       
       const matchesSearch = u.name?.toLowerCase().includes(search.toLowerCase()) || 
+ 
                             u.phone?.includes(search) || 
                             u.email?.toLowerCase().includes(search.toLowerCase());
       const matchesChapter = !chapterFilter || u.chapter_id === chapterFilter;
@@ -286,6 +300,7 @@ export function ManageSubscriptions() {
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Position</th>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Start Date</th>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">End Date</th>
+              <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Days Remaining</th>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Default Pwd</th>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Last Renewal</th>

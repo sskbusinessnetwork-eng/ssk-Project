@@ -34,6 +34,7 @@ interface MasterAdminCompanionViewProps {
     vicePresidents: number;
     treasurers: number;
   };
+  tasks?: any[];
 }
 
 export function MasterAdminCompanionView({
@@ -50,6 +51,7 @@ export function MasterAdminCompanionView({
   allReferrals = [],
   subscriptionStats = { active: 0, expired: 0, renewalsDue: 0, renewed: 0 },
   leadershipStats = { chapterAdmins: 0, presidents: 0, vicePresidents: 0, treasurers: 0 },
+  tasks = [],
 }: MasterAdminCompanionViewProps) {
   
   const formatRevenueLabel = (val: number) => {
@@ -129,7 +131,7 @@ export function MasterAdminCompanionView({
   const midLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 2 / 3) : '0';
   const lowLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 1 / 3) : '0';
 
-  const displayTasks = [
+  const displayTasks = tasks.length > 0 ? tasks : [
     { key: 't1', label: "Audit & Authorize Chapter Admin Credentials", isDone: true, link: "/admins", linkText: "Admins" },
     { key: 't2', label: "Monitor Global Directory and Listings Database", isDone: true, link: "/members", linkText: "Members" },
     { key: 't3', label: "Review Cross-Region Referral Metrics", isDone: false, link: "/reports", linkText: "Reports" },
