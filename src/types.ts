@@ -125,16 +125,24 @@ export interface GuestInvitation {
 
 export interface OneToOneMeeting {
   id: string;
-  creatorId: string;
-  participantIds: string[];
-  date: string;
-  time: string;
-  venue?: string;
+  title: string;
+  organizer_id: string;
+  member_id: string;
+  chapter_id: string;
+  scheduled_date: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'UPCOMING' | 'NOT_COMPLETED';
+  created_at?: string;
+  updated_at?: string;
+  // Legacy / optional fields for compatibility if needed
+  creatorId?: string;
+  participantIds?: string[];
+  type?: string;
+  date?: string;
+  time?: string;
+  duration?: number;
+  description?: string;
   notes?: string;
-  status: 'UPCOMING' | 'COMPLETED' | 'NOT_COMPLETED';
-  attendance?: Record<string, AttendanceStatus>;
-  createdAt: string;
-  updatedAt?: string;
+  attendance?: Record<string, 'PRESENT' | 'ABSENT'>;
 }
 
 export interface Position {

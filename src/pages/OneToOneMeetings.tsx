@@ -41,6 +41,7 @@ export function OneToOneMeetings() {
   
   // Form state
   const [formData, setFormData] = useState({
+    title: '',
     participantId: '',
     date: '',
     time: '',
@@ -65,13 +66,13 @@ export function OneToOneMeetings() {
 
     // Fetch meetings
     const meetingsConstraints = (isAdmin || isChapterAdmin)
-      ? [orderBy('date', 'desc')]
+      ? [orderBy('scheduled_date', 'desc')]
       : [
           or(
-            where('creatorId', '==', profile.uid),
-            where('participantIds', 'array-contains', profile.uid)
+            where('organizer_id', '==', profile.uid),
+            where('member_id', '==', profile.uid)
           ),
-          orderBy('date', 'desc')
+          orderBy('scheduled_date', 'desc')
         ];
 
     const unsubscribe = databaseService.subscribe<OneToOneMeeting>(
@@ -152,6 +153,7 @@ export function OneToOneMeetings() {
       };
 
       await databaseService.create('one_to_one_meetings', newMeeting);
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       
       setShowSuccess(true);
       setFormData({ 
@@ -187,6 +189,7 @@ export function OneToOneMeetings() {
         attendance: updateFormData.attendance,
         updatedAt: new Date().toISOString()
       });
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setIsUpdateModalOpen(false);
       setUpdatingMeeting(null);
     } catch (err: any) {
@@ -439,15 +442,15 @@ export function OneToOneMeetings() {
                   key={meeting.id} 
                   meeting={meeting} 
                   members={members} 
-                  isCreator={meeting.creatorId === profile.uid}
+                  isCreator={(meeting.organizer_id || meeting.creatorId) === profile.uid}
                   isAdmin={isAdmin}
                   onUpdate={() => {
                     setUpdatingMeeting(meeting);
                     setUpdateFormData({
                       notes: meeting.notes || '',
                       attendance: meeting.attendance || {
-                        [meeting.creatorId]: 'PRESENT',
-                        [meeting.participantIds[0]]: 'PRESENT'
+                        [(meeting.organizer_id || meeting.creatorId)]: 'PRESENT',
+                        [(meeting.member_id || (meeting.participantIds && meeting.participantIds[0]))]: 'PRESENT'
                       }
                     });
                     setIsUpdateModalOpen(true);
@@ -476,8 +479,8 @@ export function OneToOneMeetings() {
               <div className="divide-y divide-white/5">
                 {pastMeetings.length > 0 ? (
                   pastMeetings.map((meeting) => {
-                    const creator = members.find(m => m.uid === meeting.creatorId) || (meeting.creatorId === profile.uid ? profile : null);
-                    const participant = members.find(m => m.uid === meeting.participantIds[0]) || (meeting.participantIds[0] === profile.uid ? profile : null);
+                    const creator = members.find(m => m.uid === (meeting.organizer_id || meeting.creatorId)) || ((meeting.organizer_id || meeting.creatorId) === profile.uid ? profile : null);
+                    const participant = members.find(m => m.uid === (meeting.member_id || (meeting.participantIds && meeting.participantIds[0]))) || ((meeting.member_id || (meeting.participantIds && meeting.participantIds[0])) === profile.uid ? profile : null);
                     const myAttendance = meeting.attendance?.[profile.uid] || 'ABSENT';
 
                     return (
@@ -907,8 +910,8 @@ export function OneToOneMeetings() {
               <tbody className="divide-y divide-white/5">
                 {historyMeetings.length > 0 ? (
                   historyMeetings.map((meeting) => {
-                    const creator = members.find(m => m.uid === meeting.creatorId);
-                    const participant = members.find(m => m.uid === meeting.participantIds[0]);
+                    const creator = members.find(m => m.uid === (meeting.organizer_id || meeting.creatorId));
+                    const participant = members.find(m => m.uid === (meeting.member_id || (meeting.participantIds && meeting.participantIds[0])));
                     
                     return (
                       <tr key={meeting.id} className="hover:bg-[#1C2538] transition-colors">
@@ -976,8 +979,8 @@ interface MeetingCardProps {
 }
 
 const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, isAdmin, onUpdate }) => {
-  const participants = meeting.participantIds.map(id => members.find(m => m.uid === id)).filter(Boolean) as UserProfile[];
-  const creator = members.find(m => m.uid === meeting.creatorId);
+  const participants = ([meeting.member_id || (meeting.participantIds && meeting.participantIds[0])].filter(Boolean)).map(id => members.find(m => m.uid === id)).filter(Boolean) as UserProfile[];
+  const creator = members.find(m => m.uid === (meeting.organizer_id || meeting.creatorId));
   
   // Check if meeting is overdue (past date but still UPCOMING)
   const isOverdue = meeting.status === 'UPCOMING' && isAfter(new Date(), new Date(meeting.date + 'T23:59:59'));
@@ -1012,7 +1015,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, members, isCreator, 
               {isAdmin ? 'One-to-One Meeting' : (isCreator ? 'Organized by You' : 'Invited to Meeting')}
             </h3>
             <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
-              {isAdmin ? `Scheduled By: ${creator?.name || 'Unknown'}` : `${meeting.participantIds.length} Participants`}
+              {isAdmin ? `Scheduled By: ${creator?.name || 'Unknown'}` : `${1} Participants`}
             </p>
           </div>
         </div>

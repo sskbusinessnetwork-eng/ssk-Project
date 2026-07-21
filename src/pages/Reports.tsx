@@ -211,7 +211,7 @@ export function Reports() {
 
     const filteredOneToOnes = oneToOnes.filter(m => {
       const isDateValid = isWithinDateRange(m.date, parsedStart, parsedEnd);
-      const isChapterValid = currentChapterMemberIds.includes(m.creatorId) || (m.participantIds && m.participantIds.some(pid => currentChapterMemberIds.includes(pid)));
+      const isChapterValid = currentChapterMemberIds.includes((m.organizer_id || m.creatorId)) || (m.participantIds && m.participantIds.some(pid => currentChapterMemberIds.includes(pid)));
       return isDateValid && isChapterValid;
     });
 
@@ -314,7 +314,7 @@ export function Reports() {
 
       // 3. 1-to-1 Completed
       const completedOneToOnesCount = reportsData.oneToOnes.filter(m => 
-        m.status === 'COMPLETED' && (m.creatorId === member.uid || m.participantIds?.includes(member.uid))
+        m.status === 'COMPLETED' && ((m.organizer_id || m.creatorId) === member.uid || ([m.member_id, ...(m.participantIds || [])]).includes(member.uid))
       ).length;
 
       // 4. Guests Invited

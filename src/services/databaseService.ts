@@ -91,7 +91,7 @@ export const databaseService = {
       }
     } catch (error) {
       console.error('Database create error:', error);
-      return '';
+      throw error;
     }
   },
 

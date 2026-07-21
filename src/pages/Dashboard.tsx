@@ -214,8 +214,8 @@ export function Analytics() {
     const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
       setOneToOnes(data);
       if (profile.role === 'MEMBER') {
-        setCreatedOneToOnes(data.filter(m => m.creatorId === profile.uid));
-        setParticipatedOneToOnes(data.filter(m => m.participantIds?.includes(profile.uid)));
+        setCreatedOneToOnes(data.filter(m => (m.organizer_id || m.creatorId) === profile.uid));
+        setParticipatedOneToOnes(data.filter(m => ([m.member_id, ...(m.participantIds || [])]).includes(profile.uid)));
       }
     });
 
@@ -376,7 +376,7 @@ export function Analytics() {
     const chapterOneToOnes = profile?.role === 'MASTER_ADMIN'
       ? oneToOnes
       : oneToOnes.filter(m => 
-          chapterUserIds.includes(m.creatorId) || 
+          chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
           (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
         );
     const upcomingOneToOnesCount = chapterOneToOnes.filter(m => m.status === 'PENDING' || m.status === 'APPROVED').length;
@@ -389,7 +389,7 @@ export function Analytics() {
       return oneToOnes.length;
     }
     const chapterOneToOnes = oneToOnes.filter(m => 
-      chapterUserIds.includes(m.creatorId) || 
+      chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
       (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
     );
     return chapterOneToOnes.length;
@@ -589,7 +589,7 @@ export function Analytics() {
         desc: `${creatorName} completed 1-to-1 with ${participantName}`,
         type: 'onetoone',
         time: new Date(m.createdAt || m.date).getTime(),
-        fromUserId: m.creatorId,
+        fromUserId: (m.organizer_id || m.creatorId),
         toUserId: m.participantIds?.[0],
       });
     });
@@ -719,10 +719,10 @@ export function Analytics() {
     // 2. One-to-One Meeting
     const todayOneToOnes = oneToOnes.filter(m => 
       isToday(m.date) && 
-      (m.creatorId === profile.uid || m.participantIds?.includes(profile.uid))
+      ((m.organizer_id || m.creatorId) === profile.uid || ([m.member_id, ...(m.participantIds || [])]).includes(profile.uid))
     );
     todayOneToOnes.forEach(m => {
-      const otherId = m.creatorId === profile.uid ? m.participantIds?.[0] : m.creatorId;
+      const otherId = (m.organizer_id || m.creatorId) === profile.uid ? m.participantIds?.[0] : (m.organizer_id || m.creatorId);
       const otherMember = chapterUsers.find(u => u.uid === otherId);
       const otherName = otherMember?.name || 'Member';
       
@@ -1475,7 +1475,7 @@ export function Analytics() {
     const list = profile?.role === 'MASTER_ADMIN'
       ? oneToOnes
       : oneToOnes.filter(m => 
-          chapterUserIds.includes(m.creatorId) || 
+          chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
           (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
         );
     return (
@@ -1500,8 +1500,8 @@ export function Analytics() {
               </tr>
             ) : (
               list.map((m) => {
-                const creator = chapterUsers.find(u => u.uid === m.creatorId);
-                const partnerId = m.participantIds?.find((id: string) => id !== m.creatorId);
+                const creator = chapterUsers.find(u => u.uid === (m.organizer_id || m.creatorId));
+                const partnerId = m.participantIds?.find((id: string) => id !== (m.organizer_id || m.creatorId));
                 const partner = chapterUsers.find(u => u.uid === partnerId);
                 return (
                   <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">

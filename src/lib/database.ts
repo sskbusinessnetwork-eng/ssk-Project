@@ -151,120 +151,40 @@ function applyConstraints(queryBuilder: any, constraints: QueryConstraint[], mee
 
 export async function getDocs(queryRef: any) {
   const collectionPath = queryRef.path;
-  
   let finalConstraints = [...(queryRef.constraints || [])];
   let meetingIdsFiltered: string[] | null = null;
   
-  if (collectionPath === 'one_to_one_meetings') {
-    const partIdConstraint = finalConstraints.find(c => 
-      c.type === 'where' && c.field === 'participantIds' && c.op === 'array-contains'
-    );
-    
-    const orConstraint = finalConstraints.find(c => c.type === 'or');
-    let targetUserId = '';
-    
-    if (orConstraint) {
-      const partCond = orConstraint.conditions?.find((cond: any) => cond.field === 'participantIds');
-      if (partCond) {
-        targetUserId = partCond.val;
-      }
-    } else if (partIdConstraint) {
-      targetUserId = partIdConstraint.val;
-    }
-    
-    if (targetUserId) {
-      const { data: partData, error: partErr } = await supabase
-        .from('meeting_participants')
-        .select('meeting_id')
-        .eq('user_id', targetUserId);
-      
-      if (!partErr && partData) {
-        meetingIdsFiltered = partData.map(p => p.meeting_id);
-      } else {
-        meetingIdsFiltered = [];
-      }
-    }
-  }
-  
   let builder = supabase.from(collectionPath).select('*');
   builder = applyConstraints(builder, finalConstraints, meetingIdsFiltered);
-
-  // Apply Role-Based and Chapter-Based Analytics Security Filters
-  try {
-    const savedUser = typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('user') : null;
-    if (savedUser) {
-      const parsed = JSON.parse(savedUser);
-      const loggedInProfile = parsed.profile || null;
-
-      if (loggedInProfile && loggedInProfile.role !== 'MASTER_ADMIN' && loggedInProfile.chapter_id) {
-        const userChapterId = loggedInProfile.chapter_id;
-
-        // Fetch user IDs belonging to this chapter for nested filters
-        let chapterUserIds: string[] = [];
-        if (['one_to_one_meetings', 'referrals', 'thank_you_slips', 'position_history'].includes(collectionPath)) {
-          const { data: cUsers, error: cUsersErr } = await supabase
-            .from('users')
-            .select('id')
-            .eq('chapter_id', userChapterId)
-            .neq('role', 'MASTER_ADMIN');
-          if (!cUsersErr && cUsers) {
-            chapterUserIds = cUsers.map(u => u.id);
-          }
+  
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, chapter_id')
+      .eq('id', session.user.id)
+      .single();
+      
+    if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
+      const userChapterId = userProfile.chapter_id;
+      if (collectionPath === 'users') {
+        const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
+        if (!hasSingleIdFilter) {
+          builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
         }
-
-        if (collectionPath === 'users') {
-          const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
-          if (!hasSingleIdFilter) {
-            builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
-          }
-        } else if (collectionPath === 'meetings') {
-          builder = builder.eq('chapter_id', userChapterId);
-        } else if (collectionPath === 'testimonials') {
-          builder = builder.eq('chapter_id', userChapterId);
-        } else if (collectionPath === 'guest_invitations') {
-          builder = builder.eq('chapter_id', userChapterId);
-        } else if (collectionPath === 'guest_registrations') {
-          builder = builder.eq('chapter_id', userChapterId);
-        } else if (collectionPath === 'one_to_one_meetings') {
-          if (chapterUserIds.length === 0) {
-            builder = builder.in('creator_id', ['00000000-0000-0000-0000-000000000000']);
-          } else {
-            builder = builder.in('creator_id', chapterUserIds);
-          }
-        } else if (collectionPath === 'referrals') {
-          if (chapterUserIds.length === 0) {
-            builder = builder.in('from_user_id', ['00000000-0000-0000-0000-000000000000']);
-          } else {
-            const idListStr = `(${chapterUserIds.join(',')})`;
-            builder = builder.or(`from_user_id.in.${idListStr},to_user_id.in.${idListStr}`);
-          }
-        } else if (collectionPath === 'thank_you_slips') {
-          if (chapterUserIds.length === 0) {
-            builder = builder.in('from_user_id', ['00000000-0000-0000-0000-000000000000']);
-          } else {
-            const idListStr = `(${chapterUserIds.join(',')})`;
-            builder = builder.or(`from_user_id.in.${idListStr},to_user_id.in.${idListStr}`);
-          }
-        } else if (collectionPath === 'position_history') {
-          if (chapterUserIds.length === 0) {
-            builder = builder.in('member_id', ['00000000-0000-0000-0000-000000000000']);
-          } else {
-            builder = builder.in('member_id', chapterUserIds);
-          }
-        }
+      } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
+        builder = builder.eq('chapter_id', userChapterId);
       }
     }
-  } catch (err) {
-    console.error("Error applying security filter in getDocs:", err);
   }
 
   const { data, error } = await builder;
   if (error) {
-    console.warn(`Supabase getDocs error on ${collectionPath}:`, error.message);
-    return { docs: [], empty: true };
+    console.error("getDocs error for", collectionPath, ":", error);
+    return [];
   }
   
-  let rows = keysToCamel(data || []);
+  let rows = (data || []).map(row => keysToCamel(row));
   
   if (collectionPath === 'users') {
     rows = rows.map(r => {
@@ -428,13 +348,19 @@ export async function setDoc(docRef: any, data: any, options?: any) {
     const snakeData = keysToSnake(cleanData);
     const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
     const { error } = await supabase.from('users').upsert({ id, ...preparedSnake }, { onConflict: 'id' });
-    if (error) console.error("setDoc error:", error);
+    if (error) {
+      console.error("setDoc error:", error);
+      throw new Error(error.message || 'Database upsert failed');
+    }
     return;
   }
   
   const snakeData = keysToSnake(cleanData);
   const { error } = await supabase.from(path).upsert({ id, ...snakeData }, { onConflict: 'id' });
-  if (error) console.error("setDoc error:", error);
+  if (error) {
+    console.error("setDoc error:", error);
+    throw new Error(error.message || 'Database upsert failed');
+  }
   
   if (path === 'one_to_one_meetings' && participantIds !== undefined) {
     await supabase.from('meeting_participants').delete().eq('meeting_id', id);
@@ -454,18 +380,13 @@ export async function addDoc(collectionRef: any, data: any) {
   
   let participantIds: string[] | undefined = undefined;
   let cleanData = { ...data };
-  if (collectionPath === 'one_to_one_meetings') {
-    participantIds = cleanData.participantIds;
-    delete cleanData.participantIds;
-  }
-  
   if (collectionPath === 'users') {
     const snakeData = keysToSnake(cleanData);
     const preparedSnake = prepareUserPayload(snakeData, '');
     const { data: result, error } = await supabase.from(collectionPath).insert(preparedSnake).select().single();
     if (error) {
       console.error("addDoc error:", error);
-      return { id: Math.random().toString(36).substring(2, 15) };
+      throw new Error(error.message || 'Database insert failed');
     }
     return { id: result?.id || Math.random().toString(36).substring(2, 15) };
   }
@@ -474,7 +395,7 @@ export async function addDoc(collectionRef: any, data: any) {
   const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
   if (error) {
     console.error("addDoc error:", error);
-    return { id: Math.random().toString(36).substring(2, 15) };
+    throw new Error(error.message || 'Database insert failed');
   }
   
   const newId = result?.id;
