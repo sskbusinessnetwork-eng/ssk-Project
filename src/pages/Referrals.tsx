@@ -26,6 +26,7 @@ import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
+import { supabase } from '../lib/supabaseClient';
 
 export function Referrals() {
   const { profile } = useAuth();
@@ -154,52 +155,111 @@ export function Referrals() {
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
-
       const toUser = members.find(m => m.uid === formData.toUserId);
       
-      const currentUserId = profile.uid || null;
-      const currentChapterId = profile.chapter_id || null;
-      const selectedReceiverId = formData.toUserId || null;
+      const currentUser = profile;
+      const sender_id = profile?.uid || null;
+      const receiver_id = formData.toUserId || null;
+      const chapter_id = profile?.chapter_id || null;
+      const customer_name = formData.contactName || null;
+      const customer_mobile = normalizedPhone || null;
+      const requirement = formData.requirement || null;
 
-      console.log("Current User ID:", currentUserId);
-      console.log("Current Chapter ID:", currentChapterId);
-      console.log("Selected Receiver ID:", selectedReceiverId);
-      
-      if (!currentUserId) throw new Error("sender_id is missing.");
-      if (!currentChapterId) throw new Error("chapter_id is missing.");
-      if (!selectedReceiverId) throw new Error("Receiver not selected.");
-      if (!toUser) throw new Error("Selected member not found");
+      // 1. Before Insert Print values in browser console
+      console.log({
+        currentUser,
+        sender_id,
+        receiver_id,
+        chapter_id,
+        customer_name,
+        customer_mobile,
+        requirement
+      });
 
-      // Verify foreign keys in the database
-      const [senderProfile, receiverProfile, chapterProfile] = await Promise.all([
-        databaseService.get<any>('users', currentUserId),
-        databaseService.get<any>('users', selectedReceiverId),
-        databaseService.get<any>('chapters', currentChapterId)
-      ]);
+      if (!currentUser) throw new Error("currentUser is missing.");
+      if (!sender_id) throw new Error("sender_id is missing.");
+      if (!receiver_id) throw new Error("receiver_id is missing.");
+      if (!chapter_id) throw new Error("chapter_id is missing.");
+      if (!customer_name) throw new Error("customer_name is missing.");
+      if (!customer_mobile) throw new Error("customer_mobile is missing.");
+      if (!requirement) throw new Error("requirement is missing.");
 
-      if (!senderProfile) {
-        throw new Error("Foreign key violation: sender_id does not exist in users table.");
+      // 2. Check Authentication
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error("User not authenticated.");
       }
-      if (!receiverProfile) {
-        throw new Error("Foreign key violation: receiver_id does not exist in users table.");
-      }
-      if (!chapterProfile) {
-        throw new Error("Foreign key violation: chapter_id does not exist in chapters table.");
+
+      // 3. Verify Current User in database
+      const { data: dbUser, error: dbUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (dbUserError || !dbUser) {
+        console.error("User verification error:", dbUserError);
+        throw new Error("Logged-in user profile not found in users table.");
       }
 
+      // Verify necessary fields
+      if (!dbUser.id) throw new Error("Sender id is missing.");
+      if (!dbUser.chapter_id) throw new Error("Sender chapter_id is missing.");
+      if (!dbUser.role) throw new Error("Sender role is missing.");
+
+      // 4. Verify Receiver
+      const { data: receiverProfile, error: receiverError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', receiver_id)
+        .single();
+
+      if (receiverError || !receiverProfile) {
+        console.error("Receiver verification error:", receiverError);
+        throw new Error("Selected member not found.");
+      }
+
+      // 8. Verify Foreign Keys
+      const { data: chapterProfile, error: chapterError } = await supabase
+        .from('chapters')
+        .select('*')
+        .eq('id', chapter_id)
+        .single();
+
+      if (chapterError || !chapterProfile) {
+        console.error("Chapter verification error:", chapterError);
+        throw new Error("Sender chapter does not exist in chapters table.");
+      }
+
+      // 5. Verify and Build Insert Columns (supports old and new names)
       const newReferral = {
-        toUserId: formData.toUserId,
-        contactName: formData.contactName,
-        contactPhone: normalizedPhone,
-        requirement: formData.requirement,
+        sender_id: sender_id,
+        from_user_id: sender_id,
+        receiver_id: receiver_id,
+        to_user_id: receiver_id,
+        chapter_id: chapter_id,
+        customer_name: customer_name,
+        contact_name: customer_name,
+        customer_mobile: customer_mobile,
+        contact_phone: customer_mobile,
+        requirement: requirement,
         notes: formData.notes || '',
-        fromUserId: profile.uid,
         status: 'PENDING',
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       // Create referral
-      await databaseService.create('referrals', newReferral);
+      const { error: insertError } = await supabase
+        .from('referrals')
+        .insert([newReferral]);
+
+      if (insertError) {
+        throw insertError;
+      }
       
       // Create notifications
       await notificationService.createNotification(
@@ -210,7 +270,7 @@ export function Referrals() {
       );
 
       // Notify recipient's admin
-      if (toUser.adminId) {
+      if (toUser && toUser.adminId) {
         await notificationService.createNotification(
           toUser.adminId,
           'CHAPTER_ADMIN',
@@ -220,7 +280,7 @@ export function Referrals() {
       }
 
       // Notify sender's admin (if different from recipient's admin)
-      if (profile.adminId && profile.adminId !== toUser.adminId) {
+      if (profile.adminId && toUser && profile.adminId !== toUser.adminId) {
         await notificationService.createNotification(
           profile.adminId,
           'CHAPTER_ADMIN',
@@ -231,31 +291,19 @@ export function Referrals() {
 
       await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${toUser.name}.`);
 
+      // 9. After Successful Insert: close popup, refresh, update analytics, show message
       setSuccessMessage("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
 
-      // Refresh Given and Received referral lists & update analytics immediately
+      // Refresh lists & update analytics immediately
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Referral Insert Error:", error);
-      
-      let errorMsg = error?.message || "Failed to send referral. Please try again.";
-      
-      if (errorMsg === "Receiver not selected." || errorMsg === "sender_id is missing." || errorMsg === "chapter_id is missing.") {
-        setErrorMessage(errorMsg);
-      } else if (error?.code === '42501' || errorMsg.includes('row-level security') || errorMsg.toLowerCase().includes('permission denied') || errorMsg.toLowerCase().includes('violates row-level security policy')) {
-        setErrorMessage("Permission denied.");
-      } else if (error?.code === '23503' || errorMsg.includes('foreign key') || errorMsg.toLowerCase().includes('foreign key violation')) {
-        setErrorMessage("Foreign key violation.");
-      } else if (error?.code === '23505' || errorMsg.includes('duplicate') || errorMsg.toLowerCase().includes('duplicate referral')) {
-        setErrorMessage("Duplicate referral.");
-      } else if (errorMsg.includes('Failed to fetch') || errorMsg.toLowerCase().includes('connection failed') || errorMsg.toLowerCase().includes('supabase connection failed')) {
-        setErrorMessage("Supabase connection failed.");
-      } else {
-        setErrorMessage(errorMsg);
-      }
+      // 6 & 10. Replace Generic Error and never swallow errors
+      console.error("Referral Error:", error);
+      alert(error.message);
+      setErrorMessage(error.message);
     } finally {
       setIsSubmitting(false);
     }
