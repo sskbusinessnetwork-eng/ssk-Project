@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
+import { notificationService } from '../services/notificationService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format, isAfter, parseISO } from 'date-fns';
@@ -459,6 +460,20 @@ export function OneToOneMeetings() {
         });
       }
 
+      try {
+        const senderName = profile?.name || currentUserRecord?.name || 'A member';
+        await notificationService.sendNotification({
+          userId: receiver_id,
+          type: 'MEETING',
+          title: 'One-to-One Meeting Scheduled',
+          message: `Your One-to-One Meeting with ${senderName} is scheduled for ${formData.date} at ${formData.time}.`,
+          relatedUserId: sender_id,
+          link: '/one-to-one'
+        });
+      } catch (nErr) {
+        console.warn("Notification error:", nErr);
+      }
+
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       await fetchMeetingsAndUsers();
 
@@ -664,6 +679,23 @@ export function OneToOneMeetings() {
       if (dbErr) {
         console.warn("Direct update error, trying databaseService fallback:", dbErr);
         await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
+      }
+
+      try {
+        const senderName = profile?.name || currentUserRecord?.name || 'A member';
+        const otherUserId = receiverId === (profile?.uid || profile?.id) ? senderId : receiverId;
+        if (otherUserId) {
+          await notificationService.sendNotification({
+            userId: otherUserId,
+            type: 'MEETING',
+            title: 'Meeting Rescheduled',
+            message: `Your One-to-One Meeting with ${senderName} has been rescheduled to ${rescheduleDate} at ${rescheduleTime}.`,
+            relatedUserId: senderId,
+            link: '/one-to-one'
+          });
+        }
+      } catch (nErr) {
+        console.warn("Notification error:", nErr);
       }
 
       await fetchMeetingsAndUsers();
@@ -1594,8 +1626,8 @@ export function OneToOneMeetings() {
                     const sender = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
                     const receiver = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
 
-                    const senderName = getUserFullName(sender) || 'Sender';
-                    const receiverName = getUserFullName(receiver) || 'Receiver';
+                    const senderName = sender ? `${getUserFullName(sender)} (${formatUserRoleOrPosition(sender)})` : 'Member';
+                    const receiverName = receiver ? `${getUserFullName(receiver)} (${formatUserRoleOrPosition(receiver)})` : 'Member';
 
                     return (
                       <tr key={meeting.id} className="hover:bg-[#1C2538] transition-colors">

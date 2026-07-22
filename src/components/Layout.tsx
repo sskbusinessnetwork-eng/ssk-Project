@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil } from '../utils/authUtils';
 import { differenceInDays } from 'date-fns';
 import { databaseService } from '../services/databaseService';
+import { notificationService } from '../services/notificationService';
 import {  where  } from '../lib/database';
 
 export function Layout() {
@@ -21,7 +22,23 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, logout } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(8);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const userId = profile?.uid || profile?.id;
+    if (!userId) return;
+
+    const unsubscribe = notificationService.subscribeUserNotifications(
+      userId,
+      undefined,
+      (list) => {
+        const unread = list.filter(n => !n.read && !n.is_read).length;
+        setUnreadCount(unread);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [profile?.uid, profile?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -147,9 +164,11 @@ export function Layout() {
                 <div className="p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5">
                   <Bell size={18} strokeWidth={2} />
                 </div>
-                <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
-                  8
-                </span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
               
 

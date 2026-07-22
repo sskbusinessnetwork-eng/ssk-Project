@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { 
   TrendingUp, Calendar, ArrowUpRight, ArrowDownLeft, ChevronLeft, 
   Award, Users, Handshake, Share2, 
-  UserPlus, Clock, ArrowRight, Trophy, DollarSign, Sparkles
+  UserPlus, Clock, ArrowRight, Trophy, DollarSign, Sparkles,
+  Search, Filter, X
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
@@ -15,6 +16,43 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
+
+import { format } from 'date-fns';
+import { getCleanFullName } from '../utils/authUtils';
+
+const getUserFullName = (user: any): string => {
+  if (!user) return '';
+  const rawName = user.full_name || user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+  if (!rawName) return '';
+  return getCleanFullName(rawName);
+};
+
+const formatUserRoleOrPosition = (user: any): string => {
+  if (!user) return 'Member';
+  
+  const pos = user.position || user.chapter_position || user.chapterPosition;
+  if (pos && typeof pos === 'string') {
+    const pLower = pos.toLowerCase().trim();
+    if (pLower === 'president') return 'President';
+    if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+    if (pLower === 'treasurer') return 'Treasurer';
+    if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+    if (pLower === 'member') return 'Member';
+  }
+
+  const role = user.role;
+  if (role) {
+    const rUpper = String(role).toUpperCase().trim();
+    if (rUpper === 'PRESIDENT') return 'President';
+    if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
+    if (rUpper === 'TREASURER') return 'Treasurer';
+    if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
+    if (rUpper === 'MEMBER') return 'Member';
+  }
+
+  return 'Member';
+};
 
 export function MyReport() {
   const { profile } = useAuth();
@@ -30,12 +68,86 @@ export function MyReport() {
   const [receivedThankYouSlips, setReceivedThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [givenTestimonials, setGivenTestimonials] = useState<any[]>([]);
   const [receivedTestimonials, setReceivedTestimonials] = useState<any[]>([]);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
+  const [allChaptersList, setAllChaptersList] = useState<any[]>([]);
   
+  // Referral Search & Filter States
+  const [referralSearchQuery, setReferralSearchQuery] = useState<string>('');
+  const [referralStatusFilter, setReferralStatusFilter] = useState<string>('ALL');
+  const [referralStartDate, setReferralStartDate] = useState<string>('');
+  const [referralEndDate, setReferralEndDate] = useState<string>('');
+  const [activeReferralTab, setActiveReferralTab] = useState<'inbound' | 'outbound' | 'all'>('inbound');
+
   // Period Filter: 'Monthly' | 'Quarterly' | 'Half Yearly' | 'Yearly' | 'Lifetime'
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Monthly');
 
   // Modal State for Card Details
   const [activeModal, setActiveModal] = useState<'attendance' | 'referrals' | 'revenue' | 'onetoones' | null>(null);
+
+  const userRole = profile?.role;
+  const userPosition = String(profile?.position || profile?.chapter_position || '').toLowerCase().trim();
+  const isMasterAdmin = userRole === 'MASTER_ADMIN';
+  const isChapterAdmin = userRole === 'CHAPTER_ADMIN' || userPosition === 'chapter_admin';
+  const isCardClickable = isChapterAdmin || isMasterAdmin;
+
+  const getUserNameAndRole = (userId?: string) => {
+    if (!userId) return { name: '', role: '' };
+    const cleanId = String(userId).trim();
+    const found = allUsersList.find((u: any) => String(u.id || u.uid || '').trim() === cleanId);
+    if (!found) return { name: '', role: '' };
+    return {
+      name: getUserFullName(found) || '',
+      role: formatUserRoleOrPosition(found) || ''
+    };
+  };
+
+  const getUserFullDetails = (userId?: string) => {
+    if (!userId) return { name: '', position: '', chapter: '' };
+    const cleanId = String(userId).trim();
+    if (!cleanId) return { name: '', position: '', chapter: '' };
+
+    const found = allUsersList.find((u: any) => String(u.id || u.uid || '').trim() === cleanId);
+    if (!found) return { name: '', position: '', chapter: '' };
+
+    const name = getUserFullName(found) || found.name || found.full_name || '';
+    const position = formatUserRoleOrPosition(found);
+
+    let chapterName = found.chapter_name || found.chapterName || '';
+    if (!chapterName && found.chapter_id) {
+      const chap = allChaptersList.find((c: any) => String(c.id).trim() === String(found.chapter_id).trim());
+      if (chap) {
+        chapterName = chap.chapter_name || chap.name || '';
+      }
+    }
+
+    return {
+      name: name || '',
+      position: position || '',
+      chapter: chapterName || ''
+    };
+  };
+
+  const formatDateOnly = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return format(d, 'yyyy-MM-dd');
+    } catch {
+      return dateStr || '';
+    }
+  };
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return format(d, 'yyyy-MM-dd hh:mm a');
+    } catch {
+      return dateStr || '';
+    }
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -55,6 +167,13 @@ export function MyReport() {
 
     const fetchAllAnalyticsData = async () => {
       try {
+        // 0. Fetch Users and Chapters list for details mapping
+        const { data: rawUsers } = await supabase.from('users').select('*');
+        if (rawUsers) setAllUsersList(rawUsers);
+
+        const { data: rawChapters } = await supabase.from('chapters').select('*');
+        if (rawChapters) setAllChaptersList(rawChapters);
+
         // 1. Fetch Referrals directly from Supabase
         const { data: rawRefs, error: refErr } = await supabase
           .from('referrals')
@@ -939,10 +1058,13 @@ export function MyReport() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
             {/* 1. Thank You Slips Received */}
             <motion.div
-              onClick={() => setActiveModal('revenue')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(16,185,129,0.3)', boxShadow: '0 12px 30px rgba(16,185,129,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('revenue') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(16,185,129,0.3)', boxShadow: '0 12px 30px rgba(16,185,129,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -969,10 +1091,13 @@ export function MyReport() {
 
             {/* 2. Thank You Slips Sent */}
             <motion.div
-              onClick={() => setActiveModal('revenue')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(239,68,68,0.3)', boxShadow: '0 12px 30px rgba(239,68,68,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('revenue') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(239,68,68,0.3)', boxShadow: '0 12px 30px rgba(239,68,68,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-red-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -999,10 +1124,13 @@ export function MyReport() {
 
             {/* 3. Referrals Sent */}
             <motion.div
-              onClick={() => setActiveModal('referrals')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(245,158,11,0.3)', boxShadow: '0 12px 30px rgba(245,158,11,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('referrals') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(245,158,11,0.3)', boxShadow: '0 12px 30px rgba(245,158,11,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -1029,10 +1157,13 @@ export function MyReport() {
 
             {/* 4. Referrals Received */}
             <motion.div
-              onClick={() => setActiveModal('referrals')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(59,130,246,0.3)', boxShadow: '0 12px 30px rgba(59,130,246,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('referrals') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(59,130,246,0.3)', boxShadow: '0 12px 30px rgba(59,130,246,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -1065,10 +1196,13 @@ export function MyReport() {
 
             {/* 5. Attendance */}
             <motion.div
-              onClick={() => setActiveModal('attendance')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(168,85,247,0.3)', boxShadow: '0 12px 30px rgba(168,85,247,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('attendance') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(168,85,247,0.3)', boxShadow: '0 12px 30px rgba(168,85,247,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -1095,10 +1229,13 @@ export function MyReport() {
 
             {/* 6. One-to-One Meetings */}
             <motion.div
-              onClick={() => setActiveModal('onetoones')}
-              whileHover={{ y: -5, scale: 1.02, borderColor: 'rgba(236,72,153,0.3)', boxShadow: '0 12px 30px rgba(236,72,153,0.15)' }}
-              whileTap={{ scale: 0.98 }}
-              className="relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md cursor-pointer flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group"
+              onClick={isCardClickable ? () => setActiveModal('onetoones') : undefined}
+              whileHover={isCardClickable ? { y: -5, scale: 1.02, borderColor: 'rgba(236,72,153,0.3)', boxShadow: '0 12px 30px rgba(236,72,153,0.15)' } : undefined}
+              whileTap={isCardClickable ? { scale: 0.98 } : undefined}
+              className={cn(
+                "relative overflow-hidden p-5 rounded-[22px] border border-white/5 bg-[#111827]/40 backdrop-blur-md flex flex-col justify-between h-[195px] transition-all duration-300 shadow-[0_8px_32px_rgba(0,0,0,0.3)] group",
+                isCardClickable ? "cursor-pointer" : "cursor-default"
+              )}
             >
               <div className="absolute top-0 right-0 w-20 h-20 bg-pink-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-pink-500/10 transition-all duration-300" />
               <div className="flex items-start justify-between">
@@ -1308,29 +1445,40 @@ export function MyReport() {
 
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-white uppercase tracking-widest">Meeting Chronology</h4>
-                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden">
-                      {completedMeetings.slice(0, 5).map((m) => {
-                        let attMap = m.attendance;
-                        if (typeof attMap === 'string') {
-                          try { attMap = JSON.parse(attMap); } catch (e) { attMap = {}; }
-                        }
-                        const att = attMap?.[userId];
-                        const isPresent = ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(att);
-                        return (
-                          <div key={m.id} className="p-4 flex items-center justify-between text-xs">
-                            <div className="space-y-0.5">
-                              <p className="font-bold text-white">Chapter Meeting</p>
-                              <p className="text-neutral-400 font-medium">{m.date}</p>
-                            </div>
-                            <span className={cn(
-                              "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
-                              isPresent ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
-                            )}>
-                              {isPresent ? 'PRESENT' : 'ABSENT'}
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-bold uppercase text-[10px]">
+                            <th className="p-3">Meeting Date</th>
+                            <th className="p-3">Location</th>
+                            <th className="p-3 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {completedMeetings.slice(0, 10).map((m) => {
+                            let attMap = m.attendance;
+                            if (typeof attMap === 'string') {
+                              try { attMap = JSON.parse(attMap); } catch (e) { attMap = {}; }
+                            }
+                            const att = attMap?.[userId];
+                            const isPresent = ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(att);
+                            return (
+                              <tr key={m.id} className="hover:bg-white/5">
+                                <td className="p-3 font-bold text-white whitespace-nowrap">{m.date}</td>
+                                <td className="p-3 text-neutral-300 whitespace-nowrap">{m.location || 'Chapter Venue'}</td>
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  <span className={cn(
+                                    "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
+                                    isPresent ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                  )}>
+                                    {isPresent ? 'PRESENT' : 'ABSENT'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                       {completedMeetings.length === 0 && (
                         <p className="p-4 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">No meetings recorded in chapter history.</p>
                       )}
@@ -1340,70 +1488,358 @@ export function MyReport() {
               )}
 
               {/* MODAL 2: REFERRALS DRILL DOWN */}
-              {activeModal === 'referrals' && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-                    <div className="p-3 bg-amber-500/15 text-amber-400 rounded-xl border border-amber-500/20">
-                      <Share2 size={22} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-extrabold text-white">Referrals Diagnostic Audit</h3>
-                      <p className="text-xs text-neutral-400">Deep-dive auditing of inbound and outbound transactional leads.</p>
-                    </div>
-                  </div>
+              {activeModal === 'referrals' && (() => {
+                const filterReferrals = (list: Referral[]) => {
+                  return list.filter(r => {
+                    const sender = getUserFullDetails(r.sender_id || r.fromUserId);
+                    const receiver = getUserFullDetails(r.receiver_id || r.toUserId);
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-[#0B1220]/60 rounded-xl border border-white/5 text-center">
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Referrals Passed</p>
-                      <p className="text-2xl font-black text-white">{referralsStats.passed}</p>
-                    </div>
-                    <div className="p-4 bg-[#0B1220]/60 rounded-xl border border-white/5 text-center">
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Referrals Received</p>
-                      <p className="text-2xl font-black text-white">{referralsStats.received}</p>
-                    </div>
-                    <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center">
-                      <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Conversion Rate</p>
-                      <p className="text-2xl font-black text-emerald-400">{referralsStats.conversionRate}%</p>
-                    </div>
-                  </div>
+                    // 1. Search Query
+                    if (referralSearchQuery.trim()) {
+                      const q = referralSearchQuery.toLowerCase().trim();
+                      const contactName = (r.contactName || '').toLowerCase();
+                      const contactPhone = (r.contactPhone || '').toLowerCase();
+                      const requirement = (r.requirement || r.notes || '').toLowerCase();
+                      const sName = (sender.name || '').toLowerCase();
+                      const rName = (receiver.name || '').toLowerCase();
 
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">Inbound & Outbound History</h4>
-                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden max-h-[250px] overflow-y-auto">
-                      {[...passedReferrals, ...receivedReferrals].slice(0, 10).map((r) => {
-                        const isOutbound = String(r.sender_id || r.fromUserId) === userId;
-                        return (
-                          <div key={r.id} className="p-4 flex items-center justify-between text-xs gap-3">
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className={cn(
-                                  "px-2 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-wider shrink-0",
-                                  isOutbound ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'
-                                )}>
-                                  {isOutbound ? 'OUTBOUND' : 'INBOUND'}
-                                </span>
-                                <p className="font-bold text-white truncate max-w-[200px]">{r.requirement}</p>
-                              </div>
-                              <p className="text-neutral-400 font-medium mt-0.5">Contact: {r.contactName}</p>
-                            </div>
-                            <span className={cn(
-                              "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap",
-                              r.status === 'COMPLETED' || r.status === 'CONVERTED' || r.status === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              r.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                              'bg-red-500/10 text-red-400 border-red-500/20'
-                            )}>
-                              {(r.status || 'PENDING').replace('_', ' ')}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {passedReferrals.length === 0 && receivedReferrals.length === 0 && (
-                        <p className="p-4 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">No referral records logged.</p>
+                      const matches = 
+                        contactName.includes(q) ||
+                        contactPhone.includes(q) ||
+                        requirement.includes(q) ||
+                        sName.includes(q) ||
+                        rName.includes(q);
+
+                      if (!matches) return false;
+                    }
+
+                    // 2. Status Filter
+                    if (referralStatusFilter !== 'ALL') {
+                      const statusUpper = (r.status || 'PENDING').toUpperCase();
+                      if (referralStatusFilter === 'PENDING' && statusUpper !== 'PENDING') return false;
+                      if (referralStatusFilter === 'CONVERTED' && !['COMPLETED', 'CONVERTED', 'CLOSED'].includes(statusUpper)) return false;
+                      if (referralStatusFilter === 'REJECTED' && !['REJECTED', 'DECLINED', 'CANCELLED'].includes(statusUpper)) return false;
+                    }
+
+                    // 3. Date Range Filter
+                    if (referralStartDate) {
+                      const rTime = new Date(r.createdAt).getTime();
+                      const sTime = new Date(referralStartDate).getTime();
+                      if (!isNaN(rTime) && !isNaN(sTime) && rTime < sTime) return false;
+                    }
+
+                    if (referralEndDate) {
+                      const rTime = new Date(r.createdAt).getTime();
+                      const eDate = new Date(referralEndDate);
+                      eDate.setHours(23, 59, 59, 999);
+                      const eTime = eDate.getTime();
+                      if (!isNaN(rTime) && !isNaN(eTime) && rTime > eTime) return false;
+                    }
+
+                    return true;
+                  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                };
+
+                const filteredInboundList = filterReferrals(receivedReferrals);
+                const filteredOutboundList = filterReferrals(passedReferrals);
+
+                const combinedAllMap = new Map<string, Referral>();
+                [...passedReferrals, ...receivedReferrals].forEach(r => combinedAllMap.set(r.id, r));
+                const filteredAllList = filterReferrals(Array.from(combinedAllMap.values()));
+
+                const hasActiveFilters = Boolean(referralSearchQuery || referralStatusFilter !== 'ALL' || referralStartDate || referralEndDate);
+
+                const renderStatusBadge = (status?: string) => {
+                  const sUpper = (status || 'PENDING').toUpperCase();
+                  const isConverted = ['COMPLETED', 'CONVERTED', 'CLOSED'].includes(sUpper);
+                  const isPending = sUpper === 'PENDING';
+                  return (
+                    <span className={cn(
+                      "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap",
+                      isConverted ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                      isPending ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                      'bg-red-500/10 text-red-400 border-red-500/20'
+                    )}>
+                      {sUpper.replace('_', ' ')}
+                    </span>
+                  );
+                };
+
+                return (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 border-b border-white/5 pb-4">
+                      <div className="p-3 bg-amber-500/15 text-amber-400 rounded-xl border border-amber-500/20">
+                        <Share2 size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-extrabold text-white">Referrals Diagnostic Audit</h3>
+                        <p className="text-xs text-neutral-400">Deep-dive auditing of inbound and outbound transactional leads with live Supabase data.</p>
+                      </div>
+                    </div>
+
+                    {/* Stats Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 bg-[#0B1220]/60 rounded-xl border border-white/5 text-center">
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Referrals Passed</p>
+                        <p className="text-2xl font-black text-white">{referralsStats.passed}</p>
+                      </div>
+                      <div className="p-4 bg-[#0B1220]/60 rounded-xl border border-white/5 text-center">
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Referrals Received</p>
+                        <p className="text-2xl font-black text-white">{referralsStats.received}</p>
+                      </div>
+                      <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center">
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Conversion Rate</p>
+                        <p className="text-2xl font-black text-emerald-400">{referralsStats.conversionRate}%</p>
+                      </div>
+                    </div>
+
+                    {/* SEARCH & FILTER CONTROLS */}
+                    <div className="bg-[#0B1220]/80 border border-white/10 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest">
+                        <Filter size={14} /> Search & Filter Audit Logs
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                        {/* Search Input */}
+                        <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                          <input
+                            type="text"
+                            placeholder="Search contact, sent by, sent to..."
+                            value={referralSearchQuery}
+                            onChange={(e) => setReferralSearchQuery(e.target.value)}
+                            className="w-full bg-[#080D1A] border border-white/10 rounded-lg pl-9 pr-3 py-2 text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500/50"
+                          />
+                        </div>
+
+                        {/* Status Filter */}
+                        <div>
+                          <select
+                            value={referralStatusFilter}
+                            onChange={(e) => setReferralStatusFilter(e.target.value)}
+                            className="w-full bg-[#080D1A] border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500/50"
+                          >
+                            <option value="ALL">All Statuses</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="CONVERTED">Converted / Closed</option>
+                            <option value="REJECTED">Rejected / Cancelled</option>
+                          </select>
+                        </div>
+
+                        {/* Start Date */}
+                        <div className="flex items-center gap-1.5 bg-[#080D1A] border border-white/10 rounded-lg px-2.5 py-1.5">
+                          <span className="text-[10px] font-bold text-neutral-400 uppercase shrink-0">From:</span>
+                          <input
+                            type="date"
+                            value={referralStartDate}
+                            onChange={(e) => setReferralStartDate(e.target.value)}
+                            className="bg-transparent text-white focus:outline-none w-full"
+                          />
+                        </div>
+
+                        {/* End Date */}
+                        <div className="flex items-center gap-1.5 bg-[#080D1A] border border-white/10 rounded-lg px-2.5 py-1.5">
+                          <span className="text-[10px] font-bold text-neutral-400 uppercase shrink-0">To:</span>
+                          <input
+                            type="date"
+                            value={referralEndDate}
+                            onChange={(e) => setReferralEndDate(e.target.value)}
+                            className="bg-transparent text-white focus:outline-none w-full"
+                          />
+                        </div>
+                      </div>
+
+                      {hasActiveFilters && (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            onClick={() => {
+                              setReferralSearchQuery('');
+                              setReferralStatusFilter('ALL');
+                              setReferralStartDate('');
+                              setReferralEndDate('');
+                            }}
+                            className="flex items-center gap-1 text-[11px] font-bold text-neutral-400 hover:text-white transition-colors"
+                          >
+                            <X size={12} /> Clear Filters
+                          </button>
+                        </div>
                       )}
                     </div>
+
+                    {/* TAB SWITCHER */}
+                    <div className="flex items-center gap-2 border-b border-white/10 pb-2 overflow-x-auto text-xs font-bold">
+                      <button
+                        onClick={() => setActiveReferralTab('inbound')}
+                        className={cn(
+                          "px-4 py-2 rounded-lg transition-all border whitespace-nowrap",
+                          activeReferralTab === 'inbound'
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            : "bg-white/5 text-neutral-400 border-transparent hover:text-white"
+                        )}
+                      >
+                        Inbound History (Received) ({filteredInboundList.length})
+                      </button>
+                      <button
+                        onClick={() => setActiveReferralTab('outbound')}
+                        className={cn(
+                          "px-4 py-2 rounded-lg transition-all border whitespace-nowrap",
+                          activeReferralTab === 'outbound'
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            : "bg-white/5 text-neutral-400 border-transparent hover:text-white"
+                        )}
+                      >
+                        Outbound History (Sent) ({filteredOutboundList.length})
+                      </button>
+                      <button
+                        onClick={() => setActiveReferralTab('all')}
+                        className={cn(
+                          "px-4 py-2 rounded-lg transition-all border whitespace-nowrap",
+                          activeReferralTab === 'all'
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            : "bg-white/5 text-neutral-400 border-transparent hover:text-white"
+                        )}
+                      >
+                        {isMasterAdmin ? 'All System Referrals' : isChapterAdmin ? 'All Chapter Referrals' : 'All My Referrals'} ({filteredAllList.length})
+                      </button>
+                    </div>
+
+                    {/* TABLE VIEWS */}
+
+                    {/* 1. INBOUND HISTORY (REFERRALS RECEIVED) */}
+                    {(activeReferralTab === 'inbound' || activeReferralTab === 'all') && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+                            Inbound History (Referrals Received)
+                          </h4>
+                          <span className="text-[10px] text-neutral-400 font-semibold">{filteredInboundList.length} records</span>
+                        </div>
+                        <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl overflow-x-auto max-h-[360px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-bold uppercase text-[10px]">
+                                <th className="p-3 whitespace-nowrap">Date</th>
+                                <th className="p-3 whitespace-nowrap">Sent By</th>
+                                <th className="p-3 whitespace-nowrap">Sender Position</th>
+                                <th className="p-3 whitespace-nowrap">Sender Chapter</th>
+                                {(isChapterAdmin || isMasterAdmin || activeReferralTab === 'all') && (
+                                  <>
+                                    <th className="p-3 whitespace-nowrap">Sent To</th>
+                                    <th className="p-3 whitespace-nowrap">Receiver Position</th>
+                                    <th className="p-3 whitespace-nowrap">Receiver Chapter</th>
+                                  </>
+                                )}
+                                <th className="p-3 whitespace-nowrap">Contact Name</th>
+                                <th className="p-3 whitespace-nowrap">Contact Number</th>
+                                <th className="p-3">Business Requirement</th>
+                                <th className="p-3 text-right whitespace-nowrap">Referral Status</th>
+                                <th className="p-3 text-right whitespace-nowrap">Created Date & Time</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {filteredInboundList.map((r) => {
+                                const sender = getUserFullDetails(r.sender_id || r.fromUserId);
+                                const receiver = getUserFullDetails(r.receiver_id || r.toUserId);
+                                return (
+                                  <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="p-3 font-bold text-white whitespace-nowrap">{formatDateOnly(r.createdAt)}</td>
+                                    <td className="p-3 font-bold text-white whitespace-nowrap">{sender.name}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{sender.position}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{sender.chapter}</td>
+                                    {(isChapterAdmin || isMasterAdmin || activeReferralTab === 'all') && (
+                                      <>
+                                        <td className="p-3 font-bold text-white whitespace-nowrap">{receiver.name}</td>
+                                        <td className="p-3 text-neutral-300 whitespace-nowrap">{receiver.position}</td>
+                                        <td className="p-3 text-neutral-300 whitespace-nowrap">{receiver.chapter}</td>
+                                      </>
+                                    )}
+                                    <td className="p-3 font-semibold text-neutral-200 whitespace-nowrap">{r.contactName}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{r.contactPhone}</td>
+                                    <td className="p-3 text-neutral-300 max-w-[200px] truncate">{r.requirement || r.notes}</td>
+                                    <td className="p-3 text-right whitespace-nowrap">{renderStatusBadge(r.status)}</td>
+                                    <td className="p-3 text-right text-neutral-400 whitespace-nowrap">{formatDateTime(r.createdAt)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {filteredInboundList.length === 0 && (
+                            <p className="p-6 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">
+                              No inbound referral records found.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. OUTBOUND HISTORY (REFERRALS SENT) */}
+                    {(activeReferralTab === 'outbound' || activeReferralTab === 'all') && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+                            Outbound History (Referrals Sent)
+                          </h4>
+                          <span className="text-[10px] text-neutral-400 font-semibold">{filteredOutboundList.length} records</span>
+                        </div>
+                        <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl overflow-x-auto max-h-[360px] overflow-y-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-bold uppercase text-[10px]">
+                                <th className="p-3 whitespace-nowrap">Date</th>
+                                {(isChapterAdmin || isMasterAdmin || activeReferralTab === 'all') && (
+                                  <>
+                                    <th className="p-3 whitespace-nowrap">Sent By</th>
+                                    <th className="p-3 whitespace-nowrap">Sender Position</th>
+                                    <th className="p-3 whitespace-nowrap">Sender Chapter</th>
+                                  </>
+                                )}
+                                <th className="p-3 whitespace-nowrap">Sent To</th>
+                                <th className="p-3 whitespace-nowrap">Receiver Position</th>
+                                <th className="p-3 whitespace-nowrap">Receiver Chapter</th>
+                                <th className="p-3 whitespace-nowrap">Contact Name</th>
+                                <th className="p-3 whitespace-nowrap">Contact Number</th>
+                                <th className="p-3">Business Requirement</th>
+                                <th className="p-3 text-right whitespace-nowrap">Referral Status</th>
+                                <th className="p-3 text-right whitespace-nowrap">Created Date & Time</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {filteredOutboundList.map((r) => {
+                                const sender = getUserFullDetails(r.sender_id || r.fromUserId);
+                                const receiver = getUserFullDetails(r.receiver_id || r.toUserId);
+                                return (
+                                  <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                                    <td className="p-3 font-bold text-white whitespace-nowrap">{formatDateOnly(r.createdAt)}</td>
+                                    {(isChapterAdmin || isMasterAdmin || activeReferralTab === 'all') && (
+                                      <>
+                                        <td className="p-3 font-bold text-white whitespace-nowrap">{sender.name}</td>
+                                        <td className="p-3 text-neutral-300 whitespace-nowrap">{sender.position}</td>
+                                        <td className="p-3 text-neutral-300 whitespace-nowrap">{sender.chapter}</td>
+                                      </>
+                                    )}
+                                    <td className="p-3 font-bold text-white whitespace-nowrap">{receiver.name}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{receiver.position}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{receiver.chapter}</td>
+                                    <td className="p-3 font-semibold text-neutral-200 whitespace-nowrap">{r.contactName}</td>
+                                    <td className="p-3 text-neutral-300 whitespace-nowrap">{r.contactPhone}</td>
+                                    <td className="p-3 text-neutral-300 max-w-[200px] truncate">{r.requirement || r.notes}</td>
+                                    <td className="p-3 text-right whitespace-nowrap">{renderStatusBadge(r.status)}</td>
+                                    <td className="p-3 text-right text-neutral-400 whitespace-nowrap">{formatDateTime(r.createdAt)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {filteredOutboundList.length === 0 && (
+                            <p className="p-6 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">
+                              No outbound referral records found.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* MODAL 3: REVENUE VALUE INSIGHTS */}
               {activeModal === 'revenue' && (
@@ -1430,25 +1866,40 @@ export function MyReport() {
                   </div>
 
                   <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">Verified Slips Auditing</h4>
-                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden max-h-[250px] overflow-y-auto">
-                      {[...sentThankYouSlips, ...receivedThankYouSlips].slice(0, 10).map((s) => {
-                        const isReceived = String(s.toUserId) === userId;
-                        return (
-                          <div key={s.id} className="p-4 flex items-center justify-between text-xs">
-                            <div className="space-y-0.5">
-                              <p className="font-bold text-white">{s.customerName || 'Verified Slip'}</p>
-                              <p className="text-neutral-400 font-medium">Type: {isReceived ? 'Received from peer' : 'Sent to peer'}</p>
-                            </div>
-                            <span className={cn(
-                              "font-extrabold",
-                              isReceived ? 'text-emerald-400' : 'text-neutral-300'
-                            )}>
-                              {isReceived ? '+' : '-'} ₹{(s.businessValue || 0).toLocaleString()}
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">Verified Slips Details</h4>
+                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl overflow-x-auto max-h-[320px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-bold uppercase text-[10px]">
+                            <th className="p-3">Sender Name</th>
+                            <th className="p-3">Receiver Name</th>
+                            <th className="p-3">Customer Name</th>
+                            <th className="p-3 text-right">Business Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {[...sentThankYouSlips, ...receivedThankYouSlips].map((s) => {
+                            const sender = getUserNameAndRole(s.fromUserId);
+                            const receiver = getUserNameAndRole(s.toUserId);
+                            return (
+                              <tr key={s.id} className="hover:bg-white/5">
+                                <td className="p-3 whitespace-nowrap">
+                                  <p className="font-bold text-white">{sender.name}</p>
+                                  <span className="text-[10px] text-neutral-400 font-medium">{sender.role}</span>
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <p className="font-bold text-white">{receiver.name}</p>
+                                  <span className="text-[10px] text-neutral-400 font-medium">{receiver.role}</span>
+                                </td>
+                                <td className="p-3 text-neutral-300 font-medium whitespace-nowrap">{s.customerName || '-'}</td>
+                                <td className="p-3 text-right font-extrabold text-emerald-400 whitespace-nowrap">
+                                  ₹{(s.businessValue || 0).toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                       {sentThankYouSlips.length === 0 && receivedThankYouSlips.length === 0 && (
                         <p className="p-4 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">No verified thank you slips logged.</p>
                       )}
@@ -1482,24 +1933,49 @@ export function MyReport() {
                   </div>
 
                   <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">Log History</h4>
-                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden max-h-[250px] overflow-y-auto">
-                      {oneToOnesStats.list.slice(0, 10).map((m) => {
-                        return (
-                          <div key={m.id} className="p-4 flex items-center justify-between text-xs">
-                            <div className="space-y-0.5">
-                              <p className="font-bold text-white">Venue: {m.venue || 'TBD'}</p>
-                              <p className="text-neutral-400 font-medium">{m.date || m.scheduled_date || 'Date TBD'} {m.time ? `at ${m.time}` : ''}</p>
-                            </div>
-                            <span className={cn(
-                              "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
-                              m.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                            )}>
-                              {m.status}
-                            </span>
-                          </div>
-                        );
-                      })}
+                    <h4 className="text-xs font-bold text-white uppercase tracking-widest">Meeting Log Details</h4>
+                    <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl overflow-x-auto max-h-[320px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/5 text-neutral-400 font-bold uppercase text-[10px]">
+                            <th className="p-3">Scheduled By</th>
+                            <th className="p-3">Meeting With</th>
+                            <th className="p-3">Date & Time</th>
+                            <th className="p-3">Venue</th>
+                            <th className="p-3 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {oneToOnesStats.list.map((m) => {
+                            const sender = getUserNameAndRole(m.organizer_id || m.creatorId);
+                            const receiver = getUserNameAndRole(m.member_id);
+                            return (
+                              <tr key={m.id} className="hover:bg-white/5">
+                                <td className="p-3 whitespace-nowrap">
+                                  <p className="font-bold text-white">{sender.name}</p>
+                                  <span className="text-[10px] text-neutral-400 font-medium">{sender.role}</span>
+                                </td>
+                                <td className="p-3 whitespace-nowrap">
+                                  <p className="font-bold text-white">{receiver.name}</p>
+                                  <span className="text-[10px] text-neutral-400 font-medium">{receiver.role}</span>
+                                </td>
+                                <td className="p-3 text-neutral-300 whitespace-nowrap">
+                                  {m.date || m.scheduled_date || 'Date TBD'} {m.time ? `@ ${m.time}` : ''}
+                                </td>
+                                <td className="p-3 text-neutral-300 max-w-[150px] truncate">{m.venue || 'TBD'}</td>
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  <span className={cn(
+                                    "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
+                                    m.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  )}>
+                                    {m.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                       {oneToOnesStats.list.length === 0 && (
                         <p className="p-4 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">No 1-to-1 syncs scheduled or completed.</p>
                       )}

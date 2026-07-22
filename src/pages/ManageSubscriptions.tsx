@@ -6,6 +6,7 @@ import { Search, Filter, Shield, Calendar, CreditCard, ChevronDown, Check, X, Bu
 import { UserProfile, Chapter } from '../types';
 import { format, differenceInDays, addYears } from 'date-fns';
 import { Modal } from '../components/Modal';
+import { notificationService } from '../services/notificationService';
 
 export function ManageSubscriptions() {
   const { profile } = useAuth();
@@ -196,6 +197,22 @@ export function ManageSubscriptions() {
         .eq('id', selectedUser.uid || selectedUser.id);
         
       if (error) throw error;
+
+      try {
+        const isApproved = editForm.subscriptionStatus === 'Active';
+        await notificationService.sendNotification({
+          userId: selectedUser.uid || selectedUser.id,
+          role: selectedUser.role || 'MEMBER',
+          type: 'SUBSCRIPTION',
+          title: isApproved ? 'Subscription Approved' : 'Subscription Status Updated',
+          message: isApproved 
+            ? `Your membership subscription has been approved and extended until ${editForm.subscriptionEnd}.`
+            : `Your membership subscription status was updated to ${editForm.subscriptionStatus}.`,
+          link: '/subscriptions'
+        });
+      } catch (notifErr) {
+        console.warn("Notification error:", notifErr);
+      }
       
       setEditModalOpen(false);
       setSelectedUser(null);

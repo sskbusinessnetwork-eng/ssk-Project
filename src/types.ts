@@ -177,11 +177,15 @@ export interface Position {
 export interface Notification {
   id: string;
   userId: string;
-  role: UserRole;
-  type: 'REFERRAL' | 'THANKYOU' | 'MEMBER_ADD' | 'SUBSCRIPTION' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE' | 'TESTIMONIAL';
+  role?: UserRole;
+  type: 'REFERRAL' | 'MEETING' | 'GUEST' | 'SUBSCRIPTION' | 'SYSTEM' | 'THANKYOU' | 'TESTIMONIAL' | 'MEMBER_ADD' | 'UPGRADE' | 'UPGRADE_REQUEST' | 'GUEST_REGISTRATION' | 'ASSOCIATE_MEMBER_INVITE' | 'PROFILE';
+  title?: string;
   message: string;
   read?: boolean;
+  is_read?: boolean;
   relatedUserId?: string;
+  relatedId?: string;
+  link?: string;
   createdAt: string;
 }
 

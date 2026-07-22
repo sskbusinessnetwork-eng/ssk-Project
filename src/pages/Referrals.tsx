@@ -520,12 +520,15 @@ export function Referrals() {
       }
 
       try {
-        await notificationService.createNotification(
-          receiver_id, 
-          'MEMBER', 
-          'REFERRAL', 
-          `You have received a new referral from ${profile?.name || currentUserRecord?.name || 'a member'} for ${contact_name}.`
-        );
+        await notificationService.sendNotification({
+          userId: receiver_id,
+          role: 'MEMBER',
+          type: 'REFERRAL',
+          title: 'Referral Received',
+          message: `You received a new referral from ${profile?.name || currentUserRecord?.name || 'a member'} for ${contact_name}.`,
+          relatedUserId: profile?.uid || profile?.id,
+          link: '/referrals'
+        });
       } catch (notifErr) {
         console.warn("Notification error:", notifErr);
       }
@@ -582,6 +585,30 @@ export function Referrals() {
 
       if (updateErr) throw updateErr;
 
+      // Send notifications to the referrer
+      const referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+      if (referrerId) {
+        try {
+          await notificationService.sendNotification({
+            userId: referrerId,
+            type: 'REFERRAL',
+            title: 'Referral Completed',
+            message: `Your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} has been completed.`,
+            link: '/referrals'
+          });
+
+          await notificationService.sendNotification({
+            userId: referrerId,
+            type: 'THANKYOU',
+            title: 'Thank You Slip Received',
+            message: `You received a Thank You Slip from ${profile.name || 'a member'} for ₹${Number(thankYouData.businessValue).toLocaleString('en-IN')}.`,
+            link: '/my-report'
+          });
+        } catch (nErr) {
+          console.warn("Notification error:", nErr);
+        }
+      }
+
       setSuccessMessage("Referral updated successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsThankYouModalOpen(false);
@@ -615,7 +642,20 @@ export function Referrals() {
 
       if (updateErr) throw updateErr;
 
-      setSuccessMessage("Referral updated successfully!");
+      const referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+      if (referrerId) {
+        try {
+          await notificationService.sendNotification({
+            userId: referrerId,
+            type: 'REFERRAL',
+            title: 'Referral Rejected',
+            message: `Your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} was rejected / marked lost.`,
+            link: '/referrals'
+          });
+        } catch (nErr) {
+          console.warn("Notification error:", nErr);
+        }
+      }
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsNotConvertedModalOpen(false);
       setNotConvertedReason('');

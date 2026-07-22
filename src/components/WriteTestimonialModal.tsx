@@ -40,13 +40,15 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: Wri
       });
 
       // Send notification
-      await notificationService.createNotification(
-        receiver.uid,
-        receiver.role || 'MEMBER',
-        'TESTIMONIAL',
-        `🎉 You received a new testimonial from ${author.name}.`,
-        author.uid
-      );
+      await notificationService.sendNotification({
+        userId: receiver.uid || (receiver as any).id,
+        role: receiver.role || 'MEMBER',
+        type: 'TESTIMONIAL',
+        title: 'Testimonial Received',
+        message: `You received a Testimonial from ${author.name}.`,
+        relatedUserId: author.uid || (author as any).id,
+        link: '/testimonials'
+      });
 
       setSuccess(true);
       setTimeout(() => {

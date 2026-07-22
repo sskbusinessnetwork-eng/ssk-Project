@@ -50,13 +50,15 @@ export function SubscriptionExpired() {
           
           if (!error && admins && admins.length > 0) {
             for (const admin of admins) {
-              await notificationService.createNotification(
-                admin.id,
-                'CHAPTER_ADMIN',
-                'SUBSCRIPTION',
-                `${profile.name} has requested renewal of his membership.`,
-                profile.uid
-              );
+              await notificationService.sendNotification({
+                userId: admin.id,
+                role: 'CHAPTER_ADMIN',
+                type: 'SUBSCRIPTION',
+                title: 'Renewal Request',
+                message: `${profile.name} has submitted a membership renewal request.`,
+                relatedUserId: profile.uid || profile.id,
+                link: '/manage-subscriptions'
+              });
             }
           }
         }
@@ -69,25 +71,29 @@ export function SubscriptionExpired() {
         
         if (!error && masterAdmins && masterAdmins.length > 0) {
           for (const admin of masterAdmins) {
-            await notificationService.createNotification(
-              admin.id,
-              'MASTER_ADMIN',
-              'SUBSCRIPTION',
-              `${profile.name} (Chapter Admin) has requested renewal of their chapter membership.`,
-              profile.uid
-            );
+            await notificationService.sendNotification({
+              userId: admin.id,
+              role: 'MASTER_ADMIN',
+              type: 'SUBSCRIPTION',
+              title: 'Chapter Admin Renewal Request',
+              message: `${profile.name} (Chapter Admin) has requested renewal of their chapter membership.`,
+              relatedUserId: profile.uid || profile.id,
+              link: '/manage-subscriptions'
+            });
           }
         }
       }
 
       // 3. Create a confirmation notification for the user themselves
-      await notificationService.createNotification(
-        profile.uid,
-        profile.role,
-        'SUBSCRIPTION',
-        'Your membership renewal request has been submitted.',
-        profile.uid
-      );
+      await notificationService.sendNotification({
+        userId: profile.uid || profile.id,
+        role: profile.role,
+        type: 'SUBSCRIPTION',
+        title: 'Renewal Request Submitted',
+        message: 'Your membership renewal request has been submitted.',
+        relatedUserId: profile.uid || profile.id,
+        link: '/subscriptions'
+      });
 
       // 4. Refresh local profile state
       await refreshProfile();
