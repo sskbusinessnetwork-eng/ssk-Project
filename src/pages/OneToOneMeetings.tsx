@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -20,10 +20,74 @@ import { databaseService } from '../services/databaseService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
 import { format, isAfter, parseISO } from 'date-fns';
-import {  where, orderBy, collection, getDocs, query, or  } from '../lib/database';
+import { where, orderBy, collection, getDocs, query, or } from '../lib/database';
 import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
+import { getCleanFullName } from '../utils/authUtils';
+
+const getUserFullName = (user: any): string => {
+  if (!user) return '';
+  const rawName = user.full_name || user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+  if (!rawName) return '';
+  return getCleanFullName(rawName);
+};
+
+const formatUserRoleOrPosition = (user: any): string => {
+  if (!user) return 'Member';
+  
+  const pos = user.position || user.chapter_position || user.chapterPosition;
+  if (pos && typeof pos === 'string') {
+    const pLower = pos.toLowerCase().trim();
+    if (pLower === 'president') return 'President';
+    if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+    if (pLower === 'treasurer') return 'Treasurer';
+    if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+    if (pLower === 'member') return 'Member';
+  }
+
+  const role = user.role;
+  if (role) {
+    const rUpper = String(role).toUpperCase().trim();
+    if (rUpper === 'PRESIDENT') return 'President';
+    if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
+    if (rUpper === 'TREASURER') return 'Treasurer';
+    if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
+    if (rUpper === 'MEMBER') return 'Member';
+  }
+
+  return 'Member';
+};
+
+const getUserFullAddress = (user: any): string => {
+  if (!user) return '';
+  const busName = user.business_name || user.businessName || '';
+  const addr = user.address || user.business_address || user.street || '';
+  const area = user.area || '';
+  const city = user.city || '';
+  const state = user.state || '';
+  const pincode = user.pincode || user.pin_code || user.zip || '';
+
+  const addressParts = [addr, area, city, state].map(s => (s ? String(s).trim() : '')).filter(Boolean);
+  let fullAddress = addressParts.join(', ');
+  if (pincode) {
+    if (fullAddress) {
+      fullAddress += ` - ${pincode}`;
+    } else {
+      fullAddress = String(pincode);
+    }
+  }
+
+  if (busName && fullAddress) {
+    return `${busName}, ${fullAddress}`;
+  } else if (fullAddress) {
+    return fullAddress;
+  } else if (busName) {
+    return busName;
+  }
+  return '';
+};
 
 export function OneToOneMeetings() {
   const { profile } = useAuth();
@@ -31,13 +95,19 @@ export function OneToOneMeetings() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const [meetings, setMeetings] = useState<OneToOneMeeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
+  const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyType, setHistoryType] = useState<'scheduled' | 'attended' | 'all'>('all');
-  const [locationSelection, setLocationSelection] = useState('');
+  
+  // Member Dropdown Tab Filter & Location Option State
+  const [memberTab, setMemberTab] = useState<'my_chapter' | 'all'>('my_chapter');
+  const [locationType, setLocationType] = useState<'Online' | 'My Address' | 'Member Address'>('Online');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -64,13 +134,53 @@ export function OneToOneMeetings() {
   useEffect(() => {
     if (!profile) return;
 
-    // Fetch meetings
+    // Load live users & chapters
+    const loadUsersAndChapters = async () => {
+      try {
+        const { data: usersData, error: uErr } = await supabase
+          .from('users')
+          .select('*');
+        
+        if (uErr) console.error("Error fetching users for 1:1 meetings:", uErr);
+        if (usersData) {
+          setAllUsersList(usersData);
+          const memberList = usersData
+            .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile))
+            .filter(m => m.role !== 'MASTER_ADMIN');
+          setMembers(memberList);
+        }
+
+        const { data: chaptersData, error: cErr } = await supabase
+          .from('chapters')
+          .select('*');
+        
+        if (cErr) console.error("Error fetching chapters for 1:1 meetings:", cErr);
+        if (chaptersData) {
+          const cmap = new Map<string, string>();
+          chaptersData.forEach((c: any) => {
+            if (c.id && c.name) {
+              cmap.set(String(c.id).trim().toLowerCase(), c.name);
+              cmap.set(String(c.id).trim(), c.name);
+            }
+          });
+          setChapterMap(cmap);
+        }
+      } catch (err) {
+        console.error("Load users & chapters error:", err);
+      }
+    };
+
+    loadUsersAndChapters();
+
+    // Fetch meetings subscription
     const meetingsConstraints = (isAdmin || isChapterAdmin)
       ? [orderBy('scheduled_date', 'desc')]
       : [
           or(
             where('organizer_id', '==', profile.uid),
-            where('member_id', '==', profile.uid)
+            where('member_id', '==', profile.uid),
+            where('sender_id', '==', profile.uid),
+            where('receiver_id', '==', profile.uid)
           ),
           orderBy('scheduled_date', 'desc')
         ];
@@ -84,97 +194,199 @@ export function OneToOneMeetings() {
       }
     );
 
-    // Fetch all members for selection
-    const fetchMembers = async () => {
-      if (!profile) return;
-      
-      try {
-        let queryBuilder = supabase.from('users').select('*');
-        
-        if (!isAdmin && profile.chapter_id) {
-          queryBuilder = queryBuilder.eq('chapter_id', profile.chapter_id);
-        }
-        
-        const { data, error } = await queryBuilder;
-        
-        if (error) {
-          console.error("Error fetching members:", error);
-          return;
-        }
-        
-        if (data) {
-          const memberList = data
-            .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile))
-            .filter(m => 
-              m.uid !== profile.uid && 
-              m.role !== 'MASTER_ADMIN'
-            );
-          
-          console.log('Current User:', { id: profile.uid, chapter_id: profile.chapter_id, role: profile.role });
-          console.log('Fetched Members Count:', memberList.length);
-          console.log('Fetched Members:', memberList);
-            
-          setMembers(memberList);
-        }
-      } catch (err) {
-        console.error("Fetch members error:", err);
-      }
-    };
-    fetchMembers();
-
     return () => unsubscribe();
-  }, [profile, isAdmin]);
+  }, [profile, isAdmin, isChapterAdmin]);
+
+  // Derive Logged In User Record & Chapter ID
+  const currentAuthId = profile?.id || profile?.uid;
+  const currentUserRecord = useMemo(() => {
+    return allUsersList.find(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId)) || profile;
+  }, [allUsersList, currentAuthId, profile]);
+
+  const currentUserId = currentUserRecord?.id || profile?.id;
+  const currentUserChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
+
+  // Derive Available Members based on Tab (My Chapter Members vs All Members)
+  const availableMembers = useMemo(() => {
+    return allUsersList.filter(u => {
+      // Exclude MASTER_ADMIN
+      if (u.role === 'MASTER_ADMIN') return false;
+
+      // Exclude logged in user
+      if (currentUserId && (String(u.id) === String(currentUserId) || String(u.uid) === String(currentUserId))) {
+        return false;
+      }
+      if (currentAuthId && String(u.id) === String(currentAuthId)) {
+        return false;
+      }
+
+      if (memberTab === 'my_chapter') {
+        if (!currentUserChapterId) return false;
+        return String(u.chapter_id) === String(currentUserChapterId);
+      }
+
+      return true; // 'all' members
+    });
+  }, [allUsersList, memberTab, currentUserChapterId, currentUserId, currentAuthId]);
+
+  // Search Filtered Members
+  const filteredMembers = useMemo(() => {
+    if (!searchTerm.trim()) return availableMembers;
+    const q = searchTerm.toLowerCase().trim();
+
+    return availableMembers.filter(m => {
+      const fullName = (getUserFullName(m) || m.name || m.full_name || '').toLowerCase();
+      const phone = (m.phone || m.contact_phone || m.whatsappNumber || m.mobile || '').toLowerCase();
+      const category = (m.category || m.business_category || m.businessName || m.business_name || '').toLowerCase();
+      const chapterName = (chapterMap.get(String(m.chapter_id)) || m.chapter_name || '').toLowerCase();
+
+      return (
+        fullName.includes(q) ||
+        phone.includes(q) ||
+        category.includes(q) ||
+        chapterName.includes(q)
+      );
+    });
+  }, [availableMembers, searchTerm, chapterMap]);
+
+  // Addresses for location selection
+  const myAddress = useMemo(() => getUserFullAddress(currentUserRecord), [currentUserRecord]);
+  
+  const selectedMember = useMemo(() => {
+    if (!formData.participantId) return null;
+    return allUsersList.find(m => String(m.id) === String(formData.participantId) || String(m.uid) === String(formData.participantId)) || null;
+  }, [allUsersList, formData.participantId]);
+
+  const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
 
-    if (profile.role !== 'MASTER_ADMIN' && !profile.chapter_id) {
-      setError("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+    if (!formData.participantId) {
+      setError('Please select a member.');
       return;
     }
 
-    if (!formData.participantId) {
-      alert('Please select a member.');
+    if (!formData.date) {
+      setError('Please select a meeting date.');
+      return;
+    }
+
+    if (!formData.time) {
+      setError('Please select a meeting time.');
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
+
     try {
+      const authId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
+      if (!authId) {
+        throw new Error("Logged in user is not authenticated.");
+      }
+
+      let senderQuery = supabase.from('users').select('*');
+      if (typeof authId === 'number' || (typeof authId === 'string' && /^\d+$/.test(authId))) {
+        senderQuery = senderQuery.eq('id', authId);
+      } else {
+        senderQuery = senderQuery.eq('uid', authId);
+      }
+      const { data: senderRecord, error: senderErr } = await senderQuery.maybeSingle();
+
+      if (senderErr || !senderRecord) {
+        throw new Error("Invalid sender record in users table.");
+      }
+
+      const { data: receiverRecord, error: receiverErr } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', formData.participantId)
+        .maybeSingle();
+
+      if (receiverErr || !receiverRecord) {
+        throw new Error("The selected member is invalid.");
+      }
+
+      const sender_id = senderRecord.id;
+      const receiver_id = receiverRecord.id;
+      const chapter_id = senderRecord.chapter_id || receiverRecord.chapter_id || profile?.chapter_id;
+
+      if (!chapter_id && senderRecord.role !== 'MASTER_ADMIN') {
+        throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      }
+
+      const senderFullAddress = getUserFullAddress(senderRecord);
+      const receiverFullAddress = getUserFullAddress(receiverRecord);
+
+      let finalLocation = "Online Meeting";
+      let finalLocationType = "Online Meeting";
+
+      if (locationType === 'My Address') {
+        finalLocationType = "My Address";
+        finalLocation = senderFullAddress || "My Address";
+      } else if (locationType === 'Member Address') {
+        finalLocationType = "Member's Address";
+        finalLocation = receiverFullAddress || "Member's Address";
+      } else {
+        finalLocationType = "Online Meeting";
+        finalLocation = "Online Meeting";
+      }
+
       const meetingDate = parseISO(formData.date);
       const now = new Date();
       const status = isAfter(meetingDate, now) ? 'UPCOMING' : 'COMPLETED';
 
-      const newMeeting: Omit<OneToOneMeeting, 'id'> = {
-        creatorId: profile.uid,
-        participantIds: [formData.participantId],
+      const newMeetingPayload = {
+        sender_id: sender_id,
+        receiver_id: receiver_id,
+        organizer_id: sender_id,
+        member_id: receiver_id,
+        creatorId: sender_id,
+        participantIds: [receiver_id],
+        chapter_id: chapter_id,
+        meeting_location: finalLocation,
+        venue: finalLocation,
+        meeting_type: finalLocationType,
+        scheduled_date: formData.date,
         date: formData.date,
+        scheduled_time: formData.time,
         time: formData.time,
-        venue: formData.venue,
-        notes: formData.notes,
-        status,
+        notes: formData.notes || '',
+        status: status,
+        created_at: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
 
-      await databaseService.create('one_to_one_meetings', newMeeting);
+      const { error: dbErr } = await supabase
+        .from('one_to_one_meetings')
+        .insert([newMeetingPayload]);
+
+      if (dbErr) {
+        console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
+        await databaseService.create('one_to_one_meetings', newMeetingPayload);
+      }
+
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      
+
       setShowSuccess(true);
       setFormData({ 
+        title: '',
         participantId: '', 
         date: '', 
         time: '', 
         venue: '',
         notes: '' 
       });
-      setLocationSelection('');
-      
+      setLocationType('Online');
+      setSearchTerm('');
+
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
       }, 2000);
-      
+
     } catch (err: any) {
       console.error("Error creating one-to-one meeting:", err);
       setError(err.message || "Failed to schedule meeting. Please try again.");
@@ -204,52 +416,6 @@ export function OneToOneMeetings() {
       setIsSubmitting(false);
     }
   };
-
-  const selectedMember = members.find(m => m.uid === formData.participantId);
-  const formatBusinessAddress = (user?: any | null) => {
-    if (!user) return null;
-    const businessName = user.businessName || user.business_name;
-    const { address, city, state, pincode } = user;
-    
-    const addressParts = [address, city, state].filter(Boolean);
-    let fullAddress = addressParts.join(', ');
-    if (fullAddress && pincode) {
-      fullAddress += ` - ${pincode}`;
-    } else if (!fullAddress && pincode) {
-      fullAddress = pincode;
-    }
-    
-    if (businessName && fullAddress) {
-      return `${businessName}, ${fullAddress}`;
-    } else if (fullAddress) {
-      return fullAddress;
-    } else if (businessName) {
-      return businessName;
-    }
-    return null;
-  };
-
-  const myAddress = formatBusinessAddress(profile);
-  const theirAddress = formatBusinessAddress(selectedMember);
-
-  const locationOptions = [];
-  if (myAddress) {
-    locationOptions.push({ label: `My Business Address - ${myAddress}`, value: myAddress });
-  }
-  if (selectedMember && theirAddress) {
-    locationOptions.push({ label: `${selectedMember.name}'s Business Address - ${theirAddress}`, value: theirAddress });
-  }
-  locationOptions.push({ label: 'Online Meeting', value: 'Online Meeting' });
-  locationOptions.push({ label: 'Other Location', value: 'Other' });
-
-  const filteredMembers = members.filter(m => {
-    const search = searchTerm.toLowerCase();
-    const nameMatch = m.name?.toLowerCase().includes(search) || false;
-    const phoneMatch = m.phone?.toLowerCase().includes(search) || m.whatsappNumber?.toLowerCase().includes(search) || false;
-    const positionMatch = m.position?.toLowerCase().includes(search) || m.role?.toLowerCase().includes(search) || false;
-    
-    return nameMatch || phoneMatch || positionMatch;
-  });
 
   // Analytics for Master Admin and Chapter Admin
   const stats = React.useMemo(() => {
@@ -540,8 +706,8 @@ export function OneToOneMeetings() {
         onClose={() => {
           if (!isSubmitting) {
             setIsModalOpen(false);
-            setFormData({ participantId: '', date: '', time: '', venue: '', notes: '' });
-            setLocationSelection('');
+            setFormData({ title: '', participantId: '', date: '', time: '', venue: '', notes: '' });
+            setLocationType('Online');
             setSearchTerm('');
             setIsDropdownOpen(false);
           }
@@ -565,7 +731,6 @@ export function OneToOneMeetings() {
               </div>
             )}
             
-            
             {/* Member Selection - Searchable Dropdown */}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Select Member</label>
@@ -576,18 +741,29 @@ export function OneToOneMeetings() {
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                     <Users size={18} className="text-neutral-400 group-hover:text-primary transition-colors shrink-0" />
-                    {formData.participantId ? (
-                      <span className="text-sm font-bold text-white truncate">
-                        {(() => {
-                          const m = members.find(m => m.uid === formData.participantId);
-                          if (!m) return '';
-                          const role = m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
-                                       m.position === 'president' ? 'President' :
-                                       m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
-                                       m.position === 'treasurer' ? 'Treasurer' : 'Member';
-                          return `${m.name} (${role})`;
-                        })()}
-                      </span>
+                    {selectedMember ? (
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        {selectedMember.photo_url || selectedMember.photoURL || selectedMember.avatar_url || selectedMember.profile_photo ? (
+                          <img
+                            src={selectedMember.photo_url || selectedMember.photoURL || selectedMember.avatar_url || selectedMember.profile_photo}
+                            alt={getUserFullName(selectedMember)}
+                            className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/10"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                            {getUserFullName(selectedMember).charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-white truncate">
+                            {getUserFullName(selectedMember)} <span className="text-xs font-semibold text-primary">({formatUserRoleOrPosition(selectedMember)})</span>
+                          </p>
+                          <p className="text-[10px] text-neutral-400 font-medium truncate">
+                            {selectedMember.category || selectedMember.business_category || selectedMember.businessName || selectedMember.business_name || 'General'} • {chapterMap.get(String(selectedMember.chapter_id)) || selectedMember.chapter_name || 'No Chapter'}
+                          </p>
+                        </div>
+                      </div>
                     ) : (
                       <span className="text-sm font-medium text-neutral-400">Select a member...</span>
                     )}
@@ -597,12 +773,47 @@ export function OneToOneMeetings() {
 
                 {isDropdownOpen && (
                   <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-[#111827] rounded-[16px] border border-white/5 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    {/* Tab Switcher */}
+                    <div className="flex border-b border-white/5 bg-[#151C2E]">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMemberTab('my_chapter');
+                        }}
+                        className={cn(
+                          "flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 text-center",
+                          memberTab === 'my_chapter'
+                            ? "border-primary text-primary bg-primary/10"
+                            : "border-transparent text-neutral-400 hover:text-white"
+                        )}
+                      >
+                        My Chapter Members
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMemberTab('all');
+                        }}
+                        className={cn(
+                          "flex-1 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 text-center",
+                          memberTab === 'all'
+                            ? "border-primary text-primary bg-primary/10"
+                            : "border-transparent text-neutral-400 hover:text-white"
+                        )}
+                      >
+                        All Members
+                      </button>
+                    </div>
+
+                    {/* Search Input Box */}
                     <div className="p-3 border-b border-white/5 bg-[#151C2E]">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
                         <input
                           type="text"
-                          placeholder={isAdmin ? "Search across all chapters..." : "Search in your chapter..."}
+                          placeholder="Search by name, phone, category, chapter..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           className="w-full pl-9 pr-4 py-2 text-xs rounded-[12px] border border-white/5 bg-[#111827] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
@@ -610,59 +821,73 @@ export function OneToOneMeetings() {
                         />
                       </div>
                     </div>
+
+                    {/* Filtered Members List */}
                     <div className="max-h-60 overflow-y-auto p-3 custom-scrollbar space-y-2">
                       {filteredMembers.length > 0 ? (
-                        filteredMembers.map((member) => (
-                          <div
-                            key={member.uid}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setFormData(prev => ({ ...prev, participantId: member.uid, venue: '' }));
-                              setLocationSelection('');
-                              setIsDropdownOpen(false);
-                            }}
-                            className={cn(
-                              "group/item flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-all",
-                              formData.participantId === member.uid
-                                ? "bg-primary/10 border border-primary/20 shadow-sm"
-                                : "bg-[#111827] border border-white/5 hover:bg-[#1C2538]"
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name)}&background=random`}
-                                className="w-10 h-10 rounded-lg object-cover shadow-sm"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <p className="text-xs font-bold text-white uppercase tracking-tight">
-                                    {member.name}
+                        filteredMembers.map((member) => {
+                          const mName = getUserFullName(member);
+                          const mRole = formatUserRoleOrPosition(member);
+                          const mCategory = member.category || member.business_category || member.businessName || member.business_name || 'General';
+                          const mChapter = chapterMap.get(String(member.chapter_id)) || member.chapter_name || 'No Chapter';
+                          const mPhoto = member.photo_url || member.photoURL || member.avatar_url || member.profile_photo;
+                          const memberIdToUse = member.id || member.uid;
+
+                          return (
+                            <div
+                              key={memberIdToUse}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFormData(prev => ({ ...prev, participantId: memberIdToUse }));
+                                setIsDropdownOpen(false);
+                              }}
+                              className={cn(
+                                "group/item flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-all",
+                                String(formData.participantId) === String(memberIdToUse)
+                                  ? "bg-primary/10 border border-primary/20 shadow-sm"
+                                  : "bg-[#111827] border border-white/5 hover:bg-[#1C2538]"
+                              )}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                {mPhoto ? (
+                                  <img
+                                    src={mPhoto}
+                                    alt={mName}
+                                    className="w-10 h-10 rounded-full object-cover shadow-sm border border-white/10 shrink-0"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                                    {mName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="text-xs font-bold text-white uppercase tracking-tight truncate">
+                                      {mName}
+                                    </p>
+                                    <span className={cn(
+                                      "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0",
+                                      mRole === 'President' ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
+                                      mRole === 'Vice President' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
+                                      mRole === 'Treasurer' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" :
+                                      mRole === 'Chapter Admin' ? "bg-red-500/20 text-red-400 border border-red-500/20" :
+                                      "bg-neutral-500/20 text-neutral-400 border border-neutral-500/20"
+                                    )}>
+                                      {mRole}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">
+                                    {mCategory} • {mChapter}
                                   </p>
-                                  <span className={cn(
-                                    "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full",
-                                    member.role === 'CHAPTER_ADMIN' || member.position === 'chapter_admin' ? "bg-red-500/20 text-red-400 border border-red-500/20" :
-                                    member.position === 'president' ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
-                                    member.position === 'vice_president' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
-                                    member.position === 'treasurer' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" :
-                                    "bg-neutral-500/20 text-neutral-400 border border-neutral-500/20"
-                                  )}>
-                                    {member.role === 'CHAPTER_ADMIN' || member.position === 'chapter_admin' ? 'Chapter Admin' :
-                                     member.position === 'president' ? 'President' :
-                                     member.position === 'vice_president' ? 'Vice President' :
-                                     member.position === 'treasurer' ? 'Treasurer' : 'Member'}
-                                  </span>
                                 </div>
-                                <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">
-                                  {member.category || 'General'} • {member.phone || member.whatsappNumber || 'No Phone'}
-                                </p>
                               </div>
+                              {String(formData.participantId) === String(memberIdToUse) && (
+                                <CheckCircle2 size={16} className="text-primary shrink-0 ml-2" />
+                              )}
                             </div>
-                            {formData.participantId === member.uid && (
-                              <CheckCircle2 size={16} className="text-primary" />
-                            )}
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="py-6 text-center">
                           <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest italic">No members found.</p>
@@ -674,46 +899,37 @@ export function OneToOneMeetings() {
               </div>
             </div>
 
-            {formData.participantId && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
-                  <select
-                    required
-                    value={locationSelection}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setLocationSelection(val);
-                      if (val !== 'Other') {
-                        setFormData({ ...formData, venue: val });
-                      } else {
-                        setFormData({ ...formData, venue: '' });
-                      }
-                    }}
-                    className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white"
-                  >
-                    <option value="" className="bg-[#111827] text-white">Select a location...</option>
-                    {locationOptions.map((opt, idx) => (
-                      <option key={idx} value={opt.value} className="bg-[#111827] text-white">{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                {locationSelection === 'Other' && (
-                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Enter Meeting Location</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="E.g., Starbucks, MG Road"
-                      value={formData.venue}
-                      onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-                      className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white"
-                    />
-                  </div>
+            {/* Meeting Location Dropdown */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
+              <select
+                required
+                value={locationType}
+                onChange={(e) => setLocationType(e.target.value as 'Online' | 'My Address' | 'Member Address')}
+                className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white cursor-pointer"
+              >
+                <option value="Online" className="bg-[#111827] text-white">
+                  1. Online Meeting
+                </option>
+                <option value="My Address" className="bg-[#111827] text-white">
+                  2. My Address {myAddress ? `(${myAddress})` : '(Full Address)'}
+                </option>
+                <option value="Member Address" className="bg-[#111827] text-white">
+                  3. Member's Address {memberAddress ? `(${memberAddress})` : '(Full Address)'}
+                </option>
+              </select>
+
+              <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 text-xs text-neutral-300">
+                <span className="font-bold text-primary mr-1">Selected Address:</span>
+                {locationType === 'Online' && 'Online Meeting'}
+                {locationType === 'My Address' && (myAddress || 'Address not specified in profile')}
+                {locationType === 'Member Address' && (
+                  selectedMember 
+                    ? (memberAddress || 'Address not specified in member profile')
+                    : 'Please select a member first'
                 )}
               </div>
-            )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
