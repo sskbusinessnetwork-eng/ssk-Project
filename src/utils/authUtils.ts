@@ -1,4 +1,89 @@
 import { UserRole } from '../types';
+import { supabase } from '../lib/supabaseClient';
+
+export const validateUserChapterId = (profile: any): { isValid: boolean; errorMessage?: string } => {
+  if (!profile) {
+    return { isValid: false, errorMessage: 'User is not authenticated.' };
+  }
+  if (profile.role === 'MASTER_ADMIN') {
+    return { isValid: true };
+  }
+  if (!profile.chapter_id) {
+    return {
+      isValid: false,
+      errorMessage: 'This account is missing a chapter assignment. Please contact your Chapter Admin or Master Admin.'
+    };
+  }
+  return { isValid: true };
+};
+
+export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
+  if (!userRecord || userRecord.role === 'MASTER_ADMIN') {
+    return userRecord;
+  }
+
+  // If chapter_id is already populated, return as is
+  if (userRecord.chapter_id) {
+    return userRecord;
+  }
+
+  const userId = userRecord.id || userRecord.uid;
+  if (!userId) return userRecord;
+
+  try {
+    let assignedChapterId: string | null = null;
+
+    // 1. Check if user's created_by user has a chapter_id
+    if (userRecord.created_by) {
+      const { data: creator } = await supabase
+        .from('users')
+        .select('chapter_id')
+        .eq('id', userRecord.created_by)
+        .single();
+      if (creator && creator.chapter_id) {
+        assignedChapterId = creator.chapter_id;
+      }
+    }
+
+    // 2. If not found, check if this user is a leader of a chapter
+    if (!assignedChapterId) {
+      const { data: chapter } = await supabase
+        .from('chapters')
+        .select('id')
+        .or(`president.eq.${userId},vice_president.eq.${userId},treasurer.eq.${userId},chapter_admin.eq.${userId}`)
+        .limit(1);
+      if (chapter && chapter.length > 0) {
+        assignedChapterId = chapter[0].id;
+      }
+    }
+
+    // 3. Fallback: pick the first available chapter in chapters table
+    if (!assignedChapterId) {
+      const { data: chapters } = await supabase
+        .from('chapters')
+        .select('id')
+        .limit(1);
+      if (chapters && chapters.length > 0) {
+        assignedChapterId = chapters[0].id;
+      }
+    }
+
+    // If an assigned chapter ID was found, update the user in Supabase
+    if (assignedChapterId) {
+      console.log(`Auto-healing chapter_id for user ${userId} -> ${assignedChapterId}`);
+      await supabase
+        .from('users')
+        .update({ chapter_id: assignedChapterId })
+        .eq('id', userId);
+
+      userRecord.chapter_id = assignedChapterId;
+    }
+  } catch (err) {
+    console.error('Error in ensureUserChapterId:', err);
+  }
+
+  return userRecord;
+};
 
 export const getDashboardPath = (role: UserRole | undefined, position?: string): string => {
   if (role === 'MASTER_ADMIN') {

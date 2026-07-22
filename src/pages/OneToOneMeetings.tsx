@@ -129,6 +129,11 @@ export function OneToOneMeetings() {
     e.preventDefault();
     if (!profile) return;
 
+    if (profile.role !== 'MASTER_ADMIN' && !profile.chapter_id) {
+      setError("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      return;
+    }
+
     if (!formData.participantId) {
       alert('Please select a member.');
       return;

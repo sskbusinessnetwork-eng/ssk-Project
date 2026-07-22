@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setDoc } from '../lib/database';
 import { UserProfile } from '../types';
 import { supabase } from '../lib/supabaseClient';
+import { ensureUserChapterId } from '../utils/authUtils';
 
 export const auth = {}; // dummy
 export const db = {}; // dummy
@@ -59,13 +60,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [error, setError] = useState<string | null>(null);
 
-  const login = (userProfile: UserProfile) => {
-    setUser({ uid: userProfile.uid });
-    setProfile(userProfile);
+  const login = async (userProfile: UserProfile) => {
+    const verifiedProfile = await ensureUserChapterId(userProfile);
+    setUser({ uid: verifiedProfile.uid });
+    setProfile(verifiedProfile);
     localStorage.setItem('user', JSON.stringify({ 
-      uid: userProfile.uid, 
-      phone: userProfile.phone,
-      profile: userProfile
+      uid: verifiedProfile.uid, 
+      phone: verifiedProfile.phone,
+      profile: verifiedProfile
     }));
   };
 
@@ -91,7 +93,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
         const userData = userDoc.data() as UserProfile;
-        const updatedProfile = { uid, ...userData };
+        let updatedProfile = { uid, ...userData };
+        updatedProfile = await ensureUserChapterId(updatedProfile);
         setProfile(updatedProfile);
         localStorage.setItem('user', JSON.stringify({
           uid,
@@ -118,7 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (userDoc.exists()) {
           const userData = userDoc.data() as UserProfile;
-          const updatedProfile = { uid, ...userData };
+          let updatedProfile = { uid, ...userData };
+          updatedProfile = await ensureUserChapterId(updatedProfile);
           setUser({ uid });
           setProfile(updatedProfile);
           localStorage.setItem('user', JSON.stringify({

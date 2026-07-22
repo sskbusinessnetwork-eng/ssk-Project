@@ -252,6 +252,10 @@ export function Guests() {
 
     setIsSubmitting(true);
     try {
+      if (profile.role !== 'MASTER_ADMIN' && !profile.chapter_id) {
+        throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      }
+
       const normalizedPhone = normalizePhoneNumber(formData.guestPhone);
 
       const newInvitationData: Omit<GuestInvitation, 'id'> = {

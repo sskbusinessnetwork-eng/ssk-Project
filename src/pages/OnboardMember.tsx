@@ -84,6 +84,10 @@ export function OnboardMember() {
         if (emailExists) throw new Error('Email ID already exists.');
       }
 
+      if (!formData.chapterId) {
+        throw new Error('Please select a Chapter for this member. Chapter assignment is required.');
+      }
+
       if (editingId) {
         await updateDoc(doc(db, 'users', editingId), {
           name: formData.fullName,
