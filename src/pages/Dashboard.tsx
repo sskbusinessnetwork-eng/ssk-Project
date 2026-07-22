@@ -850,7 +850,7 @@ export function Analytics() {
       profile.bio
     );
     tasks.push({
-      key: 'completeProfile',
+      key: 'completeProfileFull',
       label: 'Complete Your Profile',
       isDone: isProfileComplete,
       link: '/profile',

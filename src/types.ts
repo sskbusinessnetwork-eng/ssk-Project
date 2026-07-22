@@ -85,9 +85,13 @@ export interface Referral {
   senderFullName?: string;
   senderRole?: string;
   senderChapter?: string;
+  senderCategory?: string;
+  senderPhoto?: string;
   receiverFullName?: string;
   receiverRole?: string;
   receiverChapter?: string;
+  receiverCategory?: string;
+  receiverPhoto?: string;
   contactName: string;
   contactPhone: string;
   requirement: string;

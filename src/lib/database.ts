@@ -161,28 +161,34 @@ export async function getDocs(queryRef: any) {
   
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user) {
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, chapter_id')
-      .eq('id', session.user.id)
-      .single();
+    let userQuery = supabase.from('users').select('role, chapter_id');
+    if (/^\d+$/.test(session.user.id)) {
+      userQuery = userQuery.eq('id', session.user.id);
+    } else {
+      userQuery = userQuery.eq('uid', session.user.id);
+    }
+    const { data: userProfile } = await userQuery.maybeSingle();
       
     if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
       const userChapterId = userProfile.chapter_id;
-      if (collectionPath === 'users') {
-        const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
-        if (!hasSingleIdFilter) {
-          builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
+      const hasChapterFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'chapter_id' || c.field === 'chapterId'));
+      
+      if (!hasChapterFilter) {
+        if (collectionPath === 'users') {
+          const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
+          if (!hasSingleIdFilter) {
+            builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
+          }
+        } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
+          builder = builder.eq('chapter_id', userChapterId);
         }
-      } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
-        builder = builder.eq('chapter_id', userChapterId);
       }
     }
   }
 
   const { data, error } = await builder;
   if (error) {
-    console.error("getDocs error for", collectionPath, ":", error);
+    console.error("getDocs error for", collectionPath, ":", error?.message || error);
     const emptyDocs: any[] = [];
     return { docs: emptyDocs, empty: true, forEach: (cb: any) => emptyDocs.forEach(cb) };
   }

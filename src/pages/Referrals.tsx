@@ -136,8 +136,8 @@ export function Referrals() {
         .from('referrals')
         .select(`
           *,
-          sender:users!sender_id(id, full_name, name, first_name, last_name, role, position, chapter_position, chapter_id),
-          receiver:users!receiver_id(id, full_name, name, first_name, last_name, role, position, chapter_position, chapter_id)
+          sender:users!sender_id(*),
+          receiver:users!receiver_id(*)
         `)
         .order('created_at', { ascending: false });
 
@@ -187,7 +187,7 @@ export function Referrals() {
       // STEP 2 - VERIFY USERS TABLE: Fetch users table for complete mapping
       const { data: usersData, error: usersErr } = await supabase
         .from('users')
-        .select('id, uid, name, full_name, first_name, last_name, role, position, chapter_position, chapter_id, phone, business_name, category');
+        .select('*');
 
       if (usersErr) {
         console.warn("Could not fetch users list for referral mapping:", usersErr);
@@ -214,19 +214,15 @@ export function Referrals() {
 
         // STEP 6 - DEBUG: Log lookup results clearly
         if (!senderUser) {
-          console.error(`Referral sender_id: ${senderIdRaw}`);
-          console.error(`Matching sender user: NOT FOUND`);
+          console.error(`Referral sender_id: ${senderIdRaw} - Matching sender user: NOT FOUND`);
         } else {
-          console.log(`Referral sender_id: ${senderIdRaw}`);
-          console.log(`Matching sender user:`, senderUser);
+          console.log(`Referral sender_id: ${senderIdRaw} - Sender:`, senderUser);
         }
 
         if (!receiverUser) {
-          console.error(`Referral receiver_id: ${receiverIdRaw}`);
-          console.error(`Matching receiver user: NOT FOUND`);
+          console.error(`Referral receiver_id: ${receiverIdRaw} - Matching receiver user: NOT FOUND`);
         } else {
-          console.log(`Referral receiver_id: ${receiverIdRaw}`);
-          console.log(`Matching receiver user:`, receiverUser);
+          console.log(`Referral receiver_id: ${receiverIdRaw} - Receiver:`, receiverUser);
         }
 
         // Master Admin must never appear as a sender or receiver
@@ -234,13 +230,17 @@ export function Referrals() {
           continue;
         }
 
-        const senderFullName = senderUser ? getUserFullName(senderUser) : 'Member Not Found';
+        const senderFullName = senderUser ? getUserFullName(senderUser) : 'Member';
         const senderRoleFormatted = senderUser ? formatUserRoleOrPosition(senderUser) : '';
         const senderChapterName = senderUser?.chapter_id ? (chapterMap.get(String(senderUser.chapter_id).trim().toLowerCase()) || '') : '';
+        const senderCategoryName = senderUser ? (senderUser.category || senderUser.business_category || senderUser.businessName || senderUser.business_name || '') : '';
+        const senderPhotoUrl = senderUser ? (senderUser.photo_url || senderUser.photoURL || senderUser.avatar_url || senderUser.profile_photo || senderUser.image_url || '') : '';
 
-        const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member Not Found';
+        const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member';
         const receiverRoleFormatted = receiverUser ? formatUserRoleOrPosition(receiverUser) : '';
         const receiverChapterName = receiverUser?.chapter_id ? (chapterMap.get(String(receiverUser.chapter_id).trim().toLowerCase()) || '') : '';
+        const receiverCategoryName = receiverUser ? (receiverUser.category || receiverUser.business_category || receiverUser.businessName || receiverUser.business_name || '') : '';
+        const receiverPhotoUrl = receiverUser ? (receiverUser.photo_url || receiverUser.photoURL || receiverUser.avatar_url || receiverUser.profile_photo || receiverUser.image_url || '') : '';
 
         formattedList.push({
           id: r.id,
@@ -255,9 +255,13 @@ export function Referrals() {
           senderFullName,
           senderRole: senderRoleFormatted,
           senderChapter: senderChapterName,
+          senderCategory: senderCategoryName,
+          senderPhoto: senderPhotoUrl,
           receiverFullName,
           receiverRole: receiverRoleFormatted,
           receiverChapter: receiverChapterName,
+          receiverCategory: receiverCategoryName,
+          receiverPhoto: receiverPhotoUrl,
           contactName: r.contact_name || r.customer_name || 'N/A',
           contactPhone: r.contact_phone || r.customer_mobile || 'N/A',
           requirement: r.business_requirement || r.requirement || 'N/A',
@@ -301,11 +305,13 @@ export function Referrals() {
 
       if (!currentAuthId) return;
 
-      const { data: currentUserRecord } = await supabase
-        .from('users')
-        .select('id, chapter_id, role')
-        .or(`id.eq.${currentAuthId},uid.eq.${currentAuthId}`)
-        .maybeSingle();
+      let currentUserQuery = supabase.from('users').select('id, chapter_id, role');
+      if (typeof currentAuthId === 'number' || (typeof currentAuthId === 'string' && /^\d+$/.test(currentAuthId))) {
+        currentUserQuery = currentUserQuery.eq('id', currentAuthId);
+      } else {
+        currentUserQuery = currentUserQuery.eq('uid', currentAuthId);
+      }
+      const { data: currentUserRecord } = await currentUserQuery.maybeSingle();
 
       const userChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
       const userRole = currentUserRecord?.role || profile?.role;
@@ -315,12 +321,18 @@ export function Referrals() {
         return;
       }
 
-      const { data: chapterMembers, error } = await supabase
+      let memberQuery = supabase
         .from('users')
         .select('id, name, full_name, first_name, last_name, position, chapter_position, category, business_category, chapter_id, role')
         .eq('chapter_id', userChapterId)
-        .neq('id', currentUserRecord?.id || currentAuthId)
         .neq('role', 'MASTER_ADMIN');
+
+      const currentUserId = currentUserRecord?.id || profile?.id;
+      if (currentUserId && (typeof currentUserId === 'number' || /^\d+$/.test(String(currentUserId)))) {
+        memberQuery = memberQuery.neq('id', currentUserId);
+      }
+
+      const { data: chapterMembers, error } = await memberQuery;
 
       if (error) {
         console.error("Error fetching chapter members for dropdown:", error);
@@ -417,11 +429,13 @@ export function Referrals() {
       }
 
       // STEP 4 - Sender: Use Logged in user's users.id
-      const { data: currentUserRecord, error: senderErr } = await supabase
-        .from('users')
-        .select('*')
-        .or(`id.eq.${currentAuthId},uid.eq.${currentAuthId}`)
-        .maybeSingle();
+      let senderQuery = supabase.from('users').select('*');
+      if (typeof currentAuthId === 'number' || (typeof currentAuthId === 'string' && /^\d+$/.test(currentAuthId))) {
+        senderQuery = senderQuery.eq('id', currentAuthId);
+      } else {
+        senderQuery = senderQuery.eq('uid', currentAuthId);
+      }
+      const { data: currentUserRecord, error: senderErr } = await senderQuery.maybeSingle();
 
       if (senderErr || !currentUserRecord) {
         console.error("Sender lookup error:", senderErr);
@@ -1071,40 +1085,82 @@ export function Referrals() {
             <div className="space-y-4">
               <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-1">
+                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-2">
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                       Sender
                     </p>
-                    <p className="text-sm font-bold text-white leading-tight">
-                      {selectedReferral.senderFullName || selectedReferral.senderName || 'Member Not Found'}
-                    </p>
-                    {selectedReferral.senderRole && (
-                      <p className="text-xs font-semibold text-primary">
-                        {selectedReferral.senderRole}
+                    <div className="flex items-center gap-2.5">
+                      {selectedReferral.senderPhoto ? (
+                        <img 
+                          src={selectedReferral.senderPhoto} 
+                          alt={selectedReferral.senderFullName || 'Sender'} 
+                          className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                          {(selectedReferral.senderFullName || 'M').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white leading-tight truncate">
+                          {selectedReferral.senderFullName || selectedReferral.senderName || 'Member'}
+                        </p>
+                        {selectedReferral.senderRole && (
+                          <p className="text-xs font-semibold text-primary">
+                            {selectedReferral.senderRole}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {selectedReferral.senderCategory && (
+                      <p className="text-xs text-neutral-300 font-medium">
+                        Category: <span className="text-white font-semibold">{selectedReferral.senderCategory}</span>
                       </p>
                     )}
                     {selectedReferral.senderChapter && (
                       <p className="text-[11px] font-medium text-neutral-400">
-                        {selectedReferral.senderChapter}
+                        Chapter: <span className="text-neutral-300">{selectedReferral.senderChapter}</span>
                       </p>
                     )}
                   </div>
 
-                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-1 sm:text-right">
+                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-2">
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                       Receiver
                     </p>
-                    <p className="text-sm font-bold text-white leading-tight">
-                      {selectedReferral.receiverFullName || selectedReferral.receiverName || 'Member Not Found'}
-                    </p>
-                    {selectedReferral.receiverRole && (
-                      <p className="text-xs font-semibold text-primary">
-                        {selectedReferral.receiverRole}
+                    <div className="flex items-center gap-2.5">
+                      {selectedReferral.receiverPhoto ? (
+                        <img 
+                          src={selectedReferral.receiverPhoto} 
+                          alt={selectedReferral.receiverFullName || 'Receiver'} 
+                          className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" 
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                          {(selectedReferral.receiverFullName || 'M').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-white leading-tight truncate">
+                          {selectedReferral.receiverFullName || selectedReferral.receiverName || 'Member'}
+                        </p>
+                        {selectedReferral.receiverRole && (
+                          <p className="text-xs font-semibold text-primary">
+                            {selectedReferral.receiverRole}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {selectedReferral.receiverCategory && (
+                      <p className="text-xs text-neutral-300 font-medium">
+                        Category: <span className="text-white font-semibold">{selectedReferral.receiverCategory}</span>
                       </p>
                     )}
                     {selectedReferral.receiverChapter && (
                       <p className="text-[11px] font-medium text-neutral-400">
-                        {selectedReferral.receiverChapter}
+                        Chapter: <span className="text-neutral-300">{selectedReferral.receiverChapter}</span>
                       </p>
                     )}
                   </div>
