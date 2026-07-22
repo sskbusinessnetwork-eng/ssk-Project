@@ -87,9 +87,13 @@ export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
 
 export const getDashboardPath = (role: UserRole | undefined, position?: string): string => {
   if (role === 'MASTER_ADMIN') {
-    return '/admin/analytics';
+    return '/admin/home';
   }
-  return '/analytics';
+  const posLower = position?.toLowerCase() || '';
+  if (role === 'CHAPTER_ADMIN' || posLower === 'chapter_admin' || posLower === 'chapter admin') {
+    return '/chapter-admin/home';
+  }
+  return '/member/home';
 };
 
 export const getCleanFullName = (name: string | undefined): string => {

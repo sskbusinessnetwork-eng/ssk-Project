@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
-import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock, AlertCircle, X } from 'lucide-react';
+import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock, AlertCircle, X, Calendar } from 'lucide-react';
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
+import { db, doc, setDoc } from '../lib/database';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface LeaderForm {
@@ -11,7 +12,30 @@ interface LeaderForm {
   mobile: string;
   whatsapp: string;
   email: string;
+  subscriptionStart: string;
+  subscriptionEnd: string;
 }
+
+const getDefaultDates = () => {
+  const today = new Date();
+  const start = today.toISOString().split('T')[0];
+  const nextYear = new Date(today);
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  const end = nextYear.toISOString().split('T')[0];
+  return { start, end };
+};
+
+const createEmptyLeader = (): LeaderForm => {
+  const { start, end } = getDefaultDates();
+  return {
+    fullName: '',
+    mobile: '',
+    whatsapp: '',
+    email: '',
+    subscriptionStart: start,
+    subscriptionEnd: end,
+  };
+};
 
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -35,10 +59,10 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
   });
 
   const [leaders, setLeaders] = useState({
-    chapter_admin: { fullName: '', mobile: '', whatsapp: '', email: '' } as LeaderForm,
-    president: { fullName: '', mobile: '', whatsapp: '', email: '' } as LeaderForm,
-    vice_president: { fullName: '', mobile: '', whatsapp: '', email: '' } as LeaderForm,
-    treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' } as LeaderForm,
+    chapter_admin: createEmptyLeader(),
+    president: createEmptyLeader(),
+    vice_president: createEmptyLeader(),
+    treasurer: createEmptyLeader(),
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,13 +78,13 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
     }
   };
 
-    const closeForm = () => {
+  const closeForm = () => {
     setFormData({ chapter_name: '', meeting_venue: '' });
     setLeaders({
-      chapter_admin: { fullName: '', mobile: '', whatsapp: '', email: '' },
-      president: { fullName: '', mobile: '', whatsapp: '', email: '' },
-      vice_president: { fullName: '', mobile: '', whatsapp: '', email: '' },
-      treasurer: { fullName: '', mobile: '', whatsapp: '', email: '' },
+      chapter_admin: createEmptyLeader(),
+      president: createEmptyLeader(),
+      vice_president: createEmptyLeader(),
+      treasurer: createEmptyLeader(),
     });
     setSuccessPopup(false);
     if (onSuccess) onSuccess();
@@ -85,6 +109,13 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
       
       if (l.email.trim() && !/^\S+@\S+\.\S+$/.test(l.email.trim())) {
         newErrors[`${String(pos)}_email`] = "Invalid email address.";
+      }
+
+      if (!l.subscriptionStart) {
+        newErrors[`${String(pos)}_subscriptionStart`] = "Subscription Start Date is required.";
+      }
+      if (!l.subscriptionEnd) {
+        newErrors[`${String(pos)}_subscriptionEnd`] = "Subscription End Date is required.";
       }
     }
 
@@ -168,34 +199,49 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
       let createdUsers: string[] = [];
 
       try {
-        // 2. Create users
-        const usersToInsert = positions.map(pos => {
+        // 2. Create users with full subscription fields
+        for (const pos of positions) {
           const leader = leaders[pos];
           const phone = normalizePhoneNumber(leader.mobile);
           const uid = leaderUIDs[pos];
           const defaultPassword = 'Welcometosskbusiness';
           createdUsers.push(uid);
 
-          return {
+          const startDateISO = leader.subscriptionStart ? new Date(leader.subscriptionStart).toISOString() : new Date().toISOString();
+          const endDateISO = leader.subscriptionEnd ? new Date(leader.subscriptionEnd).toISOString() : new Date().toISOString();
+
+          await setDoc(doc(db, 'users', uid), {
             id: uid,
+            uid: uid,
             name: leader.fullName.trim(),
             phone: phone,
-            whatsapp_number: leader.whatsapp.trim() || phone,
+            whatsappNumber: leader.whatsapp.trim() || phone,
             email: leader.email.trim() || null,
             password: defaultPassword,
             role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
             status: 'ACTIVE',
+            membershipStatus: 'ACTIVE',
             chapter_id: chapterId,
+            chapterName: formData.chapter_name.trim(),
             position: pos,
             must_change_password: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-        });
-        
-        const { error: usersError } = await supabase.from('users').insert(usersToInsert);
-        if (usersError) {
-          throw new Error(`Failed to create leadership members: ${usersError.message}`);
+            subscriptionStart: startDateISO,
+            subscriptionEnd: endDateISO,
+            subscriptionStartDate: leader.subscriptionStart,
+            subscriptionEndDate: leader.subscriptionEnd,
+            subscriptionStatus: 'Active',
+            subscriptionType: 'Annual',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+
+          await setDoc(doc(db, 'auth_data', uid), {
+            id: uid,
+            uid: uid,
+            password: defaultPassword,
+            phone: phone,
+            updatedAt: new Date().toISOString()
+          });
         }
 
         // 3. Update chapter with the valid user IDs
@@ -210,18 +256,6 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           throw new Error(`Unable to link members to the chapter: ${chapterUpdateError.message}`);
         }
 
-        const authDataToInsert = usersToInsert.map(u => ({
-          id: u.id,
-          uid: u.id,
-          password: u.password,
-          updatedAt: new Date().toISOString()
-        }));
-
-        const { error: authError } = await supabase.from('auth_data').insert(authDataToInsert);
-        if (authError) {
-           console.error("Warning: Failed to save to auth_data, but users were created", authError);
-        }
-
         setSuccessPopup(true);
         window.dispatchEvent(new Event('dashboard-refresh'));
         
@@ -229,6 +263,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         await supabase.from('chapters').delete().eq('id', chapterId);
         if (createdUsers.length > 0) {
            await supabase.from('users').delete().in('id', createdUsers);
+           await supabase.from('auth_data').delete().in('id', createdUsers);
         }
         throw insertError;
       }
@@ -314,6 +349,38 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             />
           </div>
           {errors[`${String(pos)}_email`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_email`]}</p>}
+        </div>
+
+        {/* Subscription Start Date */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Subscription Start Date *</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
+            <input
+              type="date"
+              name={`${String(pos)}_subscriptionStart`}
+              value={leaders[pos].subscriptionStart}
+              onChange={(e) => handleLeaderChange(pos, 'subscriptionStart', e.target.value)}
+              className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_subscriptionStart`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
+            />
+          </div>
+          {errors[`${String(pos)}_subscriptionStart`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_subscriptionStart`]}</p>}
+        </div>
+
+        {/* Subscription End Date */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Subscription End Date *</label>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
+            <input
+              type="date"
+              name={`${String(pos)}_subscriptionEnd`}
+              value={leaders[pos].subscriptionEnd}
+              onChange={(e) => handleLeaderChange(pos, 'subscriptionEnd', e.target.value)}
+              className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_subscriptionEnd`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
+            />
+          </div>
+          {errors[`${String(pos)}_subscriptionEnd`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_subscriptionEnd`]}</p>}
         </div>
         
       </div>

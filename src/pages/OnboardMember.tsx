@@ -49,7 +49,7 @@ export function OnboardMember() {
       
     // Subscribe to all members (for simplicity, getting all users)
     const unsub = onSnapshot(collection(db, 'users'), snap => {
-      setMembers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      setMembers((snap?.docs || []).map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
     });
     
     return () => unsub();

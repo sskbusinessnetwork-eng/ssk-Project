@@ -68,14 +68,14 @@ export function Positions() {
     // Subscribe to members
     const qMembers = query(collection(db, 'users'), where('chapter_id', '==', selectedChapterId));
     const unsub1 = onSnapshot(qMembers, (snap) => {
-      setMembers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      setMembers((snap?.docs || []).map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
       setLoading(false);
     });
 
     // Subscribe to history
     const qHistory = query(collection(db, 'position_history'), where('chapter_id', '==', selectedChapterId));
     const unsubHistory = onSnapshot(qHistory, (snap) => {
-      const hist = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      const hist = (snap?.docs || []).map(d => ({ id: d.id, ...d.data() } as any));
       hist.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setHistory(hist);
     });

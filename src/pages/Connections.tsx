@@ -129,16 +129,32 @@ export function Connections() {
       if (!sender_id) throw new Error("Missing sender_id");
       if (!receiver_id) throw new Error("Missing receiver_id");
       if (!chapter_id) throw new Error("Missing chapter_id: Your account is not assigned to any chapter.");
-      if (!referralForm.customerName) throw new Error("Missing customer_name");
-      if (!referralForm.mobileNumber) throw new Error("Missing customer_mobile");
+      const contact_name = referralForm.customerName ? referralForm.customerName.trim() : null;
+      const contact_phone = referralForm.mobileNumber ? referralForm.mobileNumber.trim() : null;
+      const business_requirement = (referralForm.requirement || 'General Referral').trim();
+
+      if (!contact_name) throw new Error("Missing contact_name (Customer Name)");
+      if (!contact_phone) throw new Error("Missing contact_phone (Mobile Number)");
+
+      console.log({
+        sender_id,
+        receiver_id,
+        chapter_id,
+        contact_name,
+        contact_phone,
+        business_requirement
+      });
 
       const newReferral = {
         sender_id,
         receiver_id,
         chapter_id,
-        customer_name: referralForm.customerName.trim(),
-        customer_mobile: referralForm.mobileNumber.trim(),
-        requirement: (referralForm.requirement || 'General Referral').trim(),
+        contact_name,
+        contact_phone,
+        business_requirement,
+        customer_name: contact_name,
+        customer_mobile: contact_phone,
+        requirement: business_requirement,
         notes: referralForm.notes || '',
         status: 'Pending',
         created_at: new Date().toISOString(),

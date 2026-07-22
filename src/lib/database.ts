@@ -54,6 +54,7 @@ function camelToSnake(str: string): string {
   if (str === 'whatsappNumber') return 'whatsapp_number';
   if (str === 'mustChangePassword') return 'must_change_password';
   if (str === 'participantIds') return 'participant_ids';
+  if (str === 'read') return 'is_read';
   
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
@@ -68,6 +69,7 @@ function snakeToCamel(str: string): string {
   if (str === 'whatsapp_number') return 'whatsappNumber';
   if (str === 'must_change_password') return 'mustChangePassword';
   if (str === 'participant_ids') return 'participantIds';
+  if (str === 'is_read') return 'read';
   
   return str.replace(/([-_][a-z])/g, group =>
     group.toUpperCase().replace('-', '').replace('_', '')
@@ -181,7 +183,8 @@ export async function getDocs(queryRef: any) {
   const { data, error } = await builder;
   if (error) {
     console.error("getDocs error for", collectionPath, ":", error);
-    return [];
+    const emptyDocs: any[] = [];
+    return { docs: emptyDocs, empty: true, forEach: (cb: any) => emptyDocs.forEach(cb) };
   }
   
   let rows = (data || []).map(row => keysToCamel(row));

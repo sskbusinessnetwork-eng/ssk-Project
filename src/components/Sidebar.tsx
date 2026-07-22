@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, Share2, Award, UserPlus, User, LogOut, CreditCard,
   Shield, Bell, X, Sparkles, Layers, ChevronLeft, ChevronRight, Activity, FileText,
-  MessageSquare, Settings, HelpCircle, LogIn, Crown
+  MessageSquare, Settings, HelpCircle, LogIn, Crown, Tags
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -52,10 +52,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     }
   };
 
-  const getDashboardPath = () => getDashboardPathUtil(profile?.role);
+  const getDashboardPath = () => getDashboardPathUtil(profile?.role, profile?.position);
 
   const menuItems: { icon: any; label: string; path: string; roles: string[]; badge?: number }[] = [
-    { icon: LayoutDashboard, label: 'Home', path: '/analytics', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: LayoutDashboard, label: 'Home', path: getDashboardPath(), roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Users, label: 'Network', path: '/network', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Calendar, label: 'Meetings', path: '/meetings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Layers, label: 'One-to-One', path: '/one-to-one', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
@@ -68,7 +68,8 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN'] },
     { icon: Users, label: 'Manage Members', path: '/members', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
-        { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Tags, label: 'Manage Categories', path: '/categories', roles: ['MASTER_ADMIN'] },
+    { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Settings, label: 'Settings', path: '/settings', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
   ];
 
@@ -193,8 +194,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
       </style>
       <div className="flex-1 overflow-y-auto custom-thin-scrollbar py-3 px-3 flex flex-col gap-[6px]">
         {visibleMenuItems.map((item) => {
-          const isActive = location.pathname === item.path || 
-                          (item.path === '/analytics' && location.pathname === '/dashboard');
+          const homePaths = ['/analytics', '/dashboard', '/admin/analytics', '/admin/home', '/chapter-admin/home', '/member/home'];
+          const isHomeItem = item.label === 'Home' || homePaths.includes(item.path);
+          const isActive = location.pathname === item.path || (isHomeItem && homePaths.includes(location.pathname));
           
           return (
             <div key={item.path} className="relative">

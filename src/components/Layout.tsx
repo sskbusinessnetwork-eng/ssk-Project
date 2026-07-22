@@ -75,10 +75,10 @@ export function Layout() {
     }
   };
 
-  const getDashboardPath = () => getDashboardPathUtil(profile?.role);
+  const getDashboardPath = () => getDashboardPathUtil(profile?.role, profile?.position);
 
   const mobileNavItems = [
-    { icon: LayoutDashboard, label: 'Home', path: '/analytics' },
+    { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
     ...(profile?.role !== 'MEMBER' ? [{ icon: Users, label: 'Network', path: '/network' }] : []),
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
     { icon: Share2, label: 'Referrals', path: '/refer' },

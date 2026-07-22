@@ -66,7 +66,7 @@ export function Login() {
   useEffect(() => {
     if (user && !isForgotPasswordFlow && !isResetStep) {
       if (!authLoading && profile && isLoginFlow) {
-        const dashboardPath = getDashboardPath(profile.role);
+        const dashboardPath = getDashboardPath(profile.role, profile.position);
         navigate(dashboardPath, { replace: true });
       }
     }
@@ -124,7 +124,8 @@ export function Login() {
           createdAt: masterAdmin.created_at
         });
 
-        navigate('/master-admin/dashboard', { replace: true });
+        const dashboardPath = getDashboardPath('MASTER_ADMIN');
+        navigate(dashboardPath, { replace: true });
         return;
       }
 
@@ -162,7 +163,7 @@ export function Login() {
         if (user.must_change_password) {
           navigate('/set-password');
         } else {
-          const dashboardPath = getDashboardPath(user.role || 'MEMBER');
+          const dashboardPath = getDashboardPath(user.role || 'MEMBER', user.position);
           navigate(dashboardPath, { replace: true });
         }
         return;
@@ -324,8 +325,8 @@ export function Login() {
       if (userData.must_change_password) {
         navigate('/set-password');
       } else {
-        const dashboardPath = getDashboardPath(userData.role || 'MEMBER');
-        navigate(dashboardPath);
+        const dashboardPath = getDashboardPath(userData.role || 'MEMBER', userData.position);
+        navigate(dashboardPath, { replace: true });
       }
     } catch (err: any) {
       console.error("Quick login error:", err);

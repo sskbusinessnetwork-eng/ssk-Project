@@ -10,7 +10,7 @@ export function usePositions() {
   useEffect(() => {
     const q = query(collection(db, 'positions'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const posList = snapshot.docs.map(doc => ({
+      const posList = (snapshot?.docs || []).map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Position));

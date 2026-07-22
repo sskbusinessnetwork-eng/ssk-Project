@@ -28,7 +28,7 @@ export function TestimonialReports() {
 
     const q = query(collection(db, 'testimonials'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ts = snapshot.docs.map(doc => ({
+      const ts = (snapshot?.docs || []).map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Testimonial));

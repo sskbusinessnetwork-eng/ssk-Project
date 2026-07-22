@@ -49,6 +49,11 @@ export default function App() {
             
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/admin/home" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Analytics /></ProtectedRoute>} />
+              <Route path="/chapter-admin/home" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Analytics /></ProtectedRoute>} />
+              <Route path="/member/home" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><Analytics /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<Navigate to="/analytics" replace />} />
+              <Route path="/master-admin/dashboard" element={<Navigate to="/admin/home" replace />} />
               <Route path="/member/my-report" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><MyReport /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Analytics /></ProtectedRoute>} />
               <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />

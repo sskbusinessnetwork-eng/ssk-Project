@@ -160,7 +160,8 @@ export const databaseService = {
 
     const q = query(collection(db, path), ...constraints);
     return onSnapshot(q, (snapshot) => {
-      callback(snapshot.docs.map((d: any) => {
+      const docs = snapshot?.docs || [];
+      callback(docs.map((d: any) => {
         const data = d.data();
         const obj = { id: d.id, ...data } as T;
         if (path === 'users' && !(obj as any).uid) {

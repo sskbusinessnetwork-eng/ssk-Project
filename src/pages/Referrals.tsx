@@ -100,7 +100,7 @@ export function Referrals() {
 
     // Subscribe to thank you slips to show notes in "Passed" tab
     const unsubSlips = onSnapshot(collection(db, 'thank_you_slips'), (snapshot) => {
-      const slips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ThankYouSlip));
+      const slips = (snapshot?.docs || []).map(doc => ({ id: doc.id, ...doc.data() } as ThankYouSlip));
       setThankYouSlips(slips);
     });
 
@@ -271,14 +271,14 @@ export function Referrals() {
         throw new Error("Sender and receiver must belong to the same chapter.");
       }
 
-      const customer_name = formData.contactName ? formData.contactName.trim() : null;
-      const customer_mobile = normalizedPhone ? normalizedPhone.trim() : null;
-      const requirement = formData.requirement ? formData.requirement.trim() : null;
+      const contact_name = formData.contactName ? formData.contactName.trim() : null;
+      const contact_phone = normalizedPhone ? normalizedPhone.trim() : null;
+      const business_requirement = formData.requirement ? formData.requirement.trim() : null;
 
       // 7. Verify required strings
-      if (!customer_name) throw new Error("Missing customer_name");
-      if (!customer_mobile) throw new Error("Missing customer_mobile");
-      if (!requirement) throw new Error("Missing requirement");
+      if (!contact_name) throw new Error("Missing contact_name (Customer Name)");
+      if (!contact_phone) throw new Error("Missing contact_phone (Mobile Number)");
+      if (!business_requirement) throw new Error("Missing business_requirement (Requirement)");
 
       // 8. Log details before inserting
       console.log("Current User:", {
@@ -292,23 +292,26 @@ export function Referrals() {
         role: receiverRecord.role,
         chapter_id: receiverRecord.chapter_id
       });
-      console.log("Referral Data:", {
+      console.log({
         sender_id,
         receiver_id,
         chapter_id,
-        customer_name,
-        customer_mobile,
-        requirement
+        contact_name,
+        contact_phone,
+        business_requirement
       });
 
-      // 9. Build Referral Payload (matching database schema)
+      // 9. Build Referral Payload (matching both contact_* and customer_* column names in database schema)
       const newReferral = {
         sender_id: sender_id,
         receiver_id: receiver_id,
         chapter_id: chapter_id,
-        customer_name: customer_name,
-        customer_mobile: customer_mobile,
-        requirement: requirement,
+        contact_name: contact_name,
+        contact_phone: contact_phone,
+        business_requirement: business_requirement,
+        customer_name: contact_name,
+        customer_mobile: contact_phone,
+        requirement: business_requirement,
         notes: formData.notes ? formData.notes.trim() : '',
         status: 'Pending',
         created_at: new Date().toISOString(),
@@ -338,7 +341,7 @@ export function Referrals() {
           receiver_id, 
           'MEMBER', 
           'REFERRAL', 
-          `You have received a new referral from ${profile?.name || currentUserRecord.name} for ${customer_name}.`
+          `You have received a new referral from ${profile?.name || currentUserRecord.name} for ${contact_name}.`
         );
 
         if (toUser && (toUser as any).adminId) {
@@ -365,18 +368,18 @@ export function Referrals() {
       // Refresh Given Referrals, Received Referrals, analytics, reports, tasks
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Referral Insert / RLS Error:");
+      console.error("Referral Insert / RLS Error:", error);
       console.error("Policy Name:", error?.policy || "referrals_insert_policy");
-      console.error("PostgreSQL Error:", error?.message || error);
+      console.error("PostgreSQL Error Message:", error?.message || error);
       console.error("SQLSTATE Code:", error?.code || "42501");
-      console.error("Complete Supabase Error Object:", JSON.stringify(error, null, 2), error);
+      console.error("Complete Supabase Error Object:", JSON.stringify(error, null, 2));
 
       let mainMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
       if (error?.code === '42501') {
         mainMsg = "Insert blocked by Row Level Security.";
       }
 
-      const fullAlertMessage = `${mainMsg}\n\nCode: ${error?.code || 'N/A'}\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`;
+      const fullAlertMessage = `PostgreSQL Error (${error?.code || 'N/A'}): ${mainMsg}\n\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`;
 
       alert(fullAlertMessage);
       setErrorMessage(fullAlertMessage);
