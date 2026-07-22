@@ -98,7 +98,7 @@ export function ThankYouSlips() {
         setAllUsers(users);
         const names: Record<string, string> = {};
         users.forEach(u => {
-          names[u.uid] = u.name || u.displayName || 'Unknown Member';
+          names[u.uid] = u.name || u.displayName || 'Member Not Found';
         });
         setMemberNames(prev => ({ ...prev, ...names }));
       });
@@ -111,7 +111,7 @@ export function ThankYouSlips() {
     databaseService.list<UserProfile>('users', []).then(users => {
       const names: Record<string, string> = {};
       users.forEach(u => {
-        names[u.uid] = u.name || u.displayName || 'Unknown Member';
+        names[u.uid] = u.name || u.displayName || 'Member Not Found';
       });
       setMemberNames(prev => ({ ...prev, ...names }));
     });

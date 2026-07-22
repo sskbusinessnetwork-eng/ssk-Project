@@ -114,6 +114,21 @@ export function Referrals() {
         return;
       }
 
+      // Query chapters table for chapter names mapping
+      const { data: chaptersData } = await supabase
+        .from('chapters')
+        .select('id, name, chapter_name');
+
+      const chapterMap = new Map<string, string>();
+      if (chaptersData) {
+        chaptersData.forEach((c: any) => {
+          const cName = c.chapter_name || c.name || '';
+          if (c.id && cName) {
+            chapterMap.set(String(c.id).trim().toLowerCase(), cName);
+          }
+        });
+      }
+
       // Query referrals from Supabase with sender and receiver joins
       let refRows: any[] = [];
       let queryError: any = null;
@@ -122,8 +137,8 @@ export function Referrals() {
         .from('referrals')
         .select(`
           *,
-          sender:users!sender_id(id, full_name, name, first_name, last_name, role, position, chapter_position),
-          receiver:users!receiver_id(id, full_name, name, first_name, last_name, role, position, chapter_position)
+          sender:users!sender_id(id, full_name, name, first_name, last_name, role, position, chapter_position, chapter_id),
+          receiver:users!receiver_id(id, full_name, name, first_name, last_name, role, position, chapter_position, chapter_id)
         `)
         .order('created_at', { ascending: false });
 
@@ -167,7 +182,7 @@ export function Referrals() {
       // Fetch user details for complete fallback mapping
       const { data: usersData, error: usersErr } = await supabase
         .from('users')
-        .select('id, uid, name, full_name, first_name, last_name, role, position, chapter_position, phone, business_name, category');
+        .select('id, uid, name, full_name, first_name, last_name, role, position, chapter_position, chapter_id, phone, business_name, category');
 
       if (usersErr) {
         console.warn("Could not fetch users list for referral mapping:", usersErr);
@@ -204,17 +219,19 @@ export function Referrals() {
           continue;
         }
 
-        const senderFullName = getUserFullName(senderUser);
-        const senderRoleFormatted = formatUserRoleOrPosition(senderUser);
+        const senderFullName = senderUser ? getUserFullName(senderUser) : 'Member Not Found';
+        const senderRoleFormatted = senderUser ? formatUserRoleOrPosition(senderUser) : '';
+        const senderChapterName = senderUser?.chapter_id ? (chapterMap.get(String(senderUser.chapter_id).trim().toLowerCase()) || '') : '';
         const senderDisplayName = senderUser
-          ? `${senderFullName || 'Member'} (${senderRoleFormatted})`
-          : (senderIdRaw ? `User Record Missing (${senderIdRaw})` : 'N/A');
+          ? `${senderFullName || 'Member Not Found'}${senderRoleFormatted ? ` (${senderRoleFormatted})` : ''}`
+          : 'Member Not Found';
 
-        const receiverFullName = getUserFullName(receiverUser);
-        const receiverRoleFormatted = formatUserRoleOrPosition(receiverUser);
+        const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member Not Found';
+        const receiverRoleFormatted = receiverUser ? formatUserRoleOrPosition(receiverUser) : '';
+        const receiverChapterName = receiverUser?.chapter_id ? (chapterMap.get(String(receiverUser.chapter_id).trim().toLowerCase()) || '') : '';
         const receiverDisplayName = receiverUser
-          ? `${receiverFullName || 'Member'} (${receiverRoleFormatted})`
-          : (receiverIdRaw ? `User Record Missing (${receiverIdRaw})` : 'N/A');
+          ? `${receiverFullName || 'Member Not Found'}${receiverRoleFormatted ? ` (${receiverRoleFormatted})` : ''}`
+          : 'Member Not Found';
 
         formattedList.push({
           id: r.id,
@@ -226,6 +243,12 @@ export function Referrals() {
           receiverName: receiverDisplayName,
           fromUserName: senderDisplayName,
           toUserName: receiverDisplayName,
+          senderFullName,
+          senderRole: senderRoleFormatted,
+          senderChapter: senderChapterName,
+          receiverFullName,
+          receiverRole: receiverRoleFormatted,
+          receiverChapter: receiverChapterName,
           contactName: r.contact_name || r.customer_name || 'N/A',
           contactPhone: r.contact_phone || r.customer_mobile || 'N/A',
           requirement: r.business_requirement || r.requirement || 'N/A',
@@ -998,22 +1021,43 @@ export function Referrals() {
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-1">
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                       Sender
                     </p>
-                    <p className="text-sm font-bold text-white">
-                      {selectedReferral.senderName}
+                    <p className="text-sm font-bold text-white leading-tight">
+                      {selectedReferral.senderFullName || selectedReferral.senderName || 'Member Not Found'}
                     </p>
+                    {selectedReferral.senderRole && (
+                      <p className="text-xs font-semibold text-primary">
+                        {selectedReferral.senderRole}
+                      </p>
+                    )}
+                    {selectedReferral.senderChapter && (
+                      <p className="text-[11px] font-medium text-neutral-400">
+                        {selectedReferral.senderChapter}
+                      </p>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
+
+                  <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 space-y-1 sm:text-right">
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                       Receiver
                     </p>
-                    <p className="text-sm font-bold text-white">
-                      {selectedReferral.receiverName}
+                    <p className="text-sm font-bold text-white leading-tight">
+                      {selectedReferral.receiverFullName || selectedReferral.receiverName || 'Member Not Found'}
                     </p>
+                    {selectedReferral.receiverRole && (
+                      <p className="text-xs font-semibold text-primary">
+                        {selectedReferral.receiverRole}
+                      </p>
+                    )}
+                    {selectedReferral.receiverChapter && (
+                      <p className="text-[11px] font-medium text-neutral-400">
+                        {selectedReferral.receiverChapter}
+                      </p>
+                    )}
                   </div>
                 </div>
 

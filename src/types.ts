@@ -73,10 +73,21 @@ export interface Meeting {
 
 export interface Referral {
   id: string;
+  sender_id?: string;
+  receiver_id?: string;
   fromUserId: string;
   fromUserName?: string;
   fromUserRole?: UserRole;
   toUserId: string;
+  senderName?: string;
+  receiverName?: string;
+  toUserName?: string;
+  senderFullName?: string;
+  senderRole?: string;
+  senderChapter?: string;
+  receiverFullName?: string;
+  receiverRole?: string;
+  receiverChapter?: string;
   contactName: string;
   contactPhone: string;
   requirement: string;
