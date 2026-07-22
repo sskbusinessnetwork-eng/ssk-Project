@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import { motion } from 'motion/react';
 import { 
   User, 
@@ -229,19 +230,36 @@ export function Profile() {
     try {
       setIsReferring(true);
       
-      const newReferral: Omit<Referral, 'id'> = {
-        fromUserId: currentUserProfile.uid,
-        toUserId: targetProfile.uid,
-        contactName: referralForm.customerName,
-        contactPhone: referralForm.mobileNumber,
-        requirement: referralForm.requirement || 'General Referral',
-        notes: referralForm.notes,
-        status: 'PENDING',
-        createdAt: new Date().toISOString()
+      const sender_id = currentUserProfile.uid;
+      const receiver_id = targetProfile.uid;
+      const chapter_id = currentUserProfile.chapter_id;
+
+      if (!sender_id) throw new Error("Missing sender_id");
+      if (!receiver_id) throw new Error("Missing receiver_id");
+      if (!chapter_id) throw new Error("Missing chapter_id: Your account is not assigned to any chapter.");
+      if (!referralForm.customerName) throw new Error("Missing customer_name");
+      if (!referralForm.mobileNumber) throw new Error("Missing customer_mobile");
+
+      const newReferral = {
+        sender_id,
+        receiver_id,
+        chapter_id,
+        customer_name: referralForm.customerName.trim(),
+        customer_mobile: referralForm.mobileNumber.trim(),
+        requirement: (referralForm.requirement || 'General Referral').trim(),
+        notes: referralForm.notes || '',
+        status: 'Pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      await databaseService.create('referrals', newReferral);
+      const { error } = await supabase
+        .from('referrals')
+        .insert([newReferral]);
+
+      if (error) throw error;
       
+      alert("Referral submitted successfully.");
       setSuccessMessage(`Referral sent to ${targetProfile.name} successfully!`);
       setIsModalOpen(false);
       setReferralForm({
@@ -251,9 +269,15 @@ export function Profile() {
         requirement: ''
       });
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (error) {
-      console.error("Error creating referral:", error);
-      alert("Failed to send referral. Please try again.");
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    } catch (error: any) {
+      console.error("Referral Insert Error:", error);
+      console.error(error?.message, error?.details, error?.hint, error?.code);
+      let mainMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
+      if (error?.code === '42501') {
+        mainMsg = "Insert blocked by Row Level Security.";
+      }
+      alert(`${mainMsg}\n\nCode: ${error?.code || 'N/A'}\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`);
     } finally {
       setIsReferring(false);
     }

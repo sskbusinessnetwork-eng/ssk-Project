@@ -209,7 +209,7 @@ export function Referrals() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        throw new Error("User is not authenticated.");
+        throw new Error("Missing sender_id: User is not authenticated.");
       }
 
       // 2. Load logged-in user's record from the Supabase users table
@@ -230,12 +230,17 @@ export function Referrals() {
       const sender_id = currentUserRecord.id || user.id;
       const chapter_id = currentUserRecord.chapter_id || profile?.chapter_id;
 
-      // 3. Verify chapter_id is not NULL
-      if (!chapter_id) {
-        throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      // 3. Verify sender_id exists
+      if (!sender_id) {
+        throw new Error("Missing sender_id");
       }
 
-      // 4. Verify chapter_id exists in chapters table
+      // 4. Verify chapter_id exists
+      if (!chapter_id) {
+        throw new Error("Missing chapter_id: Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      }
+
+      // 5. Verify chapter_id exists in chapters table
       const { data: chapterRecord, error: chapterError } = await supabase
         .from('chapters')
         .select('id')
@@ -243,13 +248,13 @@ export function Referrals() {
         .maybeSingle();
 
       if (chapterError || !chapterRecord) {
-        throw new Error("Your assigned chapter does not exist. Please contact your Chapter Admin.");
+        throw new Error("Missing chapter_id: Your assigned chapter does not exist in chapters table.");
       }
 
-      // 5. Verify selected member exists
+      // 6. Verify receiver_id exists
       const receiver_id = formData.toUserId || null;
       if (!receiver_id) {
-        throw new Error("Receiver not selected.");
+        throw new Error("Missing receiver_id");
       }
 
       const { data: receiverRecord, error: receiverError } = await supabase
@@ -260,7 +265,7 @@ export function Referrals() {
 
       if (receiverError || !receiverRecord) {
         console.error("Receiver verification error:", receiverError);
-        throw new Error("Selected member does not exist.");
+        throw new Error("Missing receiver_id: Selected member does not exist.");
       }
 
       if (receiverRecord.role === 'MASTER_ADMIN') {
@@ -271,9 +276,23 @@ export function Referrals() {
       const customer_mobile = normalizedPhone ? normalizedPhone.trim() : null;
       const requirement = formData.requirement ? formData.requirement.trim() : null;
 
-      // Log values before inserting
-      console.log({
-        currentUser: profile,
+      // 7. Verify required strings
+      if (!customer_name) throw new Error("Missing customer_name");
+      if (!customer_mobile) throw new Error("Missing customer_mobile");
+      if (!requirement) throw new Error("Missing requirement");
+
+      // 8. Log everything before inserting
+      console.log("Current User:", {
+        id: currentUserRecord.id,
+        auth_id: user.id,
+        role: currentUserRecord.role,
+        chapter_id: currentUserRecord.chapter_id
+      });
+      console.log("Selected Receiver:", {
+        id: receiverRecord.id,
+        name: receiverRecord.name
+      });
+      console.log("Referral Data:", {
         sender_id,
         receiver_id,
         chapter_id,
@@ -282,41 +301,34 @@ export function Referrals() {
         requirement
       });
 
-      // Verify non-null required fields
-      if (!sender_id) throw new Error("sender_id is missing.");
-      if (!receiver_id) throw new Error("receiver_id is missing.");
-      if (!chapter_id) throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
-      if (!customer_name) throw new Error("Contact Name is required.");
-      if (!customer_mobile) throw new Error("Contact Phone is required.");
-      if (!requirement) throw new Error("Requirement is required.");
-
-      // Build Referral payload with all supported columns
+      // 9. Build Referral Payload (matching database schema)
       const newReferral = {
         sender_id: sender_id,
-        from_user_id: sender_id,
         receiver_id: receiver_id,
-        to_user_id: receiver_id,
         chapter_id: chapter_id,
         customer_name: customer_name,
-        contact_name: customer_name,
         customer_mobile: customer_mobile,
-        contact_phone: customer_mobile,
         requirement: requirement,
-        notes: formData.notes || '',
-        status: 'PENDING',
+        notes: formData.notes ? formData.notes.trim() : '',
+        status: 'Pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Create referral in Supabase
-      const { error: insertError } = await supabase
+      console.log("Insert Payload:", newReferral);
+
+      // 10. Insert into Supabase
+      const { data: insertResult, error: insertError } = await supabase
         .from('referrals')
-        .insert([newReferral]);
+        .insert([newReferral])
+        .select();
 
       if (insertError) {
         console.error("Referral Insert Error:", insertError);
-        throw new Error(`Supabase Error: ${insertError.message}`);
+        throw insertError;
       }
+
+      console.log("Insert result:", insertResult);
 
       const toUser = members.find(m => m.uid === formData.toUserId) || receiverRecord;
 
@@ -344,8 +356,8 @@ export function Referrals() {
       }
 
       // Success Feedback
-      setSuccessMessage("Referral submitted successfully.");
       alert("Referral submitted successfully.");
+      setSuccessMessage("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
@@ -353,10 +365,22 @@ export function Referrals() {
       // Refresh Given Referrals, Received Referrals, analytics, reports, tasks
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Referral Insert Error:", error);
-      const message = error?.message || (typeof error === 'string' ? error : "Failed to send referral.");
-      alert(message);
-      setErrorMessage(message);
+      console.error("Referral Insert Error");
+      console.error(error);
+      console.error(error?.message);
+      console.error(error?.details);
+      console.error(error?.hint);
+      console.error(error?.code);
+
+      let mainMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
+      if (error?.code === '42501') {
+        mainMsg = "Insert blocked by Row Level Security.";
+      }
+
+      const fullAlertMessage = `${mainMsg}\n\nCode: ${error?.code || 'N/A'}\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`;
+
+      alert(fullAlertMessage);
+      setErrorMessage(fullAlertMessage);
     } finally {
       setIsSubmitting(false);
     }
