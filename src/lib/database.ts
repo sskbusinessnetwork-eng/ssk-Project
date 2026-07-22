@@ -223,20 +223,33 @@ export async function getDocs(queryRef: any) {
       .select('meeting_id, user_id')
       .in('meeting_id', meetingIds);
     
+    const partsMap: Record<string, string[]> = {};
     if (!partsErr && parts) {
-      const partsMap: Record<string, string[]> = {};
       parts.forEach(p => {
         if (!partsMap[p.meeting_id]) partsMap[p.meeting_id] = [];
         partsMap[p.meeting_id].push(p.user_id);
       });
-      rows.forEach(m => {
-        m.participantIds = partsMap[m.id] || [];
-      });
-    } else {
-      rows.forEach(m => {
-        m.participantIds = [];
-      });
     }
+
+    rows.forEach(m => {
+      const sender = m.senderId || m.sender_id || m.organizerId || m.organizer_id || m.creatorId;
+      const receiver = m.receiverId || m.receiver_id || m.memberId || m.member_id;
+      
+      m.sender_id = sender;
+      m.receiver_id = receiver;
+      m.organizer_id = sender;
+      m.member_id = receiver;
+      m.creatorId = sender;
+      m.date = m.scheduledDate || m.scheduled_date || m.date;
+      m.time = m.meetingTime || m.meeting_time || m.time;
+      m.venue = m.meetingLocation || m.meeting_location || m.venue;
+
+      if (partsMap[m.id] && partsMap[m.id].length > 0) {
+        m.participantIds = partsMap[m.id];
+      } else {
+        m.participantIds = [receiver].filter(Boolean);
+      }
+    });
   }
   
   const docs = rows.map(row => ({
@@ -389,6 +402,11 @@ export async function addDoc(collectionRef: any, data: any) {
   
   let participantIds: string[] | undefined = undefined;
   let cleanData = { ...data };
+  if (collectionPath === 'one_to_one_meetings') {
+    participantIds = cleanData.participantIds;
+    delete cleanData.participantIds;
+  }
+
   if (collectionPath === 'users') {
     const snakeData = keysToSnake(cleanData);
     const preparedSnake = prepareUserPayload(snakeData, '');
