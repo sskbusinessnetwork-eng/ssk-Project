@@ -99,8 +99,7 @@ export function Referrals() {
     setErrorMessage(null);
 
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const currentUserId = authData?.user?.id || profile?.uid || profile?.id;
+      const currentUserId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
       if (!currentUserId) {
         setLoading(false);
@@ -144,9 +143,9 @@ export function Referrals() {
 
       if (!joinedErr && joinedData) {
         if (filter === 'passed') {
-          refRows = joinedData.filter((r: any) => r.sender_id === currentUserId || r.from_user_id === currentUserId);
+          refRows = joinedData.filter((r: any) => String(r.sender_id) === String(currentUserId) || String(r.from_user_id) === String(currentUserId));
         } else {
-          refRows = joinedData.filter((r: any) => r.receiver_id === currentUserId || r.to_user_id === currentUserId);
+          refRows = joinedData.filter((r: any) => String(r.receiver_id) === String(currentUserId) || String(r.to_user_id) === String(currentUserId));
         }
       } else {
         if (joinedErr) {
@@ -158,9 +157,9 @@ export function Referrals() {
           .order('created_at', { ascending: false });
 
         if (filter === 'passed') {
-          fallbackQuery = fallbackQuery.eq('sender_id', currentUserId);
+          fallbackQuery = fallbackQuery.or(`sender_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`);
         } else {
-          fallbackQuery = fallbackQuery.eq('receiver_id', currentUserId);
+          fallbackQuery = fallbackQuery.or(`receiver_id.eq.${currentUserId},to_user_id.eq.${currentUserId}`);
         }
 
         const fallbackRes = await fallbackQuery;
@@ -179,7 +178,13 @@ export function Referrals() {
         return;
       }
 
-      // Fetch user details for complete fallback mapping
+      // STEP 1 - VERIFY DATABASE: Log every referral column
+      console.log(`[Referrals Table Verification] Total rows fetched: ${refRows.length}`);
+      refRows.forEach((r: any, idx: number) => {
+        console.log(`[Referral #${idx + 1}] ID: ${r.id} | sender_id: ${r.sender_id} | receiver_id: ${r.receiver_id} | chapter_id: ${r.chapter_id}`);
+      });
+
+      // STEP 2 - VERIFY USERS TABLE: Fetch users table for complete mapping
       const { data: usersData, error: usersErr } = await supabase
         .from('users')
         .select('id, uid, name, full_name, first_name, last_name, role, position, chapter_position, chapter_id, phone, business_name, category');
@@ -207,11 +212,21 @@ export function Referrals() {
         const senderUser = r.sender || userMap.get(senderKey);
         const receiverUser = r.receiver || userMap.get(receiverKey);
 
-        if (senderIdRaw && !senderUser) {
-          console.error(`[Referral Error] Missing sender record in users table for ID: "${senderIdRaw}" on referral ID: "${r.id}"`);
+        // STEP 6 - DEBUG: Log lookup results clearly
+        if (!senderUser) {
+          console.error(`Referral sender_id: ${senderIdRaw}`);
+          console.error(`Matching sender user: NOT FOUND`);
+        } else {
+          console.log(`Referral sender_id: ${senderIdRaw}`);
+          console.log(`Matching sender user:`, senderUser);
         }
-        if (receiverIdRaw && !receiverUser) {
-          console.error(`[Referral Error] Missing receiver record in users table for ID: "${receiverIdRaw}" on referral ID: "${r.id}"`);
+
+        if (!receiverUser) {
+          console.error(`Referral receiver_id: ${receiverIdRaw}`);
+          console.error(`Matching receiver user: NOT FOUND`);
+        } else {
+          console.log(`Referral receiver_id: ${receiverIdRaw}`);
+          console.log(`Matching receiver user:`, receiverUser);
         }
 
         // Master Admin must never appear as a sender or receiver
@@ -222,16 +237,10 @@ export function Referrals() {
         const senderFullName = senderUser ? getUserFullName(senderUser) : 'Member Not Found';
         const senderRoleFormatted = senderUser ? formatUserRoleOrPosition(senderUser) : '';
         const senderChapterName = senderUser?.chapter_id ? (chapterMap.get(String(senderUser.chapter_id).trim().toLowerCase()) || '') : '';
-        const senderDisplayName = senderUser
-          ? `${senderFullName || 'Member Not Found'}${senderRoleFormatted ? ` (${senderRoleFormatted})` : ''}`
-          : 'Member Not Found';
 
         const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member Not Found';
         const receiverRoleFormatted = receiverUser ? formatUserRoleOrPosition(receiverUser) : '';
         const receiverChapterName = receiverUser?.chapter_id ? (chapterMap.get(String(receiverUser.chapter_id).trim().toLowerCase()) || '') : '';
-        const receiverDisplayName = receiverUser
-          ? `${receiverFullName || 'Member Not Found'}${receiverRoleFormatted ? ` (${receiverRoleFormatted})` : ''}`
-          : 'Member Not Found';
 
         formattedList.push({
           id: r.id,
@@ -239,10 +248,10 @@ export function Referrals() {
           receiver_id: receiverIdRaw,
           fromUserId: senderIdRaw,
           toUserId: receiverIdRaw,
-          senderName: senderDisplayName,
-          receiverName: receiverDisplayName,
-          fromUserName: senderDisplayName,
-          toUserName: receiverDisplayName,
+          senderName: senderFullName,
+          receiverName: receiverFullName,
+          fromUserName: senderFullName,
+          toUserName: receiverFullName,
           senderFullName,
           senderRole: senderRoleFormatted,
           senderChapter: senderChapterName,
@@ -288,15 +297,14 @@ export function Referrals() {
   // Fetch chapter members specifically for the referral recipient dropdown
   const loadChapterMembers = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || profile?.uid || profile?.id;
+      const userId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
       if (!userId) return;
 
       const { data: currentUserData } = await supabase
         .from('users')
         .select('id, chapter_id, role')
-        .eq('id', userId)
+        .or(`id.eq.${userId},uid.eq.${userId}`)
         .maybeSingle();
 
       const userChapterId = currentUserData?.chapter_id || profile?.chapter_id;
@@ -311,7 +319,7 @@ export function Referrals() {
         .from('users')
         .select('*')
         .eq('chapter_id', userChapterId)
-        .neq('id', userId)
+        .neq('id', currentUserData?.id || userId)
         .neq('role', 'MASTER_ADMIN');
 
       if (error) {
@@ -319,8 +327,10 @@ export function Referrals() {
       } else if (chapterMembers) {
         const formatted = chapterMembers.map(m => ({
           ...m,
-          uid: m.id || m.uid,
-          name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member',
+          uid: m.id,
+          id: m.id,
+          name: getUserFullName(m) || m.name || m.full_name || 'Member',
+          displayName: getUserFullName(m) || m.name || m.full_name || 'Member',
           businessName: m.business_name || m.businessName || 'Business',
           category: m.category || m.business_category || 'Member'
         }));
@@ -395,7 +405,7 @@ export function Referrals() {
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
-      const currentUserId = profile?.uid || profile?.id || (await supabase.auth.getUser()).data?.user?.id;
+      const currentUserId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
       if (!currentUserId) {
         throw new Error("Missing sender_id: User is not authenticated.");
@@ -403,8 +413,8 @@ export function Referrals() {
 
       const { data: currentUserRecord } = await supabase
         .from('users')
-        .select('id, chapter_id, role, name')
-        .eq('id', currentUserId)
+        .select('id, chapter_id, role, name, full_name')
+        .or(`id.eq.${currentUserId},uid.eq.${currentUserId}`)
         .maybeSingle();
 
       const userRole = currentUserRecord?.role || profile?.role;
@@ -423,20 +433,22 @@ export function Referrals() {
         throw new Error("Missing chapter_id: Your account is not assigned to any chapter. Please contact your Chapter Admin.");
       }
 
-      const receiver_id = formData.toUserId || null;
-      if (!receiver_id) {
+      const selectedReceiverId = formData.toUserId || null;
+      if (!selectedReceiverId) {
         throw new Error("Missing receiver_id");
       }
 
       const { data: receiverRecord, error: receiverError } = await supabase
         .from('users')
-        .select('id, name, chapter_id, role')
-        .eq('id', receiver_id)
+        .select('id, name, full_name, chapter_id, role')
+        .or(`id.eq.${selectedReceiverId},uid.eq.${selectedReceiverId}`)
         .maybeSingle();
 
       if (receiverError || !receiverRecord) {
-        throw new Error("Missing receiver_id: Selected member does not exist.");
+        throw new Error("Missing receiver_id: Selected member does not exist in users table.");
       }
+
+      const receiver_id = receiverRecord.id;
 
       if (receiverRecord.role === 'MASTER_ADMIN') {
         throw new Error("Master Admins cannot receive referrals.");
@@ -450,10 +462,14 @@ export function Referrals() {
       if (!contact_phone) throw new Error("Missing contact_phone (Mobile Number)");
       if (!business_requirement) throw new Error("Missing business_requirement (Requirement)");
 
+      console.log(`[Referral Insert] Creating referral with sender_id (users.id): "${sender_id}", receiver_id (users.id): "${receiver_id}", chapter_id: "${chapter_id}"`);
+
       const newReferral = {
         sender_id: sender_id,
         receiver_id: receiver_id,
         chapter_id: chapter_id,
+        from_user_id: sender_id,
+        to_user_id: receiver_id,
         contact_name: contact_name,
         contact_phone: contact_phone,
         business_requirement: business_requirement,

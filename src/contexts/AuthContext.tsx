@@ -62,12 +62,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (userProfile: UserProfile) => {
     const verifiedProfile = await ensureUserChapterId(userProfile);
-    setUser({ uid: verifiedProfile.uid });
-    setProfile(verifiedProfile);
+    const userId = verifiedProfile.id || verifiedProfile.uid;
+    const finalProfile = {
+      ...verifiedProfile,
+      id: userId,
+      uid: userId
+    };
+
+    const pAny = finalProfile as any;
+    console.log('Current User', {
+      id: pAny.id,
+      auth_user_id: pAny.auth_user_id || pAny.id,
+      chapter_id: pAny.chapter_id,
+      role: pAny.role,
+      full_name: pAny.full_name || pAny.name
+    });
+
+    setUser({ uid: userId, id: userId });
+    setProfile(finalProfile);
     localStorage.setItem('user', JSON.stringify({ 
-      uid: verifiedProfile.uid, 
-      phone: verifiedProfile.phone,
-      profile: verifiedProfile
+      uid: userId,
+      id: userId,
+      phone: finalProfile.phone,
+      profile: finalProfile
     }));
   };
 
@@ -121,9 +138,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (userDoc.exists()) {
           const userData = userDoc.data() as UserProfile;
-          let updatedProfile = { uid, ...userData };
+          let updatedProfile = { id: uid, uid, ...userData };
           updatedProfile = await ensureUserChapterId(updatedProfile);
-          setUser({ uid });
+
+          const pAny = updatedProfile as any;
+          console.log('Current User', {
+            id: pAny.id || pAny.uid,
+            auth_user_id: pAny.auth_user_id || pAny.id || pAny.uid,
+            chapter_id: pAny.chapter_id,
+            role: pAny.role,
+            full_name: pAny.full_name || pAny.name
+          });
+
+          setUser({ uid, id: uid });
           setProfile(updatedProfile);
           localStorage.setItem('user', JSON.stringify({
             uid,
