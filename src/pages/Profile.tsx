@@ -165,20 +165,132 @@ export function Profile() {
     fetchData();
   }, [currentUserProfile, isViewMode, targetUserId, isAdmin]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert('File size too large. Please select an image under 2MB.');
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          const MAX_HEIGHT = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Canvas to Blob failed'));
+              }
+            },
+            'image/webp',
+            0.8
+          );
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUserProfile?.uid) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setErrorMessage('Invalid file type. Please upload a JPG, PNG, or WEBP image.');
+      setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData(prev => ({ ...prev, photoURL: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('File size too large. Please select an image under 5MB.');
+      setTimeout(() => setErrorMessage(null), 5000);
+      return;
+    }
+
+    try {
+      setIsUploadingPhoto(true);
+      setErrorMessage(null);
+
+      // Compress image
+      const compressedBlob = await compressImage(file);
+      const fileExt = 'webp';
+      const fileName = `${currentUserProfile.uid}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Delete old photo if it exists and is from our bucket
+      if (formData.photoURL && formData.photoURL.includes('supabase.co/storage/v1/object/public/profile_photos/')) {
+        try {
+          const oldUrl = new URL(formData.photoURL);
+          const pathSegments = oldUrl.pathname.split('/');
+          const oldFileName = pathSegments[pathSegments.length - 1];
+          if (oldFileName) {
+            await supabase.storage.from('profile_photos').remove([oldFileName]);
+          }
+        } catch (err) {
+          console.warn("Failed to delete old profile photo", err);
+        }
+      }
+
+      // Upload new photo
+      const { error: uploadError, data } = await supabase.storage
+        .from('profile_photos')
+        .upload(filePath, compressedBlob, {
+          contentType: 'image/webp',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile_photos')
+        .getPublicUrl(filePath);
+
+      // Update formData and database
+      setFormData(prev => ({ ...prev, photoURL: publicUrl }));
+      await databaseService.update('users', currentUserProfile.uid, { photoURL: publicUrl });
+
+      setSuccessMessage('Profile picture updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    } catch (error: any) {
+      console.error("Error uploading photo:", error);
+      setErrorMessage(error.message || 'Failed to upload profile picture.');
+      setTimeout(() => setErrorMessage(null), 5000);
+    } finally {
+      setIsUploadingPhoto(false);
+      // Reset input so the same file can be uploaded again if needed
+      if (e.target) {
+         e.target.value = '';
+      }
+    }
   };
 
   const handleRemovePhoto = () => {
@@ -746,9 +858,13 @@ export function Profile() {
                 </div>
               )}
             </div>
-            <label className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-2 border-[#111827] active:scale-90 transition-all">
-              <Camera size={16} />
-              <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+            <label className={cn("absolute bottom-0 right-0 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-2 border-[#111827] transition-all", isUploadingPhoto ? "opacity-50 cursor-not-allowed" : "active:scale-90")}>
+              {isUploadingPhoto ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Camera size={16} />
+              )}
+              <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg,image/webp" onChange={handlePhotoUpload} disabled={isUploadingPhoto} />
             </label>
           </div>
           <div>

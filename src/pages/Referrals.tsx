@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -7,7 +7,8 @@ import {
   ArrowRightLeft,
   AlertCircle,
   Share2,
-  Users
+  Users,
+  Building2
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
@@ -60,6 +61,9 @@ export function Referrals() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [thankYouSlips, setThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [allMembers, setAllMembers] = useState<any[]>([]);
+  const [memberFilter, setMemberFilter] = useState<'all' | 'my_chapter'>('all');
+  const [currentUserChapterId, setCurrentUserChapterId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'passed' | 'received'>('received');
   const [loading, setLoading] = useState(true);
@@ -298,14 +302,30 @@ export function Referrals() {
     }
   };
 
-  // Fetch chapter members specifically for the referral recipient dropdown
-  const loadChapterMembers = async () => {
+  // Fetch all active members from Supabase users table for referral recipient dropdown
+  const loadAllMembers = async () => {
     try {
       const currentAuthId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
-
       if (!currentAuthId) return;
 
-      let currentUserQuery = supabase.from('users').select('id, chapter_id, role');
+      // 1. Fetch chapters mapping for chapter names
+      const { data: chaptersData } = await supabase
+        .from('chapters')
+        .select('id, name, chapter_name');
+
+      const cmap = new Map<string, string>();
+      if (chaptersData) {
+        chaptersData.forEach((c: any) => {
+          const cName = c.chapter_name || c.name || '';
+          if (c.id && cName) {
+            cmap.set(String(c.id).trim().toLowerCase(), cName);
+            cmap.set(String(c.id).trim(), cName);
+          }
+        });
+      }
+
+      // 2. Lookup current user
+      let currentUserQuery = supabase.from('users').select('id, uid, chapter_id, role');
       if (typeof currentAuthId === 'number' || (typeof currentAuthId === 'string' && /^\d+$/.test(currentAuthId))) {
         currentUserQuery = currentUserQuery.eq('id', currentAuthId);
       } else {
@@ -313,56 +333,120 @@ export function Referrals() {
       }
       const { data: currentUserRecord } = await currentUserQuery.maybeSingle();
 
-      const userChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
-      const userRole = currentUserRecord?.role || profile?.role;
+      const userChapId = currentUserRecord?.chapter_id || profile?.chapter_id || (profile as any)?.chapterId;
+      if (userChapId) {
+        setCurrentUserChapterId(String(userChapId));
+      }
 
-      if (userRole === 'MASTER_ADMIN' || !userChapterId) {
-        setMembers([]);
+      const currentUserId = currentUserRecord?.id || profile?.id;
+      const currentUserUid = currentUserRecord?.uid || profile?.uid;
+
+      // 3. Query all users from Supabase users table
+      const { data: usersData, error } = await supabase
+        .from('users')
+        .select('*');
+
+      if (error) {
+        console.error("Error fetching active members for referral dropdown:", error);
         return;
       }
 
-      let memberQuery = supabase
-        .from('users')
-        .select('id, name, full_name, first_name, last_name, position, chapter_position, category, business_category, chapter_id, role')
-        .eq('chapter_id', userChapterId)
-        .neq('role', 'MASTER_ADMIN');
+      if (usersData) {
+        const activeMembers = usersData
+          .filter((m: any) => {
+            // Exclude MASTER_ADMIN
+            if (m.role === 'MASTER_ADMIN') return false;
 
-      const currentUserId = currentUserRecord?.id || profile?.id;
-      if (currentUserId && (typeof currentUserId === 'number' || /^\d+$/.test(String(currentUserId)))) {
-        memberQuery = memberQuery.neq('id', currentUserId);
-      }
+            // Exclude currently logged in user
+            if (currentUserId && (String(m.id) === String(currentUserId) || String(m.uid) === String(currentUserId))) {
+              return false;
+            }
+            if (currentUserUid && (String(m.id) === String(currentUserUid) || String(m.uid) === String(currentUserUid))) {
+              return false;
+            }
 
-      const { data: chapterMembers, error } = await memberQuery;
+            // Status check
+            const statusStr = (m.status || '').toUpperCase().trim();
+            if (statusStr === 'INACTIVE' || statusStr === 'EXPIRED' || statusStr === 'SUSPENDED') {
+              return false;
+            }
 
-      if (error) {
-        console.error("Error fetching chapter members for dropdown:", error);
-      } else if (chapterMembers) {
-        const formatted = chapterMembers.map(m => {
-          const fullName = getUserFullName(m) || m.name || m.full_name || 'Member';
-          const pos = m.position || m.chapter_position || '';
-          const cat = m.category || m.business_category || '';
-          return {
-            ...m,
-            id: m.id,
-            uid: m.id,
-            name: fullName,
-            displayName: fullName,
-            position: pos,
-            category: cat
-          };
-        });
-        setMembers(formatted as unknown as UserProfile[]);
+            // Subscription status check
+            const subStatusStr = (m.subscription_status || m.subscriptionStatus || '').toUpperCase().trim();
+            if (subStatusStr === 'INACTIVE' || subStatusStr === 'EXPIRED') {
+              return false;
+            }
+
+            // Subscription end date check
+            const endDateStr = m.subscription_end || m.subscription_end_date || m.subscriptionEndDate;
+            if (endDateStr && subStatusStr !== 'ACTIVE') {
+              try {
+                const endDate = new Date(endDateStr);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                if (!isNaN(endDate.getTime()) && endDate < today) {
+                  return false;
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+
+            return true;
+          })
+          .map((m: any) => {
+            const fullName = getUserFullName(m) || m.name || m.full_name || 'Member';
+            const pos = formatUserRoleOrPosition(m);
+            const cat = m.category || m.business_category || m.business_name || '';
+            const phone = m.phone || m.contact_phone || m.mobile || m.phone_number || '';
+            const rawChapId = m.chapter_id || m.chapterId || '';
+            const cId = rawChapId ? String(rawChapId).trim().toLowerCase() : '';
+            const chapterName = cId ? (cmap.get(cId) || m.chapter_name || m.chapterName || 'Chapter') : (m.chapter_name || m.chapterName || 'No Chapter');
+
+            return {
+              ...m,
+              id: m.id,
+              uid: m.uid || m.id,
+              name: fullName,
+              displayName: fullName,
+              position: pos,
+              category: cat,
+              phone: phone,
+              chapterId: rawChapId,
+              chapter_id: rawChapId,
+              chapterName: chapterName
+            };
+          });
+
+        setAllMembers(activeMembers);
+        setMembers(activeMembers as unknown as UserProfile[]);
       }
     } catch (err) {
-      console.error("Failed to fetch chapter members for dropdown:", err);
+      console.error("Failed to fetch active members for referral dropdown:", err);
     }
   };
+
+  const effectiveUserChapterId = currentUserChapterId || profile?.chapter_id || (profile as any)?.chapterId;
+
+  const filteredMembers = useMemo(() => {
+    if (memberFilter === 'my_chapter') {
+      if (!effectiveUserChapterId) return [];
+      return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim());
+    }
+    return allMembers;
+  }, [allMembers, memberFilter, effectiveUserChapterId]);
+
+  const allCount = allMembers.length;
+  const myChapterCount = useMemo(() => {
+    if (!effectiveUserChapterId) return 0;
+    return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim()).length;
+  }, [allMembers, effectiveUserChapterId]);
 
   useEffect(() => {
     if (!profile) return;
 
     fetchReferrals();
-    loadChapterMembers();
+    loadAllMembers();
 
     // Subscribe to realtime changes on referrals table
     const channel = supabase
@@ -443,15 +527,11 @@ export function Referrals() {
       }
 
       const sender_id = currentUserRecord.id; // users.id
-      const chapter_id = currentUserRecord.chapter_id || profile?.chapter_id;
+      let chapter_id = currentUserRecord.chapter_id || profile?.chapter_id || (profile as any)?.chapterId;
 
       const userRole = currentUserRecord.role || profile?.role;
       if (userRole === 'MASTER_ADMIN') {
         throw new Error("Master Admins cannot send referrals as they are not part of the business network.");
-      }
-
-      if (!chapter_id) {
-        throw new Error("Missing chapter_id: Your account is not assigned to any chapter. Please contact your Chapter Admin.");
       }
 
       const selectedReceiverId = formData.toUserId || null;
@@ -465,6 +545,19 @@ export function Referrals() {
         .select('*')
         .eq('id', selectedReceiverId)
         .maybeSingle();
+
+      if (receiverError || !receiverRecord) {
+        console.error("Receiver lookup error:", receiverError);
+        throw new Error("The selected member is invalid.");
+      }
+
+      if (!chapter_id) {
+        chapter_id = receiverRecord.chapter_id;
+      }
+
+      if (!chapter_id) {
+        throw new Error("Missing chapter_id: Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      }
 
       // STEP 7 - Debug logging
       console.log("Logged in user id:", sender_id);
@@ -861,35 +954,66 @@ export function Referrals() {
         title="Pass a New Referral"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Member Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Select Member</label>
+            <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+              Filter Members
+            </label>
+            <div className="grid grid-cols-2 gap-2 bg-[#111827] p-1.5 rounded-xl border border-white/5">
+              <button
+                type="button"
+                onClick={() => setMemberFilter('all')}
+                className={cn(
+                  "py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2",
+                  memberFilter === 'all'
+                    ? "bg-primary text-white shadow-md shadow-primary/20"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Users size={14} />
+                All Members ({allCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberFilter('my_chapter')}
+                className={cn(
+                  "py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2",
+                  memberFilter === 'my_chapter'
+                    ? "bg-primary text-white shadow-md shadow-primary/20"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Building2 size={14} />
+                My Chapter ({myChapterCount})
+              </button>
+            </div>
+          </div>
+
+          {/* Member Selection Dropdown */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Select Member</label>
+              <span className="text-xs text-neutral-400 font-semibold">{filteredMembers.length} active member(s)</span>
+            </div>
             <select
               id="referral-toUserId"
               required
               value={formData.toUserId}
               onChange={(e) => {
                 const selectedMemberId = e.target.value;
-                const selectedMember = members.find(m => String(m.id) === String(selectedMemberId));
-                const selectedMemberName = selectedMember ? (selectedMember.name || getUserFullName(selectedMember)) : '';
-                
-                // STEP 2 - Debug log selection
-                console.log({
-                  selectedMember,
-                  selectedMemberId,
-                  selectedMemberName
-                });
-
                 setFormData({ ...formData, toUserId: selectedMemberId });
               }}
-              className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium"
             >
               <option value="" className="bg-[#111827] text-white">Choose a member...</option>
-              {members.map((m) => {
-                const posStr = m.position ? ` (${m.position})` : '';
-                const catStr = m.category ? ` - ${m.category}` : '';
+              {filteredMembers.map((m) => {
+                const nameStr = m.displayName || m.name || 'Member';
+                const chapterStr = m.chapterName ? ` (${m.chapterName})` : '';
+                const posStr = m.position ? ` - ${m.position}` : '';
+                const phoneStr = m.phone ? ` • ${m.phone}` : '';
                 return (
                   <option key={m.id} value={m.id} className="bg-[#111827] text-white">
-                    {m.name || m.displayName}{posStr}{catStr}
+                    {nameStr}{chapterStr}{posStr}{phoneStr}
                   </option>
                 );
               })}
