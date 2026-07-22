@@ -297,18 +297,18 @@ export function Referrals() {
   // Fetch chapter members specifically for the referral recipient dropdown
   const loadChapterMembers = async () => {
     try {
-      const userId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
+      const currentAuthId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
-      if (!userId) return;
+      if (!currentAuthId) return;
 
-      const { data: currentUserData } = await supabase
+      const { data: currentUserRecord } = await supabase
         .from('users')
         .select('id, chapter_id, role')
-        .or(`id.eq.${userId},uid.eq.${userId}`)
+        .or(`id.eq.${currentAuthId},uid.eq.${currentAuthId}`)
         .maybeSingle();
 
-      const userChapterId = currentUserData?.chapter_id || profile?.chapter_id;
-      const userRole = currentUserData?.role || profile?.role;
+      const userChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
+      const userRole = currentUserRecord?.role || profile?.role;
 
       if (userRole === 'MASTER_ADMIN' || !userChapterId) {
         setMembers([]);
@@ -317,24 +317,29 @@ export function Referrals() {
 
       const { data: chapterMembers, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, name, full_name, first_name, last_name, position, chapter_position, category, business_category, chapter_id, role')
         .eq('chapter_id', userChapterId)
-        .neq('id', currentUserData?.id || userId)
+        .neq('id', currentUserRecord?.id || currentAuthId)
         .neq('role', 'MASTER_ADMIN');
 
       if (error) {
         console.error("Error fetching chapter members for dropdown:", error);
       } else if (chapterMembers) {
-        const formatted = chapterMembers.map(m => ({
-          ...m,
-          uid: m.id,
-          id: m.id,
-          name: getUserFullName(m) || m.name || m.full_name || 'Member',
-          displayName: getUserFullName(m) || m.name || m.full_name || 'Member',
-          businessName: m.business_name || m.businessName || 'Business',
-          category: m.category || m.business_category || 'Member'
-        }));
-        setMembers(formatted as UserProfile[]);
+        const formatted = chapterMembers.map(m => {
+          const fullName = getUserFullName(m) || m.name || m.full_name || 'Member';
+          const pos = m.position || m.chapter_position || '';
+          const cat = m.category || m.business_category || '';
+          return {
+            ...m,
+            id: m.id,
+            uid: m.id,
+            name: fullName,
+            displayName: fullName,
+            position: pos,
+            category: cat
+          };
+        });
+        setMembers(formatted as unknown as UserProfile[]);
       }
     } catch (err) {
       console.error("Failed to fetch chapter members for dropdown:", err);
@@ -405,28 +410,30 @@ export function Referrals() {
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
-      const currentUserId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
+      const currentAuthId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
-      if (!currentUserId) {
+      if (!currentAuthId) {
         throw new Error("Missing sender_id: User is not authenticated.");
       }
 
-      const { data: currentUserRecord } = await supabase
+      // STEP 4 - Sender: Use Logged in user's users.id
+      const { data: currentUserRecord, error: senderErr } = await supabase
         .from('users')
-        .select('id, chapter_id, role, name, full_name')
-        .or(`id.eq.${currentUserId},uid.eq.${currentUserId}`)
+        .select('*')
+        .or(`id.eq.${currentAuthId},uid.eq.${currentAuthId}`)
         .maybeSingle();
 
-      const userRole = currentUserRecord?.role || profile?.role;
-      if (userRole === 'MASTER_ADMIN') {
-        throw new Error("Master Admins cannot send referrals as they are not part of the business network.");
+      if (senderErr || !currentUserRecord) {
+        console.error("Sender lookup error:", senderErr);
+        throw new Error("The logged in user is invalid.");
       }
 
-      const sender_id = currentUserRecord?.id || currentUserId;
-      const chapter_id = currentUserRecord?.chapter_id || profile?.chapter_id;
+      const sender_id = currentUserRecord.id; // users.id
+      const chapter_id = currentUserRecord.chapter_id || profile?.chapter_id;
 
-      if (!sender_id) {
-        throw new Error("Missing sender_id");
+      const userRole = currentUserRecord.role || profile?.role;
+      if (userRole === 'MASTER_ADMIN') {
+        throw new Error("Master Admins cannot send referrals as they are not part of the business network.");
       }
 
       if (!chapter_id) {
@@ -435,20 +442,28 @@ export function Referrals() {
 
       const selectedReceiverId = formData.toUserId || null;
       if (!selectedReceiverId) {
-        throw new Error("Missing receiver_id");
+        throw new Error("The selected member is invalid.");
       }
 
+      // STEP 3 - Before inserting: Run SELECT * FROM users WHERE id = receiver_id
       const { data: receiverRecord, error: receiverError } = await supabase
         .from('users')
-        .select('id, name, full_name, chapter_id, role')
-        .or(`id.eq.${selectedReceiverId},uid.eq.${selectedReceiverId}`)
+        .select('*')
+        .eq('id', selectedReceiverId)
         .maybeSingle();
 
+      // STEP 7 - Debug logging
+      console.log("Logged in user id:", sender_id);
+      console.log("Selected member id:", selectedReceiverId);
+      console.log("Sender lookup:", currentUserRecord);
+      console.log("Receiver lookup:", receiverRecord);
+
       if (receiverError || !receiverRecord) {
-        throw new Error("Missing receiver_id: Selected member does not exist in users table.");
+        console.error("Receiver lookup error:", receiverError);
+        throw new Error("The selected member is invalid.");
       }
 
-      const receiver_id = receiverRecord.id;
+      const receiver_id = receiverRecord.id; // users.id
 
       if (receiverRecord.role === 'MASTER_ADMIN') {
         throw new Error("Master Admins cannot receive referrals.");
@@ -462,8 +477,7 @@ export function Referrals() {
       if (!contact_phone) throw new Error("Missing contact_phone (Mobile Number)");
       if (!business_requirement) throw new Error("Missing business_requirement (Requirement)");
 
-      console.log(`[Referral Insert] Creating referral with sender_id (users.id): "${sender_id}", receiver_id (users.id): "${receiver_id}", chapter_id: "${chapter_id}"`);
-
+      // STEP 5 - Referral insert
       const newReferral = {
         sender_id: sender_id,
         receiver_id: receiver_id,
@@ -799,13 +813,32 @@ export function Referrals() {
               id="referral-toUserId"
               required
               value={formData.toUserId}
-              onChange={(e) => setFormData({ ...formData, toUserId: e.target.value })}
+              onChange={(e) => {
+                const selectedMemberId = e.target.value;
+                const selectedMember = members.find(m => String(m.id) === String(selectedMemberId));
+                const selectedMemberName = selectedMember ? (selectedMember.name || getUserFullName(selectedMember)) : '';
+                
+                // STEP 2 - Debug log selection
+                console.log({
+                  selectedMember,
+                  selectedMemberId,
+                  selectedMemberName
+                });
+
+                setFormData({ ...formData, toUserId: selectedMemberId });
+              }}
               className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
             >
               <option value="" className="bg-[#111827] text-white">Choose a member...</option>
-              {members.map((m) => (
-                <option key={m.uid} value={m.uid} className="bg-[#111827] text-white">{m.name || m.displayName} ({m.businessName} - {m.category})</option>
-              ))}
+              {members.map((m) => {
+                const posStr = m.position ? ` (${m.position})` : '';
+                const catStr = m.category ? ` - ${m.category}` : '';
+                return (
+                  <option key={m.id} value={m.id} className="bg-[#111827] text-white">
+                    {m.name || m.displayName}{posStr}{catStr}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
