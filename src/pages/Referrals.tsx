@@ -203,12 +203,10 @@ export function Referrals() {
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
       
-      // 1. Verify authenticated user via Supabase
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // 1. Verify authenticated user
+      const currentUserId = profile?.uid || profile?.id || (await supabase.auth.getUser()).data?.user?.id;
 
-      if (!user) {
+      if (!currentUserId) {
         throw new Error("Missing sender_id: User is not authenticated.");
       }
 
@@ -216,19 +214,16 @@ export function Referrals() {
       const { data: currentUserRecord, error: currentUserError } = await supabase
         .from('users')
         .select('id, chapter_id, role, name')
-        .eq('id', user.id)
+        .eq('id', currentUserId)
         .maybeSingle();
 
-      if (currentUserError || !currentUserRecord) {
-        throw new Error("Logged-in user profile not found in users table.");
-      }
-
-      if (currentUserRecord.role === 'MASTER_ADMIN' || profile?.role === 'MASTER_ADMIN') {
+      const userRole = currentUserRecord?.role || profile?.role;
+      if (userRole === 'MASTER_ADMIN') {
         throw new Error("Master Admins cannot send referrals as they are not part of the business network.");
       }
 
-      const sender_id = currentUserRecord.id || user.id;
-      const chapter_id = currentUserRecord.chapter_id || profile?.chapter_id;
+      const sender_id = currentUserRecord?.id || currentUserId;
+      const chapter_id = currentUserRecord?.chapter_id || profile?.chapter_id;
 
       // 3. Verify sender_id exists
       if (!sender_id) {
@@ -272,6 +267,10 @@ export function Referrals() {
         throw new Error("Master Admins cannot receive referrals.");
       }
 
+      if (receiverRecord.chapter_id && receiverRecord.chapter_id !== chapter_id && userRole !== 'MASTER_ADMIN') {
+        throw new Error("Sender and receiver must belong to the same chapter.");
+      }
+
       const customer_name = formData.contactName ? formData.contactName.trim() : null;
       const customer_mobile = normalizedPhone ? normalizedPhone.trim() : null;
       const requirement = formData.requirement ? formData.requirement.trim() : null;
@@ -281,16 +280,17 @@ export function Referrals() {
       if (!customer_mobile) throw new Error("Missing customer_mobile");
       if (!requirement) throw new Error("Missing requirement");
 
-      // 8. Log everything before inserting
+      // 8. Log details before inserting
       console.log("Current User:", {
-        id: currentUserRecord.id,
-        auth_id: user.id,
-        role: currentUserRecord.role,
-        chapter_id: currentUserRecord.chapter_id
+        id: sender_id,
+        role: userRole,
+        chapter_id: chapter_id
       });
       console.log("Selected Receiver:", {
         id: receiverRecord.id,
-        name: receiverRecord.name
+        name: receiverRecord.name,
+        role: receiverRecord.role,
+        chapter_id: receiverRecord.chapter_id
       });
       console.log("Referral Data:", {
         sender_id,
@@ -324,7 +324,7 @@ export function Referrals() {
         .select();
 
       if (insertError) {
-        console.error("Referral Insert Error:", insertError);
+        console.error("Referral Insert Error Object:", insertError);
         throw insertError;
       }
 
@@ -365,12 +365,11 @@ export function Referrals() {
       // Refresh Given Referrals, Received Referrals, analytics, reports, tasks
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Referral Insert Error");
-      console.error(error);
-      console.error(error?.message);
-      console.error(error?.details);
-      console.error(error?.hint);
-      console.error(error?.code);
+      console.error("Referral Insert / RLS Error:");
+      console.error("Policy Name:", error?.policy || "referrals_insert_policy");
+      console.error("PostgreSQL Error:", error?.message || error);
+      console.error("SQLSTATE Code:", error?.code || "42501");
+      console.error("Complete Supabase Error Object:", JSON.stringify(error, null, 2), error);
 
       let mainMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
       if (error?.code === '42501') {

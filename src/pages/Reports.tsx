@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
+import { calculateMemberGrowthScore } from '../utils/growthScore';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
@@ -324,17 +325,18 @@ export function Reports() {
       const testimonialsSubmitted = reportsData.testimonials.filter(t => t.authorMemberId === member.uid).length;
 
       // Formulaic custom Growth Score out of 100
-      const attendanceScore = attendancePercent;
-      const referralsScore = Math.min(referralsPassed * 20, 100); // 5 referrals = 100%
-      const oneToOnesScore = Math.min(completedOneToOnesCount * 25, 100); // 4 sessions = 100%
-      const guestsScore = Math.min(guestsInvited * 33.3, 100); // 3 guests = 100%
-      
-      const growthScore = Math.round(
-        attendanceScore * 0.40 + 
-        referralsScore * 0.25 + 
-        oneToOnesScore * 0.20 + 
-        guestsScore * 0.15
-      );
+      const growthScore = calculateMemberGrowthScore({
+        attendancePercent,
+        completedOneToOnes: completedOneToOnesCount,
+        referralsSent: referralsPassed,
+        referralsReceived: reportsData.referrals.filter(r => (r.toUserId || r.receiver_id) === member.uid).length,
+        thankYouSlipsSent: 0,
+        thankYouSlipsReceived: 0,
+        guestInvites: guestsInvited,
+        testimonialsSubmitted,
+        isProfileComplete: Boolean(member.name && member.phone && member.businessName),
+        isSubscriptionActive: member.membershipStatus === 'ACTIVE' || member.status === 'ACTIVE'
+      }).score;
 
       // Human-readable position label
       let displayPosition = 'Associate Member';

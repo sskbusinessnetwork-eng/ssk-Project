@@ -2,7 +2,7 @@ import { format, addYears } from 'date-fns';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
-  Eye, Plus, Filter, TrendingUp, CheckCircle2, Clock, Sparkles, Target, Compass, 
+  Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
   CheckSquare, User
 , AlertTriangle} from 'lucide-react';
@@ -21,6 +21,7 @@ import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
+import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -1063,13 +1064,139 @@ export function Analytics() {
   }, [chapterUsers, profile, subscriptionRequests, resolvedChapterName]);
 
 
-  // Dynamic Growth Score
-  const dynamicGrowthScore = useMemo(() => {
-    if (profile?.role !== 'MEMBER') return weeklyMeetingAttendance || 0;
-    if (todayTasks.length === 0) return 100;
-    const completed = todayTasks.filter(t => t.isDone).length;
-    return Math.round((completed / todayTasks.length) * 100);
-  }, [todayTasks, profile, weeklyMeetingAttendance]);
+  // Dynamic Growth Score & Status calculation
+  const growthScoreData = useMemo(() => {
+    if (!profile) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+
+    if (profile.role === 'MASTER_ADMIN') {
+      if (chapterUsers.length === 0) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+      const totalActivities = allReferrals.length + allSlips.length + oneToOnes.length + guestInvitations.length + allTestimonials.length;
+      if (totalActivities === 0) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+
+      const scores = chapterUsers.map(u => {
+        const uRefsSent = allReferrals.filter(r => (r.fromUserId || r.sender_id) === u.uid || r.sender_id === u.id).length;
+        const uRefsRecv = allReferrals.filter(r => (r.toUserId || r.receiver_id) === u.uid || r.receiver_id === u.id).length;
+        const uSlipsSent = allSlips.filter(s => (s.fromUserId || s.sender_id) === u.uid || s.sender_id === u.id).length;
+        const uSlipsRecv = allSlips.filter(s => (s.toUserId || s.receiver_id) === u.uid || s.receiver_id === u.id).length;
+        const uOto = oneToOnes.filter(m => [m.organizer_id, m.creatorId, m.member_id].includes(u.uid) || [m.organizer_id, m.member_id].includes(u.id)).length;
+        const uGuests = guestInvitations.filter(g => (g.createdBy || g.user_id) === u.uid || g.user_id === u.id).length;
+        const uTest = allTestimonials.filter(t => (t.authorMemberId || t.author_id) === u.uid || t.author_id === u.id).length;
+        return calculateMemberGrowthScore({
+          attendancePercent: weeklyMeetingAttendance,
+          completedOneToOnes: uOto,
+          referralsSent: uRefsSent,
+          referralsReceived: uRefsRecv,
+          thankYouSlipsSent: uSlipsSent,
+          thankYouSlipsReceived: uSlipsRecv,
+          guestInvites: uGuests,
+          testimonialsSubmitted: uTest,
+          isProfileComplete: Boolean(u.name && u.phone && u.businessName),
+          isSubscriptionActive: u.membershipStatus === 'ACTIVE' || u.status === 'ACTIVE'
+        }).score;
+      });
+      const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / (scores.length || 1));
+      return calculateMemberGrowthScore({ attendancePercent: avgScore });
+    } else if (profile.role === 'CHAPTER_ADMIN' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(profile.position || '')) {
+      const chapterMems = chapterUsers.filter(u => u.chapter_id === profile.chapter_id || u.chapterId === profile.chapter_id);
+      if (chapterMems.length === 0) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+      const totalActivities = allReferrals.length + allSlips.length + oneToOnes.length + guestInvitations.length + allTestimonials.length;
+      if (totalActivities === 0) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+
+      const scores = chapterMems.map(u => {
+        const uRefsSent = allReferrals.filter(r => (r.fromUserId || r.sender_id) === u.uid || r.sender_id === u.id).length;
+        const uRefsRecv = allReferrals.filter(r => (r.toUserId || r.receiver_id) === u.uid || r.receiver_id === u.id).length;
+        const uSlipsSent = allSlips.filter(s => (s.fromUserId || s.sender_id) === u.uid || s.sender_id === u.id).length;
+        const uSlipsRecv = allSlips.filter(s => (s.toUserId || s.receiver_id) === u.uid || s.receiver_id === u.id).length;
+        const uOto = oneToOnes.filter(m => [m.organizer_id, m.creatorId, m.member_id].includes(u.uid) || [m.organizer_id, m.member_id].includes(u.id)).length;
+        const uGuests = guestInvitations.filter(g => (g.createdBy || g.user_id) === u.uid || g.user_id === u.id).length;
+        const uTest = allTestimonials.filter(t => (t.authorMemberId || t.author_id) === u.uid || t.author_id === u.id).length;
+        return calculateMemberGrowthScore({
+          attendancePercent: weeklyMeetingAttendance,
+          completedOneToOnes: uOto,
+          referralsSent: uRefsSent,
+          referralsReceived: uRefsRecv,
+          thankYouSlipsSent: uSlipsSent,
+          thankYouSlipsReceived: uSlipsRecv,
+          guestInvites: uGuests,
+          testimonialsSubmitted: uTest,
+          isProfileComplete: Boolean(u.name && u.phone && u.businessName),
+          isSubscriptionActive: u.membershipStatus === 'ACTIVE' || u.status === 'ACTIVE'
+        }).score;
+      });
+      const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / (scores.length || 1));
+      return calculateMemberGrowthScore({ attendancePercent: avgScore });
+    } else {
+      const uRefsSent = passedReferrals.length;
+      const uRefsRecv = receivedReferrals.length;
+      const uSlipsSent = allSlips.filter(s => (s.fromUserId || s.sender_id) === profile.uid).length;
+      const uSlipsRecv = allSlips.filter(s => (s.toUserId || s.receiver_id) === profile.uid).length;
+      const uOto = oneToOnes.filter(m => [m.organizer_id, m.creatorId, m.member_id].includes(profile.uid)).length;
+      const uGuests = guestInvitations.filter(g => (g.createdBy || g.user_id) === profile.uid).length;
+      const uTest = allTestimonials.filter(t => (t.authorMemberId || t.author_id) === profile.uid).length;
+      const isProfileComplete = Boolean(profile.name && profile.phone && profile.businessName && profile.avatarUrl);
+      const isSubscriptionActive = profile.membershipStatus === 'ACTIVE' || profile.status === 'ACTIVE' || (profile.subscriptionEndDate && new Date(profile.subscriptionEndDate) > new Date());
+
+      return calculateMemberGrowthScore({
+        attendancePercent: weeklyMeetingAttendance,
+        completedOneToOnes: uOto,
+        referralsSent: uRefsSent,
+        referralsReceived: uRefsRecv,
+        thankYouSlipsSent: uSlipsSent,
+        thankYouSlipsReceived: uSlipsRecv,
+        guestInvites: uGuests,
+        testimonialsSubmitted: uTest,
+        isProfileComplete,
+        isSubscriptionActive
+      });
+    }
+  }, [profile, chapterUsers, allReferrals, allSlips, oneToOnes, guestInvitations, allTestimonials, weeklyMeetingAttendance, passedReferrals, receivedReferrals]);
+
+  const dynamicGrowthScore = growthScoreData.score;
+  const growthStatus = growthScoreData.status;
+  const growthStatusColor = growthScoreData.statusColor;
+
+  // Calculate Weekly and Monthly Growth Trends from live Supabase data
+  const { weeklyGrowth, monthlyGrowth } = useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const startOfPrevWeek = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const startOfMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startOfPrevMonth = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+    const countActivities = (start: Date, end: Date) => {
+      let refs = allReferrals.filter(r => isDateInRange(r.created_at || r.createdAt, start, end));
+      let slips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt, start, end));
+      let otos = oneToOnes.filter(m => isDateInRange(m.created_at || m.createdAt || m.date, start, end));
+      let guests = guestInvitations.filter(g => isDateInRange(g.created_at || g.createdAt, start, end));
+      let tests = allTestimonials.filter(t => isDateInRange(t.created_at || t.createdAt, start, end));
+
+      if (profile?.role === 'MEMBER' && profile?.position !== 'president' && profile?.position !== 'vice_president' && profile?.position !== 'treasurer' && profile?.position !== 'chapter_admin') {
+        refs = refs.filter(r => (r.fromUserId || r.sender_id) === profile.uid || (r.toUserId || r.receiver_id) === profile.uid);
+        slips = slips.filter(s => (s.fromUserId || s.sender_id) === profile.uid || (s.toUserId || s.receiver_id) === profile.uid);
+        otos = otos.filter(m => [m.organizer_id, m.creatorId, m.member_id].includes(profile.uid));
+        guests = guests.filter(g => (g.createdBy || g.user_id) === profile.uid);
+        tests = tests.filter(t => (t.authorMemberId || t.author_id) === profile.uid);
+      } else if (profile?.role !== 'MASTER_ADMIN' && profile?.chapter_id) {
+        refs = refs.filter(r => r.chapter_id === profile.chapter_id || r.chapterId === profile.chapter_id);
+        slips = slips.filter(s => s.chapter_id === profile.chapter_id || s.chapterId === profile.chapter_id);
+        otos = otos.filter(m => m.chapter_id === profile.chapter_id || m.chapterId === profile.chapter_id);
+        guests = guests.filter(g => g.chapter_id === profile.chapter_id || g.chapterId === profile.chapter_id);
+        tests = tests.filter(t => t.chapter_id === profile.chapter_id || t.chapterId === profile.chapter_id);
+      }
+
+      return refs.length + slips.length + otos.length + guests.length + tests.length;
+    };
+
+    const currentWeekAct = countActivities(startOfWeek, now);
+    const prevWeekAct = countActivities(startOfPrevWeek, startOfWeek);
+    const currentMonthAct = countActivities(startOfMonth, now);
+    const prevMonthAct = countActivities(startOfPrevMonth, startOfMonth);
+
+    return {
+      weeklyGrowth: calculateGrowthTrend(currentWeekAct, prevWeekAct),
+      monthlyGrowth: calculateGrowthTrend(currentMonthAct, prevMonthAct)
+    };
+  }, [allReferrals, allSlips, oneToOnes, guestInvitations, allTestimonials, profile]);
 
   // Count up animation to dynamicGrowthScore
   useEffect(() => {
@@ -1872,24 +1999,26 @@ export function Analytics() {
              <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
                <span className="text-[30px] md:text-[34px] font-extrabold text-white leading-none tracking-tighter">{score}</span>
                <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">Growth Score</span>
-               <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", score >= 80 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/10" : score >= 50 ? "bg-blue-500/20 text-blue-400 border-blue-500/10" : "bg-red-500/20 text-red-400 border-red-500/10")}>
-                 {score >= 80 ? "Excellent" : score >= 50 ? "On Track" : "Needs Action"}
+               <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
+                 {growthStatus}
                </div>
              </div>
              
              {/* Trend Indicators (Right Side Desktop Sync) */}
              <div className="absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col gap-3.5 hidden md:flex">
                 <div className="flex flex-col">
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
-                    <TrendingUp size={13} strokeWidth={3} />
-                    +4%
+                  <div className={cn("flex items-center gap-1 font-bold text-[11px]", weeklyGrowth.isPositive ? "text-emerald-400" : weeklyGrowth.isNegative ? "text-red-400" : "text-[#9CA3AF]")}>
+                    {weeklyGrowth.isPositive && <TrendingUp size={13} strokeWidth={3} />}
+                    {weeklyGrowth.isNegative && <TrendingDown size={13} strokeWidth={3} />}
+                    {weeklyGrowth.formatted}
                   </div>
                   <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Weekly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last week</span></span>
                 </div>
                 <div className="flex flex-col">
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold text-[11px]">
-                    <TrendingUp size={13} strokeWidth={3} />
-                    +12%
+                  <div className={cn("flex items-center gap-1 font-bold text-[11px]", monthlyGrowth.isPositive ? "text-emerald-400" : monthlyGrowth.isNegative ? "text-red-400" : "text-[#9CA3AF]")}>
+                    {monthlyGrowth.isPositive && <TrendingUp size={13} strokeWidth={3} />}
+                    {monthlyGrowth.isNegative && <TrendingDown size={13} strokeWidth={3} />}
+                    {monthlyGrowth.formatted}
                   </div>
                   <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Monthly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last month</span></span>
                 </div>

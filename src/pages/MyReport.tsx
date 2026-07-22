@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { Meeting, Referral, OneToOneMeeting, GuestInvitation, ThankYouSlip, UserProfile } from '../types';
 import { cn } from '../lib/utils';
+import { calculateMemberGrowthScore } from '../utils/growthScore';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell 
@@ -242,22 +243,20 @@ export function MyReport() {
   }, [filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
   // 5. Dynamic Growth Score
-  // Calculated from: Growth Score = (Completed Checklist Items / Total Checklist Items) * 100
   const dynamicGrowthScore = useMemo(() => {
-    const hasAttendedMeeting = completedMeetings.some(m => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[userId]));
-    const hasPassedReferral = filteredPassedReferrals.length > 0;
-    const hasScheduledOneToOne = filteredCreatedOneToOnes.length > 0 || filteredParticipatedOneToOnes.length > 0;
-    const hasFollowedUpReferral = filteredReceivedReferrals.some(r => r.status !== 'PENDING');
-    const hasInvitedGuest = filteredGuestInvitations.length > 0;
-
-    const completedChecklistCount = (hasAttendedMeeting ? 1 : 0) +
-                                    (hasPassedReferral ? 1 : 0) +
-                                    (hasScheduledOneToOne ? 1 : 0) +
-                                    (hasFollowedUpReferral ? 1 : 0) +
-                                    (hasInvitedGuest ? 1 : 0);
-
-    return Math.round((completedChecklistCount / 5) * 100);
-  }, [completedMeetings, filteredPassedReferrals, filteredCreatedOneToOnes, filteredParticipatedOneToOnes, filteredReceivedReferrals, filteredGuestInvitations, userId]);
+    return calculateMemberGrowthScore({
+      attendancePercent: attendanceData.percentage || 0,
+      completedOneToOnes: oneToOnesStats.completed,
+      referralsSent: referralsStats.given,
+      referralsReceived: referralsStats.received,
+      thankYouSlipsSent: filteredSentThankYouSlips.length,
+      thankYouSlipsReceived: filteredReceivedThankYouSlips.length,
+      guestInvites: filteredGuestInvitations.length,
+      testimonialsSubmitted: 0,
+      isProfileComplete: Boolean(profile?.name && profile?.phone && profile?.businessName),
+      isSubscriptionActive: profile?.membershipStatus === 'ACTIVE' || profile?.status === 'ACTIVE'
+    }).score;
+  }, [attendanceData, oneToOnesStats, referralsStats, filteredSentThankYouSlips, filteredReceivedThankYouSlips, filteredGuestInvitations, profile]);
 
   // 5b. MOM trend metrics based on actual database logs for high-fidelity dashboards
   const parsedDatesWithMeta = useMemo(() => {
