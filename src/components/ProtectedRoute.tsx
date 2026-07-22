@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types';
 import { getDashboardPath } from '../utils/authUtils';
+import { BrandLogo } from './BrandLogo';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -17,12 +18,14 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // 1. If we are still determining auth state OR we have a user but no profile yet, show loading
   if (loading || (user && !profile)) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F9FAFB]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-[0.3em] animate-pulse">
-            Loading Profile...
-          </p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0B0F17] text-white p-6 space-y-4">
+        <div className="relative">
+          <div className="absolute -inset-4 rounded-[32px] bg-primary/20 blur-xl animate-pulse" />
+          <BrandLogo size="lg" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-400 pt-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/30 border-t-primary"></div>
+          <span>Loading Profile...</span>
         </div>
       </div>
     );

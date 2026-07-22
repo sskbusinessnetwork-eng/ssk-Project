@@ -13,6 +13,7 @@ import { differenceInDays } from 'date-fns';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import {  where  } from '../lib/database';
+import { BrandLogo } from './BrandLogo';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -115,19 +116,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
           className="w-full"
         >
           {!isCollapsed ? (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#E53935] flex items-center justify-center text-white font-black text-sm tracking-tighter shadow-[0_0_12px_rgba(229,57,53,0.4)]">
-                SSK
-              </div>
-              <div className="flex flex-col">
-                <span className="text-white font-bold text-[13px] leading-tight tracking-wide">BUSINESS NETWORK</span>
-              </div>
-            </div>
+            <BrandLogo size="sm" showText={true} lightText={true} />
           ) : (
             <div className="w-full flex justify-center">
-              <div className="w-8 h-8 rounded-lg bg-[#E53935] flex items-center justify-center text-white font-black text-sm tracking-tighter shadow-[0_0_12px_rgba(229,57,53,0.4)]">
-                SSK
-              </div>
+              <BrandLogo size="sm" showText={false} />
             </div>
           )}
         </motion.div>

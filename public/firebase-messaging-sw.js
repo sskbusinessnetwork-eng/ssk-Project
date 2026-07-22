@@ -19,7 +19,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: '/firebase-logo.png' // Add your icon path here
+    icon: 'https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/profile_photos/SSK%20LOGO%20AI%20File%20pdf_page-0001.jpg'
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);

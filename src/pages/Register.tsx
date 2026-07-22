@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { getDashboardPath } from '../utils/authUtils';
 import { RegisterForm } from '../components/RegisterForm';
+import { BrandLogo } from '../components/BrandLogo';
 
 export function Register() {
   const { user, profile, loading } = useAuth();
@@ -41,12 +42,8 @@ export function Register() {
           <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-navy transition-colors mb-10 group text-[10px] font-black uppercase tracking-[0.2em]">
             Back to Home
           </Link>
-          <div className="w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500 overflow-hidden bg-white p-1">
-            <img 
-              src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
-              className="w-full h-full object-cover rounded-[2.2rem]"
-              referrerPolicy="no-referrer"
-            />
+          <div className="flex justify-center mb-6">
+            <BrandLogo size="xl" showText={false} />
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-navy mb-4 tracking-tighter uppercase">Join the Business Network</h1>
           <p className="text-muted-foreground font-medium px-4 text-sm leading-relaxed">Create your account to start networking and growing your business network.</p>

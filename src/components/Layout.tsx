@@ -13,6 +13,7 @@ import { differenceInDays } from 'date-fns';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import {  where  } from '../lib/database';
+import { BrandLogo } from './BrandLogo';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -132,15 +133,9 @@ export function Layout() {
             </button>
             
             {/* Header Logo branding */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#E53935] flex items-center justify-center text-white font-black text-sm tracking-tighter shadow-[0_0_12px_rgba(229,57,53,0.4)] shrink-0">
-                SSK
-              </div>
-              <div className="flex flex-col hidden xs:flex">
-                <span className="text-white font-black text-[12px] leading-tight tracking-wide">BUSINESS NETWORK</span>
-                <span className="text-[7px] text-[#9CA3AF] font-bold tracking-widest leading-none uppercase -mt-0.5">Enterprise Platform</span>
-              </div>
-            </div>
+            <Link to="/dashboard" className="flex items-center">
+              <BrandLogo size="sm" showText={true} subtitle="ENTERPRISE PLATFORM" />
+            </Link>
           </div>
 
           <div className="flex-1 max-w-[600px] px-6 hidden lg:block">

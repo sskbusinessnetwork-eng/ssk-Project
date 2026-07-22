@@ -9,6 +9,7 @@ import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath, getCleanFullName } from '../utils/authUtils';
 import {  db, doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit  } from '../lib/database';
 import { UserProfile } from '../types';
+import { BrandLogo } from '../components/BrandLogo';
 
 export function Login() {
   const { user, profile, loading: authLoading, login } = useAuth();
@@ -74,8 +75,15 @@ export function Login() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="relative">
+          <div className="absolute -inset-4 rounded-[32px] bg-primary/20 blur-xl animate-pulse" />
+          <BrandLogo size="xl" />
+        </div>
+        <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-widest pt-4">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/30 border-t-primary"></div>
+          <span>Loading SSK Network...</span>
+        </div>
       </div>
     );
   }
@@ -359,24 +367,9 @@ export function Login() {
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 text-center"
+          className="mb-8 text-center flex flex-col items-center"
         >
-          <div className="w-20 h-20 rounded-[22px] bg-white p-1.5 shadow-2xl mb-5 mx-auto border border-neutral-800 overflow-hidden relative group">
-            <img 
-              src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
-              alt="Logo"
-              className="w-full h-full object-cover rounded-xl"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          </div>
-          
-          <h1 className="text-2xl font-black text-white tracking-widest uppercase mb-1">
-            SSK <span className="text-primary font-bold">NETWORKS</span>
-          </h1>
-          <p className="text-neutral-500 text-[10px] font-extrabold uppercase tracking-[0.25em] max-w-[280px] mx-auto leading-tight">
-            PLATINUM ONBOARDING SUITE
-          </p>
+          <BrandLogo size="xl" showText={true} lightText={true} subtitle="PLATINUM ONBOARDING SUITE" className="flex-col gap-4 text-center" />
         </motion.div>
 
         {/* Login Card */}

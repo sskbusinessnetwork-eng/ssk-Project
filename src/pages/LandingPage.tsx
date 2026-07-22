@@ -10,6 +10,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
+import { BrandLogo } from '../components/BrandLogo';
 import {  where, orderBy, limit  } from '../lib/database';
 import { format } from 'date-fns';
 
@@ -195,16 +196,9 @@ export function LandingPage() {
         <nav className={`px-6 py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-b border-white/10' : 'bg-transparent'}`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <motion.img 
-                whileHover={{ scale: 1.05, rotate: 5 }}
-                src="https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg" 
-                alt="Logo" 
-                className="w-10 h-10 rounded-lg object-cover shadow-[0_2px_10px_rgba(0,0,0,0.02)]"
-                referrerPolicy="no-referrer"
-              />
-              <div>
-                <h1 className={`font-black leading-none tracking-tight transition-colors text-sm md:text-base ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>SSK BUSINESS NETWORK</h1>
-              </div>
+              <Link to="/">
+                <BrandLogo size="md" showText={true} lightText={!scrolled} />
+              </Link>
             </div>
             
             <div className="flex items-center gap-4">
@@ -511,13 +505,9 @@ export function LandingPage() {
             <motion.div 
               animate={{ boxShadow: ["0 0 0px rgba(249,115,22,0)", "0 0 60px rgba(249,115,22,0.4)", "0 0 0px rgba(249,115,22,0)"] }}
               transition={{ duration: 3, repeat: Infinity }}
-              className="absolute inset-3 md:inset-4 bg-white rounded-full flex items-center justify-center border-4 border-[#F97316]"
+              className="absolute inset-3 md:inset-4 bg-white rounded-full flex items-center justify-center border-4 border-[#F97316] p-4 overflow-hidden"
             >
-              <div className="text-center">
-                <Shield size={60} md:size={80} className="mx-auto text-[#0F2040] mb-1 md:mb-2" />
-                <p className="font-black text-[#0F2040] text-[24px] md:text-[30px] lg:text-[36px] leading-none">SSK</p>
-                <p className="text-[8px] md:text-[10px] font-extrabold text-[#6B7280] uppercase tracking-[3px] mt-1">Business Network</p>
-              </div>
+              <BrandLogo size="xl" showText={false} imgClassName="object-contain" />
             </motion.div>
           </motion.div>
 

@@ -45,8 +45,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || data.message || 'New notification received.',
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
+    icon: 'https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/profile_photos/SSK%20LOGO%20AI%20File%20pdf_page-0001.jpg',
+    badge: 'https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/profile_photos/SSK%20LOGO%20AI%20File%20pdf_page-0001.jpg',
     vibrate: [100, 50, 100],
     data: { url: data.url || data.link || '/notifications' },
     tag: data.tag || 'ssk-notification'

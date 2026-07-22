@@ -9,12 +9,12 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg",
+      "src": "https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/profile_photos/SSK%20LOGO%20AI%20File%20pdf_page-0001.jpg",
       "sizes": "192x192",
       "type": "image/jpeg"
     },
     {
-      "src": "https://i.pinimg.com/736x/f8/86/19/f8861925810bc3b81b6066e5a6e7495b.jpg",
+      "src": "https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/profile_photos/SSK%20LOGO%20AI%20File%20pdf_page-0001.jpg",
       "sizes": "512x512",
       "type": "image/jpeg"
     }
