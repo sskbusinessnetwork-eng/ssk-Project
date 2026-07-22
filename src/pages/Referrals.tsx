@@ -18,6 +18,41 @@ import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
+import { getCleanFullName } from '../utils/authUtils';
+
+const getUserFullName = (user: any): string => {
+  if (!user) return '';
+  const rawName = user.full_name || user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim();
+  if (!rawName) return '';
+  return getCleanFullName(rawName);
+};
+
+const formatUserRoleOrPosition = (user: any): string => {
+  if (!user) return 'Member';
+  
+  const pos = user.position || user.chapter_position || user.chapterPosition;
+  if (pos && typeof pos === 'string') {
+    const pLower = pos.toLowerCase().trim();
+    if (pLower === 'president') return 'President';
+    if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+    if (pLower === 'treasurer') return 'Treasurer';
+    if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+    if (pLower === 'member') return 'Member';
+  }
+
+  const role = user.role;
+  if (role) {
+    const rUpper = String(role).toUpperCase().trim();
+    if (rUpper === 'PRESIDENT') return 'President';
+    if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
+    if (rUpper === 'TREASURER') return 'Treasurer';
+    if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
+    if (rUpper === 'MEMBER') return 'Member';
+  }
+
+  return 'Member';
+};
 
 export function Referrals() {
   const { profile } = useAuth();
@@ -58,7 +93,7 @@ export function Referrals() {
     }
   }, [searchParams]);
 
-  // Fetch referrals from Supabase table only
+  // Fetch referrals from Supabase table with sender and receiver relations
   const fetchReferrals = async () => {
     setLoading(true);
     setErrorMessage(null);
@@ -79,59 +114,118 @@ export function Referrals() {
         return;
       }
 
-      // Query referrals from Supabase sorted by newest first
-      let query = supabase
+      // Query referrals from Supabase with sender and receiver joins
+      let refRows: any[] = [];
+      let queryError: any = null;
+
+      const { data: joinedData, error: joinedErr } = await supabase
         .from('referrals')
-        .select('*')
+        .select(`
+          *,
+          sender:users!sender_id(id, full_name, name, first_name, last_name, role, position, chapter_position),
+          receiver:users!receiver_id(id, full_name, name, first_name, last_name, role, position, chapter_position)
+        `)
         .order('created_at', { ascending: false });
 
-      if (filter === 'passed') {
-        query = query.eq('sender_id', currentUserId);
+      if (!joinedErr && joinedData) {
+        if (filter === 'passed') {
+          refRows = joinedData.filter((r: any) => r.sender_id === currentUserId || r.from_user_id === currentUserId);
+        } else {
+          refRows = joinedData.filter((r: any) => r.receiver_id === currentUserId || r.to_user_id === currentUserId);
+        }
       } else {
-        query = query.eq('receiver_id', currentUserId);
+        if (joinedErr) {
+          console.warn("Supabase relation query failed, falling back to manual query:", joinedErr);
+        }
+        let fallbackQuery = supabase
+          .from('referrals')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (filter === 'passed') {
+          fallbackQuery = fallbackQuery.eq('sender_id', currentUserId);
+        } else {
+          fallbackQuery = fallbackQuery.eq('receiver_id', currentUserId);
+        }
+
+        const fallbackRes = await fallbackQuery;
+        if (fallbackRes.error) {
+          queryError = fallbackRes.error;
+        } else {
+          refRows = fallbackRes.data || [];
+        }
       }
 
-      const { data: refRows, error: refError } = await query;
-
-      if (refError) {
-        console.error("Supabase referrals query error:", refError);
-        setErrorMessage(`Database Error (${refError.code || 'ERR'}): ${refError.message || refError.details || 'Failed to fetch referrals'}`);
+      if (queryError) {
+        console.error("Supabase referrals query error:", queryError);
+        setErrorMessage(`Database Error (${queryError.code || 'ERR'}): ${queryError.message || 'Failed to fetch referrals'}`);
         setReferrals([]);
         setLoading(false);
         return;
       }
 
-      // Fetch user details for sender/receiver name lookup
+      // Fetch user details for complete fallback mapping
       const { data: usersData, error: usersErr } = await supabase
         .from('users')
-        .select('id, name, full_name, first_name, last_name, role, phone, business_name, category');
+        .select('id, uid, name, full_name, first_name, last_name, role, position, chapter_position, phone, business_name, category');
 
       if (usersErr) {
-        console.warn("Could not fetch user names for referrals:", usersErr);
+        console.warn("Could not fetch users list for referral mapping:", usersErr);
       }
 
       const userMap = new Map<string, any>();
       if (usersData) {
         usersData.forEach(u => {
-          const displayName = u.name || u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Member';
-          userMap.set(u.id, { ...u, name: displayName });
+          if (u.id) userMap.set(String(u.id).trim().toLowerCase(), u);
+          if (u.uid) userMap.set(String(u.uid).trim().toLowerCase(), u);
         });
       }
 
-      const formattedList: Referral[] = (refRows || []).map((r: any) => {
-        const sender = userMap.get(r.sender_id || r.from_user_id) || {};
-        const receiver = userMap.get(r.receiver_id || r.to_user_id) || {};
+      const formattedList: Referral[] = [];
 
-        return {
+      for (const r of refRows) {
+        const senderIdRaw = r.sender_id || r.from_user_id || '';
+        const receiverIdRaw = r.receiver_id || r.to_user_id || '';
+        const senderKey = String(senderIdRaw).trim().toLowerCase();
+        const receiverKey = String(receiverIdRaw).trim().toLowerCase();
+
+        const senderUser = r.sender || userMap.get(senderKey);
+        const receiverUser = r.receiver || userMap.get(receiverKey);
+
+        if (senderIdRaw && !senderUser) {
+          console.error(`[Referral Error] Missing sender record in users table for ID: "${senderIdRaw}" on referral ID: "${r.id}"`);
+        }
+        if (receiverIdRaw && !receiverUser) {
+          console.error(`[Referral Error] Missing receiver record in users table for ID: "${receiverIdRaw}" on referral ID: "${r.id}"`);
+        }
+
+        // Master Admin must never appear as a sender or receiver
+        if (senderUser?.role === 'MASTER_ADMIN' || receiverUser?.role === 'MASTER_ADMIN') {
+          continue;
+        }
+
+        const senderFullName = getUserFullName(senderUser);
+        const senderRoleFormatted = formatUserRoleOrPosition(senderUser);
+        const senderDisplayName = senderUser
+          ? `${senderFullName || 'Member'} (${senderRoleFormatted})`
+          : (senderIdRaw ? `User Record Missing (${senderIdRaw})` : 'N/A');
+
+        const receiverFullName = getUserFullName(receiverUser);
+        const receiverRoleFormatted = formatUserRoleOrPosition(receiverUser);
+        const receiverDisplayName = receiverUser
+          ? `${receiverFullName || 'Member'} (${receiverRoleFormatted})`
+          : (receiverIdRaw ? `User Record Missing (${receiverIdRaw})` : 'N/A');
+
+        formattedList.push({
           id: r.id,
-          sender_id: r.sender_id || r.from_user_id,
-          receiver_id: r.receiver_id || r.to_user_id,
-          fromUserId: r.sender_id || r.from_user_id,
-          toUserId: r.receiver_id || r.to_user_id,
-          senderName: sender.name || 'Unknown Member',
-          receiverName: receiver.name || 'Unknown Member',
-          fromUserName: sender.name || 'Unknown Member',
-          toUserName: receiver.name || 'Unknown Member',
+          sender_id: senderIdRaw,
+          receiver_id: receiverIdRaw,
+          fromUserId: senderIdRaw,
+          toUserId: receiverIdRaw,
+          senderName: senderDisplayName,
+          receiverName: receiverDisplayName,
+          fromUserName: senderDisplayName,
+          toUserName: receiverDisplayName,
           contactName: r.contact_name || r.customer_name || 'N/A',
           contactPhone: r.contact_phone || r.customer_mobile || 'N/A',
           requirement: r.business_requirement || r.requirement || 'N/A',
@@ -140,8 +234,8 @@ export function Referrals() {
           updatedAt: r.updated_at || r.updatedAt || new Date().toISOString(),
           notes: r.notes || '',
           notConvertedReason: r.not_converted_reason || r.notConvertedReason || ''
-        } as Referral;
-      });
+        } as Referral);
+      }
 
       setReferrals(formattedList);
 
