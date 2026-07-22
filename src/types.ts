@@ -75,6 +75,7 @@ export interface Referral {
   id: string;
   sender_id?: string;
   receiver_id?: string;
+  chapter_id?: string;
   fromUserId: string;
   fromUserName?: string;
   fromUserRole?: UserRole;
@@ -111,6 +112,7 @@ export interface ThankYouSlip {
   businessValue: number;
   notes: string;
   createdAt: string;
+  chapter_id?: string;
 }
 
 export interface GuestInvitation {
@@ -143,6 +145,8 @@ export interface OneToOneMeeting {
   title?: string;
   organizer_id?: string;
   member_id?: string;
+  sender_id?: string;
+  receiver_id?: string;
   chapter_id?: string;
   scheduled_date?: string;
   status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'UPCOMING' | 'NOT_COMPLETED';

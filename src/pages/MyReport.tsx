@@ -3,18 +3,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { 
   TrendingUp, Calendar, ArrowUpRight, ArrowDownLeft, ChevronLeft, 
-  Award, Star, Shield, Users, Handshake, CheckSquare, Share2, 
-  UserPlus, RefreshCw, BarChart3, Clock, HelpCircle, Activity,
-  Briefcase, ArrowRight, Trophy, Flame, Zap, DollarSign, Eye, Play, Sparkles
+  Award, Users, Handshake, Share2, 
+  UserPlus, Clock, ArrowRight, Trophy, DollarSign, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { databaseService } from '../services/databaseService';
-import { Meeting, Referral, OneToOneMeeting, GuestInvitation, ThankYouSlip, UserProfile } from '../types';
+import { supabase } from '../lib/supabaseClient';
+import { Meeting, Referral, OneToOneMeeting, GuestInvitation, ThankYouSlip } from '../types';
 import { cn } from '../lib/utils';
 import { calculateMemberGrowthScore } from '../utils/growthScore';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell 
+  ResponsiveContainer 
 } from 'recharts';
 
 export function MyReport() {
@@ -25,11 +24,12 @@ export function MyReport() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [passedReferrals, setPassedReferrals] = useState<Referral[]>([]);
   const [receivedReferrals, setReceivedReferrals] = useState<Referral[]>([]);
-  const [createdOneToOnes, setCreatedOneToOnes] = useState<OneToOneMeeting[]>([]);
-  const [participatedOneToOnes, setParticipatedOneToOnes] = useState<OneToOneMeeting[]>([]);
+  const [oneToOnes, setOneToOnes] = useState<OneToOneMeeting[]>([]);
   const [guestInvitations, setGuestInvitations] = useState<GuestInvitation[]>([]);
   const [sentThankYouSlips, setSentThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [receivedThankYouSlips, setReceivedThankYouSlips] = useState<ThankYouSlip[]>([]);
+  const [givenTestimonials, setGivenTestimonials] = useState<any[]>([]);
+  const [receivedTestimonials, setReceivedTestimonials] = useState<any[]>([]);
   
   // Period Filter: 'Monthly' | 'Quarterly' | 'Half Yearly' | 'Yearly' | 'Lifetime'
   const [selectedPeriod, setSelectedPeriod] = useState<string>('Monthly');
@@ -40,75 +40,303 @@ export function MyReport() {
   useEffect(() => {
     if (!profile) return;
 
-    setLoading(true);
-    
-    // Subscriptions to get live data from Firestore
-    const unsubMeetings = databaseService.subscribe<Meeting>('meetings', [], (data) => {
-      setMeetings(data);
-    });
+    const currentUserId = String(profile.id || profile.uid || '').trim();
+    if (!currentUserId) return;
 
-    const unsubPassedRefs = databaseService.subscribe<Referral>('referrals', [
-      ['fromUserId', '==', profile.uid]
-    ], (data) => {
-      setPassedReferrals(data);
-    });
+    let isMounted = true;
 
-    const unsubReceivedRefs = databaseService.subscribe<Referral>('referrals', [
-      ['toUserId', '==', profile.uid]
-    ], (data) => {
-      setReceivedReferrals(data);
-    });
+    const userRole = profile.role;
+    const userPosition = String(profile.position || profile.chapter_position || '').toLowerCase().trim();
+    const userChapterId = String(profile.chapter_id || profile.chapterId || profile.adminId || '').trim();
 
-    const unsubCreated1to1s = databaseService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
-      ['creatorId', '==', profile.uid]
-    ], (data) => {
-      setCreatedOneToOnes(data);
-    });
+    const isMasterAdmin = userRole === 'MASTER_ADMIN';
+    const isChapterAdmin = userRole === 'CHAPTER_ADMIN' || userPosition === 'chapter_admin';
+    const isRegularMember = !isMasterAdmin && !isChapterAdmin;
 
-    const unsubParticipated1to1s = databaseService.subscribe<OneToOneMeeting>('one_to_one_meetings', [
-      ['participantIds', 'array-contains', profile.uid]
-    ], (data) => {
-      setParticipatedOneToOnes(data);
-    });
+    const fetchAllAnalyticsData = async () => {
+      try {
+        // 1. Fetch Referrals directly from Supabase
+        const { data: rawRefs, error: refErr } = await supabase
+          .from('referrals')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    const unsubGuests = databaseService.subscribe<GuestInvitation>('guest_invitations', [
-      ['createdBy', '==', profile.uid]
-    ], (data) => {
-      setGuestInvitations(data);
-    });
+        if (refErr) console.warn('Supabase referrals fetch error:', refErr);
 
-    const unsubSentSlips = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
-      ['fromUserId', '==', profile.uid]
-    ], (data) => {
-      setSentThankYouSlips(data);
-    });
+        const refMap = new Map<string, Referral>();
+        (rawRefs || []).forEach((r: any) => {
+          const senderId = String(r.sender_id || r.from_user_id || r.fromUserId || r.senderId || '').trim();
+          const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || r.receiverId || '').trim();
+          const item: Referral = {
+            id: String(r.id),
+            fromUserId: senderId,
+            toUserId: receiverId,
+            sender_id: senderId,
+            receiver_id: receiverId,
+            contactName: r.contact_name || r.contactName || '',
+            contactPhone: r.contact_phone || r.contactPhone || '',
+            requirement: r.requirement || r.notes || '',
+            notes: r.notes || '',
+            status: r.status || 'PENDING',
+            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+            chapter_id: r.chapter_id || r.chapterId
+          };
+          refMap.set(item.id, item);
+        });
+        const allUniqueRefs = Array.from(refMap.values());
 
-    const unsubReceivedSlips = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
-      ['toUserId', '==', profile.uid]
-    ], (data) => {
-      setReceivedThankYouSlips(data);
-    });
+        // 2. Fetch One-to-One Meetings
+        const { data: raw1to1s, error: otoErr } = await supabase
+          .from('one_to_one_meetings')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    // Simple delay to ensure states are initialized nicely
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 800);
+        if (otoErr) console.warn('Supabase one_to_one_meetings fetch error:', otoErr);
+
+        // Get participant mappings if table exists
+        const { data: rawParts } = await supabase
+          .from('meeting_participants')
+          .select('meeting_id, user_id');
+
+        const partsMap = new Map<string, string[]>();
+        (rawParts || []).forEach((p: any) => {
+          const mId = String(p.meeting_id);
+          const uId = String(p.user_id);
+          if (!partsMap.has(mId)) partsMap.set(mId, []);
+          partsMap.get(mId)!.push(uId);
+        });
+
+        const otoMap = new Map<string, OneToOneMeeting>();
+        (raw1to1s || []).forEach((m: any) => {
+          const mId = String(m.id);
+          const pIds = partsMap.get(mId) || [];
+          const sender = String(m.sender_id || m.organizer_id || m.creator_id || m.creatorId || m.senderId || '').trim();
+          const receiver = String(m.receiver_id || m.member_id || m.receiverId || m.memberId || '').trim();
+          if (sender && !pIds.includes(sender)) pIds.push(sender);
+          if (receiver && !pIds.includes(receiver)) pIds.push(receiver);
+
+          const item: OneToOneMeeting = {
+            id: mId,
+            organizer_id: sender,
+            member_id: receiver,
+            creatorId: sender,
+            participantIds: pIds,
+            status: (m.status || 'SCHEDULED').toUpperCase() as any,
+            created_at: m.created_at || m.createdAt || new Date().toISOString(),
+            createdAt: m.created_at || m.createdAt || new Date().toISOString(),
+            date: m.meeting_date || m.scheduled_date || m.date || '',
+            scheduled_date: m.meeting_date || m.scheduled_date || m.date || '',
+            time: m.meeting_time || m.time || '',
+            venue: m.meeting_location || m.venue || '',
+            chapter_id: m.chapter_id || m.chapterId
+          };
+          otoMap.set(mId, item);
+        });
+        const allUnique1to1s = Array.from(otoMap.values());
+
+        // 3. Fetch Thank You Slips
+        const { data: rawSlips, error: slipErr } = await supabase
+          .from('thank_you_slips')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (slipErr) console.warn('Supabase thank_you_slips fetch error:', slipErr);
+
+        const slipMap = new Map<string, ThankYouSlip>();
+        (rawSlips || []).forEach((s: any) => {
+          const senderId = String(s.sender_id || s.from_user_id || s.fromUserId || s.senderId || '').trim();
+          const receiverId = String(s.receiver_id || s.to_user_id || s.toUserId || s.receiverId || '').trim();
+          const item: ThankYouSlip = {
+            id: String(s.id),
+            referralId: String(s.referral_id || s.referralId || ''),
+            fromUserId: senderId,
+            toUserId: receiverId,
+            customerName: s.customer_name || s.customerName || '',
+            businessValue: Number(s.business_value || s.businessValue || 0),
+            notes: s.notes || '',
+            createdAt: s.created_at || s.createdAt || new Date().toISOString(),
+            chapter_id: s.chapter_id || s.chapterId
+          } as any;
+          slipMap.set(item.id, item);
+        });
+        const allUniqueSlips = Array.from(slipMap.values());
+
+        // 4. Fetch Testimonials
+        const { data: rawTests, error: testErr } = await supabase
+          .from('testimonials')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (testErr) console.warn('Supabase testimonials fetch error:', testErr);
+
+        const testMap = new Map<string, any>();
+        (rawTests || []).forEach((t: any) => {
+          const authorId = String(t.sender_id || t.author_id || t.from_user_id || t.author_member_id || t.authorMemberId || '').trim();
+          const receiverId = String(t.receiver_id || t.to_user_id || t.receiver_member_id || t.receiverMemberId || '').trim();
+          const item = {
+            id: String(t.id),
+            authorMemberId: authorId,
+            receiverMemberId: receiverId,
+            chapterId: String(t.chapter_id || t.chapterId || ''),
+            rating: Number(t.rating || 5),
+            title: t.title || '',
+            testimonial: t.testimonial || '',
+            status: t.status || 'APPROVED',
+            createdAt: t.created_at || t.createdAt || new Date().toISOString()
+          };
+          testMap.set(item.id, item);
+        });
+        const allUniqueTests = Array.from(testMap.values());
+
+        // 5. Fetch Guest Invitations
+        const { data: rawGuests, error: guestErr } = await supabase
+          .from('guest_invitations')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (guestErr) console.warn('Supabase guest_invitations fetch error:', guestErr);
+
+        const guestMap = new Map<string, GuestInvitation>();
+        (rawGuests || []).forEach((g: any) => {
+          const inviterId = String(g.createdBy || g.created_by || g.user_id || g.invited_by || g.sender_id || g.member_id || g.memberId || '').trim();
+          const item: GuestInvitation = {
+            id: String(g.id),
+            memberId: inviterId,
+            createdBy: inviterId,
+            createdByRole: g.created_by_role || g.createdByRole || 'MEMBER',
+            chapter_id: g.chapter_id || g.chapterId,
+            guestName: g.guest_name || g.guestName || '',
+            guestPhone: g.guest_phone || g.guestPhone || '',
+            guestEmail: g.guest_email || g.guestEmail || '',
+            guestBusiness: g.guest_business || g.guestBusiness || '',
+            createdAt: g.created_at || g.createdAt || new Date().toISOString(),
+            status: g.status || 'Invited'
+          };
+          guestMap.set(item.id, item);
+        });
+        const allUniqueGuests = Array.from(guestMap.values());
+
+        // 6. Fetch Chapter Meetings
+        const { data: rawMeetings, error: meetErr } = await supabase
+          .from('meetings')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (meetErr) console.warn('Supabase meetings fetch error:', meetErr);
+
+        const meetingMap = new Map<string, Meeting>();
+        (rawMeetings || []).forEach((m: any) => {
+          let att = m.attendance;
+          if (typeof att === 'string') {
+            try { att = JSON.parse(att); } catch (e) { att = {}; }
+          }
+          const item: Meeting = {
+            id: String(m.id),
+            adminId: m.admin_id || m.adminId,
+            chapter_id: m.chapter_id || m.chapterId,
+            date: m.date || '',
+            time: m.time || '',
+            location: m.location || '',
+            attendance: att || {},
+            isCompleted: Boolean(m.is_completed ?? m.isCompleted)
+          };
+          meetingMap.set(item.id, item);
+        });
+        const allUniqueMeetings = Array.from(meetingMap.values());
+
+        if (!isMounted) return;
+
+        // --- SCOPE FILTERING PER REQUIREMENT 9 ---
+        if (isRegularMember) {
+          // Member, President, Vice President, Treasurer: Show ONLY their own analytics!
+          // 2. Referral Sent: sender_id = currentUser.id
+          setPassedReferrals(allUniqueRefs.filter(r => String(r.sender_id || r.fromUserId) === currentUserId));
+
+          // 3. Referral Received: receiver_id = currentUser.id
+          setReceivedReferrals(allUniqueRefs.filter(r => String(r.receiver_id || r.toUserId) === currentUserId));
+
+          // 5. One-to-One Meetings: sender_id = currentUser.id OR receiver_id = currentUser.id
+          setOneToOnes(allUnique1to1s.filter(m => 
+            String(m.organizer_id || m.creatorId) === currentUserId ||
+            String(m.member_id) === currentUserId ||
+            (Array.isArray(m.participantIds) && m.participantIds.map(String).includes(currentUserId))
+          ));
+
+          // 6. Thank You Slips: Sent (sender_id = currentUser.id), Received (receiver_id = currentUser.id)
+          setSentThankYouSlips(allUniqueSlips.filter(s => String(s.fromUserId) === currentUserId));
+          setReceivedThankYouSlips(allUniqueSlips.filter(s => String(s.toUserId) === currentUserId));
+
+          // 7. Testimonials: Given (sender_id = currentUser.id), Received (receiver_id = currentUser.id)
+          setGivenTestimonials(allUniqueTests.filter(t => String(t.authorMemberId) === currentUserId));
+          setReceivedTestimonials(allUniqueTests.filter(t => String(t.receiverMemberId) === currentUserId));
+
+          // 8. Guests: Invited by logged-in user
+          setGuestInvitations(allUniqueGuests.filter(g => String(g.createdBy || g.memberId) === currentUserId));
+
+          // Meetings: Filter to user's chapter
+          setMeetings(allUniqueMeetings.filter(m => 
+            !userChapterId || m.chapter_id === userChapterId || m.adminId === userChapterId
+          ));
+        } else if (isChapterAdmin) {
+          // Chapter Admin: Show chapter-wide analytics only
+          const chapterRefs = allUniqueRefs.filter(r => !userChapterId || r.chapter_id === userChapterId);
+          setPassedReferrals(chapterRefs);
+          setReceivedReferrals(chapterRefs);
+
+          setOneToOnes(allUnique1to1s.filter(m => !userChapterId || m.chapter_id === userChapterId));
+          setSentThankYouSlips(allUniqueSlips.filter(s => !userChapterId || s.chapter_id === userChapterId));
+          setReceivedThankYouSlips(allUniqueSlips.filter(s => !userChapterId || s.chapter_id === userChapterId));
+          setGivenTestimonials(allUniqueTests.filter(t => !userChapterId || t.chapterId === userChapterId));
+          setReceivedTestimonials(allUniqueTests.filter(t => !userChapterId || t.chapterId === userChapterId));
+          setGuestInvitations(allUniqueGuests.filter(g => !userChapterId || g.chapter_id === userChapterId));
+          setMeetings(allUniqueMeetings.filter(m => !userChapterId || m.chapter_id === userChapterId || m.adminId === userChapterId));
+        } else {
+          // Master Admin: Show analytics for all chapters
+          setPassedReferrals(allUniqueRefs);
+          setReceivedReferrals(allUniqueRefs);
+          setOneToOnes(allUnique1to1s);
+          setSentThankYouSlips(allUniqueSlips);
+          setReceivedThankYouSlips(allUniqueSlips);
+          setGivenTestimonials(allUniqueTests);
+          setReceivedTestimonials(allUniqueTests);
+          setGuestInvitations(allUniqueGuests);
+          setMeetings(allUniqueMeetings);
+        }
+
+      } catch (err) {
+        console.error('Error fetching MyReport analytics:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchAllAnalyticsData();
+
+    // Realtime Postgres changes subscriptions from Supabase
+    const channel = supabase.channel(`my-reports-channel-${currentUserId}-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => fetchAllAnalyticsData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'one_to_one_meetings' }, () => fetchAllAnalyticsData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => fetchAllAnalyticsData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => fetchAllAnalyticsData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, () => fetchAllAnalyticsData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => fetchAllAnalyticsData())
+      .subscribe();
+
+    // Requirement 10: Refresh immediately after every action (listen to custom window event)
+    const handleDashboardRefresh = () => {
+      fetchAllAnalyticsData();
+    };
+    window.addEventListener('dashboard-refresh', handleDashboardRefresh);
 
     return () => {
-      unsubMeetings();
-      unsubPassedRefs();
-      unsubReceivedRefs();
-      unsubCreated1to1s();
-      unsubParticipated1to1s();
-      unsubGuests();
-      unsubSentSlips();
-      unsubReceivedSlips();
-      clearTimeout(timer);
+      isMounted = false;
+      supabase.removeChannel(channel);
+      window.removeEventListener('dashboard-refresh', handleDashboardRefresh);
     };
   }, [profile]);
 
   // COMBINED DATA METRICS
-  const userId = profile?.uid || '';
+  const userId = String(profile?.id || profile?.uid || '').trim();
   
   // Date Helpers for Period and Trend Calculations
   const getStartDateForPeriod = (period: string): Date => {
@@ -166,32 +394,26 @@ export function MyReport() {
     return parsed >= lastMonthStart && parsed < thisMonthStart;
   };
 
-  const filterItemsByPeriod = <T extends { createdAt?: string; date?: string }>(items: T[], period: string): T[] => {
+  const filterItemsByPeriod = <T extends { createdAt?: string; created_at?: string; date?: string; scheduled_date?: string }>(items: T[], period: string): T[] => {
     if (period === 'Lifetime') return items;
     const startDate = getStartDateForPeriod(period);
     return items.filter(item => {
-      const dateVal = item.createdAt || item.date;
+      const dateVal = item.createdAt || (item as any).created_at || item.date || item.scheduled_date;
       const parsed = parseFlexibleDate(dateVal);
       if (!parsed) return false;
       return parsed >= startDate;
     });
   };
 
-  // 1. Attendance Metrics - Raw filtered by chapter first
-  const relevantMeetings = useMemo(() => {
-    if (!profile?.adminId) return meetings;
-    return meetings.filter(m => m.adminId === profile.adminId);
-  }, [meetings, profile]);
-
   // Filtered raw data based on period
-  const filteredMeetings = useMemo(() => filterItemsByPeriod(relevantMeetings, selectedPeriod), [relevantMeetings, selectedPeriod]);
+  const filteredMeetings = useMemo(() => filterItemsByPeriod(meetings, selectedPeriod), [meetings, selectedPeriod]);
   const filteredPassedReferrals = useMemo(() => filterItemsByPeriod(passedReferrals, selectedPeriod), [passedReferrals, selectedPeriod]);
   const filteredReceivedReferrals = useMemo(() => filterItemsByPeriod(receivedReferrals, selectedPeriod), [receivedReferrals, selectedPeriod]);
-  const filteredCreatedOneToOnes = useMemo(() => filterItemsByPeriod(createdOneToOnes, selectedPeriod), [createdOneToOnes, selectedPeriod]);
-  const filteredParticipatedOneToOnes = useMemo(() => filterItemsByPeriod(participatedOneToOnes, selectedPeriod), [participatedOneToOnes, selectedPeriod]);
+  const filteredOneToOnes = useMemo(() => filterItemsByPeriod(oneToOnes, selectedPeriod), [oneToOnes, selectedPeriod]);
   const filteredGuestInvitations = useMemo(() => filterItemsByPeriod(guestInvitations, selectedPeriod), [guestInvitations, selectedPeriod]);
   const filteredSentThankYouSlips = useMemo(() => filterItemsByPeriod(sentThankYouSlips, selectedPeriod), [sentThankYouSlips, selectedPeriod]);
   const filteredReceivedThankYouSlips = useMemo(() => filterItemsByPeriod(receivedThankYouSlips, selectedPeriod), [receivedThankYouSlips, selectedPeriod]);
+  const filteredGivenTestimonials = useMemo(() => filterItemsByPeriod(givenTestimonials, selectedPeriod), [givenTestimonials, selectedPeriod]);
 
   const completedMeetings = useMemo(() => {
     return filteredMeetings.filter(m => m.isCompleted);
@@ -201,10 +423,14 @@ export function MyReport() {
     let attended = 0;
     let absent = 0;
     completedMeetings.forEach(meeting => {
-      const att = meeting.attendance?.[userId];
-      if (att === 'PRESENT' || att === 'Yes' || att === 'Substitute' || att === 'YES' || att === 'SUBSTITUTE' || att === 'Late') {
+      let att = meeting.attendance;
+      if (typeof att === 'string') {
+        try { att = JSON.parse(att); } catch (e) { att = {}; }
+      }
+      const val = att?.[userId];
+      if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(val)) {
         attended++;
-      } else if (att === 'ABSENT' || att === 'No' || att === 'NO') {
+      } else if (['ABSENT', 'No', 'NO'].includes(val)) {
         absent++;
       }
     });
@@ -214,51 +440,47 @@ export function MyReport() {
     return { attended, absent, total, rate };
   }, [completedMeetings, userId]);
 
-  // 2. Referrals Metrics
+  // 2 & 3. Referrals Metrics
   const referralsStats = useMemo(() => {
     const passed = filteredPassedReferrals.length;
     const received = filteredReceivedReferrals.length;
-    const converted = filteredPassedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED').length;
+    const converted = filteredPassedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED' || r.status === 'CLOSED').length;
     const conversionRate = passed > 0 ? Math.round((converted / passed) * 100) : 0;
     return { passed, received, converted, conversionRate };
   }, [filteredPassedReferrals, filteredReceivedReferrals]);
 
-  // 3. One-to-Ones Metrics
+  // 5. One-to-Ones Metrics
   const oneToOnesStats = useMemo(() => {
-    const allOneToOnes = [...filteredCreatedOneToOnes, ...filteredParticipatedOneToOnes];
-    const uniqueMap = new Map();
-    allOneToOnes.forEach(m => uniqueMap.set(m.id, m));
-    const uniqueList = Array.from(uniqueMap.values());
-    
+    const uniqueList = filteredOneToOnes;
     const completed = uniqueList.filter(m => m.status === 'COMPLETED').length;
-    const upcoming = uniqueList.filter(m => m.status === 'UPCOMING').length;
+    const upcoming = uniqueList.filter(m => m.status === 'SCHEDULED' || m.status === 'UPCOMING').length;
     return { total: uniqueList.length, completed, upcoming, list: uniqueList };
-  }, [filteredCreatedOneToOnes, filteredParticipatedOneToOnes]);
+  }, [filteredOneToOnes]);
 
-  // 4. Revenue / Thank You Slips
+  // 6. Revenue / Thank You Slips
   const revenueStats = useMemo(() => {
     const businessGiven = filteredSentThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
     const businessReceived = filteredReceivedThankYouSlips.reduce((sum, s) => sum + (s.businessValue || 0), 0);
     return { businessGiven, businessReceived };
   }, [filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
-  // 5. Dynamic Growth Score
+  // Dynamic Growth Score
   const dynamicGrowthScore = useMemo(() => {
     return calculateMemberGrowthScore({
-      attendancePercent: attendanceData.percentage || 0,
+      attendancePercent: attendanceData.rate || 0,
       completedOneToOnes: oneToOnesStats.completed,
-      referralsSent: referralsStats.given,
+      referralsSent: referralsStats.passed,
       referralsReceived: referralsStats.received,
       thankYouSlipsSent: filteredSentThankYouSlips.length,
       thankYouSlipsReceived: filteredReceivedThankYouSlips.length,
       guestInvites: filteredGuestInvitations.length,
-      testimonialsSubmitted: 0,
+      testimonialsSubmitted: filteredGivenTestimonials.length,
       isProfileComplete: Boolean(profile?.name && profile?.phone && profile?.businessName),
       isSubscriptionActive: profile?.membershipStatus === 'ACTIVE' || profile?.status === 'ACTIVE'
     }).score;
-  }, [attendanceData, oneToOnesStats, referralsStats, filteredSentThankYouSlips, filteredReceivedThankYouSlips, filteredGuestInvitations, profile]);
+  }, [attendanceData, oneToOnesStats, referralsStats, filteredSentThankYouSlips, filteredReceivedThankYouSlips, filteredGuestInvitations, filteredGivenTestimonials, profile]);
 
-  // 5b. MOM trend metrics based on actual database logs for high-fidelity dashboards
+  // MOM trend metrics calculated purely from live database data
   const parsedDatesWithMeta = useMemo(() => {
     const sumVal = (arr: ThankYouSlip[]) => arr.reduce((sum, item) => sum + (item.businessValue || 0), 0);
     
@@ -321,14 +543,9 @@ export function MyReport() {
     }, null as Date | null);
 
     // One-to-Ones
-    const allOnetoOnes = [...createdOneToOnes, ...participatedOneToOnes];
-    const uniqueOneToOnesMap = new Map();
-    allOnetoOnes.forEach(m => uniqueOneToOnesMap.set(m.id, m));
-    const uniqueOneToOnesList = Array.from(uniqueOneToOnesMap.values());
-    
-    const otoToday = uniqueOneToOnesList.filter(m => isToday(m.createdAt) || isToday(m.date));
-    const otoThisMonth = uniqueOneToOnesList.filter(m => isThisMonth(m.createdAt) || isThisMonth(m.date));
-    const otoLastMonth = uniqueOneToOnesList.filter(m => isLastMonth(m.createdAt) || isLastMonth(m.date));
+    const otoToday = oneToOnes.filter(m => isToday(m.createdAt || m.date));
+    const otoThisMonth = oneToOnes.filter(m => isThisMonth(m.createdAt || m.date));
+    const otoLastMonth = oneToOnes.filter(m => isLastMonth(m.createdAt || m.date));
     const otoThisMonthComp = otoThisMonth.filter(m => m.status === 'COMPLETED').length;
     const otoLastMonthComp = otoLastMonth.filter(m => m.status === 'COMPLETED').length;
     
@@ -336,20 +553,24 @@ export function MyReport() {
       ? Math.round(((otoThisMonthComp - otoLastMonthComp) / otoLastMonthComp) * 100) 
       : (otoThisMonthComp > 0 ? 100 : 0);
       
-    const lastUpdatedOto = uniqueOneToOnesList.reduce((latest, m) => {
+    const lastUpdatedOto = oneToOnes.reduce((latest, m) => {
       const d = parseFlexibleDate(m.createdAt || m.date);
       return d && (!latest || d > latest) ? d : latest;
     }, null as Date | null);
 
     // Attendance
-    const mCompThisMonth = relevantMeetings.filter(m => m.isCompleted && isThisMonth(m.date));
-    const mCompLastMonth = relevantMeetings.filter(m => m.isCompleted && isLastMonth(m.date));
+    const mCompThisMonth = meetings.filter(m => m.isCompleted && isThisMonth(m.date));
+    const mCompLastMonth = meetings.filter(m => m.isCompleted && isLastMonth(m.date));
     
     const getAttRate = (mList: Meeting[]) => {
       let att = 0;
       let abs = 0;
       mList.forEach(m => {
-        const val = m.attendance?.[userId];
+        let attMap = m.attendance;
+        if (typeof attMap === 'string') {
+          try { attMap = JSON.parse(attMap); } catch (e) { attMap = {}; }
+        }
+        const val = attMap?.[userId];
         if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(val)) {
           att++;
         } else if (['ABSENT', 'No', 'NO'].includes(val)) {
@@ -363,7 +584,7 @@ export function MyReport() {
     const attRateLastMonth = getAttRate(mCompLastMonth);
     const trendAtt = attRateThisMonth - attRateLastMonth;
     
-    const lastUpdatedAtt = relevantMeetings.filter(m => m.isCompleted).reduce((latest, m) => {
+    const lastUpdatedAtt = meetings.filter(m => m.isCompleted).reduce((latest, m) => {
       const d = parseFlexibleDate(m.date);
       return d && (!latest || d > latest) ? d : latest;
     }, null as Date | null);
@@ -400,15 +621,15 @@ export function MyReport() {
         lastUpdated: lastUpdatedOto
       },
       attendance: {
-        today: relevantMeetings.filter(m => m.isCompleted).some(m => isToday(m.date)) ? (relevantMeetings.filter(m => m.isCompleted).some(m => isToday(m.date) && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[userId])) ? 'Present' : 'Absent') : 'No Sync Today',
+        today: meetings.filter(m => m.isCompleted).some(m => isToday(m.date)) ? 'Synced' : 'No Sync Today',
         monthly: attRateThisMonth,
         trend: trendAtt,
         lastUpdated: lastUpdatedAtt
       }
     };
-  }, [sentThankYouSlips, receivedThankYouSlips, passedReferrals, receivedReferrals, createdOneToOnes, participatedOneToOnes, relevantMeetings, userId]);
+  }, [sentThankYouSlips, receivedThankYouSlips, passedReferrals, receivedReferrals, oneToOnes, meetings, userId]);
 
-  // 6. Recent activities timeline from actual data
+  // Recent activities timeline from actual database logs
   const dynamicActivities = useMemo(() => {
     const list: Array<{ id: string; title: string; desc: string; type: string; time: number }> = [];
     
@@ -416,9 +637,9 @@ export function MyReport() {
       list.push({
         id: `ref-pass-${r.id}`,
         title: 'Referral Passed',
-        desc: `Passed commercial lead to member for: ${r.requirement}`,
+        desc: `Passed lead: ${r.requirement || 'Commercial Requirement'}`,
         type: 'referral_sent',
-        time: r.createdAt ? new Date(r.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(r.createdAt)?.getTime() || Date.now()
       });
     });
 
@@ -426,9 +647,9 @@ export function MyReport() {
       list.push({
         id: `ref-recv-${r.id}`,
         title: 'Referral Received',
-        desc: `Received lead with status ${r.status.replace('_', ' ')}`,
+        desc: `Received lead with status ${(r.status || 'PENDING').replace('_', ' ')}`,
         type: 'referral_recv',
-        time: r.createdAt ? new Date(r.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(r.createdAt)?.getTime() || Date.now()
       });
     });
 
@@ -438,7 +659,7 @@ export function MyReport() {
         title: m.status === 'COMPLETED' ? '1-to-1 Meeting Completed' : '1-to-1 Scheduled',
         desc: `Session venue: ${m.venue || 'TBD'}`,
         type: 'onetoone',
-        time: m.createdAt ? new Date(m.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(m.createdAt || m.date)?.getTime() || Date.now()
       });
     });
 
@@ -446,9 +667,9 @@ export function MyReport() {
       list.push({
         id: `guest-${g.id}`,
         title: 'Guest Invited',
-        desc: `Invited peer ${g.guestName} representing ${g.guestBusiness}`,
+        desc: `Invited peer ${g.guestName || 'Guest'} representing ${g.guestBusiness || 'Business'}`,
         type: 'guest',
-        time: g.createdAt ? new Date(g.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(g.createdAt)?.getTime() || Date.now()
       });
     });
 
@@ -456,9 +677,9 @@ export function MyReport() {
       list.push({
         id: `slip-sent-${s.id}`,
         title: 'Thank You Slip Sent',
-        desc: `Acknowledged ₹${s.businessValue.toLocaleString()} business generated`,
+        desc: `Acknowledged ₹${(s.businessValue || 0).toLocaleString()} business generated`,
         type: 'slip_sent',
-        time: s.createdAt ? new Date(s.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(s.createdAt)?.getTime() || Date.now()
       });
     });
 
@@ -466,35 +687,56 @@ export function MyReport() {
       list.push({
         id: `slip-recv-${s.id}`,
         title: 'Thank You Slip Received',
-        desc: `Earned ₹${s.businessValue.toLocaleString()} from business generated`,
+        desc: `Earned ₹${(s.businessValue || 0).toLocaleString()} from business generated`,
         type: 'slip_recv',
-        time: s.createdAt ? new Date(s.createdAt).getTime() : Date.now()
+        time: parseFlexibleDate(s.createdAt)?.getTime() || Date.now()
       });
     });
 
-    // Sort by timestamp desc
     return list.sort((a, b) => b.time - a.time).slice(0, 10);
   }, [filteredPassedReferrals, filteredReceivedReferrals, oneToOnesStats.list, filteredGuestInvitations, filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
-  // 7. Month-Over-Month Performance Chart Data
+  // Performance Trend Chart Data (Last 6 Months derived 100% from actual database records)
   const monthlyChartData = useMemo(() => {
-    // Generate mock months with actual user data injected to represent real trend
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonthIndex = new Date().getMonth();
-    
-    return months.map((month, idx) => {
-      const isCurrentMonth = idx === currentMonthIndex;
-      return {
-        name: month,
-        "Referrals Passed": isCurrentMonth ? referralsStats.passed : Math.max(0, referralsStats.passed - Math.floor(Math.random() * 2)),
-        "1-to-1 Meetings": isCurrentMonth ? oneToOnesStats.completed : Math.max(0, oneToOnesStats.completed - Math.floor(Math.random() * 2)),
-        "Business Given (k₹)": isCurrentMonth ? Math.round(revenueStats.businessGiven / 1000) : Math.max(0, Math.round(revenueStats.businessGiven / 1000) - Math.floor(Math.random() * 50)),
-        "Business Received (k₹)": isCurrentMonth ? Math.round(revenueStats.businessReceived / 1000) : Math.max(0, Math.round(revenueStats.businessReceived / 1000) - Math.floor(Math.random() * 50))
-      };
-    }).slice(Math.max(0, currentMonthIndex - 5), currentMonthIndex + 1); // Last 6 months up to current
-  }, [referralsStats, oneToOnesStats, revenueStats]);
+    const now = new Date();
+    const result = [];
 
-  // SMART RECOMMENDATIONS & INSIGHTS
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mIdx = d.getMonth();
+      const year = d.getFullYear();
+      const monthName = months[mIdx];
+
+      const startOfMonth = new Date(year, mIdx, 1);
+      const endOfMonth = new Date(year, mIdx + 1, 0, 23, 59, 59);
+
+      const inThisMonth = (dateVal: any) => {
+        const parsed = parseFlexibleDate(dateVal);
+        return Boolean(parsed && parsed >= startOfMonth && parsed <= endOfMonth);
+      };
+
+      const refCount = filteredPassedReferrals.filter(r => inThisMonth(r.createdAt)).length;
+      
+      const otoCount = oneToOnesStats.list.filter(m => m.status === 'COMPLETED' && inThisMonth(m.createdAt || m.date)).length;
+      
+      const bizGivenK = Math.round(filteredSentThankYouSlips.filter(s => inThisMonth(s.createdAt)).reduce((sum, s) => sum + (s.businessValue || 0), 0) / 1000);
+
+      const bizRecvK = Math.round(filteredReceivedThankYouSlips.filter(s => inThisMonth(s.createdAt)).reduce((sum, s) => sum + (s.businessValue || 0), 0) / 1000);
+
+      result.push({
+        name: monthName,
+        "Referrals Passed": refCount,
+        "1-to-1 Meetings": otoCount,
+        "Business Given (k₹)": bizGivenK,
+        "Business Received (k₹)": bizRecvK
+      });
+    }
+
+    return result;
+  }, [filteredPassedReferrals, oneToOnesStats.list, filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
+
+  // Recommendations calculated from live database numbers
   const smartRecommendations = useMemo(() => {
     const list = [];
     
@@ -514,7 +756,7 @@ export function MyReport() {
       list.push({
         id: 'rec-onetoone',
         title: 'Log your first 1-to-1 Session',
-        description: 'You haven\'t logged any 1-to-1 sessions. Coordinate quick sync meetings with other members to unlock synergy.',
+        description: 'You haven\'t logged any completed 1-to-1 sessions. Coordinate quick sync meetings with other members to unlock synergy.',
         action: 'Schedule 1-to-1',
         link: '/one-to-one',
         icon: Handshake,
@@ -556,7 +798,6 @@ export function MyReport() {
       });
     }
 
-    // Default recommendation if doing perfectly
     if (list.length === 0) {
       list.push({
         id: 'rec-perfect',
@@ -809,7 +1050,7 @@ export function MyReport() {
                   <span>
                     Conversion:{' '}
                     {(() => {
-                      const converted = filteredReceivedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED').length;
+                      const converted = filteredReceivedReferrals.filter(r => r.status === 'COMPLETED' || r.status === 'CONVERTED' || r.status === 'CLOSED').length;
                       return filteredReceivedReferrals.length > 0 ? Math.round((converted / filteredReceivedReferrals.length) * 100) : 0;
                     })()}%
                   </span>
@@ -1069,8 +1310,12 @@ export function MyReport() {
                     <h4 className="text-xs font-bold text-white uppercase tracking-widest">Meeting Chronology</h4>
                     <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden">
                       {completedMeetings.slice(0, 5).map((m) => {
-                        const att = m.attendance?.[userId];
-                        const isPresent = att === 'PRESENT' || att === 'Yes' || att === 'Substitute' || att === 'YES' || att === 'SUBSTITUTE' || att === 'Late';
+                        let attMap = m.attendance;
+                        if (typeof attMap === 'string') {
+                          try { attMap = JSON.parse(attMap); } catch (e) { attMap = {}; }
+                        }
+                        const att = attMap?.[userId];
+                        const isPresent = ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(att);
                         return (
                           <div key={m.id} className="p-4 flex items-center justify-between text-xs">
                             <div className="space-y-0.5">
@@ -1126,7 +1371,7 @@ export function MyReport() {
                     <h4 className="text-xs font-bold text-white uppercase tracking-widest">Inbound & Outbound History</h4>
                     <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden max-h-[250px] overflow-y-auto">
                       {[...passedReferrals, ...receivedReferrals].slice(0, 10).map((r) => {
-                        const isOutbound = r.fromUserId === userId;
+                        const isOutbound = String(r.sender_id || r.fromUserId) === userId;
                         return (
                           <div key={r.id} className="p-4 flex items-center justify-between text-xs gap-3">
                             <div>
@@ -1143,15 +1388,18 @@ export function MyReport() {
                             </div>
                             <span className={cn(
                               "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap",
-                              r.status === 'COMPLETED' || r.status === 'CONVERTED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              r.status === 'COMPLETED' || r.status === 'CONVERTED' || r.status === 'CLOSED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                               r.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
                               'bg-red-500/10 text-red-400 border-red-500/20'
                             )}>
-                              {r.status.replace('_', ' ')}
+                              {(r.status || 'PENDING').replace('_', ' ')}
                             </span>
                           </div>
                         );
                       })}
+                      {passedReferrals.length === 0 && receivedReferrals.length === 0 && (
+                        <p className="p-4 text-center text-xs text-neutral-500 font-bold uppercase tracking-widest">No referral records logged.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1185,18 +1433,18 @@ export function MyReport() {
                     <h4 className="text-xs font-bold text-white uppercase tracking-widest">Verified Slips Auditing</h4>
                     <div className="bg-[#0B1220]/60 border border-white/5 rounded-xl divide-y divide-white/5 overflow-hidden max-h-[250px] overflow-y-auto">
                       {[...sentThankYouSlips, ...receivedThankYouSlips].slice(0, 10).map((s) => {
-                        const isReceived = s.toUserId === userId;
+                        const isReceived = String(s.toUserId) === userId;
                         return (
                           <div key={s.id} className="p-4 flex items-center justify-between text-xs">
                             <div className="space-y-0.5">
-                              <p className="font-bold text-white">{s.customerName}</p>
+                              <p className="font-bold text-white">{s.customerName || 'Verified Slip'}</p>
                               <p className="text-neutral-400 font-medium">Type: {isReceived ? 'Received from peer' : 'Sent to peer'}</p>
                             </div>
                             <span className={cn(
                               "font-extrabold",
                               isReceived ? 'text-emerald-400' : 'text-neutral-300'
                             )}>
-                              {isReceived ? '+' : '-'} ₹{s.businessValue.toLocaleString()}
+                              {isReceived ? '+' : '-'} ₹{(s.businessValue || 0).toLocaleString()}
                             </span>
                           </div>
                         );
@@ -1241,7 +1489,7 @@ export function MyReport() {
                           <div key={m.id} className="p-4 flex items-center justify-between text-xs">
                             <div className="space-y-0.5">
                               <p className="font-bold text-white">Venue: {m.venue || 'TBD'}</p>
-                              <p className="text-neutral-400 font-medium">{m.date} at {m.time}</p>
+                              <p className="text-neutral-400 font-medium">{m.date || m.scheduled_date || 'Date TBD'} {m.time ? `at ${m.time}` : ''}</p>
                             </div>
                             <span className={cn(
                               "px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
@@ -1264,7 +1512,7 @@ export function MyReport() {
               <div className="pt-4 border-t border-white/5 flex justify-end">
                 <button 
                   onClick={() => setActiveModal(null)}
-                  className="bg-[#DC143C] hover:bg-[#B22222] text-white px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-[0_8px_20px_rgba(220,20,60,0.3)] shrink-0"
+                  className="bg-[#DC143C] hover:bg-[#B22222] text-white px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-[0_8px_20px_rgba(220,20,60,0.3)] shrink-0 cursor-pointer"
                 >
                   Close Audit
                 </button>
