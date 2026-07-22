@@ -13,7 +13,8 @@ import {
   ChevronRight,
   X,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -123,23 +124,17 @@ export function OneToOneMeetings() {
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Update Meeting state
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  // Attendance & Reschedule Modal State
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [updatingMeeting, setUpdatingMeeting] = useState<OneToOneMeeting | null>(null);
-  const [updateLocationType, setUpdateLocationType] = useState<'Online' | 'My Address' | 'Member Address'>('Online');
-  const [isUpdateDropdownOpen, setIsUpdateDropdownOpen] = useState(false);
-  const [updateSearchTerm, setUpdateSearchTerm] = useState('');
-  const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
-  
-  const [updateFormData, setUpdateFormData] = useState({
-    participantId: '',
-    date: '',
-    time: '',
-    venue: '',
-    notes: '',
-    status: 'UPCOMING' as 'UPCOMING' | 'COMPLETED' | 'NOT_COMPLETED',
-    attendance: {} as Record<string, 'PRESENT' | 'ABSENT'>
-  });
+
+  const [creatorAttendance, setCreatorAttendance] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
+  const [receiverAttendance, setReceiverAttendance] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
+
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('10:00 AM');
+  const [rescheduleLocationOption, setRescheduleLocationOption] = useState<'Online Meeting' | 'My Address' | 'Selected Member Address'>('Online Meeting');
 
   const fetchMeetingsAndUsers = async () => {
     try {
@@ -496,110 +491,189 @@ export function OneToOneMeetings() {
     }
   };
 
-  const handleUpdateMeeting = async (overrideStatus?: 'UPCOMING' | 'COMPLETED' | 'NOT_COMPLETED') => {
+  const handleOpenAttendanceModal = (meeting: OneToOneMeeting) => {
+    const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
+    const isCreator = String(senderId) === String(profile?.id) || String(senderId) === String(profile?.uid) || String(senderId) === String(currentUserRecord?.id) || String(senderId) === String(currentUserRecord?.uid);
+
+    if (!isCreator && !isAdmin) {
+      return;
+    }
+
+    setUpdatingMeeting(meeting);
+
+    const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
+
+    const existingAttendance = meeting.attendance || {};
+    setCreatorAttendance(existingAttendance[senderId] || 'PRESENT');
+    if (receiverId) {
+      setReceiverAttendance(existingAttendance[receiverId] || 'PRESENT');
+    } else {
+      setReceiverAttendance('PRESENT');
+    }
+
+    setRescheduleDate(meeting.date || new Date().toISOString().split('T')[0]);
+    setRescheduleTime(meeting.time || '10:00 AM');
+    
+    let locOpt: 'Online Meeting' | 'My Address' | 'Selected Member Address' = 'Online Meeting';
+    if (meeting.venue === 'My Address' || meeting.venue?.startsWith('My Address')) {
+      locOpt = 'My Address';
+    } else if (meeting.venue === 'Member Address' || meeting.venue?.includes("Member's Address") || meeting.venue?.includes("Selected Member Address")) {
+      locOpt = 'Selected Member Address';
+    }
+    setRescheduleLocationOption(locOpt);
+
+    setError(null);
+    setIsAttendanceModalOpen(true);
+  };
+
+  const handleMarkAsCompleted = async () => {
     if (!updatingMeeting || !updatingMeeting.id) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId;
+      const receiverId = updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
+
+      const attendancePayload: Record<string, 'PRESENT' | 'ABSENT'> = {};
+      if (senderId) attendancePayload[senderId] = creatorAttendance;
+      if (receiverId) attendancePayload[receiverId] = receiverAttendance;
+
+      const payload = {
+        attendance: attendancePayload,
+        status: 'COMPLETED',
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: dbErr } = await supabase
+        .from('one_to_one_meetings')
+        .update(payload)
+        .eq('id', updatingMeeting.id);
+
+      if (dbErr) {
+        console.warn("Direct update error, trying databaseService fallback:", dbErr);
+        await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
+      }
+
+      await fetchMeetingsAndUsers();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+      setIsAttendanceModalOpen(false);
+      setUpdatingMeeting(null);
+    } catch (err: any) {
+      console.error("Error marking meeting as completed:", err);
+      setError(err.message || "Failed to mark as completed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleNotCompleted = async () => {
+    if (!updatingMeeting || !updatingMeeting.id) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId;
+      const receiverId = updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
+
+      const attendancePayload: Record<string, 'PRESENT' | 'ABSENT'> = {};
+      if (senderId) attendancePayload[senderId] = creatorAttendance;
+      if (receiverId) attendancePayload[receiverId] = receiverAttendance;
+
+      const payload = {
+        attendance: attendancePayload,
+        status: 'NOT_COMPLETED',
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: dbErr } = await supabase
+        .from('one_to_one_meetings')
+        .update(payload)
+        .eq('id', updatingMeeting.id);
+
+      if (dbErr) {
+        console.warn("Direct update error, trying databaseService fallback:", dbErr);
+        await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
+      }
+
+      await fetchMeetingsAndUsers();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+      setIsAttendanceModalOpen(false);
+      setUpdatingMeeting(null);
+    } catch (err: any) {
+      console.error("Error setting meeting as not completed:", err);
+      setError(err.message || "Failed to update meeting status.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!updatingMeeting || !updatingMeeting.id) return;
+    if (!rescheduleDate) {
+      setError("Please select a meeting date.");
+      return;
+    }
+    if (!rescheduleTime) {
+      setError("Please select a meeting time.");
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const targetStatus = overrideStatus || updateFormData.status || 'UPCOMING';
+      const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId;
+      const receiverId = updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
 
-      // 1. Sender lookup (users table)
-      const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId || currentUserId;
       let senderRecord = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
-
-      if (!senderRecord && senderId) {
-        const { data: sData } = await supabase.from('users').select('*').eq('id', senderId).maybeSingle();
-        if (sData) senderRecord = sData;
-      }
-
-      if (!senderRecord || !senderRecord.id) {
-        setError("Sender account not found in users table.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. Receiver lookup (users table)
-      const receiverId = updateFormData.participantId || updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
       let receiverRecord = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
 
-      if (!receiverRecord && receiverId) {
-        const { data: rData } = await supabase.from('users').select('*').eq('id', receiverId).maybeSingle();
-        if (rData) receiverRecord = rData;
-      }
+      const senderFullAddress = getUserFullAddress(senderRecord);
+      const receiverFullAddress = getUserFullAddress(receiverRecord);
 
-      if (!receiverRecord || !receiverRecord.id) {
-        setError("Selected member not found in users table.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Determine meeting location string
       let finalLocation = 'Online Meeting';
-      if (updateLocationType === 'Online') {
+      if (rescheduleLocationOption === 'My Address') {
+        finalLocation = senderFullAddress || 'My Address';
+      } else if (rescheduleLocationOption === 'Selected Member Address') {
+        finalLocation = receiverFullAddress || "Selected Member Address";
+      } else {
         finalLocation = 'Online Meeting';
-      } else if (updateLocationType === 'My Address') {
-        finalLocation = getUserFullAddress(senderRecord) || 'My Address';
-      } else if (updateLocationType === 'Member Address') {
-        finalLocation = getUserFullAddress(receiverRecord) || "Member's Address";
-      } else if (updateFormData.venue) {
-        finalLocation = updateFormData.venue;
       }
 
-      const meetingTitle = `1:1 Meeting - ${getUserFullName(senderRecord)} & ${getUserFullName(receiverRecord)}`;
-
-      const updatePayload = {
-        title: meetingTitle,
-        sender_id: senderRecord.id,
-        receiver_id: receiverRecord.id,
-        organizer_id: senderRecord.id,
-        member_id: receiverRecord.id,
-        participant_ids: [receiverRecord.id],
-        participantIds: [receiverRecord.id],
-        scheduled_date: updateFormData.date || updatingMeeting.date,
-        date: updateFormData.date || updatingMeeting.date,
-        scheduled_time: updateFormData.time || updatingMeeting.time,
-        meeting_time: updateFormData.time || updatingMeeting.time,
-        time: updateFormData.time || updatingMeeting.time,
+      const payload = {
+        meeting_date: rescheduleDate,
+        scheduled_date: rescheduleDate,
+        date: rescheduleDate,
+        meeting_time: rescheduleTime,
+        scheduled_time: rescheduleTime,
+        time: rescheduleTime,
         meeting_location: finalLocation,
         venue: finalLocation,
-        notes: updateFormData.notes || '',
-        status: targetStatus,
-        attendance: updateFormData.attendance,
+        status: 'RESCHEDULED',
         updated_at: new Date().toISOString()
       };
 
-      // UPDATE using meeting.id primary key
       const { error: dbErr } = await supabase
         .from('one_to_one_meetings')
-        .update(updatePayload)
+        .update(payload)
         .eq('id', updatingMeeting.id);
 
       if (dbErr) {
         console.warn("Direct update error, trying databaseService fallback:", dbErr);
-        await databaseService.update('one_to_one_meetings', updatingMeeting.id, updatePayload);
+        await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
       }
 
-      // Re-fetch data immediately
       await fetchMeetingsAndUsers();
-
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      setShowUpdateSuccess(true);
 
-      setTimeout(() => {
-        setIsUpdateModalOpen(false);
-        setShowUpdateSuccess(false);
-        setUpdatingMeeting(null);
-      }, 1200);
-
+      setIsRescheduleModalOpen(false);
+      setUpdatingMeeting(null);
     } catch (err: any) {
-      console.error("Error updating meeting:", err);
-      if (err?.message?.includes('row-level security') || err?.message?.includes('RLS') || err?.message?.includes('violates row-level security policy')) {
-        setError("Meeting update failed. Reason: Row-level security (RLS) restriction in database.");
-      } else {
-        setError(`Meeting update failed. Reason: ${err.message || 'Unknown database error'}`);
-      }
+      console.error("Error rescheduling meeting:", err);
+      setError(err.message || "Failed to reschedule meeting.");
     } finally {
       setIsSubmitting(false);
     }
@@ -802,37 +876,13 @@ export function OneToOneMeetings() {
                   meeting={meeting} 
                   allUsersList={allUsersList}
                   chapterMap={chapterMap}
-                  isCreator={(meeting.organizer_id || meeting.creatorId) === profile.uid}
+                  isCreator={
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.id) ||
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.uid) ||
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(currentUserRecord?.id)
+                  }
                   isAdmin={isAdmin}
-                  onUpdate={() => {
-                    const currentReceiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]) || '';
-                    const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId || '';
-                    
-                    let locType: 'Online' | 'My Address' | 'Member Address' = 'Online';
-                    if (meeting.venue === 'My Address' || meeting.venue?.startsWith('My Address')) {
-                      locType = 'My Address';
-                    } else if (meeting.venue === 'Member Address' || meeting.venue?.includes("Member's Address")) {
-                      locType = 'Member Address';
-                    }
-
-                    setUpdatingMeeting(meeting);
-                    setUpdateFormData({
-                      participantId: currentReceiverId,
-                      date: meeting.date || '',
-                      time: meeting.time || '',
-                      venue: meeting.venue || '',
-                      notes: meeting.notes || '',
-                      status: meeting.status || 'UPCOMING',
-                      attendance: meeting.attendance || {
-                        [senderId]: 'PRESENT',
-                        [currentReceiverId]: 'PRESENT'
-                      }
-                    });
-                    setUpdateLocationType(locType);
-                    setError(null);
-                    setShowUpdateSuccess(false);
-                    setIsUpdateModalOpen(true);
-                  }}
+                  onUpdate={() => handleOpenAttendanceModal(meeting)}
                 />
               ))
             ) : (
@@ -1238,329 +1288,281 @@ export function OneToOneMeetings() {
           </form>
         )}
       </Modal>
-      {/* Update Meeting Modal */}
+      {/* Attendance Modal */}
       <Modal
-        isOpen={isUpdateModalOpen}
+        isOpen={isAttendanceModalOpen}
         onClose={() => {
           if (!isSubmitting) {
-            setIsUpdateModalOpen(false);
+            setIsAttendanceModalOpen(false);
             setUpdatingMeeting(null);
-            setShowUpdateSuccess(false);
           }
         }}
-        title="Update One-to-One Meeting"
+        title="ONE-TO-ONE MEETING ATTENDANCE"
       >
-        {showUpdateSuccess ? (
-          <div className="py-8 text-center space-y-4">
-            <div className="w-20 h-20 bg-emerald-500/15 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 size={48} />
-            </div>
-            <h3 className="text-2xl font-bold text-white uppercase tracking-tight">Meeting Updated!</h3>
-            <p className="text-neutral-400 font-medium">Meeting details have been updated successfully.</p>
-          </div>
-        ) : updatingMeeting ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleUpdateMeeting();
-            }}
-            className="space-y-6"
-          >
-            {error && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-[12px] text-sm font-bold flex items-center gap-2">
-                <AlertCircle size={18} />
-                {error}
+        {updatingMeeting && (() => {
+          const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId;
+          const receiverId = updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
+
+          const senderRecord = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
+          const receiverRecord = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
+
+          const senderName = getUserFullName(senderRecord) || 'Creator';
+          const receiverName = getUserFullName(receiverRecord) || 'Receiver';
+
+          const formattedMeetingDate = updatingMeeting.date ? format(new Date(updatingMeeting.date), 'dd MMM yyyy') : 'N/A';
+          const formattedMeetingTime = updatingMeeting.time ? formatTime12h(updatingMeeting.time) : 'N/A';
+
+          return (
+            <div className="space-y-6">
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-[12px] text-sm font-bold flex items-center gap-2">
+                  <AlertCircle size={18} />
+                  {error}
+                </div>
+              )}
+
+              {/* Meeting Info Section */}
+              <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-3">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting With:</span>
+                  <span className="font-bold text-white text-sm">{receiverName}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Date:</span>
+                  <span className="font-bold text-white text-sm">{formattedMeetingDate}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Time:</span>
+                  <span className="font-bold text-white text-sm">{formattedMeetingTime}</span>
+                </div>
               </div>
-            )}
 
-            {/* Member Selection */}
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Select Member (Receiver)</label>
-              <div className="relative">
-                <div 
-                  onClick={() => setIsUpdateDropdownOpen(!isUpdateDropdownOpen)}
-                  className="w-full px-4 py-4 rounded-[16px] border border-white/5 bg-[#151C2E] cursor-pointer flex items-center justify-between group hover:border-primary/50 transition-all"
-                >
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <Users size={18} className="text-neutral-400 group-hover:text-primary transition-colors shrink-0" />
-                    {(() => {
-                      const selectedUpdateMember = allUsersList.find(m => String(m.id) === String(updateFormData.participantId) || String(m.uid) === String(updateFormData.participantId));
-                      if (selectedUpdateMember) {
-                        const mName = getUserFullName(selectedUpdateMember);
-                        const mRole = formatUserRoleOrPosition(selectedUpdateMember);
-                        const mCategory = selectedUpdateMember.category || selectedUpdateMember.business_category || selectedUpdateMember.businessName || selectedUpdateMember.business_name || 'General';
-                        const mChapter = chapterMap.get(String(selectedUpdateMember.chapter_id)) || selectedUpdateMember.chapter_name || 'No Chapter';
-                        const mPhoto = selectedUpdateMember.photo_url || selectedUpdateMember.photoURL || selectedUpdateMember.avatar_url || selectedUpdateMember.profile_photo;
+              {/* Attendance Section */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold text-white uppercase tracking-widest">Attendance</h4>
 
-                        return (
-                          <div className="flex items-center gap-2.5 overflow-hidden">
-                            {mPhoto ? (
-                              <img
-                                src={mPhoto}
-                                alt={mName}
-                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/10"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                                {mName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-white truncate">
-                                {mName} <span className="text-xs font-semibold text-primary">({mRole})</span>
-                              </p>
-                              <p className="text-[10px] text-neutral-400 font-medium truncate">
-                                {mCategory} • {mChapter}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return <span className="text-sm font-medium text-neutral-400">Select a member...</span>;
-                    })()}
+                {/* Creator (Logged-in Member) */}
+                <div className="p-4 bg-[#151C2E] rounded-[14px] border border-white/5 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-white">Creator (Logged-in Member)</p>
+                    <p className="text-[10px] text-neutral-400 font-medium">{senderName}</p>
                   </div>
-                  <ChevronRight size={18} className={cn("text-neutral-400 transition-transform", isUpdateDropdownOpen ? "rotate-90" : "")} />
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">
+                      <input 
+                        type="radio" 
+                        name="creatorAttendance" 
+                        value="PRESENT" 
+                        checked={creatorAttendance === 'PRESENT'} 
+                        onChange={() => setCreatorAttendance('PRESENT')}
+                        className="w-4 h-4 text-primary bg-[#111827] border-white/20 focus:ring-primary cursor-pointer" 
+                      />
+                      <span>Present</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">
+                      <input 
+                        type="radio" 
+                        name="creatorAttendance" 
+                        value="ABSENT" 
+                        checked={creatorAttendance === 'ABSENT'} 
+                        onChange={() => setCreatorAttendance('ABSENT')}
+                        className="w-4 h-4 text-primary bg-[#111827] border-white/20 focus:ring-primary cursor-pointer" 
+                      />
+                      <span>Absent</span>
+                    </label>
+                  </div>
                 </div>
 
-                {isUpdateDropdownOpen && (
-                  <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-[#111827] rounded-[16px] border border-white/5 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-3 border-b border-white/5 bg-[#151C2E]">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
-                        <input
-                          type="text"
-                          placeholder="Search member by name..."
-                          value={updateSearchTerm}
-                          onChange={(e) => setUpdateSearchTerm(e.target.value)}
-                          className="w-full pl-9 pr-4 py-2 text-xs rounded-[12px] border border-white/5 bg-[#111827] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="max-h-52 overflow-y-auto p-3 custom-scrollbar space-y-2">
-                      {members
-                        .filter(m => getUserFullName(m).toLowerCase().includes(updateSearchTerm.toLowerCase()))
-                        .map((member) => {
-                          const mName = getUserFullName(member);
-                          const mRole = formatUserRoleOrPosition(member);
-                          const mCategory = member.category || member.business_category || member.businessName || member.business_name || 'General';
-                          const mChapter = chapterMap.get(String(member.chapter_id)) || member.chapter_name || 'No Chapter';
-                          const mPhoto = member.photo_url || member.photoURL || member.avatar_url || member.profile_photo;
-                          const memberIdToUse = member.id || member.uid;
-
-                          return (
-                            <div
-                              key={memberIdToUse}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUpdateFormData(prev => ({ ...prev, participantId: memberIdToUse }));
-                                setIsUpdateDropdownOpen(false);
-                              }}
-                              className={cn(
-                                "group/item flex items-center justify-between p-3 rounded-[12px] cursor-pointer transition-all",
-                                String(updateFormData.participantId) === String(memberIdToUse)
-                                  ? "bg-primary/10 border border-primary/20 shadow-sm"
-                                  : "bg-[#111827] border border-white/5 hover:bg-[#1C2538]"
-                              )}
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                {mPhoto ? (
-                                  <img
-                                    src={mPhoto}
-                                    alt={mName}
-                                    className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10"
-                                    referrerPolicy="no-referrer"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                                    {mName.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold text-white uppercase tracking-tight truncate">{mName} <span className="text-primary font-semibold">({mRole})</span></p>
-                                  <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">{mCategory} • {mChapter}</p>
-                                </div>
-                              </div>
-                              {String(updateFormData.participantId) === String(memberIdToUse) && (
-                                <CheckCircle2 size={16} className="text-primary shrink-0 ml-2" />
-                              )}
-                            </div>
-                          );
-                        })}
-                    </div>
+                {/* Receiver (Meeting Member) */}
+                <div className="p-4 bg-[#151C2E] rounded-[14px] border border-white/5 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-white">Receiver (Meeting Member)</p>
+                    <p className="text-[10px] text-neutral-400 font-medium">{receiverName}</p>
                   </div>
-                )}
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">
+                      <input 
+                        type="radio" 
+                        name="receiverAttendance" 
+                        value="PRESENT" 
+                        checked={receiverAttendance === 'PRESENT'} 
+                        onChange={() => setReceiverAttendance('PRESENT')}
+                        className="w-4 h-4 text-primary bg-[#111827] border-white/20 focus:ring-primary cursor-pointer" 
+                      />
+                      <span>Present</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">
+                      <input 
+                        type="radio" 
+                        name="receiverAttendance" 
+                        value="ABSENT" 
+                        checked={receiverAttendance === 'ABSENT'} 
+                        onChange={() => setReceiverAttendance('ABSENT')}
+                        className="w-4 h-4 text-primary bg-[#111827] border-white/20 focus:ring-primary cursor-pointer" 
+                      />
+                      <span>Absent</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Meeting Status Section */}
+              <div className="space-y-3 pt-2 border-t border-white/5">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Meeting Status</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleMarkAsCompleted}
+                    disabled={isSubmitting}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[14px] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 disabled:opacity-50 cursor-pointer"
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>Mark as Completed</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNotCompleted}
+                    disabled={isSubmitting}
+                    className="w-full py-3.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-[14px] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    <X size={16} />
+                    <span>Not Completed</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAttendanceModalOpen(false);
+                      setIsRescheduleModalOpen(true);
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full py-3.5 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    <RotateCcw size={16} className="text-primary" />
+                    <span>Reschedule Meeting</span>
+                  </button>
+                </div>
               </div>
             </div>
+          );
+        })()}
+      </Modal>
 
-            {/* Meeting Location */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
-              <select
-                value={updateLocationType}
-                onChange={(e) => setUpdateLocationType(e.target.value as 'Online' | 'My Address' | 'Member Address')}
-                className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white cursor-pointer"
-              >
-                <option value="Online" className="bg-[#111827] text-white">1. Online Meeting</option>
-                <option value="My Address" className="bg-[#111827] text-white">2. My Address</option>
-                <option value="Member Address" className="bg-[#111827] text-white">3. Member's Address</option>
-              </select>
+      {/* Reschedule Meeting Modal */}
+      <Modal
+        isOpen={isRescheduleModalOpen}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsRescheduleModalOpen(false);
+            setUpdatingMeeting(null);
+          }
+        }}
+        title="Reschedule One-to-One Meeting"
+      >
+        <div className="space-y-6">
+          {error && (
+            <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-[12px] text-sm font-bold flex items-center gap-2">
+              <AlertCircle size={18} />
+              {error}
             </div>
+          )}
 
-            {/* Meeting Date and Time */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
-                <input
-                  type="date"
-                  value={updateFormData.date}
-                  onChange={(e) => setUpdateFormData({ ...updateFormData, date: e.target.value })}
-                  className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium bg-[#151C2E] text-white"
-                  style={{ colorScheme: 'dark' }}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Time</label>
-                {(() => {
-                  const { time: timePart, ampm: ampmPart } = parseTo12hParts(updateFormData.time || '10:00 AM');
-                  const [selectedHour, selectedMinute] = timePart.split(':');
-                  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-                  const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+          {/* Meeting Date */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={(e) => setRescheduleDate(e.target.value)}
+              className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium bg-[#151C2E] text-white"
+              style={{ colorScheme: 'dark' }}
+            />
+          </div>
 
-                  const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
-                    setUpdateFormData({ ...updateFormData, time: `${hour}:${minute} ${ampm}` });
-                  };
+          {/* Meeting Time */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Time</label>
+            {(() => {
+              const { time: timePart, ampm: ampmPart } = parseTo12hParts(rescheduleTime || '10:00 AM');
+              const [selectedHour, selectedMinute] = timePart.split(':');
+              const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+              const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
-                  return (
-                    <div className="grid grid-cols-3 gap-2">
-                      <select
-                        value={selectedHour}
-                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
-                      >
-                        {hoursList.map(h => (
-                          <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={selectedMinute}
-                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
-                      >
-                        {minutesList.map(m => (
-                          <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={ampmPart}
-                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
-                      >
-                        <option value="AM" className="bg-[#111827] text-white">AM</option>
-                        <option value="PM" className="bg-[#111827] text-white">PM</option>
-                      </select>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
+              const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                setRescheduleTime(`${hour}:${minute} ${ampm}`);
+              };
 
-            {/* Attendance Toggles */}
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Attendance</label>
-              <div className="space-y-3">
-                {[
-                  updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId,
-                  updateFormData.participantId || updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0])
-                ].filter(Boolean).map(uid => {
-                  const member = allUsersList.find(m => String(m.id) === String(uid) || String(m.uid) === String(uid));
-                  const mName = getUserFullName(member) || 'Participant';
-                  const mPhoto = member?.photo_url || member?.photoURL || member?.avatar_url || member?.profile_photo;
+              return (
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={selectedHour}
+                    onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                  >
+                    {hoursList.map(h => (
+                      <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedMinute}
+                    onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                  >
+                    {minutesList.map(m => (
+                      <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={ampmPart}
+                    onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                  >
+                    <option value="AM" className="bg-[#111827] text-white">AM</option>
+                    <option value="PM" className="bg-[#111827] text-white">PM</option>
+                  </select>
+                </div>
+              );
+            })()}
+          </div>
 
-                  return (
-                    <div key={uid} className="flex items-center justify-between p-3 bg-[#151C2E] rounded-[12px] border border-white/5">
-                      <div className="flex items-center gap-3">
-                        {mPhoto ? (
-                          <img src={mPhoto} className="w-8 h-8 rounded-lg object-cover" referrerPolicy="no-referrer" alt={mName} />
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">
-                            {mName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span className="text-xs font-bold text-white">{mName}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setUpdateFormData(prev => ({
-                            ...prev,
-                            attendance: { ...prev.attendance, [uid]: 'PRESENT' }
-                          }))}
-                          className={cn(
-                            "px-3 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all",
-                            updateFormData.attendance[uid] === 'PRESENT' 
-                              ? "bg-emerald-600 text-white" 
-                              : "bg-[#111827] text-neutral-400 border border-white/5"
-                          )}
-                        >
-                          Present
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setUpdateFormData(prev => ({
-                            ...prev,
-                            attendance: { ...prev.attendance, [uid]: 'ABSENT' }
-                          }))}
-                          className={cn(
-                            "px-3 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all",
-                            updateFormData.attendance[uid] === 'ABSENT' 
-                              ? "bg-red-600 text-white" 
-                              : "bg-[#111827] text-neutral-400 border border-white/5"
-                          )}
-                        >
-                          Absent
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {/* Meeting Location */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
+            <select
+              value={rescheduleLocationOption}
+              onChange={(e) => setRescheduleLocationOption(e.target.value as any)}
+              className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white cursor-pointer"
+            >
+              <option value="Online Meeting" className="bg-[#111827] text-white">1. Online Meeting</option>
+              <option value="My Address" className="bg-[#111827] text-white">2. My Address</option>
+              <option value="Selected Member Address" className="bg-[#111827] text-white">3. Selected Member Address</option>
+            </select>
+          </div>
 
-            {/* Notes */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Notes</label>
-              <textarea
-                rows={3}
-                value={updateFormData.notes}
-                onChange={(e) => setUpdateFormData({ ...updateFormData, notes: e.target.value })}
-                placeholder="Add any final notes or outcomes..."
-                className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium resize-none text-sm bg-[#151C2E] text-white"
-              />
-            </div>
-
-            {/* Buttons */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="py-4 bg-primary text-white rounded-[16px] font-bold uppercase tracking-widest hover:bg-primary/90 transition-all text-[10px] disabled:opacity-50"
-              >
-                {isSubmitting ? 'Updating...' : 'Save & Update Meeting'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleUpdateMeeting('COMPLETED')}
-                disabled={isSubmitting}
-                className="py-4 bg-emerald-600 text-white rounded-[16px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all text-[10px] disabled:opacity-50"
-              >
-                Mark Completed
-              </button>
-            </div>
-          </form>
-        ) : null}
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            <button
+              type="button"
+              onClick={handleSaveReschedule}
+              disabled={isSubmitting}
+              className="py-4 bg-primary text-white rounded-[16px] font-bold uppercase tracking-widest hover:bg-primary/90 transition-all text-xs disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Schedule'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsRescheduleModalOpen(false);
+                setUpdatingMeeting(null);
+              }}
+              disabled={isSubmitting}
+              className="py-4 bg-[#151C2E] text-neutral-300 hover:text-white rounded-[16px] font-bold uppercase tracking-widest border border-white/5 hover:bg-[#1C2538] transition-all text-xs disabled:opacity-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* History Table Modal for Master Admin */}
