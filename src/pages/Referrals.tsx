@@ -34,6 +34,7 @@ export function Referrals() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [thankYouSlips, setThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'passed' | 'received'>('received');
   const [loading, setLoading] = useState(true);
@@ -103,21 +104,67 @@ export function Referrals() {
       setThankYouSlips(slips);
     });
 
-    // Fetch members/users
+    // Fetch all users for name lookups in lists
     databaseService.list<UserProfile>('users', []).then(data => {
-      if (isAdmin || isChapterAdmin) {
-        setMembers(data);
-      } else {
-        setMembers(data.filter(m => m.uid !== profile.uid && (m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE')));
-      }
+      setAllUsers(data);
     });
+
+    // Fetch chapter members specifically for the referral recipient dropdown:
+    // SELECT * FROM users WHERE chapter_id = currentUser.chapter_id AND id != currentUser.id AND role != 'MASTER_ADMIN'
+    const loadChapterMembers = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id || profile.uid;
+
+        if (!userId) return;
+
+        // Fetch current user's profile from database to ensure fresh chapter_id and role
+        const { data: currentUserData } = await supabase
+          .from('users')
+          .select('id, chapter_id, role')
+          .eq('id', userId)
+          .maybeSingle();
+
+        const userChapterId = currentUserData?.chapter_id || profile.chapter_id;
+        const userRole = currentUserData?.role || profile.role;
+
+        if (userRole === 'MASTER_ADMIN' || !userChapterId) {
+          setMembers([]);
+          return;
+        }
+
+        const { data: chapterMembers, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('chapter_id', userChapterId)
+          .neq('id', userId)
+          .neq('role', 'MASTER_ADMIN');
+
+        if (error) {
+          console.error("Error fetching chapter members for dropdown:", error);
+        } else if (chapterMembers) {
+          const formatted = chapterMembers.map(m => ({
+            ...m,
+            uid: m.id || m.uid,
+            name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member',
+            businessName: m.business_name || m.businessName || 'Business',
+            category: m.category || m.business_category || 'Member'
+          }));
+          setMembers(formatted as UserProfile[]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch chapter members for dropdown:", err);
+      }
+    };
+
+    loadChapterMembers();
 
     return () => {
       unsubscribe();
       unsubSlips();
       clearTimeout(timeoutId);
     };
-  }, [profile, filter]);
+  }, [profile, filter, isModalOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,34 +203,7 @@ export function Referrals() {
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
       
-      const currentUser = profile;
-      const sender_id = profile?.uid || null;
-      const receiver_id = formData.toUserId || null;
-      const chapter_id = profile?.chapter_id || null;
-      const customer_name = formData.contactName || null;
-      const customer_mobile = normalizedPhone || null;
-      const requirement = formData.requirement || null;
-
-      // 1 & 2. Log everything before inserting
-      console.log({
-        currentUser,
-        sender_id,
-        receiver_id,
-        chapter_id,
-        customer_name,
-        customer_mobile,
-        requirement
-      });
-
-      // 3. Verify these values are NOT null
-      if (!sender_id) throw new Error("sender_id is missing.");
-      if (!receiver_id) throw new Error("receiver_id is missing.");
-      if (!chapter_id) throw new Error("chapter_id is missing.");
-      if (!customer_name) throw new Error("customer_name is missing.");
-      if (!customer_mobile) throw new Error("customer_mobile is missing.");
-      if (!requirement) throw new Error("requirement is missing.");
-
-      // 4. Verify the logged-in user
+      // 1. Verify authenticated user via Supabase
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -192,20 +212,85 @@ export function Referrals() {
         throw new Error("User is not authenticated.");
       }
 
+      // 2. Load logged-in user's record from the Supabase users table
+      const { data: currentUserRecord, error: currentUserError } = await supabase
+        .from('users')
+        .select('id, chapter_id, role, name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (currentUserError || !currentUserRecord) {
+        throw new Error("Logged-in user profile not found in users table.");
+      }
+
+      if (currentUserRecord.role === 'MASTER_ADMIN' || profile?.role === 'MASTER_ADMIN') {
+        throw new Error("Master Admins cannot send referrals as they are not part of the business network.");
+      }
+
+      const sender_id = currentUserRecord.id || user.id;
+      const chapter_id = currentUserRecord.chapter_id || profile?.chapter_id;
+
+      // 3. Verify chapter_id is not NULL
+      if (!chapter_id) {
+        throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      }
+
+      // 4. Verify chapter_id exists in chapters table
+      const { data: chapterRecord, error: chapterError } = await supabase
+        .from('chapters')
+        .select('id')
+        .eq('id', chapter_id)
+        .maybeSingle();
+
+      if (chapterError || !chapterRecord) {
+        throw new Error("Your assigned chapter does not exist. Please contact your Chapter Admin.");
+      }
+
       // 5. Verify selected member exists
+      const receiver_id = formData.toUserId || null;
+      if (!receiver_id) {
+        throw new Error("Receiver not selected.");
+      }
+
       const { data: receiverRecord, error: receiverError } = await supabase
         .from('users')
-        .select('*')
-        .eq('id', receiver_id);
+        .select('id, name, chapter_id, role')
+        .eq('id', receiver_id)
+        .maybeSingle();
 
-      if (receiverError || !receiverRecord || receiverRecord.length === 0) {
+      if (receiverError || !receiverRecord) {
         console.error("Receiver verification error:", receiverError);
         throw new Error("Selected member does not exist.");
       }
 
-      const toUser = members.find(m => m.uid === formData.toUserId) || receiverRecord[0];
+      if (receiverRecord.role === 'MASTER_ADMIN') {
+        throw new Error("Master Admins cannot receive referrals.");
+      }
 
-      // 6. Verify referrals table column names match insert query
+      const customer_name = formData.contactName ? formData.contactName.trim() : null;
+      const customer_mobile = normalizedPhone ? normalizedPhone.trim() : null;
+      const requirement = formData.requirement ? formData.requirement.trim() : null;
+
+      // Log values before inserting
+      console.log({
+        currentUser: profile,
+        sender_id,
+        receiver_id,
+        chapter_id,
+        customer_name,
+        customer_mobile,
+        requirement
+      });
+
+      // Verify non-null required fields
+      if (!sender_id) throw new Error("sender_id is missing.");
+      if (!receiver_id) throw new Error("receiver_id is missing.");
+      if (!chapter_id) throw new Error("Your account is not assigned to any chapter. Please contact your Chapter Admin.");
+      if (!customer_name) throw new Error("Contact Name is required.");
+      if (!customer_mobile) throw new Error("Contact Phone is required.");
+      if (!requirement) throw new Error("Requirement is required.");
+
+      // Build Referral payload with all supported columns
       const newReferral = {
         sender_id: sender_id,
         from_user_id: sender_id,
@@ -229,54 +314,47 @@ export function Referrals() {
         .insert([newReferral]);
 
       if (insertError) {
-        throw insertError;
+        console.error("Referral Insert Error:", insertError);
+        throw new Error(`Supabase Error: ${insertError.message}`);
       }
+
+      const toUser = members.find(m => m.uid === formData.toUserId) || receiverRecord;
 
       // Create notifications
       try {
         await notificationService.createNotification(
-          formData.toUserId, 
+          receiver_id, 
           'MEMBER', 
           'REFERRAL', 
-          `You have received a new referral from ${profile.name} for ${formData.contactName}.`
+          `You have received a new referral from ${profile?.name || currentUserRecord.name} for ${customer_name}.`
         );
 
-        if (toUser && toUser.adminId) {
+        if (toUser && (toUser as any).adminId) {
           await notificationService.createNotification(
-            toUser.adminId,
+            (toUser as any).adminId,
             'CHAPTER_ADMIN',
             'REFERRAL',
-            `${profile.name} has passed a referral to ${toUser.name}.`
+            `${profile.name} has passed a referral to ${(toUser as any).name || 'a member'}.`
           );
         }
 
-        if (profile.adminId && toUser && profile.adminId !== toUser.adminId) {
-          await notificationService.createNotification(
-            profile.adminId,
-            'CHAPTER_ADMIN',
-            'REFERRAL',
-            `${profile.name} has passed a referral to ${toUser.name}.`
-          );
-        }
-
-        await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${toUser.name || 'member'}.`);
+        await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${(toUser as any).name || 'a member'}.`);
       } catch (notifErr) {
         console.warn("Notification warning:", notifErr);
       }
 
-      // 9. After Successful Insert
+      // Success Feedback
       setSuccessMessage("Referral submitted successfully.");
       alert("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
 
-      // Refresh Given Referrals, Received Referrals, and analytics
+      // Refresh Given Referrals, Received Referrals, analytics, reports, tasks
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      // 1, 8, 10. Replace Generic Error and never swallow errors
       console.error("Referral Insert Error:", error);
-      const message = error?.message || (typeof error === 'string' ? error : "An unexpected error occurred.");
+      const message = error?.message || (typeof error === 'string' ? error : "Failed to send referral.");
       alert(message);
       setErrorMessage(message);
     } finally {
@@ -476,10 +554,11 @@ export function Referrals() {
                   </tr>
                 ) : filteredReferrals.length > 0 ? (
                   filteredReferrals.map((ref) => {
-                    const fromUser = members.find(m => m.uid === ref.fromUserId);
-                    const toUser = members.find(m => m.uid === ref.toUserId);
+                    const lookup = allUsers.length > 0 ? allUsers : members;
+                    const fromUser = lookup.find(m => m.uid === ref.fromUserId);
+                    const toUser = lookup.find(m => m.uid === ref.toUserId);
                     const slip = thankYouSlips.find(s => s.referralId === ref.id);
-                    const chapterAdmin = members.find(m => m.uid === (toUser?.adminId || fromUser?.adminId));
+                    const chapterAdmin = lookup.find(m => m.uid === (toUser?.adminId || fromUser?.adminId));
 
                     return (
                       <tr key={ref.id} className="hover:bg-[#1C2538] transition-colors group cursor-pointer" onClick={() => {
@@ -653,8 +732,9 @@ export function Referrals() {
           </div>
         ) : (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).length > 0 ? (
           (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).map((ref, i) => {
-            const fromUser = members.find(m => m.uid === ref.fromUserId);
-            const toUser = members.find(m => m.uid === ref.toUserId);
+            const lookup = allUsers.length > 0 ? allUsers : members;
+            const fromUser = lookup.find(m => m.uid === ref.fromUserId);
+            const toUser = lookup.find(m => m.uid === ref.toUserId);
             const otherUser = filter === 'received' ? fromUser : toUser;
             const otherName = filter === 'received' ? (ref.fromUserName || fromUser?.name || 'Member') : (toUser?.name || 'Member');
             
