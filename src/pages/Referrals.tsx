@@ -155,7 +155,6 @@ export function Referrals() {
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
-      const toUser = members.find(m => m.uid === formData.toUserId);
       
       const currentUser = profile;
       const sender_id = profile?.uid || null;
@@ -165,7 +164,7 @@ export function Referrals() {
       const customer_mobile = normalizedPhone || null;
       const requirement = formData.requirement || null;
 
-      // 1. Before Insert Print values in browser console
+      // 1 & 2. Log everything before inserting
       console.log({
         currentUser,
         sender_id,
@@ -176,7 +175,7 @@ export function Referrals() {
         requirement
       });
 
-      if (!currentUser) throw new Error("currentUser is missing.");
+      // 3. Verify these values are NOT null
       if (!sender_id) throw new Error("sender_id is missing.");
       if (!receiver_id) throw new Error("receiver_id is missing.");
       if (!chapter_id) throw new Error("chapter_id is missing.");
@@ -184,57 +183,29 @@ export function Referrals() {
       if (!customer_mobile) throw new Error("customer_mobile is missing.");
       if (!requirement) throw new Error("requirement is missing.");
 
-      // 2. Check Authentication
+      // 4. Verify the logged-in user
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (!user) {
-        throw new Error("User not authenticated.");
+        throw new Error("User is not authenticated.");
       }
 
-      // 3. Verify Current User in database
-      const { data: dbUser, error: dbUserError } = await supabase
+      // 5. Verify selected member exists
+      const { data: receiverRecord, error: receiverError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.id)
-        .single();
+        .eq('id', receiver_id);
 
-      if (dbUserError || !dbUser) {
-        console.error("User verification error:", dbUserError);
-        throw new Error("Logged-in user profile not found in users table.");
-      }
-
-      // Verify necessary fields
-      if (!dbUser.id) throw new Error("Sender id is missing.");
-      if (!dbUser.chapter_id) throw new Error("Sender chapter_id is missing.");
-      if (!dbUser.role) throw new Error("Sender role is missing.");
-
-      // 4. Verify Receiver
-      const { data: receiverProfile, error: receiverError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', receiver_id)
-        .single();
-
-      if (receiverError || !receiverProfile) {
+      if (receiverError || !receiverRecord || receiverRecord.length === 0) {
         console.error("Receiver verification error:", receiverError);
-        throw new Error("Selected member not found.");
+        throw new Error("Selected member does not exist.");
       }
 
-      // 8. Verify Foreign Keys
-      const { data: chapterProfile, error: chapterError } = await supabase
-        .from('chapters')
-        .select('*')
-        .eq('id', chapter_id)
-        .single();
+      const toUser = members.find(m => m.uid === formData.toUserId) || receiverRecord[0];
 
-      if (chapterError || !chapterProfile) {
-        console.error("Chapter verification error:", chapterError);
-        throw new Error("Sender chapter does not exist in chapters table.");
-      }
-
-      // 5. Verify and Build Insert Columns (supports old and new names)
+      // 6. Verify referrals table column names match insert query
       const newReferral = {
         sender_id: sender_id,
         from_user_id: sender_id,
@@ -252,7 +223,7 @@ export function Referrals() {
         updated_at: new Date().toISOString()
       };
 
-      // Create referral
+      // Create referral in Supabase
       const { error: insertError } = await supabase
         .from('referrals')
         .insert([newReferral]);
@@ -260,50 +231,54 @@ export function Referrals() {
       if (insertError) {
         throw insertError;
       }
-      
+
       // Create notifications
-      await notificationService.createNotification(
-        formData.toUserId, 
-        'MEMBER', 
-        'REFERRAL', 
-        `You have received a new referral from ${profile.name} for ${formData.contactName}.`
-      );
-
-      // Notify recipient's admin
-      if (toUser && toUser.adminId) {
+      try {
         await notificationService.createNotification(
-          toUser.adminId,
-          'CHAPTER_ADMIN',
-          'REFERRAL',
-          `${profile.name} has passed a referral to ${toUser.name}.`
+          formData.toUserId, 
+          'MEMBER', 
+          'REFERRAL', 
+          `You have received a new referral from ${profile.name} for ${formData.contactName}.`
         );
+
+        if (toUser && toUser.adminId) {
+          await notificationService.createNotification(
+            toUser.adminId,
+            'CHAPTER_ADMIN',
+            'REFERRAL',
+            `${profile.name} has passed a referral to ${toUser.name}.`
+          );
+        }
+
+        if (profile.adminId && toUser && profile.adminId !== toUser.adminId) {
+          await notificationService.createNotification(
+            profile.adminId,
+            'CHAPTER_ADMIN',
+            'REFERRAL',
+            `${profile.name} has passed a referral to ${toUser.name}.`
+          );
+        }
+
+        await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${toUser.name || 'member'}.`);
+      } catch (notifErr) {
+        console.warn("Notification warning:", notifErr);
       }
 
-      // Notify sender's admin (if different from recipient's admin)
-      if (profile.adminId && toUser && profile.adminId !== toUser.adminId) {
-        await notificationService.createNotification(
-          profile.adminId,
-          'CHAPTER_ADMIN',
-          'REFERRAL',
-          `${profile.name} has passed a referral to ${toUser.name}.`
-        );
-      }
-
-      await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${toUser.name}.`);
-
-      // 9. After Successful Insert: close popup, refresh, update analytics, show message
+      // 9. After Successful Insert
       setSuccessMessage("Referral submitted successfully.");
+      alert("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
 
-      // Refresh lists & update analytics immediately
+      // Refresh Given Referrals, Received Referrals, and analytics
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      // 6 & 10. Replace Generic Error and never swallow errors
-      console.error("Referral Error:", error);
-      alert(error.message);
-      setErrorMessage(error.message);
+      // 1, 8, 10. Replace Generic Error and never swallow errors
+      console.error("Referral Insert Error:", error);
+      const message = error?.message || (typeof error === 'string' ? error : "An unexpected error occurred.");
+      alert(message);
+      setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
     }

@@ -87,9 +87,9 @@ export function Members() {
       // Fetch all admins for the adminMap
       const adminsQuery = query(collection(db, 'users'), where('role', '==', 'MASTER_ADMIN'));
       const chapterAdminsQuery = query(collection(db, 'users'), where('position', '==', 'chapter_admin'));
-      Promise.all([getDocs(adminsQuery), getDocs(chapterAdminsQuery)]).then(([snap1, snap2]) => {
-        const list1 = snap1.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
-        const list2 = snap2.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      Promise.all([getDocs(adminsQuery), getDocs(chapterAdminsQuery)]).then(([snap1, snap2]: [any, any]) => {
+        const list1 = (snap1?.docs || []).map((doc: any) => ({ uid: doc.id, ...doc.data() } as UserProfile));
+        const list2 = (snap2?.docs || []).map((doc: any) => ({ uid: doc.id, ...doc.data() } as UserProfile));
         const combined = [...list1];
         list2.forEach(item => {
           if (!combined.some(u => u.uid === item.uid)) {

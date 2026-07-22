@@ -125,13 +125,14 @@ export interface GuestInvitation {
 
 export interface OneToOneMeeting {
   id: string;
-  title: string;
-  organizer_id: string;
-  member_id: string;
-  chapter_id: string;
-  scheduled_date: string;
+  title?: string;
+  organizer_id?: string;
+  member_id?: string;
+  chapter_id?: string;
+  scheduled_date?: string;
   status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'UPCOMING' | 'NOT_COMPLETED';
   created_at?: string;
+  createdAt?: string;
   updated_at?: string;
   // Legacy / optional fields for compatibility if needed
   creatorId?: string;
@@ -139,6 +140,7 @@ export interface OneToOneMeeting {
   type?: string;
   date?: string;
   time?: string;
+  venue?: string;
   duration?: number;
   description?: string;
   notes?: string;

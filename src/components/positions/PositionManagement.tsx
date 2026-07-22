@@ -36,8 +36,8 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
   useEffect(() => {
     if (isMasterAdmin) {
       const q = query(collection(db, 'users'), where('role', '==', 'CHAPTER_ADMIN'));
-      getDocs(q).then(snap => {
-        setChapterAdmins(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile)));
+      getDocs(q).then((snap: any) => {
+        setChapterAdmins((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile)));
       });
     }
   }, [isMasterAdmin]);
@@ -57,9 +57,9 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
     // We can't do an OR query easily on different fields in Firestore without compound queries,
     // so we'll fetch both and combine them in state.
     const unsub1 = onSnapshot(q1, (snap1) => {
-      getDocs(q2).then(snap2 => {
-        const adminData = snap2.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
-        const membersData = snap1.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile));
+      getDocs(q2).then((snap2: any) => {
+        const adminData = (snap2?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
+        const membersData = (snap1?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
         
         const combined = [...adminData, ...membersData];
         // Deduplicate just in case

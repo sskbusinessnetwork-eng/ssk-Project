@@ -296,9 +296,9 @@ export function Login() {
       const normalizedPhone = normalizePhoneNumber(phone);
       
       const q = query(collection(db, 'users'), where('phone', '==', normalizedPhone), limit(1));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot: any = await getDocs(q);
 
-      if (querySnapshot.empty) {
+      if (!querySnapshot || querySnapshot.empty || !querySnapshot.docs?.length) {
         throw new Error('User not found. Please check your phone number.');
       }
 

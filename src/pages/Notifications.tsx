@@ -71,8 +71,8 @@ export function Notifications() {
     
     try {
       const q = query(collection(db, 'notifications'), where('userId', '==', profile.uid));
-      const snapshot = await getDocs(q);
-      const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, 'notifications', d.id)));
+      const snapshot: any = await getDocs(q);
+      const deletePromises = (snapshot?.docs || []).map((d: any) => deleteDoc(doc(db, 'notifications', d.id)));
       await Promise.all(deletePromises);
     } catch (error) {
       console.error("Error clearing notifications:", error);

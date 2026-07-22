@@ -56,8 +56,9 @@ export const databaseService = {
       }
 
       const q = query(collection(db, path), ...constraints);
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(d => {
+      const querySnapshot: any = await getDocs(q);
+      const docsArr = Array.isArray(querySnapshot) ? querySnapshot : (querySnapshot?.docs || []);
+      return docsArr.map((d: any) => {
         const data = d.data();
         const obj = { id: d.id, ...data } as T;
         if (path === 'users' && !(obj as any).uid) {

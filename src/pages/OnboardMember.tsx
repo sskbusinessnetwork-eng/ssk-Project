@@ -45,7 +45,7 @@ export function OnboardMember() {
     
     // Fetch chapters (chapter admins)
     getDocs(query(collection(db, 'users'), where('position', '==', 'chapter_admin')))
-      .then(snap => setChapters(snap.docs.map(d => ({ uid: d.id, ...d.data() } as UserProfile))));
+      .then((snap: any) => setChapters((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile))));
       
     // Subscribe to all members (for simplicity, getting all users)
     const unsub = onSnapshot(collection(db, 'users'), snap => {
