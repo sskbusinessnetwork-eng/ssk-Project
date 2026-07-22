@@ -2,27 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
-  Search, 
-  Filter, 
-  Clock, 
   CheckCircle2, 
   XCircle, 
-  Phone, 
-  MessageSquare,
   ArrowRightLeft,
-  Heart,
   AlertCircle,
   Share2,
   Users
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useSearchParams, Link } from 'react-router-dom';
-import { databaseService } from '../services/databaseService';
+import { useSearchParams } from 'react-router-dom';
 import { Referral, UserProfile, ThankYouSlip } from '../types';
 import { Modal } from '../components/Modal';
 import { format } from 'date-fns';
-import {  where, orderBy, onSnapshot, collection  } from '../lib/database';
-import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
@@ -34,7 +25,6 @@ export function Referrals() {
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [thankYouSlips, setThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState<'passed' | 'received'>('received');
   const [loading, setLoading] = useState(true);
@@ -68,109 +58,195 @@ export function Referrals() {
     }
   }, [searchParams]);
 
+  // Fetch referrals from Supabase table only
+  const fetchReferrals = async () => {
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id || profile?.uid || profile?.id;
+
+      if (!currentUserId) {
+        setLoading(false);
+        return;
+      }
+
+      // Master Admin cannot send or receive referrals
+      if (profile?.role === 'MASTER_ADMIN') {
+        setReferrals([]);
+        setLoading(false);
+        return;
+      }
+
+      // Query referrals from Supabase sorted by newest first
+      let query = supabase
+        .from('referrals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (filter === 'passed') {
+        query = query.eq('sender_id', currentUserId);
+      } else {
+        query = query.eq('receiver_id', currentUserId);
+      }
+
+      const { data: refRows, error: refError } = await query;
+
+      if (refError) {
+        console.error("Supabase referrals query error:", refError);
+        setErrorMessage(`Database Error (${refError.code || 'ERR'}): ${refError.message || refError.details || 'Failed to fetch referrals'}`);
+        setReferrals([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch user details for sender/receiver name lookup
+      const { data: usersData, error: usersErr } = await supabase
+        .from('users')
+        .select('id, name, full_name, first_name, last_name, role, phone, business_name, category');
+
+      if (usersErr) {
+        console.warn("Could not fetch user names for referrals:", usersErr);
+      }
+
+      const userMap = new Map<string, any>();
+      if (usersData) {
+        usersData.forEach(u => {
+          const displayName = u.name || u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Member';
+          userMap.set(u.id, { ...u, name: displayName });
+        });
+      }
+
+      const formattedList: Referral[] = (refRows || []).map((r: any) => {
+        const sender = userMap.get(r.sender_id || r.from_user_id) || {};
+        const receiver = userMap.get(r.receiver_id || r.to_user_id) || {};
+
+        return {
+          id: r.id,
+          sender_id: r.sender_id || r.from_user_id,
+          receiver_id: r.receiver_id || r.to_user_id,
+          fromUserId: r.sender_id || r.from_user_id,
+          toUserId: r.receiver_id || r.to_user_id,
+          senderName: sender.name || 'Unknown Member',
+          receiverName: receiver.name || 'Unknown Member',
+          fromUserName: sender.name || 'Unknown Member',
+          toUserName: receiver.name || 'Unknown Member',
+          contactName: r.contact_name || r.customer_name || 'N/A',
+          contactPhone: r.contact_phone || r.customer_mobile || 'N/A',
+          requirement: r.business_requirement || r.requirement || 'N/A',
+          status: r.status || 'Pending',
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+          updatedAt: r.updated_at || r.updatedAt || new Date().toISOString(),
+          notes: r.notes || '',
+          notConvertedReason: r.not_converted_reason || r.notConvertedReason || ''
+        } as Referral;
+      });
+
+      setReferrals(formattedList);
+
+      // Fetch thank you slips if any
+      const { data: slips } = await supabase.from('thank_you_slips').select('*');
+      if (slips) {
+        setThankYouSlips(slips.map((s: any) => ({
+          id: s.id,
+          referralId: s.referral_id || s.referralId,
+          fromUserId: s.from_user_id || s.fromUserId,
+          toUserId: s.to_user_id || s.toUserId,
+          customerName: s.customer_name || s.customerName,
+          businessValue: s.business_value || s.businessValue || 0,
+          notes: s.notes || '',
+          createdAt: s.created_at || s.createdAt
+        })));
+      }
+
+    } catch (err: any) {
+      console.error("Error in fetchReferrals:", err);
+      setErrorMessage(err?.message || "Failed to fetch referral data from database.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch chapter members specifically for the referral recipient dropdown
+  const loadChapterMembers = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || profile?.uid || profile?.id;
+
+      if (!userId) return;
+
+      const { data: currentUserData } = await supabase
+        .from('users')
+        .select('id, chapter_id, role')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const userChapterId = currentUserData?.chapter_id || profile?.chapter_id;
+      const userRole = currentUserData?.role || profile?.role;
+
+      if (userRole === 'MASTER_ADMIN' || !userChapterId) {
+        setMembers([]);
+        return;
+      }
+
+      const { data: chapterMembers, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('chapter_id', userChapterId)
+        .neq('id', userId)
+        .neq('role', 'MASTER_ADMIN');
+
+      if (error) {
+        console.error("Error fetching chapter members for dropdown:", error);
+      } else if (chapterMembers) {
+        const formatted = chapterMembers.map(m => ({
+          ...m,
+          uid: m.id || m.uid,
+          name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member',
+          businessName: m.business_name || m.businessName || 'Business',
+          category: m.category || m.business_category || 'Member'
+        }));
+        setMembers(formatted as UserProfile[]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch chapter members for dropdown:", err);
+    }
+  };
+
   useEffect(() => {
     if (!profile) return;
 
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        setLoading(false);
-        console.error("Referrals loading timed out");
-      }
-    }, 10000);
-
-    let constraints: any[] = [orderBy('createdAt', 'desc')];
-    
-    const isAdmin = profile.role === 'MASTER_ADMIN';
-    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
-
-    // For Master Admin and Chapter Admin, we don't filter by user ID to show all referrals (we'll filter in UI for Chapter Admin)
-    if (!isAdmin && !isChapterAdmin) {
-      constraints.unshift(where(filter === 'passed' ? 'fromUserId' : 'toUserId', '==', profile.uid));
-    }
-
-    const unsubscribe = databaseService.subscribe<Referral>('referrals', constraints, (data) => {
-      setReferrals(data);
-      setLoading(false);
-      clearTimeout(timeoutId);
-    }, (error) => {
-      setLoading(false);
-      clearTimeout(timeoutId);
-      console.error("Referrals subscription error:", error);
-    });
-
-    // Subscribe to thank you slips to show notes in "Passed" tab
-    const unsubSlips = onSnapshot(collection(db, 'thank_you_slips'), (snapshot) => {
-      const slips = (snapshot?.docs || []).map(doc => ({ id: doc.id, ...doc.data() } as ThankYouSlip));
-      setThankYouSlips(slips);
-    });
-
-    // Fetch all users for name lookups in lists
-    databaseService.list<UserProfile>('users', []).then(data => {
-      setAllUsers(data);
-    });
-
-    // Fetch chapter members specifically for the referral recipient dropdown:
-    // SELECT * FROM users WHERE chapter_id = currentUser.chapter_id AND id != currentUser.id AND role != 'MASTER_ADMIN'
-    const loadChapterMembers = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || profile.uid;
-
-        if (!userId) return;
-
-        // Fetch current user's profile from database to ensure fresh chapter_id and role
-        const { data: currentUserData } = await supabase
-          .from('users')
-          .select('id, chapter_id, role')
-          .eq('id', userId)
-          .maybeSingle();
-
-        const userChapterId = currentUserData?.chapter_id || profile.chapter_id;
-        const userRole = currentUserData?.role || profile.role;
-
-        if (userRole === 'MASTER_ADMIN' || !userChapterId) {
-          setMembers([]);
-          return;
-        }
-
-        const { data: chapterMembers, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('chapter_id', userChapterId)
-          .neq('id', userId)
-          .neq('role', 'MASTER_ADMIN');
-
-        if (error) {
-          console.error("Error fetching chapter members for dropdown:", error);
-        } else if (chapterMembers) {
-          const formatted = chapterMembers.map(m => ({
-            ...m,
-            uid: m.id || m.uid,
-            name: m.name || m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member',
-            businessName: m.business_name || m.businessName || 'Business',
-            category: m.category || m.business_category || 'Member'
-          }));
-          setMembers(formatted as UserProfile[]);
-        }
-      } catch (err) {
-        console.error("Failed to fetch chapter members for dropdown:", err);
-      }
-    };
-
+    fetchReferrals();
     loadChapterMembers();
 
-    return () => {
-      unsubscribe();
-      unsubSlips();
-      clearTimeout(timeoutId);
+    // Subscribe to realtime changes on referrals table
+    const channel = supabase
+      .channel('referrals-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'referrals' },
+        () => {
+          fetchReferrals();
+        }
+      )
+      .subscribe();
+
+    const handleRefresh = () => {
+      fetchReferrals();
     };
-  }, [profile, filter, isModalOpen]);
+    window.addEventListener('dashboard-refresh', handleRefresh);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+    };
+  }, [profile, filter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
 
-    // Manual validation to highlight and scroll
     const requiredFields = [
       { id: 'toUserId', value: formData.toUserId, name: 'Member' },
       { id: 'contactName', value: formData.contactName, name: 'Contact Name' },
@@ -202,16 +278,13 @@ export function Referrals() {
 
     try {
       const normalizedPhone = normalizePhoneNumber(formData.contactPhone);
-      
-      // 1. Verify authenticated user
       const currentUserId = profile?.uid || profile?.id || (await supabase.auth.getUser()).data?.user?.id;
 
       if (!currentUserId) {
         throw new Error("Missing sender_id: User is not authenticated.");
       }
 
-      // 2. Load logged-in user's record from the Supabase users table
-      const { data: currentUserRecord, error: currentUserError } = await supabase
+      const { data: currentUserRecord } = await supabase
         .from('users')
         .select('id, chapter_id, role, name')
         .eq('id', currentUserId)
@@ -225,28 +298,14 @@ export function Referrals() {
       const sender_id = currentUserRecord?.id || currentUserId;
       const chapter_id = currentUserRecord?.chapter_id || profile?.chapter_id;
 
-      // 3. Verify sender_id exists
       if (!sender_id) {
         throw new Error("Missing sender_id");
       }
 
-      // 4. Verify chapter_id exists
       if (!chapter_id) {
         throw new Error("Missing chapter_id: Your account is not assigned to any chapter. Please contact your Chapter Admin.");
       }
 
-      // 5. Verify chapter_id exists in chapters table
-      const { data: chapterRecord, error: chapterError } = await supabase
-        .from('chapters')
-        .select('id')
-        .eq('id', chapter_id)
-        .maybeSingle();
-
-      if (chapterError || !chapterRecord) {
-        throw new Error("Missing chapter_id: Your assigned chapter does not exist in chapters table.");
-      }
-
-      // 6. Verify receiver_id exists
       const receiver_id = formData.toUserId || null;
       if (!receiver_id) {
         throw new Error("Missing receiver_id");
@@ -259,7 +318,6 @@ export function Referrals() {
         .maybeSingle();
 
       if (receiverError || !receiverRecord) {
-        console.error("Receiver verification error:", receiverError);
         throw new Error("Missing receiver_id: Selected member does not exist.");
       }
 
@@ -267,41 +325,14 @@ export function Referrals() {
         throw new Error("Master Admins cannot receive referrals.");
       }
 
-      if (receiverRecord.chapter_id && receiverRecord.chapter_id !== chapter_id && userRole !== 'MASTER_ADMIN') {
-        throw new Error("Sender and receiver must belong to the same chapter.");
-      }
-
       const contact_name = formData.contactName ? formData.contactName.trim() : null;
       const contact_phone = normalizedPhone ? normalizedPhone.trim() : null;
       const business_requirement = formData.requirement ? formData.requirement.trim() : null;
 
-      // 7. Verify required strings
       if (!contact_name) throw new Error("Missing contact_name (Customer Name)");
       if (!contact_phone) throw new Error("Missing contact_phone (Mobile Number)");
       if (!business_requirement) throw new Error("Missing business_requirement (Requirement)");
 
-      // 8. Log details before inserting
-      console.log("Current User:", {
-        id: sender_id,
-        role: userRole,
-        chapter_id: chapter_id
-      });
-      console.log("Selected Receiver:", {
-        id: receiverRecord.id,
-        name: receiverRecord.name,
-        role: receiverRecord.role,
-        chapter_id: receiverRecord.chapter_id
-      });
-      console.log({
-        sender_id,
-        receiver_id,
-        chapter_id,
-        contact_name,
-        contact_phone,
-        business_requirement
-      });
-
-      // 9. Build Referral Payload (matching both contact_* and customer_* column names in database schema)
       const newReferral = {
         sender_id: sender_id,
         receiver_id: receiver_id,
@@ -318,102 +349,46 @@ export function Referrals() {
         updated_at: new Date().toISOString()
       };
 
-      console.log("Insert Payload:", newReferral);
-
-      // 10. Insert into Supabase
-      const { data: insertResult, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('referrals')
-        .insert([newReferral])
-        .select();
+        .insert([newReferral]);
 
       if (insertError) {
-        console.error("Referral Insert Error Object:", insertError);
+        console.error("Referral Insert Error:", insertError);
         throw insertError;
       }
 
-      console.log("Insert result:", insertResult);
-
-      const toUser = members.find(m => m.uid === formData.toUserId) || receiverRecord;
-
-      // Create notifications
       try {
         await notificationService.createNotification(
           receiver_id, 
           'MEMBER', 
           'REFERRAL', 
-          `You have received a new referral from ${profile?.name || currentUserRecord.name} for ${contact_name}.`
+          `You have received a new referral from ${profile?.name || currentUserRecord?.name || 'a member'} for ${contact_name}.`
         );
-
-        if (toUser && (toUser as any).adminId) {
-          await notificationService.createNotification(
-            (toUser as any).adminId,
-            'CHAPTER_ADMIN',
-            'REFERRAL',
-            `${profile.name} has passed a referral to ${(toUser as any).name || 'a member'}.`
-          );
-        }
-
-        await notificationService.notifyMasterAdmins('REFERRAL', `${profile.name} has passed a referral to ${(toUser as any).name || 'a member'}.`);
       } catch (notifErr) {
-        console.warn("Notification warning:", notifErr);
+        console.warn("Notification error:", notifErr);
       }
 
-      // Success Feedback
-      alert("Referral submitted successfully.");
-      setSuccessMessage("Referral submitted successfully.");
-      setTimeout(() => setSuccessMessage(null), 3000);
+      // Requirement 6: Close modal, show success message, refresh list automatically
       setIsModalOpen(false);
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
+      setSuccessMessage("Referral submitted successfully.");
+      setTimeout(() => setSuccessMessage(null), 4000);
 
-      // Refresh Given Referrals, Received Referrals, analytics, reports, tasks
+      await fetchReferrals();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Referral Insert / RLS Error:", error);
-      console.error("Policy Name:", error?.policy || "referrals_insert_policy");
-      console.error("PostgreSQL Error Message:", error?.message || error);
-      console.error("SQLSTATE Code:", error?.code || "42501");
-      console.error("Complete Supabase Error Object:", JSON.stringify(error, null, 2));
-
-      let mainMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
-      if (error?.code === '42501') {
-        mainMsg = "Insert blocked by Row Level Security.";
-      }
-
-      const fullAlertMessage = `PostgreSQL Error (${error?.code || 'N/A'}): ${mainMsg}\n\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`;
-
-      alert(fullAlertMessage);
-      setErrorMessage(fullAlertMessage);
+      console.error("Referral submission error:", error);
+      const fullErrorMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
+      setErrorMessage(fullErrorMsg);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const updateStatus = async (id: string, status: Referral['status']) => {
-    try {
-      await databaseService.update('referrals', id, { 
-        status,
-        updatedAt: new Date().toISOString()
-      });
-      setSuccessMessage(`Referral status updated to ${status.replace('_', ' ')}`);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (error: any) {
-      console.error("Error updating status:", error);
-      setErrorMessage(error.message || "Failed to update status");
-      setTimeout(() => setErrorMessage(null), 3000);
     }
   };
 
   const handleThankYouSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || !selectedReferral || isSubmitting) return;
-
-    // Guard: Check if already processed
-    if (selectedReferral.status === 'COMPLETED' || selectedReferral.status === 'NOT_CONVERTED') {
-      setErrorMessage("This referral has already been processed.");
-      setIsThankYouModalOpen(false);
-      setSelectedReferral(null);
-      return;
-    }
 
     if (!thankYouData.businessValue) {
       setErrorMessage("Please enter the business value.");
@@ -424,55 +399,37 @@ export function Referrals() {
     setErrorMessage(null);
 
     try {
-      // Double check latest status from Firestore for safety
-      const latestRef = await databaseService.get<Referral>('referrals', selectedReferral.id);
-      if (latestRef && (latestRef.status === 'COMPLETED' || latestRef.status === 'NOT_CONVERTED')) {
-        setErrorMessage("Already submitted.");
-        setIsThankYouModalOpen(false);
-        setSelectedReferral(null);
-        return;
-      }
-
       const newSlip = {
-        referralId: selectedReferral.id,
-        fromUserId: profile.uid, // The person saying thank you (receiver of referral)
-        toUserId: selectedReferral.fromUserId, // The person being thanked (giver of referral)
-        customerName: selectedReferral.contactName,
-        businessValue: Number(thankYouData.businessValue),
+        referral_id: selectedReferral.id,
+        from_user_id: profile.uid || profile.id,
+        to_user_id: selectedReferral.sender_id || selectedReferral.fromUserId,
+        customer_name: selectedReferral.contactName,
+        business_value: Number(thankYouData.businessValue),
         notes: thankYouData.notes,
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
 
-      await databaseService.create('thank_you_slips', newSlip);
-      
-      // Create notifications
-      await notificationService.createNotification(
-        selectedReferral.fromUserId,
-        'MEMBER',
-        'THANKYOU',
-        `${profile.name} has submitted a Thank You slip for the referral you passed.`
-      );
+      await supabase.from('thank_you_slips').insert([newSlip]);
 
-      const fromUser = members.find(m => m.uid === selectedReferral.fromUserId);
-      const fromName = selectedReferral.fromUserName || fromUser?.name || 'Member';
+      const { error: updateErr } = await supabase
+        .from('referrals')
+        .update({ 
+          status: 'Completed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedReferral.id);
 
-      await notificationService.notifyMasterAdmins('THANKYOU', `${profile.name} submitted a Thank You slip to ${fromName}.`);
-      
-      // Mark referral as completed after submitting thank you slip
-      await databaseService.update('referrals', selectedReferral.id, { 
-        status: 'COMPLETED',
-        updatedAt: new Date().toISOString()
-      });
+      if (updateErr) throw updateErr;
 
       setSuccessMessage("Referral updated successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsThankYouModalOpen(false);
       setThankYouData({ businessValue: '', notes: '' });
       setSelectedReferral(null);
+      await fetchReferrals();
     } catch (error: any) {
       console.error("Error submitting thank you slip:", error);
-      const errorMessage = error?.message || "Failed to submit thank you slip. Please try again.";
-      setErrorMessage(errorMessage);
+      setErrorMessage(error?.message || "Failed to submit thank you slip.");
     } finally {
       setIsSubmitting(false);
     }
@@ -482,188 +439,48 @@ export function Referrals() {
     e.preventDefault();
     if (!profile || !selectedReferral || !notConvertedReason || isSubmitting) return;
 
-    // Guard: Check if already processed
-    if (selectedReferral.status === 'COMPLETED' || selectedReferral.status === 'NOT_CONVERTED') {
-      setErrorMessage("This referral has already been processed.");
-      setIsNotConvertedModalOpen(false);
-      setSelectedReferral(null);
-      return;
-    }
-
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      // Double check latest status from Firestore for safety
-      const latestRef = await databaseService.get<Referral>('referrals', selectedReferral.id);
-      if (latestRef && (latestRef.status === 'COMPLETED' || latestRef.status === 'NOT_CONVERTED')) {
-        setErrorMessage("Already submitted.");
-        setIsNotConvertedModalOpen(false);
-        setSelectedReferral(null);
-        return;
-      }
+      const { error: updateErr } = await supabase
+        .from('referrals')
+        .update({ 
+          status: 'Rejected',
+          not_converted_reason: notConvertedReason,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedReferral.id);
 
-      await databaseService.update('referrals', selectedReferral.id, { 
-        status: 'NOT_CONVERTED',
-        notConvertedReason: notConvertedReason,
-        updatedAt: new Date().toISOString()
-      });
+      if (updateErr) throw updateErr;
 
       setSuccessMessage("Referral updated successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsNotConvertedModalOpen(false);
       setNotConvertedReason('');
       setSelectedReferral(null);
+      await fetchReferrals();
     } catch (error: any) {
-      console.error("Error marking referral as not converted:", error);
-      const errorMessage = error?.message || "Failed to update referral status. Please try again.";
-      setErrorMessage(errorMessage);
+      console.error("Error updating status:", error);
+      setErrorMessage(error?.message || "Failed to update referral status.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
-  const isPending = profile?.membershipStatus === 'PENDING' && !isAdmin && !isChapterAdmin;
+  const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
+  const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
-  if (isAdmin || filter === 'chapter' || filter === 'all') {
-    const associatedMemberIds = isChapterAdmin 
-      ? [...members.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid]
-      : [];
-
-    const filteredReferrals = isChapterAdmin
-      ? referrals.filter(ref => associatedMemberIds.includes(ref.fromUserId) || associatedMemberIds.includes(ref.toUserId))
-      : referrals;
-
-    return (
-      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8 pb-24">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-              <Users size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
-                Business Referrals
-              </h1>
-              <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-[0.15em] mt-0.5">
-                Monitor business transactions and conversion rates
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-[#111827] rounded-[16px] border border-white/5 shadow-sm overflow-hidden mb-12">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-[#151C2E] border-b border-white/5 sticky top-0 z-10">
-                <tr>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Referral ID</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Sent By</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Received By</th>
-                  {isAdmin && <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Chapter</th>}
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-4 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? (
-                  <tr>
-                    <td colSpan={isAdmin ? 8 : 7} className="px-6 py-8 text-center">
-                      <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Data...</p>
-                    </td>
-                  </tr>
-                ) : filteredReferrals.length > 0 ? (
-                  filteredReferrals.map((ref) => {
-                    const lookup = allUsers.length > 0 ? allUsers : members;
-                    const fromUser = lookup.find(m => m.uid === ref.fromUserId);
-                    const toUser = lookup.find(m => m.uid === ref.toUserId);
-                    const slip = thankYouSlips.find(s => s.referralId === ref.id);
-                    const chapterAdmin = lookup.find(m => m.uid === (toUser?.adminId || fromUser?.adminId));
-
-                    return (
-                      <tr key={ref.id} className="hover:bg-[#1C2538] transition-colors group cursor-pointer" onClick={() => {
-                        setSelectedReferral(ref);
-                        setIsDetailModalOpen(true);
-                      }}>
-                        <td className="px-6 py-4">
-                          <span className="text-[11px] font-mono font-medium text-neutral-400 uppercase">
-                            #{ref.id.slice(-6)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-white">{ref.fromUserName || fromUser?.name || 'Unknown'}</span>
-                            <span className="text-[11px] text-neutral-400 font-medium truncate max-w-[150px]">{fromUser?.category || 'Member'}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-white">{toUser?.name || 'Unknown'}</span>
-                            <span className="text-[11px] text-neutral-400 font-medium truncate max-w-[150px]">{toUser?.category || 'Member'}</span>
-                          </div>
-                        </td>
-                        {isAdmin && (
-                          <td className="px-6 py-4">
-                            <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
-                              {chapterAdmin?.businessName || 'Independent'}
-                            </span>
-                          </td>
-                        )}
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-medium text-neutral-300">
-                            {format(new Date(ref.createdAt), 'dd MMM yyyy')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={cn(
-                            "text-[11px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider",
-                            ref.status === 'PENDING' && "bg-amber-500/10 text-amber-400 border border-amber-500/20",
-                            ref.status === 'COMPLETED' && "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
-                            ref.status === 'NOT_CONVERTED' && "bg-red-500/10 text-red-400 border border-red-500/20",
-                            ref.status === 'CONTACTED' && "bg-primary/10 text-primary border border-primary/20"
-                          )}>
-                            {isChapterAdmin ? (
-                              (ref.status === 'COMPLETED' || ref.status === 'CONVERTED') ? 'Converted' :
-                              (ref.status === 'NOT_CONVERTED' || ref.status === 'CLOSED') ? 'Lost' :
-                              'Pending'
-                            ) : ref.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-sm font-bold text-emerald-400">
-                            {slip ? `₹${slip.businessValue.toLocaleString()}` : '-'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-xs font-medium text-neutral-400 line-clamp-1 max-w-[150px]" title={ref.notes}>
-                            {ref.notes || '-'}
-                          </p>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={isAdmin ? 8 : 7} className="px-6 py-20 text-center">
-                      <Share2 size={40} className="mx-auto text-neutral-500 mb-3" />
-                      <h3 className="text-sm font-bold text-white">No referrals found</h3>
-                      <p className="text-xs text-neutral-400 mt-1">The referral history is currently empty.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const formatDateSafely = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return format(d, 'dd MMM yyyy, HH:mm');
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-24 px-4 sm:px-0 py-6 md:py-8">
@@ -682,7 +499,7 @@ export function Referrals() {
             </p>
           </div>
         </div>
-        {!isPending && (
+        {!isPending && !isMasterAdmin && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90 shrink-0"
@@ -709,10 +526,10 @@ export function Referrals() {
         <motion.div 
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 right-4 left-4 z-[100] bg-red-500 text-white px-6 py-4 rounded-[16px] shadow-2xl flex items-center gap-3"
+          className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-[16px] flex items-start gap-3"
         >
-          <AlertCircle size={24} />
-          <span className="font-bold text-sm uppercase tracking-wider">{errorMessage}</span>
+          <AlertCircle size={20} className="shrink-0 mt-0.5" />
+          <span className="text-xs font-semibold leading-relaxed">{errorMessage}</span>
         </motion.div>
       )}
 
@@ -756,36 +573,36 @@ export function Referrals() {
             <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
             <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Referrals...</p>
           </div>
-        ) : (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).length > 0 ? (
-          (referrals.filter(r => filter === 'received' ? r.toUserId === profile?.uid : r.fromUserId === profile?.uid)).map((ref, i) => {
-            const lookup = allUsers.length > 0 ? allUsers : members;
-            const fromUser = lookup.find(m => m.uid === ref.fromUserId);
-            const toUser = lookup.find(m => m.uid === ref.toUserId);
-            const otherUser = filter === 'received' ? fromUser : toUser;
-            const otherName = filter === 'received' ? (ref.fromUserName || fromUser?.name || 'Member') : (toUser?.name || 'Member');
-            
-            return (
-              <motion.div
-                key={ref.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => {
-                  setSelectedReferral(ref);
-                  setIsDetailModalOpen(true);
-                }}
-                className={cn(
-                  "bg-[#111827] p-5 rounded-[16px] shadow-sm border flex items-center gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
-                  ref.status === 'PENDING' && filter === 'received' ? "border-amber-900/30 bg-amber-950/10" : "border-white/5"
-                )}
-              >
-                {/* Left: Icon */}
+        ) : isMasterAdmin ? (
+          <div className="py-20 text-center bg-[#111827] rounded-[14px] border border-dashed border-white/5">
+            <Users size={40} className="mx-auto text-neutral-500 mb-3" />
+            <h3 className="text-sm font-bold text-white">Master Admin Account</h3>
+            <p className="text-xs text-neutral-400 mt-1">Master Admins do not send or receive business referrals.</p>
+          </div>
+        ) : referrals.length > 0 ? (
+          referrals.map((ref, i) => (
+            <motion.div
+              key={ref.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => {
+                setSelectedReferral(ref);
+                setIsDetailModalOpen(true);
+              }}
+              className={cn(
+                "bg-[#111827] p-5 rounded-[16px] shadow-sm border flex flex-col md:flex-row md:items-center justify-between gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
+                (ref.status === 'PENDING' || ref.status === 'Pending') && filter === 'received' ? "border-amber-900/30 bg-amber-950/10" : "border-white/5"
+              )}
+            >
+              {/* Left: Icon & Details */}
+              <div className="flex items-start gap-4 flex-1 min-w-0">
                 <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative",
-                  ref.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400" : "bg-primary/10 text-primary"
+                  "w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative mt-0.5",
+                  ref.status === 'Completed' || ref.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400" : "bg-primary/10 text-primary"
                 )}>
-                  {ref.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <ArrowRightLeft size={24} />}
-                  {ref.status === 'PENDING' && filter === 'received' && (
+                  {ref.status === 'Completed' || ref.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <ArrowRightLeft size={24} />}
+                  {(ref.status === 'Pending' || ref.status === 'PENDING') && filter === 'received' && (
                     <span className="absolute -top-1 -right-1 flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
@@ -793,40 +610,44 @@ export function Referrals() {
                   )}
                 </div>
 
-                {/* Middle: Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-bold text-white truncate">
-                      {filter === 'received' ? 'From: ' : 'To: '}{otherName}
-                    </h3>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-neutral-400 uppercase tracking-wider">
+                    <span>Sender: <strong className="text-white">{ref.senderName}</strong></span>
+                    <span className="text-neutral-600">•</span>
+                    <span>Receiver: <strong className="text-white">{ref.receiverName}</strong></span>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] font-medium text-neutral-400 truncate">
-                    For: {ref.contactName} • {ref.requirement || 'Business Referral'}
-                  </p>
-                </div>
 
-                {/* Right: Date + Status */}
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                    {format(new Date(ref.createdAt), 'dd MMM')}
+                  <div className="text-sm font-semibold text-white">
+                    Contact: {ref.contactName} {ref.contactPhone ? `(${ref.contactPhone})` : ''}
+                  </div>
+
+                  <p className="text-xs text-neutral-300 line-clamp-2">
+                    Requirement: {ref.requirement}
                   </p>
-                  <span className={cn(
-                    "text-[9px] font-bold uppercase tracking-widest",
-                    ref.status === 'PENDING' && "text-amber-400",
-                    ref.status === 'COMPLETED' && "text-emerald-400",
-                    ref.status === 'NOT_CONVERTED' && "text-red-400",
-                    ref.status === 'CONTACTED' && "text-blue-400"
-                  )}>
-                    {ref.status.replace('_', ' ')}
-                  </span>
                 </div>
-              </motion.div>
-            );
-          })
+              </div>
+
+              {/* Right: Date & Status */}
+              <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 border-white/5 pt-3 md:pt-0 shrink-0 gap-1.5">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                  {formatDateSafely(ref.createdAt)}
+                </p>
+                <span className={cn(
+                  "text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+                  (ref.status === 'Pending' || ref.status === 'PENDING') && "text-amber-400 bg-amber-500/10 border border-amber-500/20",
+                  (ref.status === 'Completed' || ref.status === 'COMPLETED') && "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
+                  (ref.status === 'Rejected' || ref.status === 'NOT_CONVERTED') && "text-red-400 bg-red-500/10 border border-red-500/20",
+                  (ref.status === 'Accepted' || ref.status === 'CONTACTED') && "text-blue-400 bg-blue-500/10 border border-blue-500/20"
+                )}>
+                  {ref.status.replace('_', ' ')}
+                </span>
+              </div>
+            </motion.div>
+          ))
         ) : (
           <div className="py-20 text-center bg-[#111827] rounded-[14px] border border-dashed border-white/5">
             <Share2 size={40} className="mx-auto text-neutral-500 mb-3" />
-            <h3 className="text-sm font-bold text-white">No referrals yet</h3>
+            <h3 className="text-sm font-bold text-white">No referrals yet.</h3>
             <p className="text-xs text-neutral-400 mt-1">Your business referrals will appear here.</p>
           </div>
         )}
@@ -938,7 +759,7 @@ export function Referrals() {
           <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5">
             <p className="text-xs text-neutral-400 uppercase font-bold tracking-widest mb-1">Referral From</p>
             <p className="text-sm font-bold text-white">
-              {selectedReferral?.fromUserName || members.find(m => m.uid === selectedReferral?.fromUserId)?.name || 'Member'}
+              {selectedReferral?.senderName}
             </p>
             <p className="text-xs text-neutral-400 mt-2">For: {selectedReferral?.contactName}</p>
           </div>
@@ -1086,30 +907,40 @@ export function Referrals() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
-                      {filter === 'received' ? 'From' : 'To'}
+                      Sender
                     </p>
                     <p className="text-sm font-bold text-white">
-                      {filter === 'received' 
-                        ? (selectedReferral.fromUserName || members.find(m => m.uid === selectedReferral.fromUserId)?.name || 'Member')
-                        : (members.find(m => m.uid === selectedReferral.toUserId)?.name || 'Member')}
+                      {selectedReferral.senderName}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Date</p>
-                    <p className="text-xs font-bold text-white">{format(new Date(selectedReferral.createdAt), 'dd MMM yyyy')}</p>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">
+                      Receiver
+                    </p>
+                    <p className="text-sm font-bold text-white">
+                      {selectedReferral.receiverName}
+                    </p>
                   </div>
                 </div>
 
                 <div className="space-y-3 pt-3 border-t border-white/5">
-                  <div>
-                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Contact Details</p>
-                    <p className="text-sm font-bold text-white">{selectedReferral.contactName}</p>
-                    <p className="text-xs font-medium text-neutral-400">{selectedReferral.contactPhone}</p>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Contact Details</p>
+                      <p className="text-sm font-bold text-white">{selectedReferral.contactName}</p>
+                      <p className="text-xs font-medium text-neutral-400">{selectedReferral.contactPhone}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Created At</p>
+                      <p className="text-xs font-bold text-neutral-300">{formatDateSafely(selectedReferral.createdAt)}</p>
+                    </div>
                   </div>
+
                   <div>
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Requirement</p>
                     <p className="text-sm font-medium text-white leading-relaxed">{selectedReferral.requirement}</p>
                   </div>
+
                   {selectedReferral.notes && (
                     <div>
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Notes</p>
@@ -1120,7 +951,7 @@ export function Referrals() {
               </div>
 
               {/* Status Specific Info */}
-              {selectedReferral.status === 'COMPLETED' && (
+              {(selectedReferral.status === 'Completed' || selectedReferral.status === 'COMPLETED') && (
                 <div className="p-4 bg-emerald-950/20 rounded-[16px] border border-emerald-900/30">
                   <div className="flex items-center gap-2 mb-3">
                     <CheckCircle2 size={18} className="text-emerald-400" />
@@ -1143,19 +974,19 @@ export function Referrals() {
                 </div>
               )}
 
-              {selectedReferral.status === 'NOT_CONVERTED' && (
+              {(selectedReferral.status === 'Rejected' || selectedReferral.status === 'NOT_CONVERTED') && (
                 <div className="p-4 bg-red-950/20 rounded-[16px] border border-red-900/30">
                   <div className="flex items-center gap-2 mb-2">
                     <XCircle size={18} className="text-red-400" />
                     <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Not Converted</p>
                   </div>
-                  <p className="text-xs font-bold text-red-400">Reason: {selectedReferral.notConvertedReason}</p>
+                  <p className="text-xs font-bold text-red-400">Reason: {selectedReferral.notConvertedReason || 'N/A'}</p>
                 </div>
               )}
             </div>
 
             {/* Actions for Received Tab */}
-            {filter === 'received' && selectedReferral.status === 'PENDING' && (
+            {filter === 'received' && (selectedReferral.status === 'Pending' || selectedReferral.status === 'PENDING') && (
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => {
