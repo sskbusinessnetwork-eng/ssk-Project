@@ -29,7 +29,7 @@ export const databaseService = {
       }
       return null;
     } catch (error) {
-      console.error('Database get error:', error);
+      console.warn('Database get notice:', error);
       return null;
     }
   },
@@ -67,7 +67,7 @@ export const databaseService = {
         return obj;
       });
     } catch (error) {
-      console.error('Database list error:', error);
+      console.warn('Database list notice:', error);
       return [];
     }
   },

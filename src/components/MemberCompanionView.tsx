@@ -310,7 +310,7 @@ export function MemberCompanionView({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
                 whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-                className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full h-[84px] min-h-[84px] overflow-hidden"
+                className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px]"
               >
                 {/* Left Column: Icon Indicator & Title */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -327,7 +327,7 @@ export function MemberCompanionView({
                     )}
                   </div>
                   
-                  {/* Title (max 2 lines, ellipsis) */}
+                  {/* Title & Desc */}
                   <div className="flex flex-col flex-1 min-w-0 pr-2">
                     <h4 className={cn(
                       "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words",
@@ -336,7 +336,7 @@ export function MemberCompanionView({
                       {task.label}
                     </h4>
                     {task.desc && (
-                      <p className={cn("text-[10px] sm:text-[11px] leading-snug mt-0.5 opacity-75 hidden sm:line-clamp-1", task.isDone ? "text-gray-500" : "text-[#9CA3AF]")}>
+                      <p className={cn("text-[10px] sm:text-[11px] leading-snug mt-0.5 opacity-75 line-clamp-2", task.isDone ? "text-gray-500" : "text-[#9CA3AF]")}>
                         {task.desc}
                       </p>
                     )}

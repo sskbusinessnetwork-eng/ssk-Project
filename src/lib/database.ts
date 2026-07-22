@@ -188,7 +188,7 @@ export async function getDocs(queryRef: any) {
 
   const { data, error } = await builder;
   if (error) {
-    console.error("getDocs error for", collectionPath, ":", error?.message || error);
+    console.warn("getDocs notice for", collectionPath, ":", error?.message || error);
     const emptyDocs: any[] = [];
     return { docs: emptyDocs, empty: true, forEach: (cb: any) => emptyDocs.forEach(cb) };
   }
@@ -516,10 +516,24 @@ export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
   };
   
   fetchAndCallback();
+
+  const tableName = queryRef.path || (queryRef.type === 'collection' ? queryRef.path : null);
+  let channel: any = null;
+  if (tableName && typeof tableName === 'string') {
+    channel = supabase
+      .channel(`realtime-snapshot-${tableName}-${Math.random().toString(36).substring(2, 7)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => {
+        fetchAndCallback();
+      })
+      .subscribe();
+  }
   
   window.addEventListener('dashboard-refresh', fetchAndCallback);
   
   return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
     window.removeEventListener('dashboard-refresh', fetchAndCallback);
   };
 }

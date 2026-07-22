@@ -132,6 +132,7 @@ export function Analytics() {
 
 
   // Chapter-specific telemetry states
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [chapterUsers, setChapterUsers] = useState<any[]>([]);
   const [allSlips, setAllSlips] = useState<any[]>([]);
   const [allReferrals, setAllReferrals] = useState<any[]>([]);
@@ -184,18 +185,20 @@ export function Analytics() {
   useEffect(() => {
     if (!profile) return;
 
-    // 1. Subscribe to users (chapter members)
-    let chapterConstraints: any[] = [];
-    if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
-      chapterConstraints = [where('chapter_id', '==', profile.chapter_id)];
-    }
-
-    const unsubUsers = databaseService.subscribe<any>('users', chapterConstraints, (data) => {
+    // 1. Subscribe to users (chapter members & global users for name resolution)
+    const unsubUsers = databaseService.subscribe<any>('users', [], (data) => {
+      setAllUsersList(data);
       let filtered = data;
       if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
-        filtered = filtered.filter(u => String(u.chapter_id) === String(profile.chapter_id) || String((u as any).chapterId) === String(profile.chapter_id));
+        filtered = filtered.filter(u => String(u.chapter_id || u.chapterId) === String(profile.chapter_id));
       }
-      setChapterUsers(filtered.filter(u => ['MEMBER', 'CHAPTER_ADMIN'].includes(u.role) || u.position === 'chapter_admin'));
+      const allowedRoles = ['MEMBER', 'CHAPTER_ADMIN', 'PRESIDENT', 'VICE_PRESIDENT', 'TREASURER'];
+      const chapterMems = filtered.filter(u => {
+        const r = (u.role || '').toUpperCase();
+        const p = (u.position || '').toUpperCase();
+        return r !== 'MASTER_ADMIN' && (allowedRoles.includes(r) || allowedRoles.includes(p) || (r === '' && p === ''));
+      });
+      setChapterUsers(chapterMems);
     });
 
     // 2. Subscribe to thank you slips
@@ -221,15 +224,15 @@ export function Analytics() {
     });
 
     // 5. Subscribe to guest invitations
-    const unsubGuests = databaseService.subscribe<any>('guest_invitations', chapterConstraints, (data) => {
+    const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
       setGuestInvitations(data);
     });
 
     // 6. Subscribe to meetings
-    const unsubMeetings = databaseService.subscribe<any>('meetings', chapterConstraints, setMeetings);
+    const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
 
     // 7. Subscribe to testimonials
-    const unsubTestimonials = databaseService.subscribe<any>('testimonials', chapterConstraints, setAllTestimonials);
+    const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
 
     // 8. Subscribe to chapters
     const unsubChapters = databaseService.subscribe<any>('chapters', [], setAllChapters);
@@ -670,46 +673,118 @@ export function Analytics() {
   }, [completedFocusCount]);
 
   const todayTasks = useMemo(() => {
-    if (!profile || (profile.role !== 'MEMBER' && profile.role !== 'CHAPTER_ADMIN')) return [];
-    const tasks: any[] = [];
+    if (!profile) return [];
+    const role = (profile.role || '').toUpperCase();
+    const pos = (profile.position || '').toLowerCase();
     
-    // 0. Profile Completion Task
-    const profileStatus = calculateProfileCompletion(profile);
-    if (!profileStatus.isComplete) {
+    const isTargetRole = ['MEMBER', 'PRESIDENT', 'VICE_PRESIDENT', 'TREASURER', 'CHAPTER_ADMIN'].includes(role) ||
+      ['president', 'vice_president', 'treasurer', 'chapter_admin', 'member'].includes(pos);
+
+    if (!isTargetRole || role === 'MASTER_ADMIN') return [];
+
+    const tasks: any[] = [];
+
+    const formatSafeDate = (d: any) => {
+      if (!d) return 'N/A';
+      try {
+        const parsed = new Date(d);
+        if (isNaN(parsed.getTime())) return String(d);
+        return format(parsed, 'dd MMM yyyy');
+      } catch (e) {
+        return String(d);
+      }
+    };
+
+    const getMemberName = (uid?: string) => {
+      if (!uid) return 'Member';
+      if (String(uid) === String(profile.uid) || String(uid) === String(profile.id)) return profile.name || 'You';
+      const u = allUsersList.find(x => String(x.id) === String(uid) || String(x.uid) === String(uid));
+      return u?.name || u?.full_name || 'Member';
+    };
+
+    // 1. Complete Your Profile
+    const profilePhoto = profile.photoURL || profile.profile_photo || profile.photo_url;
+    const profileName = profile.name || profile.full_name;
+    const profilePhone = profile.phone || profile.phone_number;
+    const profileEmail = profile.email;
+    const profileBusinessName = profile.businessName || profile.business_name;
+    const profileCategory = profile.category || profile.business_category;
+    const profileDesignation = profile.professionDesignation || profile.profession_designation || profile.position;
+    const profileAddress = profile.address;
+    const profileCity = profile.city;
+    const profileState = profile.state;
+    const profilePincode = profile.pincode;
+    const profileBio = profile.bio;
+
+    const mandatoryFields = [
+      profilePhoto, profileName, profilePhone, profileEmail,
+      profileBusinessName, profileCategory, profileDesignation,
+      profileAddress, profileCity, profileState, profilePincode, profileBio
+    ];
+    const completedMandatoryCount = mandatoryFields.filter(Boolean).length;
+    const isProfileComplete = completedMandatoryCount === 12;
+
+    if (!isProfileComplete) {
       tasks.push({
         key: 'completeProfile',
-        label: `Complete Your Profile (${profileStatus.completedCount}/${profileStatus.totalRequired})`,
-        desc: "Welcome to SSK Business Network! Please complete your profile to activate all member features.",
+        label: 'Complete Your Profile',
+        desc: `Please fill in all mandatory profile fields (${completedMandatoryCount}/12)`,
         isDone: false,
         link: '/profile',
-        linkText: 'Complete',
+        linkText: 'COMPLETE',
         iconColor: 'text-amber-400',
         bgColor: 'bg-amber-500/10',
-        icon: UserPlus,
+        icon: User,
         activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
       });
     }
-    
-    if (profile.role !== 'MEMBER') return tasks;
 
-    // 1. Weekly Meeting
-    const todayWeeklyMeeting = meetings.find(m => 
-      isToday(m.date) && 
-      (!m.notes || (
-        !m.notes.toLowerCase().includes('training') && 
-        !m.notes.toLowerCase().includes('review') && 
-        !m.notes.toLowerCase().includes('business review')
-      ))
-    );
-    if (todayWeeklyMeeting) {
-      const att = todayWeeklyMeeting.attendance?.[profile.uid];
+    // 2. Subscription Renewal
+    const subEndDateStr = profile.subscriptionEndDate || profile.subscriptionEnd || profile.subscription_end_date;
+    if (subEndDateStr) {
+      const subEndDate = new Date(subEndDateStr);
+      const now = new Date();
+      const diffTime = subEndDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 30) {
+        tasks.push({
+          key: 'subscriptionRenewal',
+          label: 'Subscription Renewal',
+          desc: diffDays <= 0
+            ? `Subscription expired on ${formatSafeDate(subEndDate)}. Please renew.`
+            : `Subscription expires in ${diffDays} day${diffDays === 1 ? '' : 's'} (${formatSafeDate(subEndDate)})`,
+          isDone: !!(profile.renewalRequested || (profile.membershipStatus === 'ACTIVE' && diffDays > 0)),
+          link: '/profile',
+          linkText: 'RENEW',
+          iconColor: 'text-red-400',
+          bgColor: 'bg-red-500/10',
+          icon: Shield,
+          activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+        });
+      }
+    }
+
+    // 3. Upcoming Chapter Meeting
+    const chapterMeetings = meetings.filter(m => String(m.chapter_id || m.chapterId) === String(profile.chapter_id));
+    const upcomingChapterMeetings = chapterMeetings.filter(m => !m.isCompleted);
+    upcomingChapterMeetings.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (upcomingChapterMeetings.length > 0) {
+      const nextMeeting = upcomingChapterMeetings[0];
+      const meetingDateStr = formatSafeDate(nextMeeting.date);
+      const meetingTimeStr = nextMeeting.time || nextMeeting.meeting_time || '10:00 AM';
+      
+      const att = nextMeeting.attendance?.[profile.uid];
       const isDone = !!att && ['YES', 'PRESENT', 'SUBSTITUTE', 'Yes', 'Substitute', 'Late'].includes(att);
+
       tasks.push({
-        key: 'attendMeeting',
-        label: 'Attend Weekly Meeting',
+        key: `chapterMeeting_${nextMeeting.id}`,
+        label: 'Upcoming Chapter Meeting',
+        desc: `Meeting Date: ${meetingDateStr} | Meeting Time: ${meetingTimeStr}`,
         isDone,
         link: '/meetings',
-        linkText: 'JOIN',
+        linkText: 'VIEW',
         iconColor: 'text-purple-400',
         bgColor: 'bg-purple-500/10',
         icon: Calendar,
@@ -717,173 +792,162 @@ export function Analytics() {
       });
     }
 
-    // 2. One-to-One Meeting
-    const todayOneToOnes = oneToOnes.filter(m => 
-      isToday(m.date) && 
-      ((m.organizer_id || m.creatorId) === profile.uid || ([m.member_id, ...(m.participantIds || [])]).includes(profile.uid))
-    );
-    todayOneToOnes.forEach(m => {
-      const otherId = (m.organizer_id || m.creatorId) === profile.uid ? m.participantIds?.[0] : (m.organizer_id || m.creatorId);
-      const otherMember = chapterUsers.find(u => u.uid === otherId);
-      const otherName = otherMember?.name || 'Member';
+    // 4. Upcoming One-to-One Meeting
+    const userOneToOnes = oneToOnes.filter(m => {
+      const orgId = m.organizer_id || m.creatorId || m.sender_id;
+      const recId = m.member_id || m.receiver_id;
+      const pIds = m.participantIds || [];
+      return (orgId === profile.uid || recId === profile.uid || pIds.includes(profile.uid));
+    });
+
+    const upcomingOneToOnes = userOneToOnes.filter(m => m.status !== 'COMPLETED' && m.status !== 'REJECTED');
+    upcomingOneToOnes.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (upcomingOneToOnes.length > 0) {
+      const next1to1 = upcomingOneToOnes[0];
+      const partnerId = (next1to1.organizer_id || next1to1.creatorId || next1to1.sender_id) === profile.uid 
+        ? (next1to1.receiver_id || next1to1.member_id || next1to1.participantIds?.[0]) 
+        : (next1to1.organizer_id || next1to1.creatorId || next1to1.sender_id);
       
-      const att = m.attendance?.[profile.uid] || m.status;
-      const isDone = m.status === 'COMPLETED' || att === 'PRESENT' || att === 'COMPLETED';
-      
+      const partnerName = getMemberName(partnerId);
+      const mDateStr = formatSafeDate(next1to1.date);
+      const mTimeStr = next1to1.time || '10:00 AM';
+
       tasks.push({
-        key: `oneToOne_${m.id}`,
-        label: `Attend One-to-One Meeting with ${otherName}`,
-        isDone,
+        key: `oneToOne_${next1to1.id}`,
+        label: 'Upcoming One-to-One Meeting',
+        desc: `Meeting Date: ${mDateStr} | Meeting Time: ${mTimeStr} | Meeting Partner: ${partnerName}`,
+        isDone: next1to1.status === 'COMPLETED',
         link: '/one-to-one',
-        linkText: 'BOOK',
+        linkText: 'VIEW',
         iconColor: 'text-blue-400',
         bgColor: 'bg-blue-500/10',
         icon: Handshake,
         activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
       });
-    });
+    }
 
-    // 3. Referral Needs to be Submitted
-    const todayPassedReferral = passedReferrals.some(r => r.createdAt && isToday(r.createdAt));
-    tasks.push({
-      key: 'submitReferral',
-      label: "Submit Today's Referral",
-      isDone: todayPassedReferral,
-      link: '/refer',
-      linkText: 'PASS',
-      iconColor: 'text-orange-400',
-      bgColor: 'bg-orange-500/10',
-      icon: Share2,
-      activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-    });
+    // 5. Referral Received
+    const userReceivedRefs = allReferrals.filter(r => (r.toUserId === profile.uid || r.receiver_id === profile.uid || r.receiverMemberId === profile.uid));
+    userReceivedRefs.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
 
-    // 4. Send Thank You Slip (If Referral is received and converted)
-    const convertedReferralsReceived = receivedReferrals.filter(r => r.status === 'CONVERTED' || r.status === 'COMPLETED');
-    convertedReferralsReceived.forEach(ref => {
-      const hasSlip = allSlips.some(s => s.referralId === ref.id && s.fromUserId === profile.uid);
-      const fromMember = chapterUsers.find(u => u.uid === ref.fromUserId);
-      const fromName = fromMember?.name || 'Member';
-      
+    if (userReceivedRefs.length > 0) {
+      const latestRecRef = userReceivedRefs[0];
+      const fromId = latestRecRef.fromUserId || latestRecRef.sender_id || latestRecRef.authorMemberId;
+      const fromName = getMemberName(fromId);
+      const refDate = formatSafeDate(latestRecRef.date || latestRecRef.createdAt || latestRecRef.created_at);
+
       tasks.push({
-        key: `thankYouSlip_${ref.id}`,
-        label: `Send Thank You Slip (Referrer: ${fromName})`,
-        isDone: hasSlip,
+        key: `refReceived_${latestRecRef.id}`,
+        label: 'Referral Received',
+        desc: `Referral Date: ${refDate} | Referral From: ${fromName}`,
+        isDone: latestRecRef.status === 'CONVERTED' || latestRecRef.status === 'COMPLETED',
         link: '/refer?tab=received',
-        linkText: 'SLIP',
+        linkText: 'VIEW',
+        iconColor: 'text-orange-400',
+        bgColor: 'bg-orange-500/10',
+        icon: Share2,
+        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+      });
+    }
+
+    // 6. Referral Given
+    const userGivenRefs = allReferrals.filter(r => (r.fromUserId === profile.uid || r.sender_id === profile.uid || r.authorMemberId === profile.uid));
+    userGivenRefs.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    if (userGivenRefs.length > 0) {
+      const latestGivenRef = userGivenRefs[0];
+      const toId = latestGivenRef.toUserId || latestGivenRef.receiver_id || latestGivenRef.receiverMemberId;
+      const toName = getMemberName(toId);
+      const refDate = formatSafeDate(latestGivenRef.date || latestGivenRef.createdAt || latestGivenRef.created_at);
+
+      tasks.push({
+        key: `refGiven_${latestGivenRef.id}`,
+        label: 'Referral Given',
+        desc: `Referral Date: ${refDate} | Referral To: ${toName}`,
+        isDone: true,
+        link: '/refer?tab=given',
+        linkText: 'VIEW',
+        iconColor: 'text-emerald-400',
+        bgColor: 'bg-emerald-500/10',
+        icon: Share2,
+        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+      });
+    }
+
+    // 7. Thank You Slip Received
+    const userRecSlips = allSlips.filter(s => (s.toUserId === profile.uid || s.receiver_id === profile.uid));
+    userRecSlips.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    if (userRecSlips.length > 0) {
+      const latestRecSlip = userRecSlips[0];
+      const senderId = latestRecSlip.fromUserId || latestRecSlip.sender_id;
+      const senderName = getMemberName(senderId);
+      const slipDate = formatSafeDate(latestRecSlip.date || latestRecSlip.createdAt || latestRecSlip.created_at);
+
+      tasks.push({
+        key: `slipRec_${latestRecSlip.id}`,
+        label: 'Thank You Slip Received',
+        desc: `Date: ${slipDate} | Sender Name: ${senderName}`,
+        isDone: true,
+        link: '/refer',
+        linkText: 'VIEW',
+        iconColor: 'text-purple-400',
+        bgColor: 'bg-purple-500/10',
+        icon: CheckSquare,
+        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
+      });
+    }
+
+    // 8. Thank You Slip Sent
+    const userSentSlips = allSlips.filter(s => (s.fromUserId === profile.uid || s.sender_id === profile.uid));
+    userSentSlips.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    if (userSentSlips.length > 0) {
+      const latestSentSlip = userSentSlips[0];
+      const receiverId = latestSentSlip.toUserId || latestSentSlip.receiver_id;
+      const receiverName = getMemberName(receiverId);
+      const slipDate = formatSafeDate(latestSentSlip.date || latestSentSlip.createdAt || latestSentSlip.created_at);
+
+      tasks.push({
+        key: `slipSent_${latestSentSlip.id}`,
+        label: 'Thank You Slip Sent',
+        desc: `Date: ${slipDate} | Receiver Name: ${receiverName}`,
+        isDone: true,
+        link: '/refer',
+        linkText: 'VIEW',
         iconColor: 'text-emerald-400',
         bgColor: 'bg-emerald-500/10',
         icon: CheckSquare,
         activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
       });
-    });
-
-    // 5. Business Review
-    const todayBusinessReview = meetings.find(m => 
-      isToday(m.date) && 
-      m.notes && 
-      (m.notes.toLowerCase().includes('business review') || m.notes.toLowerCase().includes('review'))
-    );
-    if (todayBusinessReview) {
-      const att = todayBusinessReview.attendance?.[profile.uid];
-      const isDone = !!att && ['YES', 'PRESENT', 'SUBSTITUTE', 'Yes', 'Substitute', 'Late'].includes(att);
-      tasks.push({
-        key: `businessReview_${todayBusinessReview.id}`,
-        label: 'Attend Business Review',
-        isDone,
-        link: '/meetings',
-        linkText: 'VIEW',
-        iconColor: 'text-red-400',
-        bgColor: 'bg-red-500/10',
-        icon: Calendar,
-        activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-      });
     }
 
-    // 6. Training Session
-    const todayTraining = meetings.find(m => 
-      isToday(m.date) && 
-      m.notes && 
-      m.notes.toLowerCase().includes('training')
-    );
-    if (todayTraining) {
-      const att = todayTraining.attendance?.[profile.uid];
-      const isDone = !!att && ['YES', 'PRESENT', 'SUBSTITUTE', 'Yes', 'Substitute', 'Late'].includes(att);
+    // 9. Guest Invitation
+    const userGuests = guestInvitations.filter(g => (g.createdBy === profile.uid || g.member_id === profile.uid || g.invited_by === profile.uid));
+    userGuests.sort((a, b) => new Date(b.createdAt || b.date || 0).getTime() - new Date(a.createdAt || a.date || 0).getTime());
+
+    if (userGuests.length > 0) {
+      const latestGuest = userGuests[0];
+      const guestName = latestGuest.name || latestGuest.guest_name || 'Guest';
+      const mDate = formatSafeDate(latestGuest.meetingDate || latestGuest.meeting_date || latestGuest.date || latestGuest.createdAt);
+
       tasks.push({
-        key: `training_${todayTraining.id}`,
-        label: 'Attend Training Session',
-        isDone,
-        link: '/meetings',
+        key: `guest_${latestGuest.id}`,
+        label: 'Guest Invitation',
+        desc: `Guest Name: ${guestName} | Meeting Date: ${mDate}`,
+        isDone: latestGuest.status === 'Attended',
+        link: '/guests',
         linkText: 'VIEW',
         iconColor: 'text-pink-400',
         bgColor: 'bg-pink-500/10',
-        icon: Calendar,
+        icon: UserPlus,
         activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
       });
     }
 
-    // 7. Invite a Guest
-    tasks.push({
-      key: 'inviteGuest',
-      label: 'Invite a Guest',
-      isDone: hasInvitedGuest,
-      link: '/guests',
-      linkText: 'INVITE',
-      iconColor: 'text-indigo-400',
-      bgColor: 'bg-indigo-500/10',
-      icon: UserPlus,
-      activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-    });
-
-    // 8. Complete Your Profile Task
-    const isProfileComplete = !!(
-      profile.photoURL &&
-      profile.name &&
-      profile.phone &&
-      profile.email &&
-      profile.businessName &&
-      profile.category &&
-      (profile.professionDesignation || profile.profession_designation) &&
-      profile.address &&
-      profile.city &&
-      profile.state &&
-      profile.pincode &&
-      profile.bio
-    );
-    tasks.push({
-      key: 'completeProfileFull',
-      label: 'Complete Your Profile',
-      isDone: isProfileComplete,
-      link: '/profile',
-      linkText: 'PROFILE',
-      iconColor: 'text-amber-400',
-      bgColor: 'bg-amber-500/10',
-      icon: User,
-      activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-    });
-
-    // 9. Subscription Renewal Task
-    if (profile && profile.role === 'MEMBER') {
-      const endDate = profile.subscriptionEndDate || profile.subscriptionEnd;
-      if (endDate) {
-        const { daysRemaining } = calculateSubscriptionDetails(endDate);
-        if (daysRemaining <= 30) {
-          tasks.push({
-            key: 'renewMembership',
-            label: '⚠ Renew Your Membership',
-            isDone: !!profile.renewalRequested,
-            link: '#subscription-card',
-            linkText: profile.renewalRequested ? 'PENDING' : 'RENEW',
-            iconColor: 'text-red-500',
-            bgColor: 'bg-red-500/10',
-            icon: Shield,
-            activeClass: 'bg-[#DC143C] border-[#DC143C] shadow-[0_0_12px_rgba(220,20,60,0.6)]'
-          });
-        }
-      }
-    }
-
     return tasks;
-  }, [meetings, oneToOnes, passedReferrals, receivedReferrals, allSlips, chapterUsers, profile, guestInvitations, hasInvitedGuest]);
+  }, [profile, meetings, oneToOnes, allReferrals, allSlips, guestInvitations, allUsersList]);
 
   const masterAdminTasks = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
@@ -2085,8 +2149,8 @@ export function Analytics() {
         )}
       </motion.div>
 
-      {/* Dynamic Chapter Analytics Heading & KPI cards - Shown for Member, Chapter Admin, and Master Admin */}
-      {(profile?.role === 'MASTER_ADMIN' || profile?.role === 'CHAPTER_ADMIN' || profile?.role === 'MEMBER') && (
+      {/* Dynamic Chapter Analytics Heading & KPI cards - Shown for Member, Chapter Admin, President, Vice President, Treasurer, and Master Admin */}
+      {profile && (
         <>
           <div className="space-y-1 mb-2 mt-8">
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
@@ -2101,6 +2165,7 @@ export function Analytics() {
 
           <StatGrid 
             role={profile?.role}
+            position={profile?.position}
             totalChaptersCount={totalChaptersCount}
             totalMembersCount={totalMembersCount}
             activePartnersCount={activePartnersCount}
@@ -2124,7 +2189,7 @@ export function Analytics() {
       )}
 
       {/* COMPANION / REPORTS VIEW BASED ON ROLE */}
-      {(profile?.role === 'MEMBER' || profile?.role === 'CHAPTER_ADMIN') && (
+      {profile?.role !== 'MASTER_ADMIN' && (
         <MemberCompanionView
           profile={profile}
           dynamicContext={{ period: 'Weekly', priority: 'Engage', tip: '', badge: '' }}

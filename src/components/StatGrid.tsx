@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 
 interface StatGridProps {
   role?: string;
+  position?: string;
   totalChaptersCount?: number;
   totalMembersCount?: number;
   activePartnersCount?: number;
@@ -24,6 +25,7 @@ interface StatGridProps {
 
 export default function StatGrid({
   role = 'MEMBER',
+  position = '',
   totalChaptersCount = 0,
   totalMembersCount = 0,
   activePartnersCount = 0,
@@ -115,7 +117,11 @@ export default function StatGrid({
       }
     ];
 
-    if (role === 'MEMBER' || role === 'CHAPTER_ADMIN') {
+    const normRole = (role || '').toUpperCase();
+    const normPos = (position || '').toLowerCase();
+    const isChapterRole = normRole === 'MEMBER' || normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin', 'member'].includes(normPos);
+
+    if (isChapterRole && normRole !== 'MASTER_ADMIN') {
       const list = [
         {
           label: 'Total Members',
@@ -132,13 +138,10 @@ export default function StatGrid({
           trend: 'Active',
           trendLabel: 'In chapter',
           icon: Users,
-          color: 'text-red-500', 
-          bg: 'bg-red-500/10 border-red-500/20',
+          color: 'text-emerald-500', 
+          bg: 'bg-emerald-500/10 border-emerald-500/20',
         },
-      ];
-
-      if (role === 'CHAPTER_ADMIN') {
-        list.push({
+        {
           label: 'Inactive Members',
           value: formatValue('Inactive Members', inactiveMembersCount),
           trend: 'Inactive',
@@ -146,8 +149,8 @@ export default function StatGrid({
           icon: Users,
           color: 'text-red-400', 
           bg: 'bg-red-400/10 border-red-400/20',
-        });
-      }
+        },
+      ];
 
       list.push(
         {
@@ -294,6 +297,9 @@ export default function StatGrid({
   };
 
   const stats = getStatsForRole();
+  const normRole = (role || '').toUpperCase();
+  const normPos = (position || '').toLowerCase();
+  const isClickable = normRole === 'CHAPTER_ADMIN' || normPos === 'chapter_admin' || normRole === 'MASTER_ADMIN';
 
   return (
     <motion.div 
@@ -317,19 +323,23 @@ export default function StatGrid({
         return (
           <motion.div 
             key={idx}
-            onClick={() => onCardClick?.(stat.label)}
+            onClick={() => {
+              if (isClickable) {
+                onCardClick?.(stat.label);
+              }
+            }}
             variants={{
               hidden: { opacity: 0, y: 15 },
               show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
             }}
-            whileHover={{ 
+            whileHover={isClickable ? { 
                y: -8, 
                scale: 1.02, 
                boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-              borderColor: "rgba(255, 255, 255, 0.15)"
-            }}
+               borderColor: "rgba(255, 255, 255, 0.15)"
+            } : undefined}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="bg-[#111827] rounded-[20px] p-3 sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col justify-center items-center text-center h-[140px] sm:h-[160px] cursor-pointer transition-all duration-300 group col-span-1 w-full gap-1.5 sm:gap-2"
+            className={`bg-[#111827] rounded-[20px] p-3 sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col justify-center items-center text-center h-[140px] sm:h-[160px] transition-all duration-300 group col-span-1 w-full gap-1.5 sm:gap-2 ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
           >
             <motion.div 
               animate={{ y: [0, -3, 0] }}
