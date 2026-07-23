@@ -673,8 +673,7 @@ export async function updateMemberPositionDirectly(
               .from('users')
               .update({
                 role: demoteRole,
-                chapter_position: 'MEMBER',
-                position: 'member'
+                chapter_position: 'MEMBER'
               })
               .eq('id', member.id);
 
@@ -693,8 +692,7 @@ export async function updateMemberPositionDirectly(
     .from('users')
     .update({ 
       role: roleVal, 
-      chapter_position: chapterPosVal,
-      position: posVal 
+      chapter_position: chapterPosVal
     })
     .eq('id', targetUserId);
 

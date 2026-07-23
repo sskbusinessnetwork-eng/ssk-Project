@@ -273,8 +273,7 @@ async function startServer() {
                   .from('users')
                   .update({ 
                     role: demoteRole, 
-                    chapter_position: 'MEMBER',
-                    position: 'member'
+                    chapter_position: 'MEMBER'
                   })
                   .eq('id', member.id);
 
@@ -309,8 +308,7 @@ async function startServer() {
         .from('users')
         .update({ 
           role: roleVal, 
-          chapter_position: chapterPosVal,
-          position: posVal 
+          chapter_position: chapterPosVal
         })
         .eq('id', targetUserId);
 
