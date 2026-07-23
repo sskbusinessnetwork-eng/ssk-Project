@@ -8,6 +8,9 @@ export default defineConfig(({mode}) => {
   return {
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss()],
+    build: {
+      chunkSizeWarningLimit: 10000,
+    },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },

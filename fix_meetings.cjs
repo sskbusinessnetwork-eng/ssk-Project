@@ -1,20 +1,38 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/pages/Meetings.tsx', 'utf8');
 
-const file = 'src/pages/Meetings.tsx';
-let content = fs.readFileSync(file, 'utf8');
+const hookInsert = `
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const updateId = params.get('update');
+    if (updateId && meetings.length > 0) {
+      const meetingToUpdate = meetings.find(m => m.id === updateId);
+      if (meetingToUpdate && !isUpdateModalOpen && !isMeetingDetailsModalOpen) {
+        if (isAdmin) {
+          setSelectedMeeting(meetingToUpdate);
+          const normalizedAttendance: Record<string, string> = {};
+          if (meetingToUpdate.attendance) {
+            Object.entries(meetingToUpdate.attendance).forEach(([uid, status]) => {
+              normalizedAttendance[uid] = typeof status === 'string' ? status : (status as any).status || 'ABSENT';
+            });
+          }
+          setTempAttendance(normalizedAttendance);
+          setTempAmount(meetingToUpdate.amountCollected || {});
+          setTempMemberNotes(meetingToUpdate.memberNotes || {});
+          setIsUpdateModalOpen(true);
+        } else {
+          setDetailsMeeting(meetingToUpdate);
+          setIsMeetingDetailsModalOpen(true);
+        }
+        window.history.replaceState({}, '', '/meetings');
+      }
+    }
+  }, [meetings]);
+`;
 
-// Replace all usages of profile.adminId and profile.uid for chapters with profile.chapter_id
-content = content.replace(/profile\?\.adminId/g, "profile?.chapter_id");
-content = content.replace(/profile\.adminId/g, "profile.chapter_id");
-content = content.replace(/\(isChapterAdmin \? profile\?\.uid : profile\?\.chapter_id\)/g, "profile?.chapter_id");
-content = content.replace(/\(isChapterAdmin \? profile\?\.uid : profile\.chapter_id\)/g, "profile?.chapter_id");
+code = code.replace(
+  "  const fetchMeetings = async () => {",
+  hookInsert + "\n  const fetchMeetings = async () => {"
+);
 
-// `m.adminId === selectedMeeting.adminId || m.uid === selectedMeeting.adminId`
-// should be `m.chapter_id === selectedMeeting.adminId`
-content = content.replace(/m\.adminId === selectedMeeting\.adminId \|\| m\.uid === selectedMeeting\.adminId/g, "m.chapter_id === selectedMeeting.adminId");
-content = content.replace(/m\.adminId === selectedMeeting\?\.adminId \|\| m\.uid === selectedMeeting\?\.adminId/g, "m.chapter_id === selectedMeeting?.adminId");
-
-// Also replace `adminId: profile.uid` inside `scheduleData`
-content = content.replace(/adminId: profile\.uid/g, "adminId: profile.chapter_id");
-
-fs.writeFileSync(file, content);
+fs.writeFileSync('src/pages/Meetings.tsx', code);

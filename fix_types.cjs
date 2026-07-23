@@ -1,7 +1,8 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/types.ts', 'utf8');
 
-const file = 'src/types.ts';
-let content = fs.readFileSync(file, 'utf8');
-content = content.replace(/adminId\?: string;\n\s+date: string;/g, "adminId?: string;\n  chapter_id?: string;\n  date: string;");
-
-fs.writeFileSync(file, content);
+code = code.replace(
+  "  isApproved?: boolean;",
+  "  isApproved?: boolean;\n  workspace_checklist?: Record<string, boolean>;\n  growth_score?: number;"
+);
+fs.writeFileSync('src/types.ts', code);

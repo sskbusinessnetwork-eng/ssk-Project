@@ -1,0 +1,9 @@
+ALTER TABLE guest_invitations
+ADD COLUMN IF NOT EXISTS guest_whatsapp TEXT,
+ADD COLUMN IF NOT EXISTS business_category TEXT,
+ADD COLUMN IF NOT EXISTS meeting_id UUID,
+ADD COLUMN IF NOT EXISTS meeting_title TEXT,
+ADD COLUMN IF NOT EXISTS meeting_time TEXT,
+ADD COLUMN IF NOT EXISTS venue TEXT,
+ADD COLUMN IF NOT EXISTS invited_by_name TEXT,
+ADD COLUMN IF NOT EXISTS invited_by_chapter TEXT;

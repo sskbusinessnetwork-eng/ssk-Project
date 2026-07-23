@@ -1,4 +1,6 @@
-import { supabase } from '../lib/supabaseClient';
+const fs = require('fs');
+
+const code = `import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -20,7 +22,7 @@ import { db } from '../lib/database';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
 
-export function Guests() {
+export default function Guests() {
   const { profile } = useAuth();
   
   const [invitations, setInvitations] = useState<any[]>([]);
@@ -127,9 +129,9 @@ export function Guests() {
       fetchInitialData();
       
       // WhatsApp sharing logic
-      const message = `Hello *${formData.guestName}*,\n\nYou are warmly invited to attend the SSK Business Network Chapter Meeting.\n\n📅 Date: ${selectedMeeting.date}\n🕙 Time: ${selectedMeeting.time || '10:00 AM'}\n📍 Venue: ${selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall'}\n\nWe would be delighted to have you join us to connect with local business professionals, build relationships, and explore new business opportunities.\n\nLooking forward to seeing you.\n\nRegards,\n${profile.name || profile.full_name || 'Member'}\nSSK Business Network`;
+      const message = \`Hello *\${formData.guestName}*,\\n\\nYou are warmly invited to attend the SSK Business Network Chapter Meeting.\\n\\n📅 Date: \${selectedMeeting.date}\\n🕙 Time: \${selectedMeeting.time || '10:00 AM'}\\n📍 Venue: \${selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall'}\\n\\nWe would be delighted to have you join us to connect with local business professionals, build relationships, and explore new business opportunities.\\n\\nLooking forward to seeing you.\\n\\nRegards,\\n\${profile.name || profile.full_name || 'Member'}\\nSSK Business Network\`;
       
-      const waUrl = `https://wa.me/${normalizePhoneNumber(formData.guestWhatsapp)}?text=${encodeURIComponent(message)}`;
+      const waUrl = \`https://wa.me/\${normalizePhoneNumber(formData.guestWhatsapp)}?text=\${encodeURIComponent(message)}\`;
       window.open(waUrl, '_blank');
       
       setShowSuccess(true);
@@ -383,3 +385,6 @@ export function Guests() {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/pages/Guests.tsx', code);

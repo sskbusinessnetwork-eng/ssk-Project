@@ -137,6 +137,20 @@ export function OneToOneMeetings() {
   const [rescheduleTime, setRescheduleTime] = useState('10:00 AM');
   const [rescheduleLocationOption, setRescheduleLocationOption] = useState<'Online Meeting' | 'My Address' | 'Selected Member Address'>('Online Meeting');
 
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const updateId = params.get('update');
+    if (updateId && meetings.length > 0) {
+      const meetingToUpdate = meetings.find(m => m.id === updateId);
+      if (meetingToUpdate && !isAttendanceModalOpen) {
+        handleOpenAttendanceModal(meetingToUpdate);
+        // Clear param so it doesn't reopen
+        window.history.replaceState({}, '', '/one-to-one');
+      }
+    }
+  }, [meetings]);
+
   const fetchMeetingsAndUsers = async () => {
     try {
       setLoading(true);

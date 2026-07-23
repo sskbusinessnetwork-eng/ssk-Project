@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -186,7 +187,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
 }
 
 export function Meetings() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -218,6 +219,10 @@ export function Meetings() {
   const [tempAmount, setTempAmount] = useState<Record<string, number>>({});
   const [tempMemberNotes, setTempMemberNotes] = useState<Record<string, string>>({});
   const [tempNotes, setTempNotes] = useState('');
+  const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
+  const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
+  const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
+
   const [defaultSetupData, setDefaultSetupData] = useState({
     adminId: '',
     frequency: 'Weekly' as 'Weekly' | 'Monthly',
@@ -234,6 +239,57 @@ export function Meetings() {
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
+
+
+  useEffect(() => {
+    if (isUpdateModalOpen && selectedMeeting) {
+      const fetchGuests = async () => {
+        try {
+          const { data: guests, error } = await supabase
+            .from('guest_invitations')
+            .select('*')
+            .eq('meeting_id', selectedMeeting.id);
+            
+          if (guests) {
+            setMeetingGuests(guests);
+            
+            // Extract unique inviter IDs
+            const inviterIds = [...new Set(guests.map(g => g.invited_by).filter(Boolean))];
+            
+            if (inviterIds.length > 0) {
+              const { data: users, error: usersError } = await supabase
+                .from('users')
+                .select('*')
+                .in('uid', inviterIds);
+                
+              if (users) {
+                const invitersMap = users.reduce((acc, user) => {
+                  acc[user.uid] = user;
+                  return acc;
+                }, {} as Record<string, any>);
+                setGuestInviters(invitersMap);
+              }
+            }
+            
+            // Initialize tempGuestAttendance
+            const initialGuestAttendance: Record<string, string> = {};
+            guests.forEach(g => {
+              if (g.status === 'Present' || g.status === 'Absent') {
+                initialGuestAttendance[g.id] = g.status;
+              } else if (g.attendance_status) {
+                initialGuestAttendance[g.id] = g.attendance_status;
+              }
+            });
+            setTempGuestAttendance(initialGuestAttendance);
+          }
+        } catch (err) {
+          console.error("Error fetching guests:", err);
+        }
+      };
+      
+      fetchGuests();
+    }
+  }, [isUpdateModalOpen, selectedMeeting]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -536,6 +592,68 @@ export function Meetings() {
         }
       }
 
+      
+      // Guest Attendance Save Logic
+      if (meetingGuests.length > 0) {
+        for (const guest of meetingGuests) {
+          const gStatus = tempGuestAttendance[guest.id];
+          if (gStatus) {
+            // Update guest invitation status
+            const updatePayload = {
+              status: gStatus,
+              attendance_status: gStatus,
+              attendance_updated_by: profile?.uid,
+              attendance_updated_by_name: profile?.name || profile?.full_name,
+              attendance_updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+            
+            await supabase
+              .from('guest_invitations')
+              .update(updatePayload)
+              .eq('id', guest.id);
+              
+            // Update workspace checklist and score if Present
+            if (gStatus === 'Present' && guest.status !== 'Present' && guest.attendance_status !== 'Present') {
+               // Update member's growth score and checklist
+               const inviterId = guest.invited_by;
+               if (inviterId) {
+                 try {
+                   // Fetch current score
+                   const { data: inviterData } = await supabase
+                     .from('users')
+                     .select('growth_score, workspace_checklist')
+                     .eq('uid', inviterId)
+                     .single();
+                     
+                   if (inviterData) {
+                     const currentScore = inviterData.growth_score || 0;
+                     const checklist = inviterData.workspace_checklist || {};
+                     
+                     await supabase
+                       .from('users')
+                       .update({
+                         growth_score: currentScore + 10,
+                         workspace_checklist: {
+                           ...checklist,
+                           'Invite a New Guest': true
+                         }
+                       })
+                       .eq('uid', inviterId);
+                   }
+                 } catch (scoreErr) {
+                   console.error("Failed to update growth score for guest:", scoreErr);
+                 }
+               }
+            }
+          }
+        }
+      }
+      
+      // Dispatch event to refresh analytics instantly
+      await refreshProfile();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+  
       await databaseService.update('meetings', selectedMeeting.id, { 
         attendance: tempAttendance,
         amountCollected: tempAmount,
@@ -960,103 +1078,180 @@ export function Meetings() {
           )}
           <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
             <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Meeting Update</p>
-            <p className="text-sm font-bold text-white">Update attendance and amounts</p>
+            <p className="text-sm font-bold text-white">Update attendance and amounts for Members and Guests</p>
           </div>
-
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <div className="min-w-[600px] px-4 sm:px-0">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/5">
-                    <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</th>
-                    <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
-                    <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
-                    <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Note</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {members.filter(m => m.chapter_id === selectedMeeting?.adminId).map((member) => {
-                    const status = tempAttendance[member.uid];
-                    const amount = tempAmount[member.uid] || 0;
-                    const note = tempMemberNotes[member.uid] || '';
-                    return (
-                      <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
-                        <td className="py-4">
-                          <div className="flex items-center gap-3">
-                            <img 
-                              src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
-                              className="w-8 h-8 rounded-lg shrink-0"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
-                              <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 text-center">
-                          <select
-                            id={`attendance-select-${member.uid}`}
-                            value={status || ''}
-                            onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
-                            className={cn(
-                              "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white border-white/5 cursor-pointer",
-                              status === 'Yes' || status === 'PRESENT' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
-                              status === 'No' || status === 'ABSENT' ? "border-red-500/30 text-red-400 bg-red-500/10" :
-                              status === 'Substitute' ? "border-amber-500/30 text-amber-400 bg-amber-500/10" :
-                              "border-white/5 text-neutral-400"
-                            )}
-                          >
-                            <option value="" className="bg-[#111827] text-white">Select Status</option>
-                            <option value="Yes" className="bg-[#111827] text-white">Yes</option>
-                            <option value="No" className="bg-[#111827] text-white">No</option>
-                            <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
-                          </select>
-                        </td>
-                        <td className="py-4">
-                          <input
-                            type="number"
-                            value={amount}
-                            onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
-                            className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white"
-                          />
-                        </td>
-                        <td className="py-4 pl-4">
-                          <input
-                            type="text"
-                            value={note}
-                            onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
-                            placeholder="Private note..."
-                            className="w-full px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-white placeholder-neutral-500"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          
+          {/* Members Section */}
+          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden">
+            <div className="p-4 border-b border-white/5 bg-[#151C2E]">
+              <h3 className="text-sm font-bold text-white">Members</h3>
             </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[600px] px-4 sm:px-0">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</th>
+                      <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
+                      <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {members.filter(m => m.chapter_id === selectedMeeting?.adminId).map((member) => {
+                      const status = tempAttendance[member.uid];
+                      const amount = tempAmount[member.uid] || 0;
+                      const note = tempMemberNotes[member.uid] || '';
+                      return (
+                        <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
+                                className="w-8 h-8 rounded-lg shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
+                                <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 text-center">
+                            <select
+                              id={`attendance-select-${member.uid}`}
+                              value={status || ''}
+                              onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
+                              className={cn(
+                                "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white border-white/5 cursor-pointer",
+                                status === 'Yes' || status === 'PRESENT' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
+                                status === 'No' || status === 'ABSENT' ? "border-red-500/30 text-red-400 bg-red-500/10" :
+                                status === 'Substitute' ? "border-amber-500/30 text-amber-400 bg-amber-500/10" :
+                                "border-white/5 text-neutral-400"
+                              )}
+                            >
+                              <option value="" className="bg-[#111827] text-white">Select Status</option>
+                              <option value="Yes" className="bg-[#111827] text-white">Yes</option>
+                              <option value="No" className="bg-[#111827] text-white">No</option>
+                              <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
+                            </select>
+                          </td>
+                          <td className="py-4">
+                            <input
+                              type="number"
+                              value={amount}
+                              onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
+                              className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
+                            />
+                          </td>
+                          <td className="py-4 px-4">
+                            <input
+                              type="text"
+                              value={note}
+                              onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
+                              placeholder="Private note..."
+                              className="w-full px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-white placeholder-neutral-500"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          {/* Guests Section */}
+          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden">
+            <div className="p-4 border-b border-white/5 bg-[#151C2E]">
+              <h3 className="text-sm font-bold text-white">Guests</h3>
+            </div>
+            {meetingGuests.length > 0 ? (
+              <div className="overflow-x-auto">
+                <div className="min-w-[600px] px-4 sm:px-0">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Guest Info</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invited By</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {meetingGuests.map((guest) => {
+                        const status = tempGuestAttendance[guest.id] || '';
+                        const inviter = guestInviters[guest.invited_by];
+                        
+                        return (
+                          <tr key={guest.id} className="hover:bg-[#1C2538] transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-white truncate">{guest.guest_name}</p>
+                                <p className="text-[10px] text-neutral-400 truncate mt-0.5">{guest.business_category} • {guest.guest_phone}</p>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-emerald-400 truncate">{inviter?.name || guest.invited_by_name || 'Member'}</p>
+                                <p className="text-[10px] text-neutral-400 truncate mt-0.5">
+                                  {inviter?.position || 'Member'} • {inviter?.chapter_id || guest.invited_by_chapter || 'Chapter'}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <select
+                                value={status}
+                                onChange={(e) => setTempGuestAttendance(prev => ({ ...prev, [guest.id]: e.target.value }))}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white border-white/5 cursor-pointer",
+                                  status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
+                                  status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10" :
+                                  "border-white/5 text-neutral-400"
+                                )}
+                              >
+                                <option value="" className="bg-[#111827] text-white">Select Status</option>
+                                <option value="Present" className="bg-[#111827] text-white">Present</option>
+                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-sm font-medium text-neutral-400">
+                No guests invited for this meeting.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
               <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
-              <p className="text-xl font-bold text-emerald-400">
+              <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
                 {Object.values(tempAttendance).filter(s => s === 'PRESENT' || s === 'Yes' || s === 'Substitute').length}
+                {Object.values(tempGuestAttendance).filter(s => s === 'Present').length > 0 && (
+                  <span className="text-xs text-emerald-400/70 font-medium mb-1">
+                    (+{Object.values(tempGuestAttendance).filter(s => s === 'Present').length} Guests)
+                  </span>
+                )}
               </p>
             </div>
             <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
               <p className="text-xl font-bold text-white">
-                ₹{Object.values(tempAmount).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
+                ₹{Object.values(tempAmount).reduce((a: number, b: any) => a + (typeof b === 'number' ? b : parseInt(String(b)) || 0), 0).toLocaleString()}
               </p>
             </div>
           </div>
-
           <button
             onClick={handleSaveUpdate}
             disabled={isSubmitting}
-            className="w-full py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
           >
             {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save & Complete Meeting'}
           </button>
