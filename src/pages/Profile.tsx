@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { motion } from 'motion/react';
@@ -506,13 +507,7 @@ export function Profile() {
         <div className="max-w-2xl mx-auto px-4 -mt-16 relative z-20 space-y-4">
           {/* Profile Card */}
           <div className="bg-[#111827] p-6 rounded-[20px] border border-white/5 text-center space-y-4">
-            <div className="w-24 h-24 rounded-full bg-[#151C2E] mx-auto border-4 border-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden">
-              <img 
-                src={targetProfile.photoURL || `https://picsum.photos/seed/${targetProfile.uid}/200/200`} 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
+            <Avatar src={targetProfile.photoURL} name={targetProfile.name} size="w-24 h-24" className="mx-auto border-4 border-[#111827] shadow-[0_1px_3px_rgba(0,0,0,0.02)]" fallbackClassName="mx-auto border-4 border-[#111827]" />
             <div>
               <div className="flex items-center justify-center gap-2 flex-wrap px-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white break-words">{targetProfile.name}</h2>

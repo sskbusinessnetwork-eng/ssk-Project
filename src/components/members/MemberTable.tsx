@@ -1,3 +1,4 @@
+import { Avatar } from '../../components/Avatar';
 import React, { useState } from 'react';
 import { 
   Phone, 
@@ -117,13 +118,7 @@ export function MemberTable({
                   <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors group overflow-visible">
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3.5">
-                        <div className="w-11 h-11 rounded-full bg-[#151C2E] border border-white/5 overflow-hidden shrink-0 shadow-sm">
-                          <img 
-                            src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
+                        <Avatar src={member.photoURL} name={member.name} size="w-11 h-11" className="border border-white/5 shrink-0 shadow-sm" fallbackClassName="text-sm" />
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-white text-sm leading-tight truncate mb-1.5">{member.name || member.displayName}</p>
                           <div className="flex flex-col gap-0.5 text-[11px] font-medium text-neutral-400">
@@ -285,13 +280,7 @@ export function MemberTable({
             <div key={member.uid} className="bg-card p-5 rounded-[24px] border border-white/5 shadow-card space-y-4 relative overflow-hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-[12px] bg-[#151C2E] border border-white/5 overflow-hidden shrink-0 shadow-sm">
-                    <img 
-                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
+                  <Avatar src={member.photoURL} name={member.name} size="w-12 h-12" className="rounded-[12px] border border-white/5 shrink-0 shadow-sm" fallbackClassName="rounded-[12px] text-lg" />
                   <div className="min-w-0">
                     <p className="font-bold text-white text-sm leading-tight truncate mb-1.5">{member.name || member.displayName}</p>
                     <div className="flex flex-col gap-0.5 text-[11px] font-medium text-neutral-400">

@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -129,12 +130,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
       <div className="p-4 border-b border-[#1F2937]/50 shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative shrink-0">
-            <img 
-              src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'User')}&background=E53935&color=ffffff`} 
-              alt="Profile" 
-              className={cn("rounded-full border border-[#1F2937] object-cover bg-white", isCollapsed ? "w-10 h-10 mx-auto" : "w-[48px] h-[48px]")}
-              referrerPolicy="no-referrer"
-            />
+            <Avatar src={profile?.photoURL} name={profile?.name} size={isCollapsed ? "w-10 h-10" : "w-[48px] h-[48px]"} className="border border-[#1F2937] bg-[#111827] mx-auto" fallbackClassName="text-lg" />
             {!isCollapsed && (
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#11131A] flex items-center justify-center">
                 <span className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping opacity-75" />

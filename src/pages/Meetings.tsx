@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
@@ -1106,11 +1107,7 @@ export function Meetings() {
                         <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-3">
-                              <img 
-                                src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || '')}&background=random`} 
-                                className="w-8 h-8 rounded-lg shrink-0"
-                                referrerPolicy="no-referrer"
-                              />
+                              <Avatar src={member.photoURL} name={member.name} size="w-8 h-8" className="rounded-lg shrink-0" fallbackClassName="rounded-lg text-xs" />
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
                                 <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>
@@ -1297,11 +1294,7 @@ export function Meetings() {
                     <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <img 
-                            src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
-                            className="w-6 h-6 rounded-lg"
-                            referrerPolicy="no-referrer"
-                          />
+                          <Avatar src={member.photoURL} name={member.name || member.displayName || 'Member'} size="w-6 h-6" className="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
                           <p className="text-xs font-bold text-white">{member.name || member.displayName || 'Unnamed Member'}</p>
                         </div>
                       </td>
@@ -1347,11 +1340,7 @@ export function Meetings() {
               return (
                 <div key={member.uid} className="py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <img 
-                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
-                      className="w-8 h-8 rounded-lg"
-                      referrerPolicy="no-referrer"
-                    />
+                    <Avatar src={member.photoURL} name={member.name || member.displayName || 'Member'} size="w-8 h-8" className="rounded-lg" fallbackClassName="rounded-lg text-xs" />
                     <p className="text-sm font-bold text-white">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
                   {(() => {
@@ -1382,11 +1371,7 @@ export function Meetings() {
               return (
                 <div key={member.uid} className="py-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <img 
-                      src={member.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.name || member.displayName || 'Member')}&background=random`} 
-                      className="w-8 h-8 rounded-lg"
-                      referrerPolicy="no-referrer"
-                    />
+                    <Avatar src={member.photoURL} name={member.name || member.displayName || 'Member'} size="w-8 h-8" className="rounded-lg" fallbackClassName="rounded-lg text-xs" />
                     <p className="text-sm font-bold text-white">{member.name || member.displayName || 'Unnamed Member'}</p>
                   </div>
                   <span className="text-sm font-bold text-white">₹{amount.toLocaleString()}</span>

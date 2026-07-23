@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -762,13 +763,7 @@ export function Connections() {
                 onClick={() => navigate(`/profile?id=${member.uid}`)}
                 className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-all duration-300 cursor-pointer group"
               >
-                <div className="w-12 h-12 rounded-full bg-[#0F172A] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-inner">
-                  <img
-                    src={member.photoURL || `https://picsum.photos/seed/${member.uid}/100/100`}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
+                <Avatar src={member.photoURL} name={member.name} size="w-12 h-12" className="border border-white/10 shrink-0 shadow-inner" />
                 
                 <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2 flex-wrap">

@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -279,11 +280,7 @@ export function Layout() {
               <div className="overflow-y-auto px-4 pb-8 custom-scrollbar">
                 <Link to="/profile" className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5 hover:bg-[#374151] transition-colors active:bg-[#4B5563]">
                   <div className="flex items-center gap-4">
-                    <img 
-                      src={profile?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'User')}&background=DC2626&color=ffffff`} 
-                      alt="Profile" 
-                      className="w-12 h-12 rounded-full border border-white/10 shadow-sm"
-                    />
+                    <Avatar src={profile?.photoURL} name={profile?.name} size="w-12 h-12" className="border border-white/10 shadow-sm" fallbackClassName="text-lg" />
                     <div className="flex flex-col">
                       <span className="font-bold text-white">{profile?.name || 'User'}</span>
                       <span className="text-[12px] font-bold text-primary flex items-center gap-1">

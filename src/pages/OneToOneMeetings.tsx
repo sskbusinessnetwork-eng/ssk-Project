@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
@@ -1794,13 +1795,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Sender */}
             <div className="flex items-center gap-2.5 min-w-0">
-              {senderPhoto ? (
-                <img src={senderPhoto} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" alt={senderName} referrerPolicy="no-referrer" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                  {senderName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <Avatar src={senderPhoto} name={senderName} size="w-8 h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
               <div className="min-w-0">
                 <p className="text-[8px] font-bold text-primary uppercase tracking-wider">Sender (Host)</p>
                 <p className="text-xs font-bold text-white truncate">{senderName}</p>
@@ -1810,13 +1805,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
 
             {/* Receiver */}
             <div className="flex items-center gap-2.5 min-w-0">
-              {receiverPhoto ? (
-                <img src={receiverPhoto} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" alt={receiverName} referrerPolicy="no-referrer" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                  {receiverName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <Avatar src={receiverPhoto} name={receiverName} size="w-8 h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
               <div className="min-w-0">
                 <p className="text-[8px] font-bold text-primary uppercase tracking-wider">Receiver (Participant)</p>
                 <p className="text-xs font-bold text-white truncate">{receiverName}</p>

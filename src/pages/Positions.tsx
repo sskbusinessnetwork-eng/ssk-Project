@@ -1,3 +1,4 @@
+import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/database';
 import {  collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot  } from '../lib/database';
@@ -236,13 +237,7 @@ export function Positions() {
                   return (
                     <tr key={member.uid} className="hover:bg-white/5 even:bg-white/[0.02] border-b border-white/[0.06] transition-colors">
                       <td className="p-4">
-                        <div className="w-10 h-10 rounded-full bg-[#0F172A] flex items-center justify-center border border-white/10 overflow-hidden">
-                          {member.photoURL ? (
-                            <img src={member.photoURL} alt={member.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <User size={18} className="text-neutral-400 group-hover:text-primary transition-colors" />
-                          )}
-                        </div>
+                        <Avatar src={member.photoURL} name={member.name} size="w-10 h-10" className="border border-white/10" fallbackClassName="border border-white/10" />
                       </td>
                       <td className="p-4">
                         <div className="font-bold text-white text-sm">{member.name || member.displayName}</div>
