@@ -276,7 +276,7 @@ export function ManageSubscriptions() {
           >
             <option value="">All Chapters</option>
             {chapters.map(c => (
-              <option key={c.id} value={c.id}>{c.chapter_name}</option>
+              <option key={c.id} value={c.id}>{c.chapter_name || (c as any).chapterName}</option>
             ))}
           </select>
         )}

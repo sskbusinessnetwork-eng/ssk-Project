@@ -5,7 +5,7 @@ import {  collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
-import { Search, User, Phone, Mail, Clock, ArrowRight } from 'lucide-react';
+import { Search, User, Phone, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 
 const POSITIONS: { key: ChapterPosition; label: string }[] = [
@@ -185,16 +185,19 @@ export function Positions() {
           {isMasterAdmin && (
             <div className="flex-1">
               <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 mb-2 block">Select Chapter</label>
-              <select
-                value={selectedChapterId}
-                onChange={(e) => setSelectedChapterId(e.target.value)}
-                className="w-full h-[50px] px-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none transition-all text-sm font-semibold text-white cursor-pointer appearance-none"
-              >
-                <option value="" className="bg-[#161B22] text-white">Choose a Chapter...</option>
-                {chapters.map(chapter => (
-                  <option key={chapter.id} value={chapter.id} className="bg-[#161B22] text-white">{chapter.chapter_name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedChapterId}
+                  onChange={(e) => setSelectedChapterId(e.target.value)}
+                  className={`w-full h-[50px] px-4 bg-[#0F172A] border border-white/10 rounded-[14px] focus:bg-[#0F172A] focus:border-primary focus:shadow-[0_0_0_3px_rgba(239,68,68,0.18)] outline-none transition-all text-sm font-semibold cursor-pointer appearance-none ${selectedChapterId ? 'text-white' : 'text-gray-400'}`}
+                >
+                  <option value="" className="bg-[#161B22] text-gray-400">Choose a Chapter...</option>
+                  {chapters.map(chapter => (
+                    <option key={chapter.id} value={chapter.id} className="bg-[#161B22] text-white">{chapter.chapter_name || (chapter as any).chapterName}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
+              </div>
             </div>
           )}
           
