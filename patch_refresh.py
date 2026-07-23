@@ -1,17 +1,15 @@
 import re
-with open('src/pages/OneToOneMeetings.tsx', 'r') as f:
+
+with open("src/pages/Members.tsx", "r") as f:
     content = f.read()
 
-content = content.replace("await databaseService.create('one_to_one_meetings', newMeeting);", "await databaseService.create('one_to_one_meetings', newMeeting);\n      window.dispatchEvent(new CustomEvent('dashboard-refresh'));")
+pattern = r"setIsAddModalOpen\(false\);\s*setNewMemberData"
+replacement = """setIsAddModalOpen(false);
+      window.dispatchEvent(new Event('dashboard-refresh'));
+      setNewMemberData"""
 
-content = content.replace("await databaseService.update('one_to_one_meetings', updatingMeeting.id, {", "await databaseService.update('one_to_one_meetings', updatingMeeting.id, {")
-# let's just use regex for the update one
-content = re.sub(
-    r"(await databaseService\.update\('one_to_one_meetings', updatingMeeting\.id, \{[^}]+\}\);)",
-    r"\1\n      window.dispatchEvent(new CustomEvent('dashboard-refresh'));",
-    content
-)
+content = re.sub(pattern, replacement, content)
 
-with open('src/pages/OneToOneMeetings.tsx', 'w') as f:
+with open("src/pages/Members.tsx", "w") as f:
     f.write(content)
 

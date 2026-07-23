@@ -1,18 +1,46 @@
 import re
 
-with open('src/pages/Dashboard.tsx', 'r') as f:
+with open("src/pages/Referrals.tsx", "r") as f:
     content = f.read()
 
-replacement = """  const referralsPassedCount = useMemo(() => {
-    const isCompleted = (r: any) => ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
-    if (profile?.role === 'MASTER_ADMIN') {
-      return allReferrals.filter(isCompleted).length || 0;
-    }
-    return chapterReferralsList.filter(isCompleted).length || 0;
-  }, [allReferrals, chapterReferralsList, profile]);"""
+old_filter_code = """    if (memberFilter === 'my_chapter') {
+      if (!effectiveUserChapterId) return [];
+      return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim());
+    }"""
 
-pattern = r"const referralsPassedCount = useMemo\(\(\) => \{.*?\}, \[allReferrals, chapterReferralsList, profile\]\);"
-content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+new_filter_code = """    if (memberFilter === 'my_chapter') {
+      if (!effectiveUserChapterId) return [];
+      return allMembers.filter(m => {
+        const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
+        const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
+        
+        if (!memberChapId || !memberChapName) {
+          console.warn(`My Chapter filter: User ${m.id || m.uid} is missing chapter_id or chapter_name. Excluded.`);
+          return false;
+        }
+        return memberChapId === String(effectiveUserChapterId).trim();
+      });
+    }"""
 
-with open('src/pages/Dashboard.tsx', 'w') as f:
+content = content.replace(old_filter_code, new_filter_code)
+
+old_count_code = """  const myChapterCount = useMemo(() => {
+    if (!effectiveUserChapterId) return 0;
+    return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim()).length;
+  }, [allMembers, effectiveUserChapterId]);"""
+
+new_count_code = """  const myChapterCount = useMemo(() => {
+    if (!effectiveUserChapterId) return 0;
+    return allMembers.filter(m => {
+      const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
+      const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
+      if (!memberChapId || !memberChapName) return false;
+      return memberChapId === String(effectiveUserChapterId).trim();
+    }).length;
+  }, [allMembers, effectiveUserChapterId]);"""
+
+content = content.replace(old_count_code, new_count_code)
+
+with open("src/pages/Referrals.tsx", "w") as f:
     f.write(content)
+

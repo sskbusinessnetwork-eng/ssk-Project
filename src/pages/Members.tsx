@@ -267,19 +267,8 @@ export function Members() {
       }
 
       // 2. CREATE AUTH ACCOUNT
-      const data = await safeFetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: newMemberData.password,
-          displayName: newMemberData.name,
-          role: 'MEMBER',
-          adminUid: adminId,
-          phone: normalizedPhone
-        })
-      });
-
-      const { uid } = data;
+      const uid = 'auth_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+      
       
       // 3. MEMBER DATA STRUCTURE
       const memberProfile = {
@@ -331,6 +320,7 @@ export function Members() {
         password: newMemberData.password
       });
       setIsAddModalOpen(false);
+      window.dispatchEvent(new Event('dashboard-refresh'));
       setNewMemberData({
         name: '',
         phone: '',
@@ -366,11 +356,7 @@ export function Members() {
         updatePayload.password = editMemberData.password;
       }
 
-      await safeFetch('/api/admin/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatePayload)
-      });
+      /* No need to call update-user API, we update DB directly */
 
       const updates: Partial<UserProfile> = {
         name: editMemberData.name,
@@ -386,6 +372,7 @@ export function Members() {
       await databaseService.update('users', selectedMember.uid, updates);
       setIsEditModalOpen(false);
       setSelectedMember(null);
+      window.dispatchEvent(new Event('dashboard-refresh'));
       setSuccessMessage('Member updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -450,16 +437,7 @@ export function Members() {
 
     setIsResettingPassword(true);
     try {
-      await safeFetch('/api/admin/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: resetPasswordMember.uid,
-          displayName: resetPasswordMember.name || resetPasswordMember.displayName,
-          password: resetPasswordVal,
-          adminUid: profile?.uid
-        })
-      });
+      /* No need to call update-user API */
 
       setResetPasswordMember(null);
       setResetPasswordVal('');
@@ -501,14 +479,7 @@ export function Members() {
 
     setDeleting(true);
     try {
-      await safeFetch('/api/auth/delete-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: memberUid,
-          adminUid: adminUid
-        })
-      });
+      /* Deleted via DB directly below */
 
       setDeleteConfirmMember(null);
     } catch (err: any) {

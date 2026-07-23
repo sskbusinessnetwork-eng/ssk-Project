@@ -1,38 +1,56 @@
 import re
 
-with open('src/pages/Connections.tsx', 'r') as f:
+with open("src/pages/Connections.tsx", "r") as f:
     content = f.read()
 
-# 1. Remove the queryBuilder constraint
-constraint_pattern = r"if \(profile\?\.role !== 'MASTER_ADMIN' && currentChapterId\) \{\s*queryBuilder = queryBuilder\.eq\('chapter_id', currentChapterId\);\s*\}"
-content = re.sub(constraint_pattern, "", content)
+old_filter_code = """      } else {
+        const myChapId = (currentUserChapterId || '').trim();
+        const myChapName = (currentUserChapterName || '').trim().toLowerCase();
 
-# 2. Add realtime subscription
-subscription_code = """
-    fetchData();
-
-    const channel = supabase
-      .channel('connections_users_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'users' },
-        () => {
-          fetchData();
+        if (!myChapId && !myChapName) {
+          return false;
         }
-      )
-      .subscribe();
 
-    // Listen for manual re-fetch events
-    const handleRefresh = () => fetchData();
-    window.addEventListener('dashboard-refresh', handleRefresh);
-    return () => {
-      window.removeEventListener('dashboard-refresh', handleRefresh);
-      supabase.removeChannel(channel);
-    };
-"""
+        const memberChapId = (member.chapter_id || '').trim();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim().toLowerCase();
 
-cleanup_pattern = r"fetchData\(\);\s*// Listen for manual re-fetch events\s*const handleRefresh = \(\) => fetchData\(\);\s*window\.addEventListener\('dashboard-refresh', handleRefresh\);\s*return \(\) => \{\s*window\.removeEventListener\('dashboard-refresh', handleRefresh\);\s*\};\s*"
-content = re.sub(cleanup_pattern, subscription_code, content)
+        let isMatch = false;
+        if (myChapId && memberChapId) {
+          if (memberChapId === myChapId) {
+            isMatch = true;
+          }
+        }
+        if (!isMatch && myChapName && memberChapName) {
+          if (memberChapName === myChapName) {
+            isMatch = true;
+          }
+        }
 
-with open('src/pages/Connections.tsx', 'w') as f:
+        if (!isMatch) return false;
+      }"""
+
+new_filter_code = """      } else {
+        const myChapId = (currentUserChapterId || profile?.chapter_id || '').trim();
+
+        if (!myChapId) {
+          return false;
+        }
+
+        const memberChapId = (member.chapter_id || '').trim();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim();
+
+        if (!memberChapId || !memberChapName) {
+          console.warn(`My Chapter Members filter: User ${member.id || member.uid} is missing chapter_id or chapter_name. Excluded.`);
+          return false;
+        }
+
+        if (memberChapId !== myChapId) {
+          return false;
+        }
+      }"""
+
+content = content.replace(old_filter_code, new_filter_code)
+
+with open("src/pages/Connections.tsx", "w") as f:
     f.write(content)
+

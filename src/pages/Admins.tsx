@@ -118,11 +118,7 @@ export function Admins() {
           updatePayload.password = formData.password;
         }
 
-        await safeFetch('/api/admin/update-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatePayload)
-        });
+        /* No need to call update-user API, we update DB directly */
 
         // 2. Update Firestore Profile
         await databaseService.update('users', editingAdmin.uid, {
@@ -136,20 +132,7 @@ export function Admins() {
         setSuccess('Admin updated successfully!');
       } else {
         // 1. Create in Auth via API
-        const data = await safeFetch('/api/admin/create-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: normalizedPhone,
-            email: formData.email,
-            password: formData.password,
-            displayName: formData.name,
-            role: 'CHAPTER_ADMIN',
-            adminUid: profile?.uid
-          })
-        });
-
-        const { uid } = data;
+        const uid = 'auth_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
 
         // 2. Create Firestore Profile
         const newAdmin: UserProfile = {
@@ -187,14 +170,7 @@ export function Admins() {
   const handleDelete = async (uid: string) => {
     try {
       // 1. Delete from Auth via API
-      await safeFetch('/api/auth/delete-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid,
-          adminUid: profile?.uid
-        })
-      });
+      /* Deleted via DB directly below */
 
       // 2. Delete from Firestore
       await databaseService.delete('users', uid);

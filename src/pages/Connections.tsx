@@ -368,32 +368,34 @@ export function Connections() {
       if (profile?.role === 'MASTER_ADMIN') {
         const selectedChap = (masterSelectedChapterId || '').trim();
         if (!selectedChap) return false;
+        
         const memberChapId = (member.chapter_id || '').trim();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim();
+        
+        if (!memberChapId || !memberChapName) {
+          console.warn(`My Chapter Members filter: User ${member.id || member.uid} is missing chapter_id or chapter_name. Excluded.`);
+          return false;
+        }
+
         if (memberChapId !== selectedChap) return false;
       } else {
-        const myChapId = (currentUserChapterId || '').trim();
-        const myChapName = (currentUserChapterName || '').trim().toLowerCase();
+        const myChapId = (currentUserChapterId || profile?.chapter_id || '').trim();
 
-        if (!myChapId && !myChapName) {
+        if (!myChapId) {
           return false;
         }
 
         const memberChapId = (member.chapter_id || '').trim();
-        const memberChapName = (member.chapter_name || member.chapterName || '').trim().toLowerCase();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim();
 
-        let isMatch = false;
-        if (myChapId && memberChapId) {
-          if (memberChapId === myChapId) {
-            isMatch = true;
-          }
-        }
-        if (!isMatch && myChapName && memberChapName) {
-          if (memberChapName === myChapName) {
-            isMatch = true;
-          }
+        if (!memberChapId || !memberChapName) {
+          console.warn(`My Chapter Members filter: User ${member.id || member.uid} is missing chapter_id or chapter_name. Excluded.`);
+          return false;
         }
 
-        if (!isMatch) return false;
+        if (memberChapId !== myChapId) {
+          return false;
+        }
       }
     }
 
@@ -457,18 +459,20 @@ export function Connections() {
   const totalChapterCount = members.filter(m => {
     if (profile?.role === 'MASTER_ADMIN') {
       const selectedChap = (masterSelectedChapterId || '').trim();
-      return (m.chapter_id || '').trim() === selectedChap;
+      if (!selectedChap) return false;
+      const memberChapId = (m.chapter_id || '').trim();
+      const memberChapName = (m.chapter_name || m.chapterName || '').trim();
+      if (!memberChapId || !memberChapName) return false;
+      return memberChapId === selectedChap;
     } else {
-      const myChapId = (currentUserChapterId || '').trim();
-      const myChapName = (currentUserChapterName || '').trim().toLowerCase();
-      if (!myChapId && !myChapName) return false;
+      const myChapId = (currentUserChapterId || profile?.chapter_id || '').trim();
+      if (!myChapId) return false;
 
       const memberChapId = (m.chapter_id || '').trim();
-      const memberChapName = (m.chapter_name || m.chapterName || '').trim().toLowerCase();
+      const memberChapName = (m.chapter_name || m.chapterName || '').trim();
 
-      if (myChapId && memberChapId && memberChapId === myChapId) return true;
-      if (myChapName && memberChapName && memberChapName === myChapName) return true;
-      return false;
+      if (!memberChapId || !memberChapName) return false;
+      return myChapId === memberChapId;
     }
   }).length;
 

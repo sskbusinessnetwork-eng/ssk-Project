@@ -453,7 +453,16 @@ export function Referrals() {
   const filteredMembers = useMemo(() => {
     if (memberFilter === 'my_chapter') {
       if (!effectiveUserChapterId) return [];
-      return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim());
+      return allMembers.filter(m => {
+        const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
+        const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
+        
+        if (!memberChapId || !memberChapName) {
+          console.warn(`My Chapter filter: User ${m.id || m.uid} is missing chapter_id or chapter_name. Excluded.`);
+          return false;
+        }
+        return memberChapId === String(effectiveUserChapterId).trim();
+      });
     }
     return allMembers;
   }, [allMembers, memberFilter, effectiveUserChapterId]);
@@ -461,7 +470,12 @@ export function Referrals() {
   const allCount = allMembers.length;
   const myChapterCount = useMemo(() => {
     if (!effectiveUserChapterId) return 0;
-    return allMembers.filter(m => String(m.chapter_id || m.chapterId || '').trim() === String(effectiveUserChapterId).trim()).length;
+    return allMembers.filter(m => {
+      const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
+      const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
+      if (!memberChapId || !memberChapName) return false;
+      return memberChapId === String(effectiveUserChapterId).trim();
+    }).length;
   }, [allMembers, effectiveUserChapterId]);
 
   useEffect(() => {
