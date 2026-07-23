@@ -5,7 +5,7 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function check() {
-  const { data, error } = await supabase.from('chapters').select('id, chapter_name, status').limit(5);
+  const { data, error } = await supabase.from('referrals').select('id, status').limit(5);
   console.table(data);
 }
 check();

@@ -273,67 +273,63 @@ export function Analytics() {
   }, [chapterUsers, profile]);
 
   // Derive chapter statistics
-  const activePartnersCount = useMemo(() => {
+      const isMemberActive = (u: any) => {
     const now = new Date();
+    now.setHours(0, 0, 0, 0); // Start of today
+
+    // Check end date
+    let isExpiredByDate = false;
+    let isEndDateValid = false;
+    const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
+    if (endDateVal) {
+      const endDate = new Date(endDateVal);
+      endDate.setHours(0, 0, 0, 0);
+      if (endDate < now) {
+        isExpiredByDate = true;
+      } else {
+        isEndDateValid = true;
+      }
+    }
+    
+    // Check if explicitly expired/inactive
+    const isSubStatusExpired = (u.subscriptionStatus || '').toLowerCase() === 'expired' || (u.subscription_status || '').toLowerCase() === 'expired';
+    const isAccountInactive = (u.status || '').toLowerCase() === 'inactive' || (u.membershipStatus || '').toLowerCase() === 'inactive' || (u.membership_status || '').toLowerCase() === 'inactive';
+
+    if (isExpiredByDate || isSubStatusExpired || isAccountInactive) {
+      return false;
+    }
+
+    // Check account status
+    const isAccountActive = (u.status || '').toLowerCase() === 'active' || (u.membershipStatus || '').toLowerCase() === 'active' || (u.membership_status || '').toLowerCase() === 'active';
+    // Check subscription status
+    const isSubStatusActive = (u.subscriptionStatus || '').toLowerCase() === 'active' || (u.subscription_status || '').toLowerCase() === 'active';
+
+    return isAccountActive || isSubStatusActive || isEndDateValid;
+  };
+
+  const activePartnersCount = useMemo(() => {
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
-    const active = members.filter(u => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
-      return isSubActive && isPwdChanged;
-    });
-    return active.length;
+    return members.filter(isMemberActive).length;
   }, [chapterUsers]);
 
   const inactiveMembersCount = useMemo(() => {
-    const now = new Date();
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
-    const inactive = members.filter(u => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
-      return !isSubActive || !isPwdChanged;
-    });
-    return inactive.length;
+    return members.filter(u => !isMemberActive(u)).length;
   }, [chapterUsers]);
 
   const inactiveMembersList = useMemo(() => {
     const now = new Date();
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
-    return members.filter(u => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
-      return !isSubActive || !isPwdChanged;
-    }).map(u => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
-
+    return members.filter(u => !isMemberActive(u)).map(u => {
       let subStatus: 'Active' | 'Expired' | 'Inactive' = 'Inactive';
-      if (isSubActive) {
-        subStatus = 'Active';
+      const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
+      if (endDateVal && new Date(endDateVal) <= now) {
+        subStatus = 'Expired';
       } else {
-        const endDate = u.subscriptionEndDate || u.subscriptionEnd;
-        if (endDate && new Date(endDate) <= now) {
-          subStatus = 'Expired';
-        } else {
-          subStatus = 'Inactive';
-        }
+        subStatus = 'Inactive';
       }
 
-      const pwdStatus = isPwdChanged ? 'Changed' : 'Default Password Not Changed';
-
-      let inactiveReason = '';
-      if (!isSubActive && !isPwdChanged) {
-        inactiveReason = 'Both';
-      } else if (!isSubActive) {
-        inactiveReason = 'Subscription Expired';
-      } else {
-        inactiveReason = 'Default Password Not Changed';
-      }
-
-      const getDisplayPosition = (pos?: string, r?: string) => {
+      let inactiveReason = subStatus === 'Expired' ? 'Subscription Expired' : 'Account Inactive';const getDisplayPosition = (pos?: string, r?: string) => {
         if (r === 'MASTER_ADMIN') return 'Master Admin';
         if (r === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
         if (pos === 'president') return 'President';
@@ -349,7 +345,7 @@ export function Analytics() {
         chapterName: u.chapterName || u.chapter_name || 'N/A',
         position: getDisplayPosition(u.position, u.role),
         subscriptionStatus: subStatus,
-        passwordStatus: pwdStatus,
+        passwordStatus: 'Not Applicable',
         inactiveReason: inactiveReason
       };
     });
@@ -374,11 +370,12 @@ export function Analytics() {
     return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
   }, [allSlips, chapterSlips, profile]);
 
-  const referralsPassedCount = useMemo(() => {
+    const referralsPassedCount = useMemo(() => {
+    const isCompleted = (r: any) => ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
     if (profile?.role === 'MASTER_ADMIN') {
-      return allReferrals.length || 0;
+      return allReferrals.filter(isCompleted).length || 0;
     }
-    return chapterReferralsList.length || 0;
+    return chapterReferralsList.filter(isCompleted).length || 0;
   }, [allReferrals, chapterReferralsList, profile]);
 
   const upcomingSyncsCount = useMemo(() => {
@@ -433,7 +430,7 @@ export function Analytics() {
   }, [chapterUsers]);
 
   const totalChaptersCount = useMemo(() => {
-    return allChapters.length || 0;
+    return allChapters.filter(c => c.status === 'ACTIVE').length || 0;
   }, [allChapters]);
 
   const subscriptionStats = useMemo(() => {
