@@ -37,6 +37,11 @@ export function AddMemberModal({
       title="Add New Member"
     >
       <form onSubmit={onSubmit} className="space-y-5 py-2">
+        <div className="p-3 bg-primary/10 border border-primary/20 text-neutral-300 rounded-[12px] text-[10px] font-medium leading-relaxed">
+          <strong className="text-primary block mb-1">Note:</strong> 
+          Leadership positions (Chapter Admin, President, Vice President, and Treasurer) are managed exclusively by the Master Admin. Members added from this page will be created as regular Members only.
+        </div>
+        
         {error && (
           <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-xs font-bold flex items-center gap-2">
             <HelpCircle size={16} />
@@ -44,15 +49,16 @@ export function AddMemberModal({
           </div>
         )}
 
-        {/* Chapter Admin Field (Read-only) */}
+        {/* Chapter Name Field (Read-only) */}
         <div className="space-y-2">
-          <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Chapter Admin Assignment</label>
+          <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Chapter Name</label>
           <div className="relative">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <input
               type="text"
-              value={profile?.name || profile?.displayName || 'Chapter Admin'}
+              value={profile?.chapterName || profile?.chapter_name || 'Loading Chapter...'}
               disabled
+              readOnly
               className="w-full h-11 pl-8 pr-4 rounded-[12px] bg-[#151C2E]/60 border border-white/5 text-xs font-bold text-neutral-400 opacity-95 cursor-not-allowed"
             />
           </div>

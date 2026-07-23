@@ -224,6 +224,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             status: 'ACTIVE',
             membershipStatus: 'ACTIVE',
             chapter_id: chapterId,
+            chapter_name: formData.chapter_name.trim(),
             chapterName: formData.chapter_name.trim(),
             position: pos,
             must_change_password: true,

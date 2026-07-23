@@ -116,7 +116,7 @@ export function Profile() {
           setFormData({
             name: currentUserProfile.name || currentUserProfile.displayName || '',
             businessName: currentUserProfile.businessName || '',
-            chapterName: currentUserProfile.chapterName || '',
+            chapterName: currentUserProfile.chapterName || currentUserProfile.chapter_name || '',
             category: currentUserProfile.category || '',
             phone: currentUserProfile.phone || '',
             email: currentUserProfile.email || '',
@@ -143,13 +143,27 @@ export function Profile() {
 
         if (chapterId) {
           try {
-            const chap = await databaseService.get<any>('chapters', chapterId);
-            if (chap && chap.chapter_name) {
+            const { data: chap, error: chapErr } = await supabase.from('chapters').select('chapter_name').eq('id', chapterId).single();
+            if (chapErr || !chap) {
+              console.error("Invalid Chapter for id:", chapterId, chapErr);
+              setResolvedChapterName('Invalid Chapter');
+            } else if (chap && chap.chapter_name) {
               setResolvedChapterName(chap.chapter_name);
+              if (!isViewMode && currentUserProfile && (!currentUserProfile.chapterName || !currentUserProfile.chapter_name)) {
+                try {
+                  await supabase.from('users').update({ chapter_name: chap.chapter_name, chapterName: chap.chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
+                } catch (e) {}
+              }
             }
           } catch (e) {
             console.error("Error loading chapter name:", e);
+            setResolvedChapterName('Invalid Chapter');
           }
+        } else if (!isViewMode && currentUserProfile && !currentUserProfile.chapterName && !currentUserProfile.chapter_name) {
+          console.error("Chapter Not Assigned for user: ", currentUserProfile.id || currentUserProfile.uid);
+          setResolvedChapterName('Chapter Not Assigned');
+        } else if (isViewMode && targetProfile && !targetProfile.chapterName && !targetProfile.chapter_name) {
+          setResolvedChapterName('Chapter Not Assigned');
         }
 
         if (!isViewMode) {
@@ -516,7 +530,7 @@ export function Profile() {
               <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
                 <div>
                   <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
-                  {targetProfile.chapterName || resolvedChapterName || 'SSK Chapter'}
+                  {targetProfile.chapterName || targetProfile.chapter_name || resolvedChapterName || 'Chapter Not Assigned'}
                 </div>
                 <div>
                   <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
@@ -870,7 +884,7 @@ export function Profile() {
             <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
               <div>
                 <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
-                {formData.chapterName || resolvedChapterName || 'SSK Chapter'}
+                {formData.chapterName || resolvedChapterName || 'Chapter Not Assigned'}
               </div>
               <div>
                 <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
@@ -922,13 +936,13 @@ export function Profile() {
                 disabled
                 readOnly
                 type="text"
-                value={formData.chapterName || 'Not Assigned'}
+                value={formData.chapterName || resolvedChapterName || 'Chapter Not Assigned'}
                 className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white outline-none cursor-not-allowed font-bold text-sm"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') ? '(Optional)' : '<span className="text-red-500">*</span>'}</label>
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') ? '(Optional)' : <span className="text-red-500">*</span>}</label>
               <input
                 required={formData.role !== 'CHAPTER_ADMIN' && formData.position !== 'chapter_admin'}
                 type="text"

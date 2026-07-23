@@ -158,6 +158,7 @@ export function AddMemberForm() {
         whatsappNumber: normalizePhoneNumber(formData.whatsapp),
         
         chapter_id: finalChapterId,
+        chapter_name: finalChapterName,
         chapterName: finalChapterName,
         role: 'MEMBER',
         position: 'member' as any, // translates to 'Associate Member' in display
@@ -228,6 +229,26 @@ export function AddMemberForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="p-4 bg-primary/10 border border-primary/20 text-neutral-300 rounded-[12px] text-xs font-medium leading-relaxed">
+          <strong className="text-primary block mb-1">Note:</strong> 
+          Leadership positions (Chapter Admin, President, Vice President, and Treasurer) are managed exclusively by the Master Admin. Members added from this page will be created as regular Members only.
+        </div>
+
+        {/* Chapter Name Field (Read-only) */}
+        <div className="space-y-2 opacity-80">
+          <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter Name</label>
+          <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <input
+              type="text"
+              value={adminChapter?.chapter_name || 'Loading Chapter...'}
+              disabled
+              readOnly
+              className="w-full h-11 pl-10 pr-4 bg-[#0F172A] border border-white/5 rounded-xl outline-none transition-all text-sm font-bold text-white cursor-not-allowed"
+            />
+          </div>
+        </div>
+
         <div className="space-y-2">
           <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Full Name *</label>
           <div className="relative">
