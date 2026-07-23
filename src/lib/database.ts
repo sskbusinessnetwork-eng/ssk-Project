@@ -613,10 +613,6 @@ export async function updateMemberPositionDirectly(
     chapterPosVal = 'TREASURER';
     posVal = 'treasurer';
     roleVal = 'MEMBER';
-  } else if (upperInput === 'SECRETARY') {
-    chapterPosVal = 'SECRETARY';
-    posVal = 'secretary';
-    roleVal = 'MEMBER';
   } else {
     chapterPosVal = 'MEMBER';
     posVal = 'member';
@@ -662,8 +658,6 @@ export async function updateMemberPositionDirectly(
             isMatchingPosition = mChapterPos === 'VICE_PRESIDENT' || mPos === 'vice_president';
           } else if (chapterPosVal === 'TREASURER') {
             isMatchingPosition = mChapterPos === 'TREASURER' || mPos === 'treasurer';
-          } else if (chapterPosVal === 'SECRETARY') {
-            isMatchingPosition = mChapterPos === 'SECRETARY' || mPos === 'secretary';
           }
 
           if (isMatchingPosition) {
@@ -673,7 +667,8 @@ export async function updateMemberPositionDirectly(
               .from('users')
               .update({
                 role: demoteRole,
-                chapter_position: 'MEMBER'
+                chapter_position: 'MEMBER',
+                position: 'member'
               })
               .eq('id', member.id);
 
@@ -692,7 +687,8 @@ export async function updateMemberPositionDirectly(
     .from('users')
     .update({ 
       role: roleVal, 
-      chapter_position: chapterPosVal
+      chapter_position: chapterPosVal,
+      position: posVal
     })
     .eq('id', targetUserId);
 

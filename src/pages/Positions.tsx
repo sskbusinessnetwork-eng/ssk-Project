@@ -14,7 +14,6 @@ const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'president', label: 'President' },
   { key: 'vice_president', label: 'Vice President' },
   { key: 'treasurer', label: 'Treasurer' },
-  { key: 'secretary', label: 'Secretary' },
   { key: 'chapter_admin', label: 'Chapter Admin' },
 ];
 
@@ -226,8 +225,19 @@ export function Positions() {
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
                 {filteredMembers.map(member => {
-                  const raw = (member.position || (member as any).chapter_position || 'member').toLowerCase();
-                  const currentPos = raw === 'president' || raw === 'chapter_admin' ? raw : raw;
+                  const cPos = (member.chapter_position || '').toUpperCase().trim();
+                  const pos = (member.position || '').toLowerCase().trim();
+                  const role = (member.role || '').toUpperCase().trim();
+
+                  let currentPos = 'member';
+                  if (cPos === 'PRESIDENT' || pos === 'president' || pos === 'chapter_admin' || role === 'CHAPTER_ADMIN') {
+                    currentPos = (pos === 'chapter_admin' || role === 'CHAPTER_ADMIN') ? 'chapter_admin' : 'president';
+                  } else if (cPos === 'VICE_PRESIDENT' || pos === 'vice_president') {
+                    currentPos = 'vice_president';
+                  } else if (cPos === 'TREASURER' || pos === 'treasurer') {
+                    currentPos = 'treasurer';
+                  }
+
                   return (
                     <tr key={member.uid} className="hover:bg-white/5 even:bg-white/[0.02] border-b border-white/[0.06] transition-colors">
                       <td className="p-4">

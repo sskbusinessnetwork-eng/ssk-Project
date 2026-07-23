@@ -17,7 +17,6 @@ const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'president', label: 'President' },
   { key: 'vice_president', label: 'Vice President' },
   { key: 'treasurer', label: 'Treasurer' },
-  { key: 'secretary', label: 'Secretary' },
   { key: 'member', label: 'Member' },
 ];
 
@@ -169,10 +168,21 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
 
   const getPositionHolder = (pos: ChapterPosition) => {
     return members.find(m => {
+      const cPos = (m.chapter_position || '').toUpperCase();
       const p = (m.position || '').toLowerCase();
       const r = (m.role || '').toLowerCase();
       const target = pos.toLowerCase();
-      return p === target || r === target || (target === 'chapter_admin' && r === 'chapter_admin');
+
+      if (target === 'chapter_admin' || target === 'president') {
+        return cPos === 'PRESIDENT' || p === 'chapter_admin' || p === 'president' || r === 'chapter_admin';
+      }
+      if (target === 'vice_president') {
+        return cPos === 'VICE_PRESIDENT' || p === 'vice_president';
+      }
+      if (target === 'treasurer') {
+        return cPos === 'TREASURER' || p === 'treasurer';
+      }
+      return p === target || r === target;
     });
   };
 
