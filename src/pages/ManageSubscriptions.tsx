@@ -7,6 +7,7 @@ import { UserProfile, Chapter } from '../types';
 import { format, differenceInDays, addYears } from 'date-fns';
 import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
+import { isMemberActive } from '../utils/memberStatus';
 
 export function ManageSubscriptions() {
   const { profile } = useAuth();
@@ -89,26 +90,18 @@ export function ManageSubscriptions() {
     users.forEach(u => {
       if (u.role === 'MASTER_ADMIN') return;
 
-      const subEndStr = u.subscriptionEndDate || u.subscriptionEnd;
-      const subStatus = u.subscriptionStatus || u.membershipStatus;
-      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
-      
-      if (!subEndStr || (subStatus !== 'Active' && subStatus !== 'ACTIVE') || mustChangePwd) {
+      if (isMemberActive(u)) {
+        active++;
+        const subEndStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
+        if (subEndStr) {
+          const daysLeft = differenceInDays(new Date(subEndStr), now);
+          if (daysLeft >= 0 && daysLeft <= 30) {
+            expiringSoon++;
+          }
+        }
+      } else {
         inactive++;
         expired++;
-      } else {
-        const endDate = new Date(subEndStr);
-        const daysLeft = differenceInDays(endDate, now);
-        
-        if (daysLeft < 0) {
-          expired++;
-          inactive++;
-        } else if (daysLeft <= 30) {
-          expiringSoon++;
-          active++;
-        } else {
-          active++;
-        }
       }
 
       if (u.renewedAt || (u as any).renewed_at) {
@@ -139,17 +132,19 @@ export function ManageSubscriptions() {
       const matchesChapter = !chapterFilter || u.chapter_id === chapterFilter;
       const matchesPosition = !positionFilter || (u.role || 'MEMBER').toLowerCase() === positionFilter.toLowerCase();
       
-      const subEndStr = u.subscriptionEndDate || u.subscriptionEnd;
-      const subStatus = u.subscriptionStatus || u.membershipStatus;
-      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
-      
-      let computedStatus = 'Active';
-      if (!subEndStr || (subStatus !== 'Active' && subStatus !== 'ACTIVE') || mustChangePwd) {
-        computedStatus = 'Expired';
-      } else {
-        const daysLeft = differenceInDays(new Date(subEndStr), new Date());
-        if (daysLeft < 0) computedStatus = 'Expired';
-        else if (daysLeft <= 30) computedStatus = 'Expiring Soon';
+      let computedStatus = 'Expired';
+      if (isMemberActive(u)) {
+        const subEndStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
+        if (subEndStr) {
+          const daysLeft = differenceInDays(new Date(subEndStr), new Date());
+          if (daysLeft >= 0 && daysLeft <= 30) {
+            computedStatus = 'Expiring Soon';
+          } else {
+            computedStatus = 'Active';
+          }
+        } else {
+          computedStatus = 'Active';
+        }
       }
       
       const matchesStatus = !statusFilter || computedStatus === statusFilter;

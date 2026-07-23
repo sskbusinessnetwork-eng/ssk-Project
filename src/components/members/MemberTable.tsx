@@ -25,6 +25,7 @@ import { UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
 import { differenceInDays, format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { isMemberActive } from '../../utils/memberStatus';
 
 interface MemberTableProps {
   currentUserId?: string;
@@ -165,20 +166,21 @@ export function MemberTable({
                     </td>
                     <td className="px-6 py-5">
                       <div className="space-y-1">
-                        <div className={cn(
-                          "inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border leading-tight",
-                          member.membershipStatus === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                          member.membershipStatus === 'SUSPENDED' ? "bg-red-500/10 text-red-600 border-red-500/20" :
-                          "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                        )}>
-                          <div className={cn(
-                            "w-1.5 h-1.5 rounded-full animate-pulse-subtle",
-                            member.membershipStatus === 'ACTIVE' ? "bg-emerald-500" :
-                            member.membershipStatus === 'SUSPENDED' ? "bg-red-500" :
-                            "bg-amber-500"
-                          )} />
-                          {member.membershipStatus}
-                        </div>
+                        {(() => {
+                          const active = isMemberActive(member);
+                          return (
+                            <div className={cn(
+                              "inline-flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border leading-tight",
+                              active ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"
+                            )}>
+                              <div className={cn(
+                                "w-1.5 h-1.5 rounded-full animate-pulse-subtle",
+                                active ? "bg-emerald-500" : "bg-red-500"
+                              )} />
+                              {active ? 'ACTIVE' : 'INACTIVE'}
+                            </div>
+                          );
+                        })()}
                         {member.subscriptionEnd && (
                           <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-wide">
                             Exp: {format(new Date(member.subscriptionEnd), 'dd/MM/yyyy')}
@@ -309,11 +311,9 @@ export function MemberTable({
                 
                 <div className={cn(
                   "inline-flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border leading-tight shrink-0",
-                  member.membershipStatus === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                  member.membershipStatus === 'SUSPENDED' ? "bg-red-500/10 text-red-600 border-red-500/20" :
-                  "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                  isMemberActive(member) ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"
                 )}>
-                  {member.membershipStatus}
+                  {isMemberActive(member) ? 'ACTIVE' : 'INACTIVE'}
                 </div>
               </div>
 

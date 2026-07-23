@@ -159,13 +159,19 @@ export function AddMemberForm() {
         chapterName: finalChapterName,
         role: 'MEMBER',
         position: 'member' as any, // translates to 'Associate Member' in display
-        membershipStatus: 'ACTIVE' as any,
+        status: 'Inactive',
+        membershipStatus: 'INACTIVE' as any,
+        account_status: 'Inactive',
+        accountStatus: 'Inactive',
         subscriptionStart: new Date(formData.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(formData.subscriptionEnd).toISOString(),
         subscriptionStartDate: formData.subscriptionStart,
         subscriptionEndDate: formData.subscriptionEnd,
         subscriptionStatus: new Date(formData.subscriptionEnd) > new Date() ? 'Active' : 'Expired',
+        password_changed: false,
+        passwordChanged: false,
         must_change_password: true,
+        mustChangePassword: true,
         created_by: adminId,
         createdAt: new Date().toISOString()
       };

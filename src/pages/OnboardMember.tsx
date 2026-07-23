@@ -114,8 +114,14 @@ export function OnboardMember() {
           chapter_id: formData.chapterId,
           role: 'MEMBER',
           position: 'member' as ChapterPosition,
-          membershipStatus: formData.status as 'ACTIVE' | 'SUSPENDED' | 'PENDING',
+          status: 'Inactive',
+          membershipStatus: 'INACTIVE' as any,
+          account_status: 'Inactive',
+          accountStatus: 'Inactive',
+          password_changed: false,
+          passwordChanged: false,
           must_change_password: true,
+          mustChangePassword: true,
           createdAt: new Date().toISOString()
         };
 

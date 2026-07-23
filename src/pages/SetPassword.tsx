@@ -88,12 +88,21 @@ export function SetPassword() {
 
       const hashedPassword = bcrypt.hashSync(newPassword, 10);
 
+      const nowIso = new Date().toISOString();
+
       // 2. Update password in users table
       await databaseService.update('users', profile.uid, {
         password: hashedPassword,
         mustChangePassword: false,
+        must_change_password: false,
         passwordChanged: true,
-        updatedAt: new Date().toISOString()
+        password_changed: true,
+        accountStatus: 'Active',
+        account_status: 'Active',
+        membershipStatus: 'ACTIVE',
+        status: 'ACTIVE',
+        activated_at: nowIso,
+        updatedAt: nowIso
       });
 
       // 3. Update master_admins table if applicable
@@ -104,7 +113,7 @@ export function SetPassword() {
             .from('master_admins')
             .update({ 
               password: hashedPassword,
-              updated_at: new Date().toISOString()
+              updated_at: nowIso
             })
             .eq('phone_number', phone);
             
@@ -114,16 +123,22 @@ export function SetPassword() {
         }
       }
 
-      // 4. Update local context context
+      // 4. Update local context
       const updatedProfile = { 
         ...profile, 
         mustChangePassword: false, 
         must_change_password: false, 
         passwordChanged: true, 
         password_changed: true, 
+        accountStatus: 'Active',
+        account_status: 'Active',
+        membershipStatus: 'ACTIVE',
+        status: 'ACTIVE',
+        activated_at: nowIso,
         password: hashedPassword 
       };
       login(updatedProfile);
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       
       setSuccessPopup(true);
 

@@ -36,7 +36,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
   
-  if (profile?.must_change_password && location.pathname !== '/set-password') {
+  const needsPasswordChange = 
+    profile?.must_change_password === true || 
+    profile?.mustChangePassword === true || 
+    profile?.password_changed === false || 
+    profile?.passwordChanged === false;
+
+  if (needsPasswordChange && location.pathname !== '/set-password') {
     return <Navigate to="/set-password" replace />;
   }
 

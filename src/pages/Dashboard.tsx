@@ -22,6 +22,7 @@ import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
+import { isMemberActive, getMemberInactiveReasons } from '../utils/memberStatus';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -274,51 +275,6 @@ export function Analytics() {
     return Array.from(new Set(ids));
   }, [chapterUsers, profile]);
 
-  // Derive chapter statistics
-  const isMemberActive = (u: any) => {
-    if (!u || u.role === 'MASTER_ADMIN') return false;
-
-    const now = new Date();
-    now.setHours(0, 0, 0, 0); // Start of today
-
-    // 1. Subscription check: Must have subscription end date & NOT expired
-    const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
-    if (!endDateVal) {
-      return false; // Missing subscription end date
-    }
-    const endDate = new Date(endDateVal);
-    endDate.setHours(0, 0, 0, 0);
-    if (endDate < now) {
-      return false; // Expired
-    }
-    const isSubStatusExpired = (u.subscriptionStatus || '').toLowerCase() === 'expired' || (u.subscription_status || '').toLowerCase() === 'expired';
-    if (isSubStatusExpired) {
-      return false;
-    }
-
-    // 2. Position created check: must have position / leadership role set
-    const pos = (u.position || '').trim().toLowerCase();
-    const role = (u.role || '').trim().toUpperCase();
-    const hasPosition = (pos !== '' && pos !== 'none') || (role !== '' && role !== 'MEMBER');
-    if (!hasPosition) {
-      return false;
-    }
-
-    // 3. Password changed check: user must change initial password after position creation
-    const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
-    if (mustChangePwd) {
-      return false;
-    }
-
-    // 4. Overall account status
-    const statusStr = (u.status || u.membershipStatus || u.membership_status || '').toLowerCase();
-    if (statusStr === 'inactive' || statusStr === 'suspended' || statusStr === 'pending' || statusStr === 'expired') {
-      return false;
-    }
-
-    return true;
-  };
-
   const activePartnersCount = useMemo(() => {
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     return members.filter(isMemberActive).length;
@@ -330,41 +286,9 @@ export function Analytics() {
   }, [chapterUsers]);
 
   const inactiveMembersList = useMemo(() => {
-    const now = new Date();
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     return members.filter(u => !isMemberActive(u)).map(u => {
-      const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
-      let subStatus: 'Active' | 'Expired' | 'No Subscription' = 'No Subscription';
-      if (endDateVal) {
-        if (new Date(endDateVal) >= now) {
-          subStatus = 'Active';
-        } else {
-          subStatus = 'Expired';
-        }
-      }
-
-      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
-      const pwdStatus = mustChangePwd ? 'Pending Change' : 'Changed';
-
-      const pos = (u.position || '').trim().toLowerCase();
-      const role = (u.role || '').trim().toUpperCase();
-      const hasPos = (pos !== '' && pos !== 'none') || (role !== '' && role !== 'MEMBER');
-
-      let reasons: string[] = [];
-      if (subStatus !== 'Active') {
-        reasons.push(subStatus === 'Expired' ? 'Subscription Expired' : 'No Active Subscription');
-      }
-      if (!hasPos) {
-        reasons.push('Position Not Created');
-      }
-      if (mustChangePwd) {
-        reasons.push('Password Change Pending');
-      }
-      if (reasons.length === 0) {
-        const st = (u.status || u.membershipStatus || '').toLowerCase();
-        if (st) reasons.push(`Account ${st}`);
-        else reasons.push('Account Inactive');
-      }
+      const reasons = getMemberInactiveReasons(u);
 
       const getDisplayPosition = (p?: string, r?: string) => {
         const rUpper = (r || 'MEMBER').toUpperCase();
@@ -377,14 +301,16 @@ export function Analytics() {
         return 'Not Assigned';
       };
 
+      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true || u.password_changed === false || u.passwordChanged === false;
+
       return {
         uid: u.uid || u.id,
         name: u.name || 'N/A',
         phone: u.phone || 'N/A',
         chapterName: u.chapterName || u.chapter_name || 'N/A',
         position: getDisplayPosition(u.position, u.role),
-        subscriptionStatus: subStatus,
-        passwordStatus: pwdStatus,
+        subscriptionStatus: u.subscription_status || u.subscriptionStatus || 'Inactive',
+        passwordStatus: mustChangePwd ? 'Default Password' : 'Changed',
         inactiveReason: reasons.join(' & ')
       };
     });
