@@ -118,6 +118,40 @@ export function Connections() {
     setIsModalOpen(true);
   };
 
+  // Helper function to check if a member belongs to the same chapter as current user
+  const isSameChapter = (
+    member: UserProfile,
+    userChapId: string | null | undefined,
+    userChapName: string | null | undefined,
+    profileObj: any
+  ) => {
+    if (profileObj?.role === 'MASTER_ADMIN') {
+      return true;
+    }
+
+    const myId = String(userChapId || profileObj?.chapter_id || profileObj?.chapterId || '').trim();
+    const myName = String(userChapName || profileObj?.chapterName || profileObj?.chapter_name || '').trim().toLowerCase();
+
+    const memId = String(member.chapter_id || (member as any).chapterId || '').trim();
+    const memName = String(member.chapterName || member.chapter_name || '').trim().toLowerCase();
+
+    // 1. If both chapter_ids exist, they MUST match
+    if (myId && memId && myId !== memId) {
+      return false;
+    }
+
+    // 2. If both chapter_names exist, they MUST match
+    if (myName && memName && myName !== memName) {
+      return false;
+    }
+
+    // 3. Must have at least one valid identifier match
+    if (!memId && !memName) return false;
+    if (!myId && !myName) return false;
+
+    return true;
+  };
+
   const submitReferral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile || !selectedMember) return;
@@ -273,12 +307,15 @@ export function Connections() {
           if (profile.role === 'MASTER_ADMIN') {
             if (masterSelectedChapterId) {
               queryBuilder = queryBuilder.eq('chapter_id', masterSelectedChapterId);
-            } else if (chaptersList.length > 0) {
-              queryBuilder = queryBuilder.eq('chapter_id', chaptersList[0].id);
             } else {
-              setMembers([]);
-              setLoading(false);
-              return;
+              const chaps = await databaseService.list<any>('chapters');
+              if (chaps && chaps.length > 0) {
+                queryBuilder = queryBuilder.eq('chapter_id', chaps[0].id);
+              } else {
+                setMembers([]);
+                setLoading(false);
+                return;
+              }
             }
           } else {
             if (currentChapterId) {
@@ -289,10 +326,6 @@ export function Connections() {
               return;
             }
           }
-        }
-
-        if (profile?.role !== 'MASTER_ADMIN' && currentChapterId) {
-          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
         }
 
         const { data: usersData, error: usersError } = await queryBuilder;
@@ -366,13 +399,13 @@ export function Connections() {
     return () => {
       window.removeEventListener('dashboard-refresh', handleRefresh);
     };
-  }, [profile]);
+  }, [profile, activeTab, masterSelectedChapterId]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
       setActiveTab('all');
     }
-  }, [profile]);
+  }, [profile, activeTab, masterSelectedChapterId]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN' && chaptersList.length > 0 && !masterSelectedChapterId) {
@@ -381,17 +414,6 @@ export function Connections() {
   }, [profile, chaptersList, masterSelectedChapterId]);
 
   const filteredMembers = members.filter(member => {
-    // STRCIT DEBUGGING:
-    if (activeTab === 'chapter' && profile?.role !== 'MASTER_ADMIN') {
-      const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
-      const memChapId = String(member.chapter_id || '').trim();
-      console.log(`DEBUG Check: Logged in user [id: ${profile?.uid}, chapter_id: ${myChapId}] vs Member [id: ${member.id}, name: ${member.name}, chapter_id: ${memChapId}]`);
-      if (myChapId && memChapId && myChapId !== memChapId) {
-        console.error(`ERROR: Member from another chapter appeared! Member ${member.name} (${memChapId}) != Current User (${myChapId})`);
-        return false;
-      }
-    }
-
     // 1. Tab Filtering
     if (activeTab === 'chapter') {
       if (profile?.role === 'MASTER_ADMIN') {
@@ -400,11 +422,9 @@ export function Connections() {
         const memberChapId = (member.chapter_id || '').trim();
         if (memberChapId !== selectedChap) return false;
       } else {
-        const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
-        if (!myChapId) return false;
-
-        const memberChapId = String(member.chapter_id || '').trim();
-        if (myChapId !== memberChapId) return false;
+        if (!isSameChapter(member, currentUserChapterId, currentUserChapterName, profile)) {
+          return false;
+        }
       }
     }
 
@@ -467,10 +487,7 @@ export function Connections() {
       const selectedChap = (masterSelectedChapterId || '').trim();
       return (m.chapter_id || '').trim() === selectedChap;
     } else {
-      const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
-      if (!myChapId) return false;
-      const memberChapId = String(m.chapter_id || '').trim();
-      return myChapId === memberChapId;
+      return isSameChapter(m, currentUserChapterId, currentUserChapterName, profile);
     }
   }).length;
 
