@@ -197,14 +197,18 @@ export function Analytics() {
     if (!profile) return;
 
     // 1. Subscribe to users (chapter members & global users for name resolution)
-    const unsubUsers = databaseService.subscribe<any>('users', [], (data) => {
-      setAllUsersList(data);
-      let filtered = data;
-      if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
-        filtered = filtered.filter(u => String(u.chapter_id || u.chapterId) === String(profile.chapter_id));
+    let userConstraints: any[] = [];
+    if (profile.role !== 'MASTER_ADMIN') {
+      const myChapId = String(profile.chapter_id || '').trim();
+      if (myChapId) {
+        userConstraints = [where('chapter_id', '==', myChapId)];
       }
+    }
+    const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
+      setAllUsersList(data);
+      
       const allowedRoles = ['MEMBER', 'CHAPTER_ADMIN', 'PRESIDENT', 'VICE_PRESIDENT', 'TREASURER'];
-      const chapterMems = filtered.filter(u => {
+      const chapterMems = data.filter(u => {
         const r = (u.role || '').toUpperCase();
         const p = (u.position || '').toUpperCase();
         return r !== 'MASTER_ADMIN' && (allowedRoles.includes(r) || allowedRoles.includes(p) || (r === '' && p === ''));

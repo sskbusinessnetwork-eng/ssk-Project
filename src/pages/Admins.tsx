@@ -131,12 +131,8 @@ export function Admins() {
         });
         setSuccess('Admin updated successfully!');
       } else {
-        // 1. Create in Auth via API
-        const uid = 'auth_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-
         // 2. Create Firestore Profile
-        const newAdmin: UserProfile = {
-          uid,
+        const newAdmin: any = {
           name: formData.name,
           phone: normalizedPhone,
           email: formData.email,
@@ -151,7 +147,7 @@ export function Admins() {
           renewalRequested: false,
           createdAt: new Date().toISOString()
         };
-        await databaseService.create('users', newAdmin, uid);
+        await databaseService.create('users', newAdmin);
         setSuccess('Admin created successfully!');
       }
 

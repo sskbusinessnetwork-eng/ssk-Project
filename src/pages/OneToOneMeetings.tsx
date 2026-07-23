@@ -156,9 +156,22 @@ export function OneToOneMeetings() {
     try {
       setLoading(true);
       // 1. Fetch Users
-      const { data: usersData, error: uErr } = await supabase
-        .from('users')
-        .select('*');
+      let queryBuilder = supabase.from('users').select('*');
+      
+      const currentChapterId = profile?.chapter_id || profile?.chapterId;
+      if (memberTab === 'my_chapter') {
+        if (profile?.role === 'MASTER_ADMIN') {
+          // If we had a master chapter filter, we'd apply it.
+        } else if (currentChapterId) {
+          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
+        } else {
+          setAllUsersList([]);
+          setMembers([]);
+          return;
+        }
+      }
+
+      const { data: usersData, error: uErr } = await queryBuilder;
       
       let currentUsers = allUsersList;
       if (usersData && !uErr) {
@@ -253,7 +266,7 @@ export function OneToOneMeetings() {
     );
 
     return () => unsubscribe();
-  }, [profile, isAdmin, isChapterAdmin]);
+  }, [profile, isAdmin, isChapterAdmin, memberTab]);
 
   // Derive Logged In User Record & Chapter ID
   const currentAuthId = profile?.id || profile?.uid;
@@ -279,17 +292,13 @@ export function OneToOneMeetings() {
       }
 
       if (memberTab === 'my_chapter') {
-        if (!currentUserChapterId) return false;
+        const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
+        if (!myChapId) return false;
         
-        const memberChapId = (u.chapter_id || '').toString().trim();
-        const memberChapName = (u.chapter_name || u.chapterName || '').toString().trim();
+        const memberChapId = String(u.chapter_id || '').trim();
+        if (!memberChapId) return false;
 
-        if (!memberChapId || !memberChapName) {
-          console.warn(`My Chapter Members filter: User ${u.id || u.uid} is missing chapter_id or chapter_name. Excluded.`);
-          return false;
-        }
-
-        return memberChapId === String(currentUserChapterId).trim();
+        return myChapId === memberChapId;
       }
 
       return true; // 'all' members

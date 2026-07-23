@@ -1,4 +1,3 @@
-import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -262,7 +261,31 @@ export function Connections() {
           .select('*')
           .eq('status', 'ACTIVE');
 
-        
+        if (activeTab === 'chapter') {
+          if (profile.role === 'MASTER_ADMIN') {
+            if (masterSelectedChapterId) {
+              queryBuilder = queryBuilder.eq('chapter_id', masterSelectedChapterId);
+            } else if (chaptersList.length > 0) {
+              queryBuilder = queryBuilder.eq('chapter_id', chaptersList[0].id);
+            } else {
+              setMembers([]);
+              setLoading(false);
+              return;
+            }
+          } else {
+            if (currentChapterId) {
+              queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
+            } else {
+              setMembers([]);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        if (profile?.role !== 'MASTER_ADMIN' && currentChapterId) {
+          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
+        }
 
         const { data: usersData, error: usersError } = await queryBuilder;
 
@@ -327,28 +350,15 @@ export function Connections() {
       }
     };
 
-    
     fetchData();
-
-    const channel = supabase
-      .channel('connections_users_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'users' },
-        () => {
-          fetchData();
-        }
-      )
-      .subscribe();
 
     // Listen for manual re-fetch events
     const handleRefresh = () => fetchData();
     window.addEventListener('dashboard-refresh', handleRefresh);
     return () => {
       window.removeEventListener('dashboard-refresh', handleRefresh);
-      supabase.removeChannel(channel);
     };
-}, [profile]);
+  }, [profile]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -363,39 +373,48 @@ export function Connections() {
   }, [profile, chaptersList, masterSelectedChapterId]);
 
   const filteredMembers = members.filter(member => {
+    // STRCIT DEBUGGING:
+    if (activeTab === 'chapter' && profile?.role !== 'MASTER_ADMIN') {
+      const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
+      const memChapId = String(member.chapter_id || '').trim();
+      console.log(`DEBUG Check: Logged in user [id: ${profile?.uid}, chapter_id: ${myChapId}] vs Member [id: ${member.id}, name: ${member.name}, chapter_id: ${memChapId}]`);
+      if (myChapId && memChapId && myChapId !== memChapId) {
+        console.error(`ERROR: Member from another chapter appeared! Member ${member.name} (${memChapId}) != Current User (${myChapId})`);
+        return false;
+      }
+    }
+
     // 1. Tab Filtering
     if (activeTab === 'chapter') {
       if (profile?.role === 'MASTER_ADMIN') {
         const selectedChap = (masterSelectedChapterId || '').trim();
         if (!selectedChap) return false;
-        
         const memberChapId = (member.chapter_id || '').trim();
-        const memberChapName = (member.chapter_name || member.chapterName || '').trim();
-        
-        if (!memberChapId || !memberChapName) {
-          console.warn(`My Chapter Members filter: User ${member.id || member.uid} is missing chapter_id or chapter_name. Excluded.`);
-          return false;
-        }
-
         if (memberChapId !== selectedChap) return false;
       } else {
-        const myChapId = (currentUserChapterId || profile?.chapter_id || '').trim();
+        const myChapId = (currentUserChapterId || '').trim();
+        const myChapName = (currentUserChapterName || '').trim().toLowerCase();
 
-        if (!myChapId) {
+        if (!myChapId && !myChapName) {
           return false;
         }
 
         const memberChapId = (member.chapter_id || '').trim();
-        const memberChapName = (member.chapter_name || member.chapterName || '').trim();
+        const memberChapName = (member.chapter_name || member.chapterName || '').trim().toLowerCase();
 
-        if (!memberChapId || !memberChapName) {
-          console.warn(`My Chapter Members filter: User ${member.id || member.uid} is missing chapter_id or chapter_name. Excluded.`);
-          return false;
+        let isMatch = false;
+        if (myChapId && memberChapId) {
+          if (memberChapId === myChapId) {
+            isMatch = true;
+          }
+        }
+        if (!isMatch && myChapName && memberChapName) {
+          if (memberChapName === myChapName) {
+            isMatch = true;
+          }
         }
 
-        if (memberChapId !== myChapId) {
-          return false;
-        }
+        if (!isMatch) return false;
       }
     }
 
@@ -459,20 +478,18 @@ export function Connections() {
   const totalChapterCount = members.filter(m => {
     if (profile?.role === 'MASTER_ADMIN') {
       const selectedChap = (masterSelectedChapterId || '').trim();
-      if (!selectedChap) return false;
-      const memberChapId = (m.chapter_id || '').trim();
-      const memberChapName = (m.chapter_name || m.chapterName || '').trim();
-      if (!memberChapId || !memberChapName) return false;
-      return memberChapId === selectedChap;
+      return (m.chapter_id || '').trim() === selectedChap;
     } else {
-      const myChapId = (currentUserChapterId || profile?.chapter_id || '').trim();
-      if (!myChapId) return false;
+      const myChapId = (currentUserChapterId || '').trim();
+      const myChapName = (currentUserChapterName || '').trim().toLowerCase();
+      if (!myChapId && !myChapName) return false;
 
       const memberChapId = (m.chapter_id || '').trim();
-      const memberChapName = (m.chapter_name || m.chapterName || '').trim();
+      const memberChapName = (m.chapter_name || m.chapterName || '').trim().toLowerCase();
 
-      if (!memberChapId || !memberChapName) return false;
-      return myChapId === memberChapId;
+      if (myChapId && memberChapId && memberChapId === myChapId) return true;
+      if (myChapName && memberChapName && memberChapName === myChapName) return true;
+      return false;
     }
   }).length;
 
@@ -778,14 +795,20 @@ export function Connections() {
                 onClick={() => navigate(`/profile?id=${member.uid}`)}
                 className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-all duration-300 cursor-pointer group"
               >
-                <Avatar src={member.photoURL} name={member.name} size="w-12 h-12" className="border border-white/10 shrink-0 shadow-inner" />
+                <div className="w-12 h-12 rounded-full bg-[#0F172A] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-inner">
+                  <img
+                    src={member.photoURL || `https://picsum.photos/seed/${member.uid}/100/100`}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
                 
                 <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
                       {member.name}
                     </h3>
-                    {activeTab === 'chapter' && getPositionBadge(member)}
+                    {getPositionBadge(member)}
                   </div>
                   
                   <div className="flex flex-col gap-1 text-[13px] font-medium text-neutral-400">

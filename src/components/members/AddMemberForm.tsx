@@ -146,12 +146,9 @@ export function AddMemberForm() {
 
       // 2. Generate unique Member ID
       const memberId = 'SSK' + Math.floor(10000 + Math.random() * 90000).toString();
-      const uid = 'auth_' + Math.random().toString(36).substring(2, 11);
 
       // 3. Create User Profile
       const newMember = {
-        id: uid,
-        uid: uid,
         memberId: memberId,
         name: formData.fullName.trim(),
         phone: cleanPhone,
@@ -173,7 +170,7 @@ export function AddMemberForm() {
         createdAt: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'users', uid), newMember);
+      await addDoc(collection(db, 'users'), newMember);
 
       
 

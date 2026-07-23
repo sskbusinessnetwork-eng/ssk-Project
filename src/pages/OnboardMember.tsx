@@ -103,10 +103,8 @@ export function OnboardMember() {
         
       } else {
         const memberId = generateMemberId();
-        const uid = 'auth_' + Math.random().toString(36).substring(2, 11);
         
         const newMember = {
-          uid,
           memberId,
           name: formData.fullName,
           category: formData.category,
@@ -121,7 +119,7 @@ export function OnboardMember() {
           createdAt: new Date().toISOString()
         };
 
-        await setDoc(doc(db, 'users', uid), newMember);
+        await addDoc(collection(db, 'users'), newMember);
         
         
         

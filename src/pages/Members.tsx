@@ -35,7 +35,7 @@ import { EditMemberModal } from '../components/members/EditMemberModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { PositionManagement } from '../components/positions/PositionManagement';
-import {  where, doc, setDoc, collection, query, getDocs, orderBy  } from '../lib/database';
+import {  where, doc, setDoc, addDoc, collection, query, getDocs, orderBy  } from '../lib/database';
 import { db } from '../lib/database';
 import { format } from 'date-fns';
 import { cn } from '../lib/utils';
@@ -73,8 +73,19 @@ export function Members() {
 
     const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
       let filteredData = data;
-      if (profile.role !== 'MASTER_ADMIN' && profile.chapter_id) {
-        filteredData = filteredData.filter(u => String(u.chapter_id) === String(profile.chapter_id) || String((u as any).chapterId) === String(profile.chapter_id));
+      if (profile.role !== 'MASTER_ADMIN') {
+        const currentUserDbRecord = data.find(u => u.uid === profile.uid || u.id === profile.uid);
+        const myChapId = String(currentUserDbRecord?.chapter_id || profile.chapter_id || '').trim();
+        
+        if (!myChapId) {
+          filteredData = [];
+        } else {
+          filteredData = filteredData.filter(u => {
+            const memId = String(u.chapter_id || (u as any).chapterId || '').trim();
+            if (!memId) return false;
+            return memId === myChapId;
+          });
+        }
       }
       filteredData = filteredData.filter(u => u.role !== 'MASTER_ADMIN');
       setMembers(filteredData);
@@ -266,13 +277,8 @@ export function Members() {
         return;
       }
 
-      // 2. CREATE AUTH ACCOUNT
-      const uid = 'auth_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-      
-      
       // 3. MEMBER DATA STRUCTURE
       const memberProfile = {
-        uid: uid,
         name: newMemberData.name,
         role: "MEMBER",
         position: "member",
@@ -300,12 +306,13 @@ export function Members() {
         renewalRequested: false
       };
 
-      // 4. SAVE TO FIRESTORE
-      await setDoc(doc(db, "users", uid), memberProfile);
+      // 4. SAVE TO Supabase
+      const res = await addDoc(collection(db, "users"), memberProfile);
+      const newUserId = res.id;
       
       // Create notifications
       await notificationService.createNotification(
-        uid,
+        newUserId,
         'MEMBER',
         'MEMBER_ADD',
         `Welcome to the network, ${newMemberData.name}! Your account has been created.`
@@ -315,7 +322,7 @@ export function Members() {
       
       setCreatedMemberData({
         name: newMemberData.name,
-        userId: uid,
+        userId: newUserId,
         phone: normalizedPhone,
         password: newMemberData.password
       });
@@ -347,7 +354,7 @@ export function Members() {
 
       // Update Auth via Admin SDK
       const updatePayload: any = {
-        uid: selectedMember.uid,
+        uid: selectedMember.newUserId,
         displayName: editMemberData.name,
         adminUid: profile?.uid
       };
@@ -369,7 +376,7 @@ export function Members() {
         address: editMemberData.address
       };
 
-      await databaseService.update('users', selectedMember.uid, updates);
+      await databaseService.update('users', selectedMember.newUserId, updates);
       setIsEditModalOpen(false);
       setSelectedMember(null);
       window.dispatchEvent(new Event('dashboard-refresh'));
@@ -414,7 +421,7 @@ export function Members() {
 
     setError(null);
     try {
-      await databaseService.update('users', selectedMember.uid, {
+      await databaseService.update('users', selectedMember.newUserId, {
         subscriptionStart: new Date(subDates.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(subDates.subscriptionEnd).toISOString(),
       });
@@ -453,7 +460,7 @@ export function Members() {
 
   const updateStatus = async (uid: string, membershipStatus: UserProfile['membershipStatus']) => {
     try {
-      await databaseService.update('users', uid, { membershipStatus });
+      await databaseService.update('users', newUserId, { membershipStatus });
       setSuccessMessage(`Status updated to ${membershipStatus} successfully!`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -498,7 +505,11 @@ export function Members() {
 
     // Chapter Admin can ONLY see members they created
     const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
-    if (isUserChapterAdmin && m.chapter_id !== profile?.chapter_id) return false;
+    if (isUserChapterAdmin) {
+      const myChapId = String(profile?.chapter_id || '').trim();
+      const memId = String(m.chapter_id || (m as any).chapterId || '').trim();
+      if (!myChapId || !memId || memId !== myChapId) return false;
+    }
 
     const matchesSearch = 
       (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

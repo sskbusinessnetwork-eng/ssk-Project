@@ -364,9 +364,21 @@ export function Referrals() {
       const currentUserUid = profile?.uid;
 
       // 3. Query all users from Supabase users table
-      const { data: usersData, error } = await supabase
-        .from('users')
-        .select('*');
+      let usersQuery = supabase.from('users').select('*');
+      
+      if (memberFilter === 'my_chapter') {
+        if (profile?.role === 'MASTER_ADMIN') {
+          // keep all
+        } else if (userChapId) {
+          usersQuery = usersQuery.eq('chapter_id', userChapId);
+        } else {
+          setAllMembers([]);
+          setMembers([]);
+          return;
+        }
+      }
+      
+      const { data: usersData, error } = await usersQuery;
 
       if (error) {
         console.error("Error fetching active members for referral dropdown:", error);
@@ -448,20 +460,18 @@ export function Referrals() {
     }
   };
 
-  const effectiveUserChapterId = currentUserChapterId || profile?.chapter_id || (profile as any)?.chapterId;
+  const currentUserRecord = useMemo(() => allMembers.find(m => m.uid === profile?.uid || m.id === profile?.uid), [allMembers, profile]);
+  const effectiveUserChapterId = currentUserRecord?.chapter_id || currentUserChapterId || profile?.chapter_id || (profile as any)?.chapterId;
 
   const filteredMembers = useMemo(() => {
     if (memberFilter === 'my_chapter') {
-      if (!effectiveUserChapterId) return [];
+      const myChapId = String(effectiveUserChapterId || '').trim();
+      if (!myChapId) return [];
+      
       return allMembers.filter(m => {
         const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
-        const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
-        
-        if (!memberChapId || !memberChapName) {
-          console.warn(`My Chapter filter: User ${m.id || m.uid} is missing chapter_id or chapter_name. Excluded.`);
-          return false;
-        }
-        return memberChapId === String(effectiveUserChapterId).trim();
+        if (!memberChapId) return false;
+        return memberChapId === myChapId;
       });
     }
     return allMembers;
@@ -469,12 +479,13 @@ export function Referrals() {
 
   const allCount = allMembers.length;
   const myChapterCount = useMemo(() => {
-    if (!effectiveUserChapterId) return 0;
+    const myChapId = String(effectiveUserChapterId || '').trim();
+    if (!myChapId) return 0;
+    
     return allMembers.filter(m => {
       const memberChapId = String(m.chapter_id || m.chapterId || '').trim();
-      const memberChapName = String(m.chapter_name || m.chapterName || '').trim();
-      if (!memberChapId || !memberChapName) return false;
-      return memberChapId === String(effectiveUserChapterId).trim();
+      if (!memberChapId) return false;
+      return memberChapId === myChapId;
     }).length;
   }, [allMembers, effectiveUserChapterId]);
 
@@ -505,7 +516,7 @@ export function Referrals() {
       supabase.removeChannel(channel);
       window.removeEventListener('dashboard-refresh', handleRefresh);
     };
-  }, [profile, filter]);
+  }, [profile, filter, memberFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
