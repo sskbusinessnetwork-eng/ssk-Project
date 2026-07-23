@@ -74,7 +74,7 @@ export function Members() {
     const unsubscribe = databaseService.subscribe<UserProfile>('users', constraints, (data) => {
       let filteredData = data;
       if (profile.role !== 'MASTER_ADMIN') {
-        const currentUserDbRecord = data.find(u => u.uid === profile.uid || u.id === profile.uid);
+        const currentUserDbRecord = data.find(u => u.uid === profile.uid || (u as any).id === profile.uid);
         const myChapId = String(currentUserDbRecord?.chapter_id || profile.chapter_id || '').trim();
         
         if (!myChapId) {
@@ -460,7 +460,7 @@ export function Members() {
 
   const updateStatus = async (uid: string, membershipStatus: UserProfile['membershipStatus']) => {
     try {
-      await databaseService.update('users', newUserId, { membershipStatus });
+      await databaseService.update('users', uid, { membershipStatus });
       setSuccessMessage(`Status updated to ${membershipStatus} successfully!`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -730,7 +730,7 @@ export function Members() {
             </div>
           </div>
         ) : (
-          <PositionManagement />
+          <PositionManagement isMasterAdmin={isMasterAdmin} />
         )}
       </div>
 

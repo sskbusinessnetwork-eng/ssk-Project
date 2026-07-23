@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../lib/database';
-import {  collection, query, where, getDocs, doc, onSnapshot, writeBatch  } from '../../lib/database';
+import { collection, query, where, getDocs, doc, onSnapshot } from '../../lib/database';
 import { UserProfile, ChapterPosition } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { cn } from '../../lib/utils';
 import { Search, X, User } from 'lucide-react';
+import { supabase } from '../../lib/supabaseClient';
 
 interface PositionManagementProps {
   chapterAdminId?: string;
@@ -18,10 +19,12 @@ const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'treasurer', label: 'Treasurer' },
 ];
 
-export function PositionManagement({ chapterAdminId: propChapterAdminId, isMasterAdmin = false }: PositionManagementProps) {
+export function PositionManagement({ chapterAdminId: propChapterAdminId, isMasterAdmin: propIsMasterAdmin }: PositionManagementProps) {
   const { profile } = useAuth();
+  const isMasterAdmin = propIsMasterAdmin || profile?.role === 'MASTER_ADMIN';
+
   const [selectedAdminId, setSelectedAdminId] = useState<string>(propChapterAdminId || '');
-  const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
+  const [chapters, setChapters] = useState<{ id: string; name: string }[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -31,13 +34,21 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
   const [modalPosition, setModalPosition] = useState<ChapterPosition | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const effectiveAdminId = isMasterAdmin ? selectedAdminId : profile?.uid;
+  const effectiveAdminId = isMasterAdmin ? selectedAdminId : profile?.chapter_id || profile?.uid;
 
   useEffect(() => {
     if (isMasterAdmin) {
-      const q = query(collection(db, 'users'), where('role', '==', 'CHAPTER_ADMIN'));
+      // Load chapters for selection
+      const q = query(collection(db, 'chapters'));
       getDocs(q).then((snap: any) => {
-        setChapterAdmins((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile)));
+        const list = (snap?.docs || []).map((d: any) => ({
+          id: d.id,
+          name: d.data().chapter_name || d.data().chapterName || 'Unnamed Chapter'
+        }));
+        setChapters(list);
+        if (list.length > 0 && !selectedAdminId) {
+          setSelectedAdminId(list[0].id);
+        }
       });
     }
   }, [isMasterAdmin]);
@@ -50,19 +61,16 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
 
     setLoading(true);
     
-    // Subscribe to all members under this chapter admin, OR the admin themselves
+    // Subscribe to all members under this chapter
     const q1 = query(collection(db, 'users'), where('chapter_id', '==', effectiveAdminId));
     const q2 = query(collection(db, 'users'), where('uid', '==', effectiveAdminId));
 
-    // We can't do an OR query easily on different fields in Firestore without compound queries,
-    // so we'll fetch both and combine them in state.
     const unsub1 = onSnapshot(q1, (snap1) => {
       getDocs(q2).then((snap2: any) => {
         const adminData = (snap2?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
         const membersData = (snap1?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
         
         const combined = [...adminData, ...membersData];
-        // Deduplicate just in case
         const unique = Array.from(new Map(combined.map(item => [item.uid, item])).values());
         
         setMembers(unique);
@@ -74,44 +82,62 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
   }, [effectiveAdminId]);
 
   const handleAssignPosition = async (userId: string, positionName: ChapterPosition) => {
-    if (!effectiveAdminId) return;
+    if (!isMasterAdmin) {
+      alert("Only the Master Admin can assign or change positions.");
+      return;
+    }
+
+    if (!effectiveAdminId) {
+      alert("Please select a chapter first.");
+      return;
+    }
+
     setUpdatingId(userId);
 
     try {
-      const batch = writeBatch(db);
-      
-      // 1. Find if anyone currently holds this position in this chapter
-      const currentHolder = members.find(m => m.position === positionName);
-      if (currentHolder && currentHolder.uid !== userId) {
-        batch.update(doc(db, 'users', currentHolder.uid), {
-          position: 'member',
-          ...(positionName === 'chapter_admin' ? { role: 'MEMBER' } : {})
-        });
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res = await fetch('/api/admin/update-position', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          targetUserId: userId,
+          newPosition: positionName,
+          chapterId: effectiveAdminId
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update position');
       }
 
-      // 2. Find the selected user and update their position
-      const selectedUser = members.find(m => m.uid === userId);
-      if (selectedUser) {
-        batch.update(doc(db, 'users', userId), {
-          position: positionName,
-          ...(positionName === 'chapter_admin' ? { role: 'CHAPTER_ADMIN' } : {})
-        });
-      }
-
-      await batch.commit();
       setIsModalOpen(false);
       setModalPosition(null);
       setSearchTerm('');
-    } catch (error) {
+
+      // Instantly trigger realtime updates across all pages
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('users-updated'));
+    } catch (error: any) {
       console.error("Error updating position:", error);
-      alert("Failed to update position");
+      alert(error.message || "Failed to update position");
     } finally {
       setUpdatingId(null);
     }
   };
 
   const getPositionHolder = (pos: ChapterPosition) => {
-    return members.find(m => m.position === pos);
+    return members.find(m => {
+      const p = (m.position || '').toLowerCase();
+      const r = (m.role || '').toLowerCase();
+      const target = pos.toLowerCase();
+      return p === target || r === target || (target === 'chapter_admin' && r === 'chapter_admin');
+    });
   };
 
   const filteredMembers = members.filter(m => 
@@ -123,15 +149,15 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
     <div className="space-y-6">
       {isMasterAdmin && (
         <div className="bg-white p-4 rounded-[20px] shadow-sm border border-neutral-200 space-y-3">
-          <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1">Select Chapter Admin</label>
+          <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1">Select Chapter</label>
           <select
             value={selectedAdminId}
             onChange={(e) => setSelectedAdminId(e.target.value)}
             className="w-full h-12 px-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none transition-all text-sm font-semibold text-neutral-900 cursor-pointer"
           >
             <option value="">Choose a Chapter...</option>
-            {chapterAdmins.map(admin => (
-              <option key={admin.uid} value={admin.uid}>{admin.name} ({admin.businessName || 'No Business'})</option>
+            {chapters.map(ch => (
+              <option key={ch.id} value={ch.id}>{ch.name}</option>
             ))}
           </select>
         </div>
@@ -146,11 +172,6 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {POSITIONS.map(pos => {
-            // Chapter admins shouldn't re-assign the chapter admin role itself, unless Master Admin allows?
-            // "Chapter Admin CANNOT: Change Master Admin. Chapter Admin CAN: Promote members to: President, Vice President, Treasurer."
-            // So Chapter Admin shouldn't be able to change Chapter Admin.
-            if (!isMasterAdmin && pos.key === 'chapter_admin') return null;
-
             const holder = getPositionHolder(pos.key);
 
             return (
@@ -170,15 +191,21 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
                   </div>
                 </div>
                 
-                <button
-                  onClick={() => {
-                    setModalPosition(pos.key);
-                    setIsModalOpen(true);
-                  }}
-                  className="w-full py-2.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-bold uppercase tracking-wider rounded-[12px] transition-colors"
-                >
-                  Change Position
-                </button>
+                {isMasterAdmin ? (
+                  <button
+                    onClick={() => {
+                      setModalPosition(pos.key);
+                      setIsModalOpen(true);
+                    }}
+                    className="w-full py-2.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-bold uppercase tracking-wider rounded-[12px] transition-colors"
+                  >
+                    Change Position
+                  </button>
+                ) : (
+                  <div className="text-xs text-neutral-400 font-medium italic text-center py-2 bg-neutral-50 rounded-[12px]">
+                    Only Master Admin can change positions
+                  </div>
+                )}
               </div>
             );
           })}
@@ -186,7 +213,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
       )}
 
       {/* Member Selection Modal */}
-      {isModalOpen && modalPosition && (
+      {isModalOpen && modalPosition && isMasterAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/40 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-[24px] shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="p-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
@@ -220,40 +247,43 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
             <div className="flex-1 overflow-y-auto p-2">
               {filteredMembers.length > 0 ? (
                 <div className="space-y-1">
-                  {filteredMembers.map(member => (
-                    <button
-                      key={member.uid}
-                      disabled={updatingId === member.uid}
-                      onClick={() => handleAssignPosition(member.uid, modalPosition)}
-                      className={cn(
-                        "w-full text-left p-3 rounded-[12px] transition-colors flex items-center justify-between group",
-                        member.position === modalPosition ? "bg-primary/5 border border-primary/20" : "hover:bg-neutral-50 border border-transparent"
-                      )}
-                    >
-                      <div>
-                        <p className={cn(
-                          "text-sm font-bold",
-                          member.position === modalPosition ? "text-primary" : "text-neutral-900"
-                        )}>
-                          {member.name || member.displayName}
-                        </p>
-                        <p className="text-xs text-neutral-500 mt-0.5">{member.businessName || 'No business'}</p>
-                      </div>
-                      
-                      {updatingId === member.uid ? (
-                        <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                      ) : (
-                        <div className={cn(
-                          "text-xs font-bold px-2 py-1 rounded",
-                          member.position === modalPosition 
-                            ? "bg-primary text-white" 
-                            : "bg-neutral-100 text-neutral-600 group-hover:bg-primary group-hover:text-white transition-colors"
-                        )}>
-                          {member.position === modalPosition ? 'Current' : 'Select'}
+                  {filteredMembers.map(member => {
+                    const isCurrent = getPositionHolder(modalPosition)?.uid === member.uid;
+                    return (
+                      <button
+                        key={member.uid}
+                        disabled={updatingId === member.uid}
+                        onClick={() => handleAssignPosition(member.uid, modalPosition)}
+                        className={cn(
+                          "w-full text-left p-3 rounded-[12px] transition-colors flex items-center justify-between group",
+                          isCurrent ? "bg-primary/5 border border-primary/20" : "hover:bg-neutral-50 border border-transparent"
+                        )}
+                      >
+                        <div>
+                          <p className={cn(
+                            "text-sm font-bold",
+                            isCurrent ? "text-primary" : "text-neutral-900"
+                          )}>
+                            {member.name || member.displayName}
+                          </p>
+                          <p className="text-xs text-neutral-500 mt-0.5">{member.businessName || 'No business'}</p>
                         </div>
-                      )}
-                    </button>
-                  ))}
+                        
+                        {updatingId === member.uid ? (
+                          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                        ) : (
+                          <div className={cn(
+                            "text-xs font-bold px-2 py-1 rounded",
+                            isCurrent 
+                              ? "bg-primary text-white" 
+                              : "bg-neutral-100 text-neutral-600 group-hover:bg-primary group-hover:text-white transition-colors"
+                          )}>
+                            {isCurrent ? 'Current' : 'Select'}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-8 text-center">

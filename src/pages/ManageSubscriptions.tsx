@@ -91,27 +91,24 @@ export function ManageSubscriptions() {
 
       const subEndStr = u.subscriptionEndDate || u.subscriptionEnd;
       const subStatus = u.subscriptionStatus || u.membershipStatus;
+      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
       
-      if (subStatus === 'Active' || subStatus === 'ACTIVE') {
-        if (subEndStr) {
-          const endDate = new Date(subEndStr);
-          const daysLeft = differenceInDays(endDate, now);
-          
-          if (daysLeft < 0) {
-            expired++;
-            inactive++;
-          } else if (daysLeft <= 30) {
-            expiringSoon++;
-            active++;
-          } else {
-            active++;
-          }
+      if (!subEndStr || (subStatus !== 'Active' && subStatus !== 'ACTIVE') || mustChangePwd) {
+        inactive++;
+        expired++;
+      } else {
+        const endDate = new Date(subEndStr);
+        const daysLeft = differenceInDays(endDate, now);
+        
+        if (daysLeft < 0) {
+          expired++;
+          inactive++;
+        } else if (daysLeft <= 30) {
+          expiringSoon++;
+          active++;
         } else {
           active++;
         }
-      } else {
-        inactive++;
-        expired++;
       }
 
       if (u.renewedAt || (u as any).renewed_at) {
@@ -137,7 +134,6 @@ export function ManageSubscriptions() {
       }
       
       const matchesSearch = u.name?.toLowerCase().includes(search.toLowerCase()) || 
- 
                             u.phone?.includes(search) || 
                             u.email?.toLowerCase().includes(search.toLowerCase());
       const matchesChapter = !chapterFilter || u.chapter_id === chapterFilter;
@@ -145,11 +141,12 @@ export function ManageSubscriptions() {
       
       const subEndStr = u.subscriptionEndDate || u.subscriptionEnd;
       const subStatus = u.subscriptionStatus || u.membershipStatus;
+      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
       
       let computedStatus = 'Active';
-      if (subStatus !== 'Active' && subStatus !== 'ACTIVE') {
+      if (!subEndStr || (subStatus !== 'Active' && subStatus !== 'ACTIVE') || mustChangePwd) {
         computedStatus = 'Expired';
-      } else if (subEndStr) {
+      } else {
         const daysLeft = differenceInDays(new Date(subEndStr), new Date());
         if (daysLeft < 0) computedStatus = 'Expired';
         else if (daysLeft <= 30) computedStatus = 'Expiring Soon';

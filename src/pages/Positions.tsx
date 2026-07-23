@@ -1,12 +1,13 @@
 import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/database';
-import {  collection, query, where, getDocs, doc, writeBatch, addDoc, onSnapshot  } from '../lib/database';
+import { collection, query, where, getDocs, doc, addDoc, onSnapshot } from '../lib/database';
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { Search, User, Phone, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { supabase } from '../lib/supabaseClient';
 
 const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'member', label: 'Member' },
@@ -88,84 +89,46 @@ export function Positions() {
   }, [selectedChapterId]);
 
   const handleAssignPosition = async (userId: string, newPosition: ChapterPosition) => {
-    if (!selectedChapterId || !profile) return;
-    
-    if (!isMasterAdmin && newPosition === 'chapter_admin') {
-      alert("Only Master Admin can assign a new Chapter Admin.");
+    if (!isMasterAdmin) {
+      alert("Only the Master Admin can assign or change positions.");
+      return;
+    }
+
+    if (!selectedChapterId || !profile) {
+      alert("Please select a chapter first.");
       return;
     }
 
     setUpdatingId(userId);
 
     try {
-      const batch = writeBatch(db);
-      
-      const selectedUser = members.find(m => m.uid === userId);
-      if (!selectedUser) return;
-      
-      const oldPosition = selectedUser.position || 'member';
-      if (oldPosition === newPosition) {
-        setUpdatingId(null);
-        return; // No change
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-      // 1. Find if anyone currently holds this position in this chapter (unless it's 'member')
-      if (newPosition !== 'member') {
-        const currentHolder = members.find(m => m.position === newPosition);
-        if (currentHolder && currentHolder.uid !== userId) {
-          batch.update(doc(db, 'users', currentHolder.uid), {
-            position: 'member',
-            role: 'MEMBER'
-          });
-
-          // Log removal history
-          await addDoc(collection(db, 'position_history'), {
-            date: new Date().toISOString(),
-            changedById: profile.uid,
-            changedByName: profile.name || profile.displayName || 'Unknown',
-            memberId: currentHolder.uid,
-            memberName: currentHolder.name || currentHolder.displayName || 'Unknown',
-            oldPosition: newPosition,
-            newPosition: 'member',
-            chapter_id: selectedChapterId
-          });
-        }
-      }
-
-      // 2. Update the selected user
-      batch.update(doc(db, 'users', userId), {
-        position: newPosition,
-        role: 'MEMBER'
+      const res = await fetch('/api/admin/update-position', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          targetUserId: userId,
+          newPosition: newPosition,
+          chapterId: selectedChapterId
+        })
       });
 
-      // 3. Update chapter record if applicable
-      const chapterRef = doc(db, 'chapters', selectedChapterId);
-      const updates: any = {};
-      if (newPosition === 'chapter_admin') updates.chapter_admin_id = userId;
-      if (newPosition === 'president') updates.president_id = userId;
-      if (newPosition === 'vice_president') updates.vice_president_id = userId;
-      if (newPosition === 'treasurer') updates.treasurer_id = userId;
-      if (Object.keys(updates).length > 0) {
-        batch.update(chapterRef, updates);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update position');
       }
 
-      // Log assignment history
-      await addDoc(collection(db, 'position_history'), {
-        date: new Date().toISOString(),
-        changedById: profile.uid,
-        changedByName: profile.name || profile.displayName || 'Unknown',
-        memberId: userId,
-        memberName: selectedUser.name || selectedUser.displayName || 'Unknown',
-        oldPosition: oldPosition,
-        newPosition: newPosition,
-        chapter_id: selectedChapterId
-      });
-
-      await batch.commit();
-      
-    } catch (error) {
+      // Trigger realtime updates across all pages
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('users-updated'));
+    } catch (error: any) {
       console.error("Error updating position:", error);
-      alert("Failed to update position");
+      alert(error.message || "Failed to update position");
     } finally {
       setUpdatingId(null);
     }
@@ -271,7 +234,7 @@ export function Positions() {
                           <select
                             value={currentPos}
                             onChange={(e) => handleAssignPosition(member.uid, e.target.value as ChapterPosition)}
-                            disabled={updatingId === member.uid}
+                            disabled={!isMasterAdmin || updatingId === member.uid}
                             className="h-9 px-3 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-xs font-semibold text-white cursor-pointer disabled:opacity-50 min-w-[140px] appearance-none transition-colors"
                           >
                             {POSITIONS.map(pos => {

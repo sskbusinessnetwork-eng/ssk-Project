@@ -322,6 +322,51 @@ export function Meetings() {
     }
   }, [profile, isChapterAdmin]);
 
+  const fetchChapterMeetingVenue = async (chapterId?: string): Promise<string> => {
+    let activeChapterId = chapterId || profile?.chapter_id;
+    
+    if (!activeChapterId && profile?.uid) {
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('chapter_id')
+          .eq('uid', profile.uid)
+          .maybeSingle();
+        if (userData?.chapter_id) {
+          activeChapterId = userData.chapter_id;
+        }
+      } catch (e) {
+        console.error("Error fetching user chapter_id:", e);
+      }
+    }
+
+    if (!activeChapterId) {
+      return "No Meeting Venue Configured for this Chapter.";
+    }
+
+    try {
+      const { data: chapterData, error } = await supabase
+        .from('chapters')
+        .select('meeting_venue')
+        .eq('id', activeChapterId)
+        .maybeSingle();
+
+      if (error || !chapterData) {
+        return "No Meeting Venue Configured for this Chapter.";
+      }
+
+      const venue = chapterData.meeting_venue ? String(chapterData.meeting_venue).trim() : '';
+      if (!venue) {
+        return "No Meeting Venue Configured for this Chapter.";
+      }
+
+      return venue;
+    } catch (err) {
+      console.error("Error fetching chapter meeting venue:", err);
+      return "No Meeting Venue Configured for this Chapter.";
+    }
+  };
+
   useEffect(() => {
     const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     if (!chapterId) {
@@ -339,6 +384,7 @@ export function Meetings() {
 
     const loadAndSyncSetup = async () => {
       try {
+        const venue = await fetchChapterMeetingVenue(chapterId);
         const adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', chapterId);
         if (adminProfile && adminProfile.defaultMeetingSetup) {
           const setup = {
@@ -347,7 +393,7 @@ export function Meetings() {
             day: adminProfile.defaultMeetingSetup.day || 'Monday',
             date: adminProfile.defaultMeetingSetup.date || 1,
             time: adminProfile.defaultMeetingSetup.time || '07:30',
-            location: adminProfile.defaultMeetingSetup.location || '',
+            location: adminProfile.defaultMeetingSetup.location || venue,
             enabled: adminProfile.defaultMeetingSetup.enabled || false
           };
           setDefaultSetupData(setup);
@@ -364,7 +410,7 @@ export function Meetings() {
             day: 'Monday',
             date: 1,
             time: '07:30',
-            location: '',
+            location: venue,
             enabled: false
           });
         }
@@ -375,6 +421,19 @@ export function Meetings() {
 
     loadAndSyncSetup();
   }, [isMasterAdmin, selectedAdminId, isChapterAdmin, profile]);
+
+  useEffect(() => {
+    if (isScheduleModalOpen) {
+      const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+      fetchChapterMeetingVenue(chapterId).then(venue => {
+        setScheduleData(prev => ({
+          ...prev,
+          adminId: chapterId || profile?.chapter_id || '',
+          location: venue
+        }));
+      });
+    }
+  }, [isScheduleModalOpen, isMasterAdmin, selectedAdminId, profile?.chapter_id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -787,12 +846,15 @@ export function Meetings() {
               <span>Default Setup</span>
             </button>
             <button
-              onClick={() => {
-                setIsScheduleModalOpen(true);
+              onClick={async () => {
+                const targetChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+                const venue = await fetchChapterMeetingVenue(targetChapterId);
                 setScheduleData(prev => ({ 
                   ...prev, 
-                  adminId: profile.chapter_id
+                  adminId: targetChapterId || profile?.chapter_id || '',
+                  location: venue
                 }));
+                setIsScheduleModalOpen(true);
               }}
               className="flex items-center justify-center gap-2 h-11 px-5 bg-primary text-white rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10"
             >

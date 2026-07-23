@@ -133,7 +133,7 @@ export function Connections() {
     const myName = String(userChapName || profileObj?.chapterName || profileObj?.chapter_name || '').trim().toLowerCase();
 
     const memId = String(member.chapter_id || (member as any).chapterId || '').trim();
-    const memName = String(member.chapterName || member.chapter_name || '').trim().toLowerCase();
+    const memName = String(member.chapterName || (member as any).chapter_name || '').trim().toLowerCase();
 
     // 1. If both chapter_ids exist, they MUST match
     if (myId && memId && myId !== memId) {

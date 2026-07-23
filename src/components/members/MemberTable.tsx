@@ -159,7 +159,7 @@ export function MemberTable({
                           <Shield size={11} />
                         </div>
                         <span className="text-xs font-semibold text-neutral-300 truncate max-w-[150px]">
-                          {(member.created_by || member.adminId) ? (adminMap[member.created_by || member.adminId || ''] || member.createdByName || 'Master Admin') : 'Master Admin'}
+                          {((member as any).created_by || member.adminId) ? (adminMap[(member as any).created_by || member.adminId || ''] || (member as any).createdByName || 'Master Admin') : 'Master Admin'}
                         </span>
                       </div>
                     </td>
@@ -338,7 +338,7 @@ export function MemberTable({
                 <div className="text-right">
                   <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5">Chapter Admin</p>
                   <p className="text-xs font-bold text-neutral-200 truncate max-w-[140px]">
-                    {(member.created_by || member.adminId) ? (adminMap[member.created_by || member.adminId || ''] || member.createdByName || 'Master Admin') : 'Master Admin'}
+                    {((member as any).created_by || member.adminId) ? (adminMap[(member as any).created_by || member.adminId || ''] || (member as any).createdByName || 'Master Admin') : 'Master Admin'}
                   </p>
                 </div>
               </div>

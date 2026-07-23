@@ -275,38 +275,48 @@ export function Analytics() {
   }, [chapterUsers, profile]);
 
   // Derive chapter statistics
-      const isMemberActive = (u: any) => {
+  const isMemberActive = (u: any) => {
+    if (!u || u.role === 'MASTER_ADMIN') return false;
+
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Start of today
 
-    // Check end date
-    let isExpiredByDate = false;
-    let isEndDateValid = false;
+    // 1. Subscription check: Must have subscription end date & NOT expired
     const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
-    if (endDateVal) {
-      const endDate = new Date(endDateVal);
-      endDate.setHours(0, 0, 0, 0);
-      if (endDate < now) {
-        isExpiredByDate = true;
-      } else {
-        isEndDateValid = true;
-      }
+    if (!endDateVal) {
+      return false; // Missing subscription end date
     }
-    
-    // Check if explicitly expired/inactive
+    const endDate = new Date(endDateVal);
+    endDate.setHours(0, 0, 0, 0);
+    if (endDate < now) {
+      return false; // Expired
+    }
     const isSubStatusExpired = (u.subscriptionStatus || '').toLowerCase() === 'expired' || (u.subscription_status || '').toLowerCase() === 'expired';
-    const isAccountInactive = (u.status || '').toLowerCase() === 'inactive' || (u.membershipStatus || '').toLowerCase() === 'inactive' || (u.membership_status || '').toLowerCase() === 'inactive';
-
-    if (isExpiredByDate || isSubStatusExpired || isAccountInactive) {
+    if (isSubStatusExpired) {
       return false;
     }
 
-    // Check account status
-    const isAccountActive = (u.status || '').toLowerCase() === 'active' || (u.membershipStatus || '').toLowerCase() === 'active' || (u.membership_status || '').toLowerCase() === 'active';
-    // Check subscription status
-    const isSubStatusActive = (u.subscriptionStatus || '').toLowerCase() === 'active' || (u.subscription_status || '').toLowerCase() === 'active';
+    // 2. Position created check: must have position / leadership role set
+    const pos = (u.position || '').trim().toLowerCase();
+    const role = (u.role || '').trim().toUpperCase();
+    const hasPosition = (pos !== '' && pos !== 'none') || (role !== '' && role !== 'MEMBER');
+    if (!hasPosition) {
+      return false;
+    }
 
-    return isAccountActive || isSubStatusActive || isEndDateValid;
+    // 3. Password changed check: user must change initial password after position creation
+    const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
+    if (mustChangePwd) {
+      return false;
+    }
+
+    // 4. Overall account status
+    const statusStr = (u.status || u.membershipStatus || u.membership_status || '').toLowerCase();
+    if (statusStr === 'inactive' || statusStr === 'suspended' || statusStr === 'pending' || statusStr === 'expired') {
+      return false;
+    }
+
+    return true;
   };
 
   const activePartnersCount = useMemo(() => {
@@ -323,33 +333,59 @@ export function Analytics() {
     const now = new Date();
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     return members.filter(u => !isMemberActive(u)).map(u => {
-      let subStatus: 'Active' | 'Expired' | 'Inactive' = 'Inactive';
-      const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
-      if (endDateVal && new Date(endDateVal) <= now) {
-        subStatus = 'Expired';
-      } else {
-        subStatus = 'Inactive';
+      const endDateVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
+      let subStatus: 'Active' | 'Expired' | 'No Subscription' = 'No Subscription';
+      if (endDateVal) {
+        if (new Date(endDateVal) >= now) {
+          subStatus = 'Active';
+        } else {
+          subStatus = 'Expired';
+        }
       }
 
-      let inactiveReason = subStatus === 'Expired' ? 'Subscription Expired' : 'Account Inactive';const getDisplayPosition = (pos?: string, r?: string) => {
-        const role = (r || 'MEMBER').toUpperCase();
-        if (role === 'MASTER_ADMIN') return 'Master Admin';
-        if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-        if (role === 'PRESIDENT') return 'President';
-        if (role === 'VICE_PRESIDENT') return 'Vice President';
-        if (role === 'TREASURER') return 'Treasurer';
-        return 'Member';
+      const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true;
+      const pwdStatus = mustChangePwd ? 'Pending Change' : 'Changed';
+
+      const pos = (u.position || '').trim().toLowerCase();
+      const role = (u.role || '').trim().toUpperCase();
+      const hasPos = (pos !== '' && pos !== 'none') || (role !== '' && role !== 'MEMBER');
+
+      let reasons: string[] = [];
+      if (subStatus !== 'Active') {
+        reasons.push(subStatus === 'Expired' ? 'Subscription Expired' : 'No Active Subscription');
+      }
+      if (!hasPos) {
+        reasons.push('Position Not Created');
+      }
+      if (mustChangePwd) {
+        reasons.push('Password Change Pending');
+      }
+      if (reasons.length === 0) {
+        const st = (u.status || u.membershipStatus || '').toLowerCase();
+        if (st) reasons.push(`Account ${st}`);
+        else reasons.push('Account Inactive');
+      }
+
+      const getDisplayPosition = (p?: string, r?: string) => {
+        const rUpper = (r || 'MEMBER').toUpperCase();
+        if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
+        if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
+        if (rUpper === 'PRESIDENT') return 'President';
+        if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
+        if (rUpper === 'TREASURER') return 'Treasurer';
+        if (p && p.trim() && p.toLowerCase() !== 'none') return p;
+        return 'Not Assigned';
       };
 
       return {
-        uid: u.uid,
+        uid: u.uid || u.id,
         name: u.name || 'N/A',
         phone: u.phone || 'N/A',
         chapterName: u.chapterName || u.chapter_name || 'N/A',
         position: getDisplayPosition(u.position, u.role),
         subscriptionStatus: subStatus,
-        passwordStatus: 'Not Applicable',
-        inactiveReason: inactiveReason
+        passwordStatus: pwdStatus,
+        inactiveReason: reasons.join(' & ')
       };
     });
   }, [chapterUsers]);
@@ -440,19 +476,12 @@ export function Analytics() {
     const now = new Date();
     const members = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
     
-    const active = members.filter(u => {
-      return (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-    }).length;
+    const active = members.filter(u => isMemberActive(u)).length;
 
-    const expired = members.filter(u => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      return !isSubActive;
-    }).length;
+    const expired = members.filter(u => !isMemberActive(u)).length;
 
     const renewalsDue = members.filter(u => {
-      const endDateStr = u.subscriptionEndDate || u.subscriptionEnd;
+      const endDateStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
       if (!endDateStr) return false;
       const endDate = new Date(endDateStr);
       const diffTime = endDate.getTime() - now.getTime();
@@ -1289,9 +1318,7 @@ export function Analytics() {
               </tr>
             ) : (
               list.map((m) => {
-                const now = new Date();
-                const isSubActive = (m.membershipStatus === 'ACTIVE' || m.subscriptionStatus === 'Active') && 
-                  (!m.subscriptionEndDate && !m.subscriptionEnd || new Date(m.subscriptionEndDate || m.subscriptionEnd) > now);
+                const isSubActive = isMemberActive(m);
                 return (
                   <tr key={m.uid || m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
                     <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
@@ -1300,14 +1327,14 @@ export function Analytics() {
                       {m.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
                        m.role === 'PRESIDENT' ? 'President' :
                        m.role === 'VICE_PRESIDENT' ? 'Vice President' :
-                       m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
+                       m.role === 'TREASURER' ? 'Treasurer' : (m.position && m.position.toLowerCase() !== 'none' ? m.position : 'Member')}
                     </td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
                     <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
                       <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
                         isSubActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}>
-                        {isSubActive ? 'Active' : 'Expired'}
+                        {isSubActive ? 'Active' : 'Inactive / Expired'}
                       </span>
                     </td>
                   </tr>
@@ -1321,13 +1348,7 @@ export function Analytics() {
   };
 
   const renderActiveMembersDetails = () => {
-    const now = new Date();
-    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN' && (() => {
-      const isSubActive = (u.membershipStatus === 'ACTIVE' || u.subscriptionStatus === 'Active') && 
-        (!u.subscriptionEndDate && !u.subscriptionEnd || new Date(u.subscriptionEndDate || u.subscriptionEnd) > now);
-      const isPwdChanged = !u.must_change_password && !u.mustChangePassword;
-      return isSubActive && isPwdChanged;
-    })());
+    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN' && isMemberActive(u));
 
     return (
       <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">

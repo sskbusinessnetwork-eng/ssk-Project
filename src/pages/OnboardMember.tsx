@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
 import { db } from '../lib/database';
-import {  collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot  } from '../lib/database';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
 import { User, Phone, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check, RefreshCw, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
