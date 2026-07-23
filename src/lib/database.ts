@@ -302,6 +302,15 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
   const extraToSave: any = {};
   let photo = cleanData.profile_photo !== undefined ? cleanData.profile_photo : existingPhoto;
   
+  if (cleanData.status && typeof cleanData.status === 'string') {
+    const s = cleanData.status.toUpperCase();
+    cleanData.status = (s === 'INACTIVE') ? 'SUSPENDED' : s;
+  }
+  if (cleanData.membership_status && typeof cleanData.membership_status === 'string') {
+    const ms = cleanData.membership_status.toUpperCase();
+    cleanData.membership_status = (ms === 'INACTIVE') ? 'SUSPENDED' : ms;
+  }
+
   if (photo && photo.includes('|||')) {
     const parts = photo.split('|||');
     photo = parts[0];
