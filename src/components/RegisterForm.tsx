@@ -108,12 +108,14 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
 
       await setDoc(newUserRef, userProfile);
 
-      // Also store in auth_data for consistency with rules if needed
-      await setDoc(doc(db, 'auth_data', uid), {
-        uid,
-        password: password,
-        updatedAt: new Date().toISOString()
+      // Create authentication account
+      const { error: signUpError } = await supabase.auth.signUp({
+        phone: normalizedPhone,
+        password: password
       });
+      if (signUpError && signUpError.message !== 'User already registered') {
+        throw new Error(`Authentication account creation failed: ${signUpError.message}`);
+      }
 
       // Save user session in localStorage
       localStorage.setItem('user', JSON.stringify({ 

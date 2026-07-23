@@ -99,10 +99,7 @@ export function OnboardMember() {
           membershipStatus: formData.status
         });
         
-        // Update phone in auth_data just in case
-        await setDoc(doc(db, 'auth_data', editingId), {
-          phone: formData.phone
-        }, { merge: true });
+        
       } else {
         const memberId = generateMemberId();
         const uid = 'auth_' + Math.random().toString(36).substring(2, 11);
@@ -125,10 +122,13 @@ export function OnboardMember() {
 
         await setDoc(doc(db, 'users', uid), newMember);
         
-        await setDoc(doc(db, 'auth_data', uid), {
+        const { error: signUpError } = await tempSupabase.auth.signUp({
+          phone: formData.phone,
           password: 'Welcometosskbusiness',
-          phone: formData.phone
         });
+        if (signUpError && signUpError.message !== 'User already registered') {
+          console.warn(`Authentication account creation failed: ${signUpError.message}`);
+        }
         
         setCreatedMemberData({
           name: formData.fullName,
@@ -160,8 +160,8 @@ export function OnboardMember() {
     if (!confirm('Are you sure you want to reset this member\'s password? They will be forced to change it on their next login.')) return;
     
     try {
-      await updateDoc(doc(db, 'users', uid), { must_change_password: true });
-      await setDoc(doc(db, 'auth_data', uid), { password: 'Welcometosskbusiness' }, { merge: true });
+      await updateDoc(doc(db, 'users', uid), { must_change_password: true, password: 'Welcometosskbusiness' });
+      
       alert('Password reset successfully to default.');
     } catch (err) {
       console.error(err);
@@ -174,7 +174,7 @@ export function OnboardMember() {
     
     try {
       await deleteDoc(doc(db, 'users', uid));
-      await deleteDoc(doc(db, 'auth_data', uid));
+      
     } catch (err) {
       console.error(err);
       alert('Failed to delete member.');

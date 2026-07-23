@@ -317,12 +317,7 @@ export function Login() {
 
       let storedPassword = userData.password;
 
-      if (!storedPassword) {
-        const authDoc = await getDoc(doc(db, 'auth_data', uid));
-        if (authDoc.exists()) {
-          storedPassword = authDoc.data().password;
-        }
-      }
+      
 
       if (!storedPassword || storedPassword !== pass) {
         throw new Error('Wrong password. Please try again.');

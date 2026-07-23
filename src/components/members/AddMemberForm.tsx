@@ -6,6 +6,13 @@ import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
 import { supabase } from '../../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+const tempSupabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4',
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 
 export function AddMemberForm() {
   const { profile } = useAuth();
@@ -173,10 +180,13 @@ export function AddMemberForm() {
       await setDoc(doc(db, 'users', uid), newMember);
 
       // 4. Create auth record
-      await setDoc(doc(db, 'auth_data', uid), {
+      const { error: signUpError } = await tempSupabase.auth.signUp({
+        phone: cleanPhone,
         password: formData.password,
-        phone: cleanPhone
       });
+      if (signUpError && signUpError.message !== 'User already registered') {
+        throw new Error(`Authentication account creation failed: ${signUpError.message}`);
+      }
 
       // 5. Setup Success Popup data
       setCreatedMemberData({

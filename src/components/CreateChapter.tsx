@@ -4,6 +4,13 @@ import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock,
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+
+const tempSupabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4',
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 import { db, doc, setDoc } from '../lib/database';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -235,13 +242,13 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             updatedAt: new Date().toISOString()
           });
 
-          await setDoc(doc(db, 'auth_data', uid), {
-            id: uid,
-            uid: uid,
-            password: defaultPassword,
+          const { error: signUpError } = await tempSupabase.auth.signUp({
             phone: phone,
-            updatedAt: new Date().toISOString()
+            password: defaultPassword,
           });
+          if (signUpError && signUpError.message !== 'User already registered') {
+            throw new Error(`Authentication account creation failed for ${leader.fullName}: ${signUpError.message}`);
+          }
         }
 
         // 3. Update chapter with the valid user IDs
@@ -263,7 +270,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         await supabase.from('chapters').delete().eq('id', chapterId);
         if (createdUsers.length > 0) {
            await supabase.from('users').delete().in('id', createdUsers);
-           await supabase.from('auth_data').delete().in('id', createdUsers);
+           
         }
         throw insertError;
       }
