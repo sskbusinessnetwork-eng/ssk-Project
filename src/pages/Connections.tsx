@@ -44,36 +44,40 @@ export function Connections() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const getDisplayPosition = (pos?: string, role?: string) => {
-    if (role === 'MASTER_ADMIN') return 'Master Admin';
-    if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
-    if (pos === 'president') return 'President';
-    if (pos === 'vice_president') return 'Vice President';
-    if (pos === 'treasurer') return 'Treasurer';
-    return 'Associate Member';
+    if (!role) return 'Member';
+    const r = role.toUpperCase();
+    if (r === 'MASTER_ADMIN') return 'Master Admin';
+    if (r === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (r === 'PRESIDENT') return 'President';
+    if (r === 'VICE_PRESIDENT') return 'Vice President';
+    if (r === 'TREASURER') return 'Treasurer';
+    if (r === 'MEMBER') return 'Member';
+    return 'Member';
   };
 
   const getPositionBadge = (member: UserProfile) => {
-    const role = member.role;
-    const pos = member.position?.toLowerCase();
+    const role = (member.role || 'MEMBER').toUpperCase();
     
-    let label = 'Associate Member';
+    let label = 'Member';
     let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
 
     if (role === 'MASTER_ADMIN') {
       label = 'Master Admin';
       classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-    } else if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') {
+    } else if (role === 'CHAPTER_ADMIN') {
       label = 'Chapter Admin';
       classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-    } else if (pos === 'president') {
+    } else if (role === 'PRESIDENT') {
       label = 'President';
       classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-    } else if (pos === 'vice_president') {
+    } else if (role === 'VICE_PRESIDENT') {
       label = 'Vice President';
       classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-    } else if (pos === 'treasurer') {
+    } else if (role === 'TREASURER') {
       label = 'Treasurer';
       classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+    } else if (role === 'MEMBER') {
+      label = 'Member';
     }
 
     return (
@@ -229,6 +233,8 @@ export function Connections() {
 
         // Fetch fresh logged-in user's details directly from Supabase 'users' table
         const loggedInUserId = profile?.uid || profile?.id;
+        let fetchedChapterId = null;
+        let fetchedChapterName = null;
         if (loggedInUserId) {
           const { data: dbUser, error: dbUserErr } = await supabase
             .from('users')
@@ -237,24 +243,26 @@ export function Connections() {
             .single();
 
           if (!dbUserErr && dbUser) {
-            setCurrentUserChapterId(dbUser.chapter_id || null);
-            setCurrentUserChapterName(dbUser.chapter_name || null);
+            fetchedChapterId = dbUser.chapter_id || null;
+            fetchedChapterName = dbUser.chapter_name || null;
+            setCurrentUserChapterId(fetchedChapterId);
+            setCurrentUserChapterName(fetchedChapterName);
             console.log("Fresh logged-in user chapter details fetched:", {
-              chapter_id: dbUser.chapter_id,
-              chapter_name: dbUser.chapter_name
+              chapter_id: fetchedChapterId,
+              chapter_name: fetchedChapterName
             });
           } else {
             console.warn("Could not fetch fresh logged-in user from users table. Fallback to profile:", dbUserErr);
-            const fallbackId = profile.chapter_id || (profile as any).chapterId || null;
-            const fallbackName = profile.chapterName || (profile as any).chapter_name || null;
-            setCurrentUserChapterId(fallbackId);
-            setCurrentUserChapterName(fallbackName);
+            fetchedChapterId = profile.chapter_id || (profile as any).chapterId || null;
+            fetchedChapterName = profile.chapterName || (profile as any).chapter_name || null;
+            setCurrentUserChapterId(fetchedChapterId);
+            setCurrentUserChapterName(fetchedChapterName);
           }
         }
 
         // Fetch All Active Members from Supabase 'users' table
         const fallbackId = profile.chapter_id || (profile as any).chapterId || null;
-        const currentChapterId = currentUserChapterId || fallbackId;
+        const currentChapterId = fetchedChapterId || fallbackId;
 
         let queryBuilder = supabase
           .from('users')
@@ -392,29 +400,11 @@ export function Connections() {
         const memberChapId = (member.chapter_id || '').trim();
         if (memberChapId !== selectedChap) return false;
       } else {
-        const myChapId = (currentUserChapterId || '').trim();
-        const myChapName = (currentUserChapterName || '').trim().toLowerCase();
+        const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
+        if (!myChapId) return false;
 
-        if (!myChapId && !myChapName) {
-          return false;
-        }
-
-        const memberChapId = (member.chapter_id || '').trim();
-        const memberChapName = (member.chapter_name || member.chapterName || '').trim().toLowerCase();
-
-        let isMatch = false;
-        if (myChapId && memberChapId) {
-          if (memberChapId === myChapId) {
-            isMatch = true;
-          }
-        }
-        if (!isMatch && myChapName && memberChapName) {
-          if (memberChapName === myChapName) {
-            isMatch = true;
-          }
-        }
-
-        if (!isMatch) return false;
+        const memberChapId = String(member.chapter_id || '').trim();
+        if (myChapId !== memberChapId) return false;
       }
     }
 
@@ -444,20 +434,17 @@ export function Connections() {
     
     // Position Filter
     if (selectedPositionFilter) {
-      const role = member.role;
-      const pos = member.position?.toLowerCase();
+      const role = (member.role || 'MEMBER').toUpperCase();
       if (selectedPositionFilter === 'chapter_admin') {
-        if (role !== 'CHAPTER_ADMIN' && pos !== 'chapter_admin') return false;
+        if (role !== 'CHAPTER_ADMIN') return false;
       } else if (selectedPositionFilter === 'president') {
-        if (pos !== 'president') return false;
+        if (role !== 'PRESIDENT') return false;
       } else if (selectedPositionFilter === 'vice_president') {
-        if (pos !== 'vice_president') return false;
+        if (role !== 'VICE_PRESIDENT') return false;
       } else if (selectedPositionFilter === 'treasurer') {
-        if (pos !== 'treasurer') return false;
+        if (role !== 'TREASURER') return false;
       } else if (selectedPositionFilter === 'member') {
-        if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'president' || pos === 'vice_president' || pos === 'treasurer') {
-          return false;
-        }
+        if (role !== 'MEMBER') return false;
       }
     }
 
@@ -480,16 +467,10 @@ export function Connections() {
       const selectedChap = (masterSelectedChapterId || '').trim();
       return (m.chapter_id || '').trim() === selectedChap;
     } else {
-      const myChapId = (currentUserChapterId || '').trim();
-      const myChapName = (currentUserChapterName || '').trim().toLowerCase();
-      if (!myChapId && !myChapName) return false;
-
-      const memberChapId = (m.chapter_id || '').trim();
-      const memberChapName = (m.chapter_name || m.chapterName || '').trim().toLowerCase();
-
-      if (myChapId && memberChapId && memberChapId === myChapId) return true;
-      if (myChapName && memberChapName && memberChapName === myChapName) return true;
-      return false;
+      const myChapId = String(currentUserChapterId || profile?.chapter_id || '').trim();
+      if (!myChapId) return false;
+      const memberChapId = String(m.chapter_id || '').trim();
+      return myChapId === memberChapId;
     }
   }).length;
 
@@ -513,12 +494,11 @@ export function Connections() {
 
   // Sorting
   const getSortWeight = (member: UserProfile) => {
-    const role = member.role;
-    const pos = member.position?.toLowerCase();
-    if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 1;
-    if (pos === 'president') return 2;
-    if (pos === 'vice_president') return 3;
-    if (pos === 'treasurer') return 4;
+    const role = (member.role || 'MEMBER').toUpperCase();
+    if (role === 'CHAPTER_ADMIN') return 1;
+    if (role === 'PRESIDENT') return 2;
+    if (role === 'VICE_PRESIDENT') return 3;
+    if (role === 'TREASURER') return 4;
     return 5;
   };
 

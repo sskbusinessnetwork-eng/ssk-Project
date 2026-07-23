@@ -339,11 +339,12 @@ export function Reports() {
       }).score;
 
       // Human-readable position label
-      let displayPosition = 'Associate Member';
-      if (member.position === 'president') displayPosition = 'President';
-      else if (member.position === 'vice_president') displayPosition = 'Vice President';
-      else if (member.position === 'treasurer') displayPosition = 'Treasurer';
-      else if (member.position === 'chapter_admin' || member.role === 'CHAPTER_ADMIN') displayPosition = 'Chapter Admin';
+      let displayPosition = 'Member';
+      const role = (member.role || 'MEMBER').toUpperCase();
+      if (role === 'PRESIDENT') displayPosition = 'President';
+      else if (role === 'VICE_PRESIDENT') displayPosition = 'Vice President';
+      else if (role === 'TREASURER') displayPosition = 'Treasurer';
+      else if (role === 'CHAPTER_ADMIN') displayPosition = 'Chapter Admin';
 
       return {
         uid: member.uid,

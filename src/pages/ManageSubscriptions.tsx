@@ -141,7 +141,7 @@ export function ManageSubscriptions() {
                             u.phone?.includes(search) || 
                             u.email?.toLowerCase().includes(search.toLowerCase());
       const matchesChapter = !chapterFilter || u.chapter_id === chapterFilter;
-      const matchesPosition = !positionFilter || u.position === positionFilter;
+      const matchesPosition = !positionFilter || (u.role || 'MEMBER').toLowerCase() === positionFilter.toLowerCase();
       
       const subEndStr = u.subscriptionEndDate || u.subscriptionEnd;
       const subStatus = u.subscriptionStatus || u.membershipStatus;

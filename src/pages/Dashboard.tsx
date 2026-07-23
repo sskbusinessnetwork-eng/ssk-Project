@@ -207,11 +207,9 @@ export function Analytics() {
     const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
       setAllUsersList(data);
       
-      const allowedRoles = ['MEMBER', 'CHAPTER_ADMIN', 'PRESIDENT', 'VICE_PRESIDENT', 'TREASURER'];
       const chapterMems = data.filter(u => {
-        const r = (u.role || '').toUpperCase();
-        const p = (u.position || '').toUpperCase();
-        return r !== 'MASTER_ADMIN' && (allowedRoles.includes(r) || allowedRoles.includes(p) || (r === '' && p === ''));
+        const r = (u.role || 'MEMBER').toUpperCase();
+        return r !== 'MASTER_ADMIN';
       });
       setChapterUsers(chapterMems);
     });
@@ -334,12 +332,13 @@ export function Analytics() {
       }
 
       let inactiveReason = subStatus === 'Expired' ? 'Subscription Expired' : 'Account Inactive';const getDisplayPosition = (pos?: string, r?: string) => {
-        if (r === 'MASTER_ADMIN') return 'Master Admin';
-        if (r === 'CHAPTER_ADMIN' || pos === 'chapter_admin') return 'Chapter Admin';
-        if (pos === 'president') return 'President';
-        if (pos === 'vice_president') return 'Vice President';
-        if (pos === 'treasurer') return 'Treasurer';
-        return 'Associate Member';
+        const role = (r || 'MEMBER').toUpperCase();
+        if (role === 'MASTER_ADMIN') return 'Master Admin';
+        if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+        if (role === 'PRESIDENT') return 'President';
+        if (role === 'VICE_PRESIDENT') return 'Vice President';
+        if (role === 'TREASURER') return 'Treasurer';
+        return 'Member';
       };
 
       return {
@@ -1298,10 +1297,10 @@ export function Analytics() {
                     <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
-                       m.position === 'president' ? 'President' :
-                       m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
-                       m.position === 'treasurer' ? 'Treasurer' : 'Associate Member'}
+                      {m.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
+                       m.role === 'PRESIDENT' ? 'President' :
+                       m.role === 'VICE_PRESIDENT' ? 'Vice President' :
+                       m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                     </td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
                     <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
@@ -1355,10 +1354,10 @@ export function Analytics() {
                   <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
                   <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
                   <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                    {m.role === 'CHAPTER_ADMIN' || m.position === 'chapter_admin' ? 'Chapter Admin' :
-                     m.position === 'president' ? 'President' :
-                     m.position === 'vice_president' || m.position === 'vice-president' ? 'Vice President' :
-                     m.position === 'treasurer' ? 'Treasurer' : 'Associate Member'}
+                    {m.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
+                       m.role === 'PRESIDENT' ? 'President' :
+                       m.role === 'VICE_PRESIDENT' ? 'Vice President' :
+                       m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
                   </td>
                   <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
                   <td className="p-4 text-sm font-bold text-right whitespace-nowrap">

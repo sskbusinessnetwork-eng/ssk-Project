@@ -604,18 +604,20 @@ export function Members() {
             >
               Member Invites
             </button>
-            <button 
-              onClick={() => {
-                setActiveTab('positions');
-                setSearchParams({ tab: 'positions' });
-              }}
-              className={cn(
-                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'positions' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
-              )}
-            >
-              Positions
-            </button>
+            {isMasterAdmin && (
+              <button 
+                onClick={() => {
+                  setActiveTab('positions');
+                  setSearchParams({ tab: 'positions' });
+                }}
+                className={cn(
+                  "px-6 py-2 text-xs font-bold rounded-lg transition-all",
+                  activeTab === 'positions' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
+                )}
+              >
+                Positions
+              </button>
+            )}
           </div>
         )}
 

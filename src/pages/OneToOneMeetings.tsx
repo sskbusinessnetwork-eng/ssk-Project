@@ -156,7 +156,7 @@ export function OneToOneMeetings() {
     try {
       setLoading(true);
       // 1. Fetch Users
-      let queryBuilder = supabase.from('users').select('*');
+      let queryBuilder = supabase.from('users').select('*').eq('status', 'ACTIVE');
       
       const currentChapterId = profile?.chapter_id || profile?.chapterId;
       if (memberTab === 'my_chapter') {
@@ -169,6 +169,11 @@ export function OneToOneMeetings() {
           setMembers([]);
           return;
         }
+      }
+      
+      if (profile?.role !== 'MASTER_ADMIN' && currentChapterId && memberTab === 'my_chapter') {
+        // Redundant but ensuring it strictly applies
+        queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
       }
 
       const { data: usersData, error: uErr } = await queryBuilder;
