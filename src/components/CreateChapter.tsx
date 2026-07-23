@@ -220,6 +220,19 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           const startDateISO = leader.subscriptionStart ? new Date(leader.subscriptionStart).toISOString() : new Date().toISOString();
           const endDateISO = leader.subscriptionEnd ? new Date(leader.subscriptionEnd).toISOString() : new Date().toISOString();
 
+          let chapterPosVal = 'MEMBER';
+          if (pos === 'chapter_admin' || pos === 'president') {
+            chapterPosVal = 'PRESIDENT';
+          } else if (pos === 'vice_president') {
+            chapterPosVal = 'VICE_PRESIDENT';
+          } else if (pos === 'treasurer') {
+            chapterPosVal = 'TREASURER';
+          } else if (pos === 'secretary') {
+            chapterPosVal = 'SECRETARY';
+          }
+
+          const userRole = (pos === 'chapter_admin' || pos === 'president') ? 'CHAPTER_ADMIN' : 'MEMBER';
+
           await setDoc(doc(db, 'users', uid), {
             id: uid,
             uid: uid,
@@ -228,7 +241,10 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             whatsappNumber: leader.whatsapp.trim() || phone,
             email: leader.email.trim() || null,
             password: bcrypt.hashSync(defaultPassword, 10),
-            role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
+            role: userRole,
+            chapter_position: chapterPosVal,
+            chapterPosition: chapterPosVal,
+            created_by_role: 'MASTER_ADMIN',
             status: 'ACTIVE',
             membershipStatus: 'ACTIVE',
             account_status: 'ACTIVE',

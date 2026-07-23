@@ -193,38 +193,38 @@ async function startServer() {
         return res.status(403).json({ success: false, error: "Only the Master Admin can assign or change positions." });
       }
 
-      const rawPos = String(newPosition).toLowerCase().trim().replace(/[\s-]/g, '_');
+      const upperInput = String(newPosition).trim().toUpperCase().replace(/[\s-]/g, '_');
 
+      let chapterPosVal = 'MEMBER';
+      let posVal = 'member';
       let roleVal = 'MEMBER';
-      let posVal = rawPos;
 
-      if (rawPos === 'chapter_admin') {
+      if (upperInput === 'PRESIDENT' || upperInput === 'CHAPTER_ADMIN') {
+        chapterPosVal = 'PRESIDENT';
+        posVal = upperInput === 'CHAPTER_ADMIN' ? 'chapter_admin' : 'president';
         roleVal = 'CHAPTER_ADMIN';
-        posVal = 'chapter_admin';
-      } else if (rawPos === 'president') {
-        roleVal = 'PRESIDENT';
-        posVal = 'president';
-      } else if (rawPos === 'vice_president') {
-        roleVal = 'VICE_PRESIDENT';
+      } else if (upperInput === 'VICE_PRESIDENT' || upperInput === 'VICE-PRESIDENT') {
+        chapterPosVal = 'VICE_PRESIDENT';
         posVal = 'vice_president';
-      } else if (rawPos === 'treasurer') {
-        roleVal = 'TREASURER';
+        roleVal = 'MEMBER';
+      } else if (upperInput === 'TREASURER') {
+        chapterPosVal = 'TREASURER';
         posVal = 'treasurer';
-      } else if (rawPos === 'secretary') {
-        roleVal = 'SECRETARY';
+        roleVal = 'MEMBER';
+      } else if (upperInput === 'SECRETARY') {
+        chapterPosVal = 'SECRETARY';
         posVal = 'secretary';
-      } else if (rawPos === 'member') {
         roleVal = 'MEMBER';
-        posVal = 'member';
       } else {
+        chapterPosVal = 'MEMBER';
+        posVal = 'member';
         roleVal = 'MEMBER';
-        posVal = rawPos;
       }
 
       // 1. Fetch target user to verify and get chapter_id
       const { data: targetUser, error: targetErr } = await adminSupabase
         .from('users')
-        .select('id, chapter_id, role, position, name')
+        .select('id, chapter_id, role, position, chapter_position, name')
         .eq('id', targetUserId)
         .single();
 
@@ -234,30 +234,46 @@ async function startServer() {
 
       const targetChapterId = chapterId || targetUser.chapter_id;
 
+      // Preserve MASTER_ADMIN system role if target is Master Admin
+      if (targetUser.role === 'MASTER_ADMIN') {
+        roleVal = 'MASTER_ADMIN';
+      }
+
       // 2. ONE POSITION PER CHAPTER RULE
-      // If assigning a leadership position (not regular 'member'), check for existing holders in the SAME chapter.
-      if (posVal !== 'member' && targetChapterId) {
+      // If assigning a leadership position (not regular 'MEMBER'), check for existing holders in the SAME chapter.
+      if (chapterPosVal !== 'MEMBER' && targetChapterId) {
         const { data: chapterMembers } = await adminSupabase
           .from('users')
-          .select('id, role, position, name')
+          .select('id, role, position, chapter_position, name')
           .eq('chapter_id', targetChapterId);
 
         if (chapterMembers && chapterMembers.length > 0) {
           for (const member of chapterMembers) {
             if (member.id !== targetUserId) {
+              const mChapterPos = (member.chapter_position || '').toUpperCase();
               const mPos = (member.position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
               const mRole = (member.role || '').toUpperCase().trim();
 
-              const isMatchingPosition = 
-                mPos === posVal || 
-                (roleVal !== 'MEMBER' && mRole === roleVal);
+              let isMatchingPosition = false;
+
+              if (chapterPosVal === 'PRESIDENT') {
+                isMatchingPosition = mChapterPos === 'PRESIDENT' || mPos === 'president' || mPos === 'chapter_admin' || mRole === 'CHAPTER_ADMIN';
+              } else if (chapterPosVal === 'VICE_PRESIDENT') {
+                isMatchingPosition = mChapterPos === 'VICE_PRESIDENT' || mPos === 'vice_president';
+              } else if (chapterPosVal === 'TREASURER') {
+                isMatchingPosition = mChapterPos === 'TREASURER' || mPos === 'treasurer';
+              } else if (chapterPosVal === 'SECRETARY') {
+                isMatchingPosition = mChapterPos === 'SECRETARY' || mPos === 'secretary';
+              }
 
               if (isMatchingPosition) {
-                // Reassign existing holder of this position in this chapter to regular 'member'
+                // Reassign existing holder of this position in this chapter to regular 'MEMBER'
+                const demoteRole = member.role === 'MASTER_ADMIN' ? 'MASTER_ADMIN' : 'MEMBER';
                 const { error: demoteErr } = await adminSupabase
                   .from('users')
                   .update({ 
-                    role: 'MEMBER', 
+                    role: demoteRole, 
+                    chapter_position: 'MEMBER',
                     position: 'member'
                   })
                   .eq('id', member.id);
@@ -275,8 +291,8 @@ async function startServer() {
                     changed_by_name: callerName,
                     member_id: member.id,
                     member_name: member.name || 'Member',
-                    old_position: mPos || 'leadership',
-                    new_position: 'member',
+                    old_position: member.chapter_position || member.position || 'leadership',
+                    new_position: 'MEMBER',
                     chapter_id: targetChapterId
                   });
                 } catch (e) {
@@ -291,7 +307,11 @@ async function startServer() {
       // 3. Assign target user to selected position/role
       const { error: updateErr } = await adminSupabase
         .from('users')
-        .update({ role: roleVal, position: posVal })
+        .update({ 
+          role: roleVal, 
+          chapter_position: chapterPosVal,
+          position: posVal 
+        })
         .eq('id', targetUserId);
 
       if (updateErr) {
@@ -303,20 +323,24 @@ async function startServer() {
       if (targetChapterId) {
         const { data: updatedChapterUsers } = await adminSupabase
           .from('users')
-          .select('id, role, position')
+          .select('id, role, position, chapter_position')
           .eq('chapter_id', targetChapterId);
 
         if (updatedChapterUsers) {
-          const findIdForPos = (pKey: string) => {
-            const u = updatedChapterUsers.find(m => (m.position || '').toLowerCase() === pKey);
+          const findIdForPos = (cPosUpper: string, pKeyLower: string) => {
+            const u = updatedChapterUsers.find(m => 
+              (m.chapter_position || '').toUpperCase() === cPosUpper ||
+              (m.position || '').toLowerCase() === pKeyLower ||
+              (cPosUpper === 'PRESIDENT' && m.role === 'CHAPTER_ADMIN')
+            );
             return u ? u.id : null;
           };
 
           await adminSupabase.from('chapters').update({
-            chapter_admin_id: findIdForPos('chapter_admin'),
-            president_id: findIdForPos('president'),
-            vice_president_id: findIdForPos('vice_president'),
-            treasurer_id: findIdForPos('treasurer')
+            chapter_admin_id: findIdForPos('PRESIDENT', 'chapter_admin') || findIdForPos('PRESIDENT', 'president'),
+            president_id: findIdForPos('PRESIDENT', 'president') || findIdForPos('PRESIDENT', 'chapter_admin'),
+            vice_president_id: findIdForPos('VICE_PRESIDENT', 'vice_president'),
+            treasurer_id: findIdForPos('TREASURER', 'treasurer')
           }).eq('id', targetChapterId);
         }
       }
@@ -329,15 +353,15 @@ async function startServer() {
           changed_by_name: callerName,
           member_id: targetUserId,
           member_name: targetUser.name || 'Member',
-          old_position: targetUser.position || targetUser.role || 'member',
-          new_position: posVal,
+          old_position: targetUser.chapter_position || targetUser.position || targetUser.role || 'MEMBER',
+          new_position: chapterPosVal,
           chapter_id: targetChapterId
         });
       } catch (e) {
         // Ignore optional history table errors
       }
 
-      return res.json({ success: true, message: "Position updated successfully", targetUserId, newPosition: posVal, newRole: roleVal });
+      return res.json({ success: true, message: "Position updated successfully", targetUserId, newPosition: chapterPosVal, newRole: roleVal });
     } catch (e: any) {
       console.error("Error in update-position handler:", e);
       return res.status(500).json({ success: false, error: e.message || "Server error updating position" });

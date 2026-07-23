@@ -17,6 +17,8 @@ const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'president', label: 'President' },
   { key: 'vice_president', label: 'Vice President' },
   { key: 'treasurer', label: 'Treasurer' },
+  { key: 'secretary', label: 'Secretary' },
+  { key: 'member', label: 'Member' },
 ];
 
 export function PositionManagement({ chapterAdminId: propChapterAdminId, isMasterAdmin: propIsMasterAdmin }: PositionManagementProps) {

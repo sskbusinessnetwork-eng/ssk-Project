@@ -595,38 +595,38 @@ export async function updateMemberPositionDirectly(
   chapterId: string,
   callerId?: string
 ) {
-  const rawPos = String(newPosition).toLowerCase().trim().replace(/[\s-]/g, '_');
+  const upperInput = String(newPosition).trim().toUpperCase().replace(/[\s-]/g, '_');
 
+  let chapterPosVal = 'MEMBER';
+  let posVal = 'member';
   let roleVal = 'MEMBER';
-  let posVal = rawPos;
 
-  if (rawPos === 'chapter_admin') {
+  if (upperInput === 'PRESIDENT' || upperInput === 'CHAPTER_ADMIN') {
+    chapterPosVal = 'PRESIDENT';
+    posVal = upperInput === 'CHAPTER_ADMIN' ? 'chapter_admin' : 'president';
     roleVal = 'CHAPTER_ADMIN';
-    posVal = 'chapter_admin';
-  } else if (rawPos === 'president') {
-    roleVal = 'PRESIDENT';
-    posVal = 'president';
-  } else if (rawPos === 'vice_president') {
-    roleVal = 'VICE_PRESIDENT';
+  } else if (upperInput === 'VICE_PRESIDENT' || upperInput === 'VICE-PRESIDENT') {
+    chapterPosVal = 'VICE_PRESIDENT';
     posVal = 'vice_president';
-  } else if (rawPos === 'treasurer') {
-    roleVal = 'TREASURER';
+    roleVal = 'MEMBER';
+  } else if (upperInput === 'TREASURER') {
+    chapterPosVal = 'TREASURER';
     posVal = 'treasurer';
-  } else if (rawPos === 'secretary') {
-    roleVal = 'SECRETARY';
+    roleVal = 'MEMBER';
+  } else if (upperInput === 'SECRETARY') {
+    chapterPosVal = 'SECRETARY';
     posVal = 'secretary';
-  } else if (rawPos === 'member') {
     roleVal = 'MEMBER';
-    posVal = 'member';
   } else {
+    chapterPosVal = 'MEMBER';
+    posVal = 'member';
     roleVal = 'MEMBER';
-    posVal = rawPos;
   }
 
   // 1. Fetch target user
   const { data: targetUser, error: targetErr } = await supabase
     .from('users')
-    .select('id, chapter_id, role, position, name')
+    .select('id, chapter_id, role, position, chapter_position, name')
     .eq('id', targetUserId)
     .single();
 
@@ -636,29 +636,44 @@ export async function updateMemberPositionDirectly(
 
   const targetChapterId = chapterId || targetUser.chapter_id;
 
+  if (targetUser.role === 'MASTER_ADMIN') {
+    roleVal = 'MASTER_ADMIN';
+  }
+
   // 2. ONE POSITION PER CHAPTER RULE
-  if (posVal !== 'member' && targetChapterId) {
+  if (chapterPosVal !== 'MEMBER' && targetChapterId) {
     const { data: chapterMembers } = await supabase
       .from('users')
-      .select('id, role, position, name')
+      .select('id, role, position, chapter_position, name')
       .eq('chapter_id', targetChapterId);
 
     if (chapterMembers && chapterMembers.length > 0) {
       for (const member of chapterMembers) {
         if (member.id !== targetUserId) {
+          const mChapterPos = (member.chapter_position || '').toUpperCase();
           const mPos = (member.position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
           const mRole = (member.role || '').toUpperCase().trim();
 
-          const isMatchingPosition =
-            mPos === posVal ||
-            (roleVal !== 'MEMBER' && mRole === roleVal);
+          let isMatchingPosition = false;
+
+          if (chapterPosVal === 'PRESIDENT') {
+            isMatchingPosition = mChapterPos === 'PRESIDENT' || mPos === 'president' || mPos === 'chapter_admin' || mRole === 'CHAPTER_ADMIN';
+          } else if (chapterPosVal === 'VICE_PRESIDENT') {
+            isMatchingPosition = mChapterPos === 'VICE_PRESIDENT' || mPos === 'vice_president';
+          } else if (chapterPosVal === 'TREASURER') {
+            isMatchingPosition = mChapterPos === 'TREASURER' || mPos === 'treasurer';
+          } else if (chapterPosVal === 'SECRETARY') {
+            isMatchingPosition = mChapterPos === 'SECRETARY' || mPos === 'secretary';
+          }
 
           if (isMatchingPosition) {
-            // Reassign existing holder of this position in this chapter to regular 'member'
+            // Reassign existing holder of this position in this chapter to regular 'MEMBER'
+            const demoteRole = member.role === 'MASTER_ADMIN' ? 'MASTER_ADMIN' : 'MEMBER';
             const { error: demoteErr } = await supabase
               .from('users')
               .update({
-                role: 'MEMBER',
+                role: demoteRole,
+                chapter_position: 'MEMBER',
                 position: 'member'
               })
               .eq('id', member.id);
@@ -676,7 +691,11 @@ export async function updateMemberPositionDirectly(
   // 3. Assign target user to new position/role
   const { error: updateErr } = await supabase
     .from('users')
-    .update({ role: roleVal, position: posVal })
+    .update({ 
+      role: roleVal, 
+      chapter_position: chapterPosVal,
+      position: posVal 
+    })
     .eq('id', targetUserId);
 
   if (updateErr) {
@@ -688,20 +707,24 @@ export async function updateMemberPositionDirectly(
   if (targetChapterId) {
     const { data: updatedChapterUsers } = await supabase
       .from('users')
-      .select('id, role, position')
+      .select('id, role, position, chapter_position')
       .eq('chapter_id', targetChapterId);
 
     if (updatedChapterUsers) {
-      const findIdForPos = (pKey: string) => {
-        const u = updatedChapterUsers.find(m => (m.position || '').toLowerCase() === pKey);
+      const findIdForPos = (cPosUpper: string, pKeyLower: string) => {
+        const u = updatedChapterUsers.find(m => 
+          (m.chapter_position || '').toUpperCase() === cPosUpper ||
+          (m.position || '').toLowerCase() === pKeyLower ||
+          (cPosUpper === 'PRESIDENT' && m.role === 'CHAPTER_ADMIN')
+        );
         return u ? u.id : null;
       };
 
       await supabase.from('chapters').update({
-        chapter_admin_id: findIdForPos('chapter_admin'),
-        president_id: findIdForPos('president'),
-        vice_president_id: findIdForPos('vice_president'),
-        treasurer_id: findIdForPos('treasurer')
+        chapter_admin_id: findIdForPos('PRESIDENT', 'chapter_admin') || findIdForPos('PRESIDENT', 'president'),
+        president_id: findIdForPos('PRESIDENT', 'president') || findIdForPos('PRESIDENT', 'chapter_admin'),
+        vice_president_id: findIdForPos('VICE_PRESIDENT', 'vice_president'),
+        treasurer_id: findIdForPos('TREASURER', 'treasurer')
       }).eq('id', targetChapterId);
     }
   }
