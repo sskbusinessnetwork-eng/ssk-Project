@@ -122,12 +122,13 @@ async function startServer() {
 
   // Position management endpoint (Master Admin only)
   app.post("/api/admin/update-position", async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
     try {
       const token = req.headers.authorization?.split(" ")[1];
       const { targetUserId, newPosition, chapterId, callerId } = req.body;
 
       if (!targetUserId || !newPosition) {
-        return res.status(400).json({ error: "Missing targetUserId or newPosition" });
+        return res.status(400).json({ success: false, error: "Missing targetUserId or newPosition" });
       }
 
       let isMasterAdmin = false;
@@ -189,7 +190,7 @@ async function startServer() {
       // If token wasn't provided or didn't resolve, but caller header or general session exists, check if callerId or token exists
       if (!isMasterAdmin) {
         // Fallback: check if caller has MASTER_ADMIN role in database
-        return res.status(403).json({ error: "Only the Master Admin can assign or change positions." });
+        return res.status(403).json({ success: false, error: "Only the Master Admin can assign or change positions." });
       }
 
       const rawPos = String(newPosition).toLowerCase().trim().replace(/[\s-]/g, '_');
@@ -228,7 +229,7 @@ async function startServer() {
         .single();
 
       if (targetErr || !targetUser) {
-        return res.status(404).json({ error: "Target member not found" });
+        return res.status(404).json({ success: false, error: "Target member not found" });
       }
 
       const targetChapterId = chapterId || targetUser.chapter_id;
@@ -263,7 +264,7 @@ async function startServer() {
 
                 if (demoteErr) {
                   console.error("Failed to demote existing position holder:", demoteErr);
-                  return res.status(500).json({ error: "Failed to demote existing position holder in chapter" });
+                  return res.status(500).json({ success: false, error: "Failed to demote existing position holder in chapter: " + (demoteErr.message || '') });
                 }
 
                 // Log history for demoted user
@@ -295,7 +296,7 @@ async function startServer() {
 
       if (updateErr) {
         console.error("Failed to update target user position:", updateErr);
-        return res.status(500).json({ error: updateErr.message || "Failed to update member position" });
+        return res.status(500).json({ success: false, error: updateErr.message || "Failed to update member position" });
       }
 
       // 4. Keep chapters table leadership IDs in sync for targetChapterId
@@ -336,10 +337,10 @@ async function startServer() {
         // Ignore optional history table errors
       }
 
-      return res.json({ success: true, targetUserId, newPosition: posVal, newRole: roleVal });
+      return res.json({ success: true, message: "Position updated successfully", targetUserId, newPosition: posVal, newRole: roleVal });
     } catch (e: any) {
       console.error("Error in update-position handler:", e);
-      return res.status(500).json({ error: e.message || "Server error updating position" });
+      return res.status(500).json({ success: false, error: e.message || "Server error updating position" });
     }
   });
 

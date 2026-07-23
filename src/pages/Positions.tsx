@@ -119,9 +119,17 @@ export function Positions() {
         })
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = {};
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Server returned status ${res.status}`);
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to update position');
+        throw new Error(data.error || data.message || 'Failed to update position');
       }
 
       // Trigger realtime updates across all pages
