@@ -70,7 +70,8 @@ export function Notifications() {
 
   // Request Notification Permission
   const handleEnableNotifications = async () => {
-    const res = await notificationService.requestPermission();
+    if (!userId) return;
+    const res = await notificationService.requestPermission(userId);
     setPermissionState(res);
   };
 
@@ -174,31 +175,49 @@ export function Notifications() {
       </div>
 
       {/* Push Notification Permission Banner */}
-      {permissionState !== 'granted' && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent p-4 rounded-[16px] border border-primary/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0">
-              <BellOff size={20} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">Enable Push Notifications</h3>
-              <p className="text-xs text-neutral-300">
-                Enable notifications to receive referral, meeting, and task reminders.
-              </p>
-            </div>
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={cn(
+          "p-4 rounded-[16px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg",
+          permissionState === 'granted' 
+            ? "bg-gradient-to-r from-emerald-500/20 via-emerald-500/5 to-transparent border-emerald-500/30"
+            : "bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border-primary/30"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+            permissionState === 'granted' ? "bg-emerald-500/20 text-emerald-400" : "bg-primary/20 text-primary"
+          )}>
+            {permissionState === 'granted' ? <Bell size={20} /> : <BellOff size={20} />}
           </div>
-          <button
-            onClick={handleEnableNotifications}
-            className="shrink-0 px-4 py-2 bg-primary text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md hover:bg-primary/90 transition-all active:scale-95"
-          >
-            Enable Notifications
-          </button>
-        </motion.div>
-      )}
+          <div>
+            <h3 className="text-sm font-bold text-white">Push Notifications</h3>
+            <p className="text-xs text-neutral-300">
+              {permissionState === 'granted' 
+                ? "You will receive referral, meeting, and task reminders."
+                : permissionState === 'denied'
+                ? "Notifications are disabled. Please enable them in your browser settings to receive reminders."
+                : "Enable notifications to receive referral, meeting, and task reminders."}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleEnableNotifications}
+          disabled={permissionState === 'granted'}
+          className={cn(
+            "shrink-0 px-4 py-2 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all",
+            permissionState === 'granted'
+              ? "bg-emerald-600/50 cursor-default opacity-80"
+              : permissionState === 'denied'
+              ? "bg-neutral-600 hover:bg-neutral-500 active:scale-95"
+              : "bg-primary hover:bg-primary/90 active:scale-95"
+          )}
+        >
+          {permissionState === 'granted' ? '✓ Notifications Enabled' : 'Enable Notifications'}
+        </button>
+      </motion.div>
 
       {/* Today's Task Checklist Section */}
       <div className="bg-[#111827] rounded-[20px] p-5 border border-white/5 space-y-4 shadow-xl">

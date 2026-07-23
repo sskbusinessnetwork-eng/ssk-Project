@@ -162,11 +162,7 @@ export async function getDocs(queryRef: any) {
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user) {
     let userQuery = supabase.from('users').select('role, chapter_id');
-    if (/^\d+$/.test(session.user.id)) {
-      userQuery = userQuery.eq('id', session.user.id);
-    } else {
-      userQuery = userQuery.eq('uid', session.user.id);
-    }
+    userQuery = userQuery.eq('id', session.user.id);
     const { data: userProfile } = await userQuery.maybeSingle();
       
     if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
@@ -215,7 +211,27 @@ export async function getDocs(queryRef: any) {
       };
     });
   }
-  
+
+  if (collectionPath === 'notifications') {
+    rows = rows.map(r => {
+      let msg = r.message || '';
+      let extraData: any = {};
+      if (msg.includes('|||')) {
+        const parts = msg.split('|||');
+        msg = parts[0];
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch(e) {}
+      }
+      const camelExtra = keysToCamel(extraData);
+      return {
+        ...r,
+        message: msg,
+        ...camelExtra
+      };
+    });
+  }
+
   if (collectionPath === 'one_to_one_meetings' && rows.length > 0) {
     const meetingIds = rows.map(m => m.id);
     const { data: parts, error: partsErr } = await supabase
@@ -271,6 +287,7 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   bio: true,
   website: true,
   password_changed: true,
+  push_token: true,
   subscription_start_date: true,
   subscription_end_date: true,
   subscription_status: true,
@@ -418,6 +435,20 @@ export async function addDoc(collectionRef: any, data: any) {
     return { id: result?.id || Math.random().toString(36).substring(2, 15) };
   }
   
+  if (collectionPath === 'notifications') {
+    const extra = {
+      link: cleanData.link,
+      role: cleanData.role,
+      related_user_id: cleanData.relatedUserId,
+      title: cleanData.title
+    };
+    cleanData.message = (cleanData.message || '') + '|||' + JSON.stringify(extra);
+    delete cleanData.link;
+    delete cleanData.role;
+    delete cleanData.relatedUserId;
+    delete cleanData.title;
+  }
+
   const snakeData = keysToSnake(cleanData);
   const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
   if (error) {
@@ -463,13 +494,7 @@ export async function updateDoc(docRef: any, partialData: any) {
     
     const snakeData = keysToSnake(cleanData);
     const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
-    const { error } = await supabase.from('users').update(preparedSnake).eq('id', id);
-    if (error) console.error("updateDoc error:", error);
-    return;
-  }
-  
-  const snakeData = keysToSnake(cleanData);
-  if (path === 'users') {
+    
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (token) {
@@ -479,7 +504,7 @@ export async function updateDoc(docRef: any, partialData: any) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ uid: id, updates: snakeData })
+        body: JSON.stringify({ uid: id, updates: preparedSnake })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -487,13 +512,15 @@ export async function updateDoc(docRef: any, partialData: any) {
         throw new Error(data.error || 'Failed to update user');
       }
     } else {
-      const { error } = await supabase.from(path).update(snakeData).eq('id', id);
+      const { error } = await supabase.from('users').update(preparedSnake).eq('id', id);
       if (error) console.error("updateDoc error:", error);
     }
-  } else {
+    return;
+  }
+  
+  const snakeData = keysToSnake(cleanData);
     const { error } = await supabase.from(path).update(snakeData).eq('id', id);
     if (error) console.error("updateDoc error:", error);
-  }
   
   if (path === 'one_to_one_meetings' && participantIds !== undefined) {
     await supabase.from('meeting_participants').delete().eq('meeting_id', id);

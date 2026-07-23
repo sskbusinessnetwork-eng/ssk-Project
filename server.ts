@@ -5,8 +5,18 @@ import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import webpush from "web-push";
 
 dotenv.config();
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BC1b0zclASiN3KGw7H_kGEFcutEzj6IHL-26UPDEyuWrOAtS4vDvyzd1FXAktO7hISEV3EIFf9RP7u6U0L8NnbU";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "na13C1Sh44faY5Ogv-zXGwWN6yof1gnuWFPjt_tBOxw";
+
+webpush.setVapidDetails(
+  'mailto:sskbusinessnetwork@gmail.com',
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+);
 
 async function startServer() {
   const app = express();
@@ -22,6 +32,76 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/api/vapidPublicKey", (req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
+  app.post("/api/subscribe", async (req, res) => {
+    try {
+      const { subscription, uid } = req.body;
+      if (!subscription || !uid) {
+        return res.status(400).json({ error: "Missing subscription or uid" });
+      }
+      
+      const { data: user } = await supabase.from('users').select('profile_photo').eq('id', uid).single();
+      let photo = user?.profile_photo || '';
+      let extraData: any = {};
+      if (photo.includes('|||')) {
+        const parts = photo.split('|||');
+        photo = parts[0];
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch(e) {}
+      }
+      extraData.push_token = subscription;
+      
+      const newPhoto = `${photo}|||${JSON.stringify(extraData)}`;
+
+      const { error } = await supabase
+        .from("users")
+        .update({ profile_photo: newPhoto })
+        .eq("id", uid);
+        
+      if (error) {
+        console.warn("Failed to store push_token:", error);
+      }
+      
+      res.status(201).json({ success: true });
+    } catch (e: any) {
+      console.error("Subscribe error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/notify", async (req, res) => {
+    try {
+      const { uid, payload } = req.body;
+      if (!uid || !payload) return res.status(400).json({ error: "Missing uid or payload" });
+
+      const { data } = await supabase.from("users").select("profile_photo").eq("id", uid).single();
+      let photo = data?.profile_photo || '';
+      let extraData: any = {};
+      if (photo.includes('|||')) {
+        const parts = photo.split('|||');
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch(e) {}
+      }
+
+      if (!extraData.push_token) {
+        return res.status(404).json({ error: "No push token found" });
+      }
+
+      const sub = extraData.push_token;
+
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("Notify error:", e);
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Create User endpoint

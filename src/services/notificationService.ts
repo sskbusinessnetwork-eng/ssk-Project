@@ -43,7 +43,23 @@ export const notificationService = {
   // PUSH NOTIFICATION PERMISSION & BROWSER NATIVE PUSH
   // ==========================================================
 
-  async requestPermission(): Promise<NotificationPermission> {
+  // Helper for web-push base64 encoding
+  urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  },
+
+  async requestPermission(userId?: string): Promise<NotificationPermission> {
     if (!('Notification' in window)) {
       console.warn("Browser does not support notifications.");
       return 'denied';
@@ -52,7 +68,30 @@ export const notificationService = {
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        this.registerServiceWorker();
+        const reg = await this.registerServiceWorker();
+        if (reg && userId) {
+          // Subscribe to web-push
+          try {
+            const keyRes = await fetch('/api/vapidPublicKey');
+            if (keyRes.ok) {
+              const { publicKey } = await keyRes.json();
+              const applicationServerKey = this.urlBase64ToUint8Array(publicKey);
+              const subscription = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey
+              });
+              
+              await fetch('/api/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subscription, uid: userId })
+              });
+              console.log("Push subscription saved successfully");
+            }
+          } catch(e) {
+            console.warn("Push subscription failed", e);
+          }
+        }
       }
       return permission;
     } catch (error) {
@@ -70,11 +109,13 @@ export const notificationService = {
     if ('serviceWorker' in navigator) {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js');
-        console.log("Service Worker registered for push notifications:", reg.scope);
+        console.log("Service Worker registered:", reg.scope);
+        return reg;
       } catch (e) {
         console.warn("Service Worker registration notice:", e);
       }
     }
+    return null;
   },
 
   showSystemNotification(title: string, body: string, link: string = '/notifications') {
@@ -144,7 +185,8 @@ export const notificationService = {
   },
 
   async sendNotification(params: CreateNotificationParams) {
-    return this.createNotification(
+    // 1. Create in DB
+    const res = await this.createNotification(
       params.userId,
       params.role || 'MEMBER',
       params.type,
@@ -153,6 +195,26 @@ export const notificationService = {
       params.title,
       params.link
     );
+    
+    // 2. Trigger web-push API if backend exists
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: params.userId,
+          payload: {
+            title: params.title || this.getDefaultTitleForType(params.type),
+            body: params.message,
+            link: params.link || this.getDefaultLinkForType(params.type, params.relatedUserId)
+          }
+        })
+      });
+    } catch(e) {
+      console.warn("Backend push failed (non-critical):", e);
+    }
+    
+    return res;
   },
 
   async notifyMasterAdmins(type: NotificationType, message: string, relatedUserId?: string, title?: string, link?: string) {
@@ -250,9 +312,21 @@ export const notificationService = {
         (payload) => {
           const newRow = payload.new;
           if (newRow) {
-            const notifTitle = newRow.title || this.getDefaultTitleForType(newRow.type);
-            const notifMessage = newRow.message || 'You have a new update.';
-            const link = newRow.link || this.getDefaultLinkForType(newRow.type, newRow.related_user_id || newRow.related_id);
+            let notifMessage = newRow.message || 'You have a new update.';
+            let extraData: any = {};
+            if (notifMessage.includes('|||')) {
+              const parts = notifMessage.split('|||');
+              notifMessage = parts[0];
+              try {
+                extraData = JSON.parse(parts[1] || '{}');
+              } catch(e) {}
+            }
+
+            const notifTitle = newRow.title || extraData.title || this.getDefaultTitleForType(newRow.type);
+            const rawLink = newRow.link || extraData.link;
+            const rawRelatedUser = newRow.related_user_id || newRow.related_id || extraData.related_user_id;
+
+            const link = rawLink || this.getDefaultLinkForType(newRow.type, rawRelatedUser);
 
             // Show system push notification
             this.showSystemNotification(notifTitle, notifMessage, link);
@@ -266,7 +340,7 @@ export const notificationService = {
                 message: notifMessage,
                 read: newRow.is_read || false,
                 is_read: newRow.is_read || false,
-                relatedUserId: newRow.related_user_id || newRow.related_id,
+                relatedUserId: rawRelatedUser,
                 link,
                 createdAt: newRow.created_at || new Date().toISOString()
               });

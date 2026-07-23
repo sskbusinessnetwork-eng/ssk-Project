@@ -57,7 +57,7 @@ const formatUserRoleOrPosition = (user: any): string => {
 
 export function Referrals() {
   const { profile } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [thankYouSlips, setThankYouSlips] = useState<ThankYouSlip[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
@@ -73,6 +73,8 @@ export function Referrals() {
   const [isThankYouModalOpen, setIsThankYouModalOpen] = useState(false);
   const [isNotConvertedModalOpen, setIsNotConvertedModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isUpdateStatusModalOpen, setIsUpdateStatusModalOpen] = useState(false);
+  const [updateStatusVal, setUpdateStatusVal] = useState('');
   const [selectedReferral, setSelectedReferral] = useState<Referral | null>(null);
   const [notConvertedReason, setNotConvertedReason] = useState('');
   const [thankYouData, setThankYouData] = useState({
@@ -95,7 +97,30 @@ export function Referrals() {
       setFormData(prev => ({ ...prev, toUserId }));
       setIsModalOpen(true);
     }
+    const tab = searchParams.get('tab');
+    if (tab === 'passed' || tab === 'received') {
+      setFilter(tab);
+    }
   }, [searchParams]);
+
+  useEffect(() => {
+    const updateId = searchParams.get('update');
+    if (updateId && referrals.length > 0) {
+      const ref = referrals.find(r => r.id === updateId);
+      if (ref) {
+        setSelectedReferral(ref);
+        let defaultStatus = ref.status || 'New';
+        if (defaultStatus === 'Pending' || defaultStatus === 'PENDING') defaultStatus = 'New';
+        if (defaultStatus === 'Completed' || defaultStatus === 'COMPLETED' || defaultStatus === 'CONVERTED') defaultStatus = 'Converted to Business';
+        if (defaultStatus === 'Rejected' || defaultStatus === 'NOT_CONVERTED') defaultStatus = 'Closed - Not Converted';
+        setUpdateStatusVal(defaultStatus);
+        setIsUpdateStatusModalOpen(true);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('update');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [referrals, searchParams, setSearchParams]);
 
   // Fetch referrals from Supabase table with sender and receiver relations
   const fetchReferrals = async () => {
@@ -325,12 +350,8 @@ export function Referrals() {
       }
 
       // 2. Lookup current user
-      let currentUserQuery = supabase.from('users').select('id, uid, chapter_id, role');
-      if (typeof currentAuthId === 'number' || (typeof currentAuthId === 'string' && /^\d+$/.test(currentAuthId))) {
-        currentUserQuery = currentUserQuery.eq('id', currentAuthId);
-      } else {
-        currentUserQuery = currentUserQuery.eq('uid', currentAuthId);
-      }
+      let currentUserQuery = supabase.from('users').select('id, chapter_id, role');
+      currentUserQuery = currentUserQuery.eq('id', currentAuthId);
       const { data: currentUserRecord } = await currentUserQuery.maybeSingle();
 
       const userChapId = currentUserRecord?.chapter_id || profile?.chapter_id || (profile as any)?.chapterId;
@@ -339,7 +360,7 @@ export function Referrals() {
       }
 
       const currentUserId = currentUserRecord?.id || profile?.id;
-      const currentUserUid = currentUserRecord?.uid || profile?.uid;
+      const currentUserUid = profile?.uid;
 
       // 3. Query all users from Supabase users table
       const { data: usersData, error } = await supabase
@@ -514,11 +535,7 @@ export function Referrals() {
 
       // STEP 4 - Sender: Use Logged in user's users.id
       let senderQuery = supabase.from('users').select('*');
-      if (typeof currentAuthId === 'number' || (typeof currentAuthId === 'string' && /^\d+$/.test(currentAuthId))) {
-        senderQuery = senderQuery.eq('id', currentAuthId);
-      } else {
-        senderQuery = senderQuery.eq('uid', currentAuthId);
-      }
+      senderQuery = senderQuery.eq('id', currentAuthId);
       const { data: currentUserRecord, error: senderErr } = await senderQuery.maybeSingle();
 
       if (senderErr || !currentUserRecord) {
@@ -753,6 +770,87 @@ export function Referrals() {
       setIsNotConvertedModalOpen(false);
       setNotConvertedReason('');
       setSelectedReferral(null);
+      await fetchReferrals();
+    } catch (error: any) {
+      console.error("Error updating status:", error);
+      setErrorMessage(error?.message || "Failed to update referral status.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile || !selectedReferral || !updateStatusVal || isSubmitting) return;
+
+    // Map 'Closed - Not Converted' to 'Rejected' and 'Converted to Business' to 'Completed' for consistency,
+    // or we can use the exact strings. But we should respect the existing UI that handles 'Completed' and 'Rejected'.
+    let dbStatus = updateStatusVal;
+    if (updateStatusVal === 'Closed - Not Converted') dbStatus = 'Rejected';
+    if (updateStatusVal === 'Converted to Business') dbStatus = 'Completed';
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const { error: updateErr } = await supabase
+        .from('referrals')
+        .update({ 
+          status: dbStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedReferral.id);
+
+      if (updateErr) throw updateErr;
+
+      const referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+      if (referrerId) {
+        let title = 'Referral Updated';
+        let message = `The status of your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} was updated to: ${updateStatusVal}.`;
+        
+        if (dbStatus === 'Completed') {
+          title = 'Referral Converted!';
+          message = `Congratulations! Your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} was converted to business.`;
+          
+          // Notify the recipient as well
+          if (profile.uid) {
+            try {
+              await notificationService.sendNotification({
+                userId: profile.uid,
+                type: 'REFERRAL',
+                title: 'Business Closed!',
+                message: `Congratulations! You successfully converted the referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} into business.`,
+                link: '/referrals'
+              });
+            } catch (nErr) {}
+          }
+        }
+
+        try {
+          await notificationService.sendNotification({
+            userId: referrerId,
+            type: 'REFERRAL',
+            title,
+            message,
+            link: '/referrals'
+          });
+        } catch (nErr) {
+          console.warn("Notification error:", nErr);
+        }
+      }
+
+      setSuccessMessage('Status updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      setIsUpdateStatusModalOpen(false);
+      
+      if (dbStatus === 'Completed') {
+        setIsThankYouModalOpen(true);
+      } else if (dbStatus === 'Rejected') {
+        setIsNotConvertedModalOpen(true);
+      } else {
+        setSelectedReferral(null);
+      }
+      
       await fetchReferrals();
     } catch (error: any) {
       console.error("Error updating status:", error);
@@ -1235,6 +1333,74 @@ export function Referrals() {
         </form>
       </Modal>
 
+      {/* Update Status Modal */}
+      <Modal
+        isOpen={isUpdateStatusModalOpen}
+        onClose={() => {
+          setIsUpdateStatusModalOpen(false);
+          setSelectedReferral(null);
+          setUpdateStatusVal('');
+        }}
+        title="Update Referral Status"
+      >
+        <form onSubmit={handleUpdateStatus} className="space-y-6">
+          <div className="space-y-4">
+            <div className="p-4 bg-primary/10 rounded-[16px] border border-primary/20">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Referral Details</p>
+              <p className="text-sm font-bold text-white">{selectedReferral?.contactName}</p>
+              <p className="text-xs text-neutral-400">{selectedReferral?.requirement}</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">
+                Select Status
+              </label>
+              <select
+                required
+                value={updateStatusVal}
+                onChange={(e) => setUpdateStatusVal(e.target.value)}
+                className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium"
+              >
+                <option value="New" className="bg-[#111827] text-white">New</option>
+                <option value="Contacted" className="bg-[#111827] text-white">Contacted</option>
+                <option value="Meeting Scheduled" className="bg-[#111827] text-white">Meeting Scheduled</option>
+                <option value="In Progress" className="bg-[#111827] text-white">In Progress</option>
+                <option value="Converted to Business" className="bg-[#111827] text-white">Converted to Business</option>
+                <option value="Closed - Not Converted" className="bg-[#111827] text-white">Closed - Not Converted</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setIsUpdateStatusModalOpen(false);
+                setSelectedReferral(null);
+              }}
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 border border-white/10 text-neutral-400 rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:bg-[#1C2538] transition-all disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Status"
+              )}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Referral Detail Modal */}
       <Modal
         isOpen={isDetailModalOpen}
@@ -1393,25 +1559,21 @@ export function Referrals() {
             </div>
 
             {/* Actions for Received Tab */}
-            {filter === 'received' && (selectedReferral.status === 'Pending' || selectedReferral.status === 'PENDING') && (
+            {filter === 'received' && selectedReferral.status !== 'Completed' && selectedReferral.status !== 'COMPLETED' && selectedReferral.status !== 'Rejected' && selectedReferral.status !== 'NOT_CONVERTED' && (
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => {
                     setIsDetailModalOpen(false);
-                    setIsNotConvertedModalOpen(true);
+                    let defaultStatus = selectedReferral.status || 'New';
+                    if (defaultStatus === 'Pending' || defaultStatus === 'PENDING') defaultStatus = 'New';
+                    if (defaultStatus === 'Completed' || defaultStatus === 'COMPLETED' || defaultStatus === 'CONVERTED') defaultStatus = 'Converted to Business';
+                    if (defaultStatus === 'Rejected' || defaultStatus === 'NOT_CONVERTED') defaultStatus = 'Closed - Not Converted';
+                    setUpdateStatusVal(defaultStatus);
+                    setIsUpdateStatusModalOpen(true);
                   }}
-                  className="flex-1 py-3 bg-[#151C2E] border border-red-900/30 text-red-400 rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:bg-red-950/20 transition-all active:scale-95"
+                  className="w-full py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:opacity-90 transition-all active:scale-95"
                 >
-                  Lost
-                </button>
-                <button
-                  onClick={() => {
-                    setIsDetailModalOpen(false);
-                    setIsThankYouModalOpen(true);
-                  }}
-                  className="flex-1 py-3 bg-emerald-600 text-white rounded-[12px] font-bold uppercase tracking-widest text-[10px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95"
-                >
-                  Convert
+                  Update Status
                 </button>
               </div>
             )}
