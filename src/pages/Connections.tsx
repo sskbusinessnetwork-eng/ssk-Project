@@ -781,7 +781,7 @@ export function Connections() {
                     <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
                       {member.name}
                     </h3>
-                    {getPositionBadge(member)}
+                    {activeTab === 'chapter' && getPositionBadge(member)}
                   </div>
                   
                   <div className="flex flex-col gap-1 text-[13px] font-medium text-neutral-400">
