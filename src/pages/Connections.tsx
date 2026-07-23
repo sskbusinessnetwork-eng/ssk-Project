@@ -262,9 +262,7 @@ export function Connections() {
           .select('*')
           .eq('status', 'ACTIVE');
 
-        if (profile?.role !== 'MASTER_ADMIN' && currentChapterId) {
-          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
-        }
+        
 
         const { data: usersData, error: usersError } = await queryBuilder;
 
@@ -329,15 +327,28 @@ export function Connections() {
       }
     };
 
+    
     fetchData();
+
+    const channel = supabase
+      .channel('connections_users_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
 
     // Listen for manual re-fetch events
     const handleRefresh = () => fetchData();
     window.addEventListener('dashboard-refresh', handleRefresh);
     return () => {
       window.removeEventListener('dashboard-refresh', handleRefresh);
+      supabase.removeChannel(channel);
     };
-  }, [profile]);
+}, [profile]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
