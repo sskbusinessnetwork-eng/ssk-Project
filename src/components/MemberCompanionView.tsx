@@ -191,7 +191,7 @@ export function MemberCompanionView({
     }
   };
   
-  const displayTasks = todayTasks;
+  const displayTasks = (todayTasks || []).filter((t: any) => !t.isHidden);
   const completedCount = displayTasks.filter(t => t.isDone).length;
   const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 100;
 
@@ -317,7 +317,7 @@ export function MemberCompanionView({
                   {/* Non-interactive check/clock indicator */}
                   <div className="shrink-0">
                     {task.isDone ? (
-                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]">
+                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center border shadow-[0_0_8px_rgba(52,211,153,0.15)]", task.isFailed ? "bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30")}>
                         <CheckSquare size={12} />
                       </div>
                     ) : (
