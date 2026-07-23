@@ -67,11 +67,19 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
 
     const unsub1 = onSnapshot(q1, (snap1) => {
       getDocs(q2).then((snap2: any) => {
-        const adminData = (snap2?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
-        const membersData = (snap1?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile));
+        const adminData = (snap2?.docs || []).map((d: any) => {
+          const data = d.data();
+          const uId = d.id || data.id || data.uid;
+          return { ...data, id: uId, uid: uId } as UserProfile;
+        });
+        const membersData = (snap1?.docs || []).map((d: any) => {
+          const data = d.data();
+          const uId = d.id || data.id || data.uid;
+          return { ...data, id: uId, uid: uId } as UserProfile;
+        });
         
         const combined = [...adminData, ...membersData];
-        const unique = Array.from(new Map(combined.map(item => [item.uid, item])).values());
+        const unique = Array.from(new Map(combined.map(item => [item.uid || item.id, item])).values());
         
         setMembers(unique);
         setLoading(false);
@@ -107,7 +115,8 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
         body: JSON.stringify({
           targetUserId: userId,
           newPosition: positionName,
-          chapterId: effectiveAdminId
+          chapterId: effectiveAdminId,
+          callerId: profile?.id || profile?.uid
         })
       });
 

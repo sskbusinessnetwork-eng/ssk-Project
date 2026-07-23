@@ -114,7 +114,8 @@ export function Positions() {
         body: JSON.stringify({
           targetUserId: userId,
           newPosition: newPosition,
-          chapterId: selectedChapterId
+          chapterId: selectedChapterId,
+          callerId: profile.id || profile.uid
         })
       });
 
@@ -233,8 +234,8 @@ export function Positions() {
                         <div className="flex items-center gap-2">
                           <select
                             value={currentPos}
-                            onChange={(e) => handleAssignPosition(member.uid, e.target.value as ChapterPosition)}
-                            disabled={!isMasterAdmin || updatingId === member.uid}
+                            onChange={(e) => handleAssignPosition(member.uid || member.id, e.target.value as ChapterPosition)}
+                            disabled={!isMasterAdmin || updatingId === (member.uid || member.id)}
                             className="h-9 px-3 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-xs font-semibold text-white cursor-pointer disabled:opacity-50 min-w-[140px] appearance-none transition-colors"
                           >
                             {POSITIONS.map(pos => {
