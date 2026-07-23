@@ -10,6 +10,19 @@
 -- Example: replace(NEW.position::text, '_', ' ')
 -- ============================================================================
 
+-- 0. Ensure all 4 leadership enum values exist
+DO $$
+BEGIN
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'chapter_admin';
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'president';
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'vice_president';
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'treasurer';
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'secretary';
+    ALTER TYPE public.chapter_position ADD VALUE IF NOT EXISTS 'member';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END $$;
+
 -- 1. Drop existing/legacy trigger functions that attempt to call replace() on chapter_position
 DROP TRIGGER IF EXISTS position_validation_trigger ON public.users;
 DROP TRIGGER IF EXISTS enforce_single_position_trigger ON public.users;

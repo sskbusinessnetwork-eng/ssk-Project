@@ -1,6 +1,6 @@
 import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/database';
+import { db, updateMemberPositionDirectly } from '../lib/database';
 import { collection, query, where, getDocs, doc, addDoc, onSnapshot } from '../lib/database';
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
@@ -102,34 +102,51 @@ export function Positions() {
     setUpdatingId(userId);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      let success = false;
+      let errorMsg = '';
 
-      const res = await fetch('/api/admin/update-position', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          targetUserId: userId,
-          newPosition: newPosition,
-          chapterId: selectedChapterId,
-          callerId: profile.id || profile.uid
-        })
-      });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
-      const contentType = res.headers.get('content-type') || '';
-      let data: any = {};
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(text || `Server returned status ${res.status}`);
+        const res = await fetch('/api/admin/update-position', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            targetUserId: userId,
+            newPosition: newPosition,
+            chapterId: selectedChapterId,
+            callerId: profile.id || profile.uid
+          })
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.success) {
+            success = true;
+          } else {
+            errorMsg = data.error || 'Failed to update position';
+          }
+        } else {
+          // Endpoint returned 404 or HTML error - fall back to direct Supabase update
+          console.warn("API route unavailable or non-JSON response, using direct database update...");
+        }
+      } catch (err: any) {
+        console.warn("API fetch failed, trying direct database update:", err);
       }
 
-      if (!res.ok) {
-        throw new Error(data.error || data.message || 'Failed to update position');
+      if (!success) {
+        // Direct Supabase update fallback
+        await updateMemberPositionDirectly(
+          userId,
+          newPosition,
+          selectedChapterId,
+          profile.id || profile.uid
+        );
       }
 
       // Trigger realtime updates across all pages

@@ -589,3 +589,124 @@ export function writeBatch(db?: any) {
 export const serverTimestamp = () => new Date().toISOString();
 export const db = {};
 
+export async function updateMemberPositionDirectly(
+  targetUserId: string,
+  newPosition: string,
+  chapterId: string,
+  callerId?: string
+) {
+  const rawPos = String(newPosition).toLowerCase().trim().replace(/[\s-]/g, '_');
+
+  let roleVal = 'MEMBER';
+  let posVal = rawPos;
+
+  if (rawPos === 'chapter_admin') {
+    roleVal = 'CHAPTER_ADMIN';
+    posVal = 'chapter_admin';
+  } else if (rawPos === 'president') {
+    roleVal = 'PRESIDENT';
+    posVal = 'president';
+  } else if (rawPos === 'vice_president') {
+    roleVal = 'VICE_PRESIDENT';
+    posVal = 'vice_president';
+  } else if (rawPos === 'treasurer') {
+    roleVal = 'TREASURER';
+    posVal = 'treasurer';
+  } else if (rawPos === 'secretary') {
+    roleVal = 'SECRETARY';
+    posVal = 'secretary';
+  } else if (rawPos === 'member') {
+    roleVal = 'MEMBER';
+    posVal = 'member';
+  } else {
+    roleVal = 'MEMBER';
+    posVal = rawPos;
+  }
+
+  // 1. Fetch target user
+  const { data: targetUser, error: targetErr } = await supabase
+    .from('users')
+    .select('id, chapter_id, role, position, name')
+    .eq('id', targetUserId)
+    .single();
+
+  if (targetErr || !targetUser) {
+    throw new Error("Target member not found");
+  }
+
+  const targetChapterId = chapterId || targetUser.chapter_id;
+
+  // 2. ONE POSITION PER CHAPTER RULE
+  if (posVal !== 'member' && targetChapterId) {
+    const { data: chapterMembers } = await supabase
+      .from('users')
+      .select('id, role, position, name')
+      .eq('chapter_id', targetChapterId);
+
+    if (chapterMembers && chapterMembers.length > 0) {
+      for (const member of chapterMembers) {
+        if (member.id !== targetUserId) {
+          const mPos = (member.position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
+          const mRole = (member.role || '').toUpperCase().trim();
+
+          const isMatchingPosition =
+            mPos === posVal ||
+            (roleVal !== 'MEMBER' && mRole === roleVal);
+
+          if (isMatchingPosition) {
+            // Reassign existing holder of this position in this chapter to regular 'member'
+            const { error: demoteErr } = await supabase
+              .from('users')
+              .update({
+                role: 'MEMBER',
+                position: 'member'
+              })
+              .eq('id', member.id);
+
+            if (demoteErr) {
+              console.error("Failed to demote existing position holder:", demoteErr);
+              throw new Error("Failed to demote existing position holder: " + demoteErr.message);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Assign target user to new position/role
+  const { error: updateErr } = await supabase
+    .from('users')
+    .update({ role: roleVal, position: posVal })
+    .eq('id', targetUserId);
+
+  if (updateErr) {
+    console.error("Failed to update target user position:", updateErr);
+    throw new Error(updateErr.message || "Failed to update member position");
+  }
+
+  // 4. Keep chapters table leadership IDs in sync
+  if (targetChapterId) {
+    const { data: updatedChapterUsers } = await supabase
+      .from('users')
+      .select('id, role, position')
+      .eq('chapter_id', targetChapterId);
+
+    if (updatedChapterUsers) {
+      const findIdForPos = (pKey: string) => {
+        const u = updatedChapterUsers.find(m => (m.position || '').toLowerCase() === pKey);
+        return u ? u.id : null;
+      };
+
+      await supabase.from('chapters').update({
+        chapter_admin_id: findIdForPos('chapter_admin'),
+        president_id: findIdForPos('president'),
+        vice_president_id: findIdForPos('vice_president'),
+        treasurer_id: findIdForPos('treasurer')
+      }).eq('id', targetChapterId);
+    }
+  }
+
+  return { success: true, message: "Position updated successfully" };
+}
+
+

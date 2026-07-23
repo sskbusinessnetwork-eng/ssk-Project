@@ -157,7 +157,10 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         .ilike('chapter_name', formData.chapter_name.trim())
         .limit(1);
         
-      if (chapterCheckError) throw chapterCheckError;
+      if (chapterCheckError) {
+        console.error("Chapter check error:", chapterCheckError.message, chapterCheckError.code, chapterCheckError.details, chapterCheckError.hint);
+        throw chapterCheckError;
+      }
       if (existingChapter && existingChapter.length > 0) {
         newErrors.chapter_name = "A chapter with this name already exists. Please choose a different chapter name.";
         setErrors(newErrors);
@@ -168,7 +171,10 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
       for (const pos of positions) {
         const phone = normalizePhoneNumber(leaders[pos].mobile);
         const { data: existing, error: checkError } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
-        if (checkError) throw checkError;
+        if (checkError) {
+          console.error("User check error:", checkError.message, checkError.code, checkError.details, checkError.hint);
+          throw checkError;
+        }
         if (existing && existing.length > 0) {
           newErrors[`${String(pos)}_mobile`] = "This phone number is already registered. Please use a different phone number.";
           setErrors(newErrors);
@@ -187,14 +193,16 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
       // 1. Create chapter
       const chapterData = {
         id: chapterId,
-        chapter_name: formData.chapter_name,
-        meeting_venue: formData.meeting_venue,
+        chapter_name: formData.chapter_name.trim(),
+        meeting_venue: formData.meeting_venue.trim(),
+        status: 'ACTIVE',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
       const { error: chapterError } = await supabase.from('chapters').insert(chapterData);
       if (chapterError) {
+        console.error("Chapter insert error:", chapterError.message, chapterError.code, chapterError.details, chapterError.hint);
         throw new Error(`Failed to create chapter: ${chapterError.message}`);
       }
 
@@ -221,10 +229,10 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             email: leader.email.trim() || null,
             password: bcrypt.hashSync(defaultPassword, 10),
             role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
-            status: 'INACTIVE',
-            membershipStatus: 'INACTIVE',
-            account_status: 'INACTIVE',
-            accountStatus: 'INACTIVE',
+            status: 'ACTIVE',
+            membershipStatus: 'ACTIVE',
+            account_status: 'ACTIVE',
+            accountStatus: 'ACTIVE',
             chapter_id: chapterId,
             chapter_name: formData.chapter_name.trim(),
             chapterName: formData.chapter_name.trim(),
@@ -253,6 +261,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         }).eq('id', chapterId);
         
         if (chapterUpdateError) {
+          console.error("Chapter link error:", chapterUpdateError.message, chapterUpdateError.code, chapterUpdateError.details, chapterUpdateError.hint);
           throw new Error(`Unable to link members to the chapter: ${chapterUpdateError.message}`);
         }
 
@@ -260,15 +269,15 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         window.dispatchEvent(new Event('dashboard-refresh'));
         
       } catch (insertError: any) {
+        console.error("Creation sub-step error:", insertError.message, insertError.code, insertError.details, insertError.hint);
         await supabase.from('chapters').delete().eq('id', chapterId);
         if (createdUsers.length > 0) {
            await supabase.from('users').delete().in('id', createdUsers);
-           
         }
         throw insertError;
       }
     } catch (err: any) {
-      console.error("Chapter creation error:", err);
+      console.error("Chapter creation error:", err.message, err.code, err.details, err.hint, err);
       if (!errorPopup && !Object.keys(newErrors).length) {
          setErrorPopup(err.message || 'An error occurred while creating the chapter.');
       } else if (err.message) {
