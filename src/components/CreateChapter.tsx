@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import bcrypt from 'bcryptjs';
 import { UserProfile } from '../types';
 import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock, AlertCircle, X, Calendar } from 'lucide-react';
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
-import { createClient } from '@supabase/supabase-js';
 
-const tempSupabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4',
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
 import { db, doc, setDoc } from '../lib/database';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -224,7 +219,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             phone: phone,
             whatsappNumber: leader.whatsapp.trim() || phone,
             email: leader.email.trim() || null,
-            password: defaultPassword,
+            password: bcrypt.hashSync(defaultPassword, 10),
             role: pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER',
             status: 'ACTIVE',
             membershipStatus: 'ACTIVE',
@@ -241,14 +236,6 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
-
-          const { error: signUpError } = await tempSupabase.auth.signUp({
-            phone: phone,
-            password: defaultPassword,
-          });
-          if (signUpError && signUpError.message !== 'User already registered') {
-            throw new Error(`Authentication account creation failed for ${leader.fullName}: ${signUpError.message}`);
-          }
         }
 
         // 3. Update chapter with the valid user IDs

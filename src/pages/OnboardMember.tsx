@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import bcrypt from 'bcryptjs';
 import { db } from '../lib/database';
 import {  collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot  } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
@@ -122,19 +123,13 @@ export function OnboardMember() {
 
         await setDoc(doc(db, 'users', uid), newMember);
         
-        const { error: signUpError } = await tempSupabase.auth.signUp({
-          phone: formData.phone,
-          password: 'Welcometosskbusiness',
-        });
-        if (signUpError && signUpError.message !== 'User already registered') {
-          console.warn(`Authentication account creation failed: ${signUpError.message}`);
-        }
+        
         
         setCreatedMemberData({
           name: formData.fullName,
           userId: memberId,
           phone: formData.phone,
-          password: 'Welcometosskbusiness'
+          password: bcrypt.hashSync('Welcometosskbusiness', 10)
         });
       }
 
@@ -160,7 +155,7 @@ export function OnboardMember() {
     if (!confirm('Are you sure you want to reset this member\'s password? They will be forced to change it on their next login.')) return;
     
     try {
-      await updateDoc(doc(db, 'users', uid), { must_change_password: true, password: 'Welcometosskbusiness' });
+      await updateDoc(doc(db, 'users', uid), { must_change_password: true, password: bcrypt.hashSync('Welcometosskbusiness', 10) });
       
       alert('Password reset successfully to default.');
     } catch (err) {

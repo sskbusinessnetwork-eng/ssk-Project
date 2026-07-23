@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import React from 'react';
 import { motion } from 'motion/react';
 import { Phone, ShieldCheck, Lock, User, AlertCircle, Eye, EyeOff, Building2, CheckCircle2 } from 'lucide-react';
@@ -94,7 +95,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         uid,
         name: displayName,
         phone: normalizedPhone,
-        password: password, // Store plain text password as requested
+        password: bcrypt.hashSync(password, 10), // Store hashed password securely
         role: formData.role,
         membershipStatus: 'ACTIVE',
         chapterName: formData.role === 'CHAPTER_ADMIN' ? formData.chapterName : undefined,
@@ -108,14 +109,7 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
 
       await setDoc(newUserRef, userProfile);
 
-      // Create authentication account
-      const { error: signUpError } = await supabase.auth.signUp({
-        phone: normalizedPhone,
-        password: password
-      });
-      if (signUpError && signUpError.message !== 'User already registered') {
-        throw new Error(`Authentication account creation failed: ${signUpError.message}`);
-      }
+      
 
       // Save user session in localStorage
       localStorage.setItem('user', JSON.stringify({ 
