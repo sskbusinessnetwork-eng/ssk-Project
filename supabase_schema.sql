@@ -142,17 +142,33 @@ CREATE TRIGGER update_meetings_updated_at BEFORE UPDATE ON one_to_one_meetings F
 CREATE TRIGGER update_testimonials_updated_at BEFORE UPDATE ON testimonials FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER update_assessments_updated_at BEFORE UPDATE ON assessments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+-- Helper function to format chapter_position safely with explicit ::text cast
+CREATE OR REPLACE FUNCTION format_chapter_position(pos chapter_position)
+RETURNS text AS $$
+BEGIN
+    IF pos IS NULL THEN
+        RETURN '';
+    END IF;
+    RETURN replace(pos::text, '_', ' ');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- Trigger for position validation (1 per chapter)
 CREATE OR REPLACE FUNCTION enforce_single_position_per_chapter()
 RETURNS TRIGGER AS $$
+DECLARE
+    pos_str text;
 BEGIN
-    IF NEW.position IN ('chapter_admin', 'president', 'vice_president', 'treasurer') THEN
-        -- Remove position from anyone else in the same chapter who has it
-        UPDATE users 
-        SET position = 'member' 
-        WHERE chapter_id = NEW.chapter_id 
-          AND position = NEW.position 
-          AND id != NEW.id;
+    IF NEW.position IS NOT NULL THEN
+        pos_str := lower(replace(NEW.position::text, '_', ' '));
+
+        IF pos_str NOT IN ('member', '') AND NEW.chapter_id IS NOT NULL THEN
+            UPDATE users 
+            SET position = 'member'::chapter_position 
+            WHERE chapter_id = NEW.chapter_id 
+              AND id != NEW.id
+              AND lower(replace(position::text, '_', ' ')) = pos_str;
+        END IF;
     END IF;
     RETURN NEW;
 END;
