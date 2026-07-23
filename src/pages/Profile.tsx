@@ -916,18 +916,16 @@ export function Profile() {
               />
             </div>
 
-            {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') && (
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter Name <span className="text-red-500">*</span></label>
-                <input
-                  required
-                  type="text"
-                  value={formData.chapterName}
-                  onChange={(e) => setFormData({ ...formData, chapterName: e.target.value })}
-                  className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
-                />
-              </div>
-            )}
+            <div className="space-y-1 opacity-70">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Chapter Name</label>
+              <input
+                disabled
+                readOnly
+                type="text"
+                value={formData.chapterName || 'Not Assigned'}
+                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white outline-none cursor-not-allowed font-bold text-sm"
+              />
+            </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Business Name {(formData.role === 'CHAPTER_ADMIN' || formData.position === 'chapter_admin') ? '(Optional)' : '<span className="text-red-500">*</span>'}</label>
