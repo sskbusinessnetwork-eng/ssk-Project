@@ -9,21 +9,34 @@ export function getSubscriptionDates(u: any): { startDate: Date | null; endDate:
   let startDateStr = '';
   let endDateStr = '';
 
-  if (startVal) {
-    const s = new Date(startVal);
-    if (!isNaN(s.getTime())) {
-      startDate = s;
-      startDateStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
+  const parseDateStr = (val: any): { date: Date | null, str: string } => {
+    if (!val) return { date: null, str: '' };
+    const strVal = String(val);
+    
+    // Check if it matches YYYY-MM-DD anywhere in the string (e.g. 2026-07-23T00:00:00Z)
+    const match = strVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const parsedStr = match[0];
+      // new Date('2026-07-23') creates a Date at 00:00 UTC
+      return { date: new Date(parsedStr), str: parsedStr };
     }
-  }
 
-  if (endVal) {
-    const e = new Date(endVal);
-    if (!isNaN(e.getTime())) {
-      endDate = e;
-      endDateStr = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+    // Fallback for other formats (like DD-MM-YYYY)
+    const d = new Date(strVal);
+    if (!isNaN(d.getTime())) {
+      const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { date: d, str: s };
     }
-  }
+    return { date: null, str: '' };
+  };
+
+  const startParsed = parseDateStr(startVal);
+  startDate = startParsed.date;
+  startDateStr = startParsed.str;
+
+  const endParsed = parseDateStr(endVal);
+  endDate = endParsed.date;
+  endDateStr = endParsed.str;
 
   return { startDate, endDate, startDateStr, endDateStr };
 }
@@ -86,8 +99,8 @@ export function isMemberActive(u: any): boolean {
 }
 
 export function getMemberStatusLabel(u: any): 'Active' | 'Inactive / Expired' | 'Pending' {
-  if (!u) return 'Inactive / Expired';
-  if (u.role === 'MASTER_ADMIN') return 'Active';
+  if (!u) console.log("Returning Inactive / Expired"); return 'Inactive / Expired';
+  if (u.role === 'MASTER_ADMIN') console.log("Returning Active"); return 'Active';
   return getSubscriptionStatus(u);
 }
 

@@ -54,7 +54,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  const [loading, setLoading] = useState(() => {
+  const [loading, setLoading] = useState(true); // @ts-ignore
+  const __dummy = (() => {
     return !localStorage.getItem('user');
   });
 
