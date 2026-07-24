@@ -38,6 +38,18 @@ export interface TaskChecklistItem {
   urgent?: boolean;
 }
 
+function getSubscriptionDates(user: any): { startDate: Date | null; endDate: Date | null; endDateStr: string } {
+  if (!user) return { startDate: null, endDate: null, endDateStr: '' };
+  const startVal = user.subscription_start || user.subscription_start_date || user.subscriptionStartDate || user.subscriptionStart;
+  const endVal = user.subscription_end || user.subscription_end_date || user.subscriptionEndDate || user.subscriptionEnd;
+  
+  const startDate = startVal ? new Date(startVal) : null;
+  const endDate = endVal ? new Date(endVal) : null;
+  const endDateStr = endVal ? String(endVal) : '';
+  
+  return { startDate, endDate, endDateStr };
+}
+
 export const notificationService = {
   // ==========================================================
   // PUSH NOTIFICATION PERMISSION & BROWSER NATIVE PUSH
@@ -504,7 +516,7 @@ export const notificationService = {
       }
 
       // 6. Subscription Renewal Check
-      const { endDate } = getSubscriptionDates(userProfile);
+      const { endDate, endDateStr } = getSubscriptionDates(userProfile);
       if (endDate) {
         const diffMs = endDate.getTime() - new Date().getTime();
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));

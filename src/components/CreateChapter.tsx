@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
-import { UserProfile } from '../types';
-import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Lock, AlertCircle, X, Calendar } from 'lucide-react';
+import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, AlertCircle, X, Calendar } from 'lucide-react';
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
-
-import { db, doc, setDoc } from '../lib/database';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface LeaderForm {
+  userId?: string;
   fullName: string;
   mobile: string;
   whatsapp: string;
@@ -18,17 +16,9 @@ interface LeaderForm {
   subscriptionEnd: string;
 }
 
-const getDefaultDates = () => {
-  const today = new Date();
-  const start = today.toISOString().split('T')[0];
-  const nextYear = new Date(today);
-  nextYear.setFullYear(nextYear.getFullYear() + 1);
-  const end = nextYear.toISOString().split('T')[0];
-  return { start, end };
-};
-
 const createEmptyLeader = (): LeaderForm => {
   return {
+    userId: '',
     fullName: '',
     mobile: '',
     whatsapp: '',
@@ -43,21 +33,35 @@ const generateId = () => {
     return crypto.randomUUID();
   }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 };
 
 const formatDateForStorage = (dateStr: string) => {
   if (!dateStr) return '';
-  const parts = dateStr.split('-');
+  const parts = dateStr.trim().split('-');
   if (parts.length === 3 && parts[0].length === 4) {
     return `${parts[2]}-${parts[1]}-${parts[0]}`;
   }
   return dateStr;
 };
 
-export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
+const formatDateForInput = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.trim().split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      return dateStr;
+    }
+    if (parts[2].length === 4) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+  }
+  return dateStr;
+};
+
+export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => void, editChapterId?: string }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [successPopup, setSuccessPopup] = useState(false);
@@ -77,12 +81,75 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    if (editChapterId) {
+      setLoading(true);
+      const fetchChapter = async () => {
+        try {
+          const { data: chapterData, error: chErr } = await supabase
+            .from('chapters')
+            .select('*')
+            .eq('id', editChapterId)
+            .single();
+
+          if (chErr) {
+            console.error("Error fetching chapter for edit:", chErr);
+          }
+
+          if (chapterData) {
+            setFormData({
+              chapter_name: chapterData.chapter_name || '',
+              meeting_venue: chapterData.meeting_venue || '',
+            });
+          }
+
+          const { data: usersData, error: usersErr } = await supabase
+            .from('users')
+            .select('*')
+            .eq('chapter_id', editChapterId)
+            .in('position', ['chapter_admin', 'president', 'vice_president', 'treasurer']);
+
+          if (usersErr) {
+            console.error("Error fetching chapter leadership users:", usersErr);
+          }
+
+          if (usersData) {
+            setLeaders(prev => {
+              const newLeaders = { ...prev };
+              usersData.forEach(u => {
+                const pos = u.position as keyof typeof newLeaders;
+                if (newLeaders[pos]) {
+                  const startVal = u.subscriptionStartDate || u.subscriptionStart || u.subscription_start_date || u.subscription_start || '';
+                  const endVal = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end || '';
+                  newLeaders[pos] = {
+                    userId: u.id || u.uid || '',
+                    fullName: u.name || u.displayName || '',
+                    mobile: u.phone || '',
+                    whatsapp: u.whatsapp_number || u.whatsapp || u.whatsappNumber || '',
+                    email: u.email || '',
+                    subscriptionStart: formatDateForInput(startVal),
+                    subscriptionEnd: formatDateForInput(endVal),
+                  };
+                }
+              });
+              return newLeaders;
+            });
+          }
+        } catch (err) {
+          console.error("Error loading chapter data for edit:", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchChapter();
+    }
+  }, [editChapterId]);
+
   const handleLeaderChange = (pos: keyof typeof leaders, field: keyof LeaderForm, value: string) => {
     setLeaders(prev => ({
       ...prev,
       [pos]: { ...prev[pos], [field]: value }
     }));
-    // Clear error for this field if exists
     if (errors[`${String(pos)}_${field}`]) {
       setErrors(prev => ({ ...prev, [`${String(pos)}_${field}`]: '' }));
     }
@@ -121,17 +188,22 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         newErrors[`${String(pos)}_email`] = "Invalid email address.";
       }
 
-      if (!l.subscriptionStart) {
+      if (!l.subscriptionStart || !l.subscriptionStart.trim()) {
         newErrors[`${String(pos)}_subscriptionStart`] = "Subscription Start Date is required.";
       }
-      if (!l.subscriptionEnd) {
+      if (!l.subscriptionEnd || !l.subscriptionEnd.trim()) {
         newErrors[`${String(pos)}_subscriptionEnd`] = "Subscription End Date is required.";
       }
     }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      setErrorPopup("Please fill in all required fields correctly.");
+      const hasDateErrors = Object.keys(newErrors).some(k => k.includes('_subscriptionStart') || k.includes('_subscriptionEnd'));
+      if (hasDateErrors) {
+        setErrorPopup("Subscription Start Date and Subscription End Date are required for all leadership members.");
+      } else {
+        setErrorPopup("Please fill in all required fields correctly.");
+      }
       setTimeout(() => {
         const firstErrorKey = Object.keys(newErrors)[0];
         const errorElement = document.querySelector(`[name="${firstErrorKey}"]`) as HTMLElement;
@@ -158,35 +230,171 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
 
     setLoading(true);
     try {
+      if (editChapterId) {
+        // EDIT MODE
+        // 1. Check if another chapter has this name
+        const { data: nameCheck } = await supabase
+          .from('chapters')
+          .select('id')
+          .ilike('chapter_name', formData.chapter_name.trim())
+          .neq('id', editChapterId)
+          .limit(1);
+
+        if (nameCheck && nameCheck.length > 0) {
+          newErrors.chapter_name = "A chapter with this name already exists. Please choose a different chapter name.";
+          setErrors(newErrors);
+          setErrorPopup("A chapter with this name already exists. Please choose a different chapter name.");
+          setLoading(false);
+          return;
+        }
+
+        // 2. Update chapter details
+        const { error: chUpdateErr } = await supabase
+          .from('chapters')
+          .update({
+            chapter_name: formData.chapter_name.trim(),
+            meeting_venue: formData.meeting_venue.trim(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editChapterId);
+
+        if (chUpdateErr) {
+          console.error("Failed to update chapter details:", chUpdateErr);
+          setErrorPopup("Failed to save subscription dates. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        // 3. Update leadership users
+        for (const pos of positions) {
+          const leader = leaders[pos];
+          const phone = normalizePhoneNumber(leader.mobile);
+          const startDateFormatted = formatDateForStorage(leader.subscriptionStart);
+          const endDateFormatted = formatDateForStorage(leader.subscriptionEnd);
+
+          let chapterPosVal = 'MEMBER';
+          if (pos === 'chapter_admin') chapterPosVal = 'CHAPTER_ADMIN';
+          else if (pos === 'president') chapterPosVal = 'PRESIDENT';
+          else if (pos === 'vice_president') chapterPosVal = 'VICE_PRESIDENT';
+          else if (pos === 'treasurer') chapterPosVal = 'TREASURER';
+
+          const userRole = pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER';
+
+          if (leader.userId) {
+            const userUpdatePayload = {
+              name: leader.fullName.trim(),
+              phone: phone,
+              whatsapp_number: leader.whatsapp.trim() || phone,
+              whatsappNumber: leader.whatsapp.trim() || phone,
+              email: leader.email.trim() || null,
+              subscriptionStartDate: startDateFormatted,
+              subscriptionStart: startDateFormatted,
+              subscriptionEndDate: endDateFormatted,
+              subscriptionEnd: endDateFormatted,
+              subscription_start_date: startDateFormatted,
+              subscription_start: startDateFormatted,
+              subscription_end_date: endDateFormatted,
+              subscription_end: endDateFormatted,
+              updated_at: new Date().toISOString()
+            };
+
+            const { error: uErr } = await supabase
+              .from('users')
+              .update(userUpdatePayload)
+              .eq('id', leader.userId);
+
+            if (uErr) {
+              console.error(`Failed to update subscription dates for position ${pos} (user ${leader.userId}):`, uErr);
+              setErrorPopup("Failed to save subscription dates. Please try again.");
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Find user by phone or create new ID
+            const { data: existingUsers } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
+            const targetUid = existingUsers && existingUsers.length > 0 ? existingUsers[0].id : generateId();
+
+            const userUpsertPayload = {
+              id: targetUid,
+              uid: targetUid,
+              name: leader.fullName.trim(),
+              phone: phone,
+              whatsapp_number: leader.whatsapp.trim() || phone,
+              whatsappNumber: leader.whatsapp.trim() || phone,
+              email: leader.email.trim() || null,
+              role: userRole,
+              chapter_position: chapterPosVal,
+              chapterPosition: chapterPosVal,
+              chapter_id: editChapterId,
+              chapter_name: formData.chapter_name.trim(),
+              chapterName: formData.chapter_name.trim(),
+              position: pos,
+              subscriptionStartDate: startDateFormatted,
+              subscriptionStart: startDateFormatted,
+              subscriptionEndDate: endDateFormatted,
+              subscriptionEnd: endDateFormatted,
+              subscription_start_date: startDateFormatted,
+              subscription_start: startDateFormatted,
+              subscription_end_date: endDateFormatted,
+              subscription_end: endDateFormatted,
+              subscriptionStatus: 'Active',
+              subscriptionType: 'Annual',
+              updated_at: new Date().toISOString()
+            };
+
+            const { error: upsertErr } = await supabase.from('users').upsert(userUpsertPayload, { onConflict: 'id' });
+            if (upsertErr) {
+              console.error(`Failed to save subscription dates for ${pos}:`, upsertErr);
+              setErrorPopup("Failed to save subscription dates. Please try again.");
+              setLoading(false);
+              return;
+            }
+          }
+        }
+
+        setSuccessPopup(true);
+        window.dispatchEvent(new Event('dashboard-refresh'));
+        window.dispatchEvent(new CustomEvent('users-updated'));
+        setLoading(false);
+        return;
+      }
+
+      // CREATE MODE
       // 0. Check for existing chapter name
       const { data: existingChapter, error: chapterCheckError } = await supabase
         .from('chapters')
         .select('id')
         .ilike('chapter_name', formData.chapter_name.trim())
         .limit(1);
-        
+
       if (chapterCheckError) {
-        console.error("Chapter check error:", chapterCheckError.message, chapterCheckError.code, chapterCheckError.details, chapterCheckError.hint);
-        throw chapterCheckError;
+        console.error("Chapter check error:", chapterCheckError);
       }
+
       if (existingChapter && existingChapter.length > 0) {
         newErrors.chapter_name = "A chapter with this name already exists. Please choose a different chapter name.";
         setErrors(newErrors);
-        throw new Error("A chapter with this name already exists. Please choose a different chapter name.");
+        setErrorPopup("A chapter with this name already exists. Please choose a different chapter name.");
+        setLoading(false);
+        return;
       }
 
-      // 1. Check for existing users
+      // 1. Check for existing users with these phone numbers
       for (const pos of positions) {
         const phone = normalizePhoneNumber(leaders[pos].mobile);
         const { data: existing, error: checkError } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
         if (checkError) {
-          console.error("User check error:", checkError.message, checkError.code, checkError.details, checkError.hint);
-          throw checkError;
+          console.error("User check error:", checkError);
+          setErrorPopup("Failed to save subscription dates. Please try again.");
+          setLoading(false);
+          return;
         }
         if (existing && existing.length > 0) {
           newErrors[`${String(pos)}_mobile`] = "This phone number is already registered. Please use a different phone number.";
           setErrors(newErrors);
-          throw new Error("This phone number is already registered. Please use a different phone number.");
+          setErrorPopup("This phone number is already registered. Please use a different phone number.");
+          setLoading(false);
+          return;
         }
       }
 
@@ -198,7 +406,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         treasurer: generateId(),
       };
 
-      // 1. Create chapter
+      // 2. Create chapter
       const chapterData = {
         id: chapterId,
         chapter_name: formData.chapter_name.trim(),
@@ -210,14 +418,16 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
 
       const { error: chapterError } = await supabase.from('chapters').insert(chapterData);
       if (chapterError) {
-        console.error("Chapter insert error:", chapterError.message, chapterError.code, chapterError.details, chapterError.hint);
-        throw new Error(`Failed to create chapter: ${chapterError.message}`);
+        console.error("Chapter insert error:", chapterError);
+        setErrorPopup("Failed to save subscription dates. Please try again.");
+        setLoading(false);
+        return;
       }
 
       let createdUsers: string[] = [];
 
       try {
-        // 2. Create users with full subscription fields
+        // 3. Create leadership users
         for (const pos of positions) {
           const leader = leaders[pos];
           const phone = normalizePhoneNumber(leader.mobile);
@@ -229,23 +439,19 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           const endDateISO = formatDateForStorage(leader.subscriptionEnd);
 
           let chapterPosVal = 'MEMBER';
-          if (pos === 'chapter_admin') {
-            chapterPosVal = 'CHAPTER_ADMIN';
-          } else if (pos === 'president') {
-            chapterPosVal = 'PRESIDENT';
-          } else if (pos === 'vice_president') {
-            chapterPosVal = 'VICE_PRESIDENT';
-          } else if (pos === 'treasurer') {
-            chapterPosVal = 'TREASURER';
-          }
+          if (pos === 'chapter_admin') chapterPosVal = 'CHAPTER_ADMIN';
+          else if (pos === 'president') chapterPosVal = 'PRESIDENT';
+          else if (pos === 'vice_president') chapterPosVal = 'VICE_PRESIDENT';
+          else if (pos === 'treasurer') chapterPosVal = 'TREASURER';
 
           const userRole = pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER';
 
-          await setDoc(doc(db, 'users', uid), {
+          const userPayload = {
             id: uid,
             uid: uid,
             name: leader.fullName.trim(),
             phone: phone,
+            whatsapp_number: leader.whatsapp.trim() || phone,
             whatsappNumber: leader.whatsapp.trim() || phone,
             email: leader.email.trim() || null,
             password: bcrypt.hashSync(defaultPassword, 10),
@@ -255,6 +461,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             created_by_role: 'MASTER_ADMIN',
             status: 'ACTIVE',
             membershipStatus: 'ACTIVE',
+            membership_status: 'ACTIVE',
             account_status: 'ACTIVE',
             accountStatus: 'ACTIVE',
             chapter_id: chapterId,
@@ -265,17 +472,30 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             passwordChanged: false,
             must_change_password: true,
             mustChangePassword: true,
-            subscriptionStart: startDateISO,
             subscriptionStartDate: startDateISO,
+            subscriptionStart: startDateISO,
+            subscriptionEndDate: endDateISO,
             subscriptionEnd: endDateISO,
+            subscription_start_date: startDateISO,
+            subscription_start: startDateISO,
+            subscription_end_date: endDateISO,
+            subscription_end: endDateISO,
             subscriptionStatus: 'Active',
             subscriptionType: 'Annual',
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
+            updatedAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          const { error: userInsertErr } = await supabase.from('users').insert(userPayload);
+          if (userInsertErr) {
+            console.error(`User insert error for position ${pos}:`, userInsertErr);
+            throw new Error("Failed to save subscription dates. Please try again.");
+          }
         }
 
-        // 3. Update chapter with the valid user IDs
+        // 4. Update chapter with the leader user IDs
         const { error: chapterUpdateError } = await supabase.from('chapters').update({
           chapter_admin_id: leaderUIDs.chapter_admin,
           president_id: leaderUIDs.president,
@@ -284,35 +504,32 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
         }).eq('id', chapterId);
         
         if (chapterUpdateError) {
-          console.error("Chapter link error:", chapterUpdateError.message, chapterUpdateError.code, chapterUpdateError.details, chapterUpdateError.hint);
+          console.error("Chapter link error:", chapterUpdateError);
           throw new Error(`Unable to link members to the chapter: ${chapterUpdateError.message}`);
         }
 
         setSuccessPopup(true);
         window.dispatchEvent(new Event('dashboard-refresh'));
+        window.dispatchEvent(new CustomEvent('users-updated'));
         
       } catch (insertError: any) {
-        console.error("Creation sub-step error:", insertError.message, insertError.code, insertError.details, insertError.hint);
+        console.error("Creation sub-step error:", insertError);
         await supabase.from('chapters').delete().eq('id', chapterId);
         if (createdUsers.length > 0) {
            await supabase.from('users').delete().in('id', createdUsers);
         }
-        throw insertError;
+        setErrorPopup("Failed to save subscription dates. Please try again.");
       }
     } catch (err: any) {
-      console.error("Chapter creation error:", err.message, err.code, err.details, err.hint, err);
-      if (!errorPopup && !Object.keys(newErrors).length) {
-         setErrorPopup(err.message || 'An error occurred while creating the chapter.');
-      } else if (err.message) {
-         setErrorPopup(err.message);
-      }
+      console.error("Chapter creation error:", err);
+      setErrorPopup("Failed to save subscription dates. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const renderLeaderForm = (title: string, pos: keyof typeof leaders) => (
-    <div className="bg-[#0F172A]/50 border border-white/[0.05] rounded-xl p-5 space-y-4">
+    <div className="bg-[#0F172A]/50 border border-white/[0.05] rounded-xl p-5 space-y-4" key={pos}>
       <h4 className="text-sm font-bold text-white border-b border-white/[0.05] pb-2">{title}</h4>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         
@@ -421,7 +638,9 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <div className="bg-[#161B22] border border-white/[0.08] rounded-[20px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] p-6 sm:p-8 relative">
-      <h2 className="text-xl font-bold text-white mb-6">Create New Chapter</h2>
+      <h2 className="text-xl font-bold text-white mb-6">
+        {editChapterId ? 'Edit Chapter' : 'Create New Chapter'}
+      </h2>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         
@@ -475,7 +694,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           <h3 className="text-sm font-bold text-white uppercase tracking-[0.5px] pb-2">
             Assign Leadership (Mandatory)
           </h3>
-          <p className="text-xs text-neutral-400 mb-2">Create the 4 primary leadership accounts for this new chapter.</p>
+          <p className="text-xs text-neutral-400 mb-2">Configure the 4 primary leadership accounts and subscription dates for this chapter.</p>
           
           {renderLeaderForm('1. Chapter Admin', 'chapter_admin')}
           {renderLeaderForm('2. President', 'president')}
@@ -490,7 +709,9 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             className="px-8 py-3 bg-primary text-white font-bold text-sm uppercase tracking-widest rounded-[14px] hover:bg-[#DC2626] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-70 flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            {loading ? 'Creating Chapter...' : 'Create Chapter'}
+            {loading 
+              ? (editChapterId ? 'Updating Chapter...' : 'Creating Chapter...') 
+              : (editChapterId ? 'Update Chapter' : 'Create Chapter')}
           </button>
         </div>
       </form>
@@ -509,9 +730,13 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 text-emerald-400">
                   <CheckCircle2 size={24} />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">✅ Chapter Created Successfully</h3>
+                <h3 className="text-lg font-bold text-white mb-2">
+                  {editChapterId ? '✅ Chapter Updated Successfully' : '✅ Chapter Created Successfully'}
+                </h3>
                 <p className="text-sm text-neutral-400 mb-6">
-                  The chapter and all leadership members have been created successfully.
+                  {editChapterId 
+                    ? 'The chapter and all leadership members have been updated successfully.'
+                    : 'The chapter and all leadership members have been created successfully.'}
                 </p>
                 <button
                   onClick={closeForm}
@@ -545,7 +770,9 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4 text-red-400">
                   <AlertCircle size={24} />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">❌ Creation Failed</h3>
+                <h3 className="text-lg font-bold text-white mb-2">
+                  {editChapterId ? '❌ Update Failed' : '❌ Creation Failed'}
+                </h3>
                 <p className="text-sm text-neutral-400 mb-6">
                   {errorPopup}
                 </p>
@@ -563,3 +790,4 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
     </div>
   );
 }
+

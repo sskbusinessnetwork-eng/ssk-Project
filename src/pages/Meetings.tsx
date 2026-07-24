@@ -163,7 +163,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
     } else {
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId,
-        chapter_id: profile?.chapter_id || adminId,
+        chapter_id: adminId,
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,

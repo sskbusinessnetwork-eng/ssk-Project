@@ -187,18 +187,35 @@ export function ManageSubscriptions() {
       const startDateFormatted = formatDateForStorage(editForm.subscriptionStart);
       const endDateFormatted = formatDateForStorage(editForm.subscriptionEnd);
       
-      const updates = {
+      const userId = selectedUser.uid || selectedUser.id;
+      const { error: subSaveError } = await supabase.from('users').update({
         subscriptionStart: startDateFormatted,
         subscriptionStartDate: startDateFormatted,
         subscriptionEnd: endDateFormatted,
+        subscriptionEndDate: endDateFormatted,
         subscriptionStatus: editForm.subscriptionStatus,
         membershipStatus: editForm.membershipStatus,
         renewedAt: new Date().toISOString(),
         renewedBy: profile?.uid,
         renewalRequested: false
-      };
-      
-      await databaseService.update('users', selectedUser.uid || selectedUser.id, updates);
+      }).eq('id', userId);
+
+      if (subSaveError) {
+        console.error("Failed to save subscription dates to Supabase:", subSaveError);
+        throw new Error("Failed to save subscription dates. Please try again.");
+      }
+
+      await databaseService.update('users', userId, {
+        subscriptionStart: startDateFormatted,
+        subscriptionStartDate: startDateFormatted,
+        subscriptionEnd: endDateFormatted,
+        subscriptionEndDate: endDateFormatted,
+        subscriptionStatus: editForm.subscriptionStatus,
+        membershipStatus: editForm.membershipStatus,
+        renewedAt: new Date().toISOString(),
+        renewedBy: profile?.uid,
+        renewalRequested: false
+      });
 
       try {
         const isApproved = editForm.subscriptionStatus === 'Active';

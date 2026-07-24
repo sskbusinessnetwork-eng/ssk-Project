@@ -1,0 +1,5 @@
+1. Make CreateChapter support an edit mode (prop: chapterId?).
+2. Fetch chapter details and leadership positions on mount if editing.
+3. Fix the saving of dates (subscriptionStart, subscriptionStartDate, subscriptionEndDate).
+4. Make the dates mandatory.
+5. In ManageChapter.tsx, add an "Edit Chapter" tab.

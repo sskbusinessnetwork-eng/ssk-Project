@@ -55,6 +55,9 @@ function camelToSnake(str: string): string {
   if (str === 'mustChangePassword') return 'must_change_password';
   if (str === 'participantIds') return 'participant_ids';
   if (str === 'read') return 'is_read';
+  if (str === 'subscriptionStartDate') return 'subscriptionStartDate';
+  if (str === 'subscriptionStart') return 'subscriptionStart';
+  if (str === 'subscriptionEndDate') return 'subscriptionEndDate';
   
   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
@@ -288,8 +291,6 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   website: true,
   password_changed: true,
   push_token: true,
-  subscription_start_date: true,
-  subscription_end_date: true,
   subscription_status: true,
   subscription_type: true,
   renewal_requested: true,
