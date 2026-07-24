@@ -548,7 +548,7 @@ export function Connections() {
           Your account is currently being reviewed by our team. You will be able to access the member directory and discover connections once your membership is activated.
         </p>
         <Link 
-          to="/network" 
+          to="/dashboard" 
           className="mt-8 inline-block px-6 py-3 bg-[#111827] text-white rounded-[16px] font-bold hover:bg-emerald-600 transition-all"
         >
           Return to Network

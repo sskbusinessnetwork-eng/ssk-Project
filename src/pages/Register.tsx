@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+
 import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { getDashboardPath } from '../utils/authUtils';
 import { RegisterForm } from '../components/RegisterForm';
@@ -21,7 +22,7 @@ export function Register() {
 
   if (user && profile) {
     if (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN') {
-      return <Navigate to="/network" replace />;
+      return <Navigate to={getDashboardPath(profile.role, profile.position)} replace />;
     }
     const dashboardPath = getDashboardPath(profile.role);
     return <Navigate to={dashboardPath} replace />;

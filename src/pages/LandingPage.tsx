@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { getDashboardPath } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
@@ -186,7 +187,7 @@ export function LandingPage() {
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#F97316]"></div>
     </div>
   );
-  if (user && profile) return <Navigate to="/network" replace />;
+  if (user && profile) return <Navigate to={getDashboardPath(profile.role, profile.position)} replace />;
 
   return (
     <div className="min-h-screen bg-white text-[#0F2040] overflow-x-hidden font-sans selection:bg-[#F97316] selection:text-[#0F2040]">

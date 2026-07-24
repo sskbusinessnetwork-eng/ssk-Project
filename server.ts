@@ -327,6 +327,22 @@ async function startServer() {
         return res.status(500).json({ success: false, error: updateErr.message || "Failed to update member position" });
       }
 
+      // 3b. Update Chapter Admin reference for all members of the chapter
+      if (chapterPosVal === 'CHAPTER_ADMIN' && targetChapterId) {
+        const { error: chapterMembersUpdateErr } = await adminSupabase
+          .from('users')
+          .update({
+            admin_id: targetUserId,
+            created_by: targetUserId,
+            created_by_name: targetUser.name || 'Chapter Admin'
+          })
+          .eq('chapter_id', targetChapterId);
+          
+        if (chapterMembersUpdateErr) {
+          console.error("Failed to update chapter members with new chapter admin:", chapterMembersUpdateErr);
+        }
+      }
+
       // 4. Keep chapters table leadership IDs in sync for targetChapterId
       if (targetChapterId) {
         const { data: updatedChapterUsers } = await adminSupabase

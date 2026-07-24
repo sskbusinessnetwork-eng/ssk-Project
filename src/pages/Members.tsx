@@ -277,6 +277,22 @@ export function Members() {
         return;
       }
 
+      // Fetch the actual current Chapter Admin for this chapter to ensure association is correct
+      let actualChapterAdminId = adminId;
+      let actualChapterAdminName = adminProfile.name || 'Chapter Admin';
+      const { data: chapterAdminUser } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('chapter_id', finalChapterId)
+        .eq('role', 'CHAPTER_ADMIN')
+        .limit(1)
+        .single();
+      
+      if (chapterAdminUser) {
+        actualChapterAdminId = chapterAdminUser.id;
+        actualChapterAdminName = chapterAdminUser.name || 'Chapter Admin';
+      }
+
       // 3. MEMBER DATA STRUCTURE
       const memberProfile = {
         name: newMemberData.name,
@@ -295,11 +311,12 @@ export function Members() {
         chapter_id: finalChapterId,
         chapter_name: finalChapterName,
         chapterName: finalChapterName,
-        createdByName: adminProfile.name || 'Chapter Admin',
+        createdByName: actualChapterAdminName,
         createdByRole: "CHAPTER_ADMIN",
         whatsappNumber: normalizePhoneNumber(newMemberData.whatsapp),
-        adminId: adminId,
-        created_by: adminId,
+        admin_id: actualChapterAdminId,
+        adminId: actualChapterAdminId,
+        created_by: actualChapterAdminId,
         createdAt: new Date().toISOString(),
         subscriptionStart: new Date(newMemberData.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString(),

@@ -111,7 +111,7 @@ export function AddMemberForm() {
       // Fetch the logged-in Chapter Admin's profile from the database to guarantee it is secure and authentic
       const { data: adminProfile, error: profileErr } = await supabase
         .from('users')
-        .select('chapter_id, chapter_name, role')
+        .select('chapter_id, chapter_name, role, name')
         .eq('id', adminId)
         .single();
 
@@ -147,6 +147,22 @@ export function AddMemberForm() {
       // 2. Generate unique Member ID
       const memberId = 'SSK' + Math.floor(10000 + Math.random() * 90000).toString();
 
+      // Fetch the actual current Chapter Admin for this chapter to ensure association is correct
+      let actualChapterAdminId = adminId;
+      let actualChapterAdminName = adminProfile.name || 'Chapter Admin';
+      const { data: chapterAdminUser } = await supabase
+        .from('users')
+        .select('id, name')
+        .eq('chapter_id', finalChapterId)
+        .eq('role', 'CHAPTER_ADMIN')
+        .limit(1)
+        .single();
+      
+      if (chapterAdminUser) {
+        actualChapterAdminId = chapterAdminUser.id;
+        actualChapterAdminName = chapterAdminUser.name || 'Chapter Admin';
+      }
+
       // 3. Create User Profile
       const newMember = {
         memberId: memberId,
@@ -170,7 +186,10 @@ export function AddMemberForm() {
         passwordChanged: false,
         must_change_password: true,
         mustChangePassword: true,
-        created_by: adminId,
+        admin_id: actualChapterAdminId,
+        adminId: actualChapterAdminId,
+        created_by: actualChapterAdminId,
+        createdByName: actualChapterAdminName,
         createdAt: new Date().toISOString()
       };
 

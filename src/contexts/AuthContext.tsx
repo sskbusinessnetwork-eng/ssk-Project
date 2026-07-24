@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           phone: userData.phone,
           profile: updatedProfile
         }));
-      }
+      } else { localStorage.removeItem('user'); setUser(null); setProfile(null); }
     } catch (err) {
       console.error("Error refreshing profile:", err);
     }
