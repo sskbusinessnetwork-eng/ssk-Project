@@ -124,14 +124,10 @@ export function SubscriptionExpired() {
         
         <div className="space-y-3">
           <h1 className="text-2xl font-bold text-white tracking-tight uppercase leading-none font-display">
-            Membership Expired
+            Subscription Expired
           </h1>
           <p className="text-[#9CA3AF] font-medium text-sm leading-relaxed px-2">
-            Your membership subscription has expired.
-            {isAdminUser 
-              ? ' Please submit a renewal request to the Master Admin to restore dashboard access.'
-              : ' Please submit a renewal request to your Chapter Admin to restore your access to referrals, meetings, and the directory.'
-            }
+            Your subscription has expired. Please renew your subscription to continue using SSK Business Network.
           </p>
         </div>
 
@@ -161,7 +157,7 @@ export function SubscriptionExpired() {
                   Submitting Request...
                 </>
               ) : (
-                'Request Membership Renewal'
+                'Renew Subscription'
               )}
             </button>
           )}

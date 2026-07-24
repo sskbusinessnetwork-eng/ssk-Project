@@ -69,7 +69,6 @@ export default function App() {
               <Route path="/set-password" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><SetPassword /></ProtectedRoute>} />
               <Route path="/guests" element={<Guests />} />
               <Route path="/one-to-one" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><OneToOneMeetings /></ProtectedRoute>} />
-              <Route path="/network" element={<Connections />} />
               <Route path="/directory" element={<Connections />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/categories" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Categories /></ProtectedRoute>} />

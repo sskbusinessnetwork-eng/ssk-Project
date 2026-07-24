@@ -448,7 +448,15 @@ export function Members() {
 
     setIsResettingPassword(true);
     try {
-      /* No need to call update-user API */
+      const hashedPassword = bcrypt.hashSync(resetPasswordVal, 10);
+      
+      await databaseService.update('users', (resetPasswordMember as any).uid || resetPasswordMember.id, {
+        password: hashedPassword,
+        mustChangePassword: true,
+        must_change_password: true,
+        passwordChanged: false,
+        password_changed: false
+      });
 
       setResetPasswordMember(null);
       setResetPasswordVal('');

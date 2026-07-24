@@ -159,7 +159,11 @@ export function OnboardMember() {
     if (!confirm('Are you sure you want to reset this member\'s password? They will be forced to change it on their next login.')) return;
     
     try {
-      await updateDoc(doc(db, 'users', uid), { must_change_password: true, password: bcrypt.hashSync('Welcometosskbusiness', 10) });
+      await updateDoc(doc(db, 'users', uid), { 
+        must_change_password: true, 
+        password_changed: false,
+        password: bcrypt.hashSync('Welcometosskbusiness', 10) 
+      });
       
       alert('Password reset successfully to default.');
     } catch (err) {

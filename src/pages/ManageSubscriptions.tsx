@@ -7,7 +7,7 @@ import { UserProfile, Chapter } from '../types';
 import { format, differenceInDays, addYears } from 'date-fns';
 import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
-import { isMemberActive } from '../utils/memberStatus';
+import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
 
 export function ManageSubscriptions() {
   const { profile } = useAuth();
@@ -133,10 +133,11 @@ export function ManageSubscriptions() {
       const matchesPosition = !positionFilter || (u.role || 'MEMBER').toLowerCase() === positionFilter.toLowerCase();
       
       let computedStatus = 'Expired';
-      if (isMemberActive(u)) {
-        const subEndStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
-        if (subEndStr) {
-          const daysLeft = differenceInDays(new Date(subEndStr), new Date());
+      const subStatus = getSubscriptionStatus(u);
+      if (subStatus === 'Active') {
+        const { endDateStr } = getSubscriptionDates(u);
+        if (endDateStr) {
+          const daysLeft = differenceInDays(new Date(endDateStr), new Date());
           if (daysLeft >= 0 && daysLeft <= 30) {
             computedStatus = 'Expiring Soon';
           } else {
@@ -145,6 +146,10 @@ export function ManageSubscriptions() {
         } else {
           computedStatus = 'Active';
         }
+      } else if (subStatus === 'Pending') {
+        computedStatus = 'Pending';
+      } else {
+        computedStatus = 'Expired';
       }
       
       const matchesStatus = !statusFilter || computedStatus === statusFilter;
@@ -174,21 +179,15 @@ export function ManageSubscriptions() {
     try {
       const updates = {
         subscriptionStartDate: editForm.subscriptionStart,
-        subscriptionStart: editForm.subscriptionStart,
         subscriptionEndDate: editForm.subscriptionEnd,
-        subscriptionEnd: editForm.subscriptionEnd,
         subscriptionStatus: editForm.subscriptionStatus,
         membershipStatus: editForm.membershipStatus,
         renewedAt: new Date().toISOString(),
-        renewedBy: profile?.uid
+        renewedBy: profile?.uid,
+        renewalRequested: false
       };
       
-      const { error } = await supabase
-        .from('users')
-        .update(updates)
-        .eq('id', selectedUser.uid || selectedUser.id);
-        
-      if (error) throw error;
+      await databaseService.update('users', selectedUser.uid || selectedUser.id, updates);
 
       try {
         const isApproved = editForm.subscriptionStatus === 'Active';
@@ -323,25 +322,33 @@ export function ManageSubscriptions() {
               </tr>
             ) : (
               filteredUsers.map(user => {
-                const subEndStr = user.subscriptionEndDate || user.subscriptionEnd;
+                const { endDateStr } = getSubscriptionDates(user);
+                const subEndStr = endDateStr;
                 let daysLeft = 0;
                 let statusColor = "text-emerald-400";
                 let statusLabel = "Active";
                 
-                const subStatus = user.subscriptionStatus || user.membershipStatus;
-                
-                if (subStatus !== 'Active' && subStatus !== 'ACTIVE') {
+                const subStatus = getSubscriptionStatus(user);
+                if (subStatus === 'Active') {
+                  if (endDateStr) {
+                    daysLeft = differenceInDays(new Date(endDateStr), new Date());
+                    if (daysLeft <= 30) {
+                      statusColor = "text-amber-400";
+                      statusLabel = "Expiring Soon";
+                    } else {
+                      statusColor = "text-emerald-400";
+                      statusLabel = "Active";
+                    }
+                  } else {
+                    statusColor = "text-emerald-400";
+                    statusLabel = "Active";
+                  }
+                } else if (subStatus === 'Pending') {
+                  statusColor = "text-blue-400";
+                  statusLabel = "Pending";
+                } else {
                   statusColor = "text-red-400";
                   statusLabel = "Expired";
-                } else if (subEndStr) {
-                  daysLeft = differenceInDays(new Date(subEndStr), new Date());
-                  if (daysLeft < 0) {
-                    statusColor = "text-red-400";
-                    statusLabel = "Expired";
-                  } else if (daysLeft <= 30) {
-                    statusColor = "text-amber-400";
-                    statusLabel = "Expiring Soon";
-                  }
                 }
                 
                 const chap = chapters.find(c => c.id === user.chapter_id);

@@ -522,14 +522,20 @@ export async function updateDoc(docRef: any, partialData: any) {
       }
     } else {
       const { error } = await supabase.from('users').update(preparedSnake).eq('id', id);
-      if (error) console.error("updateDoc error:", error);
+      if (error) {
+        console.error("updateDoc error:", error);
+        throw new Error(error.message || 'Database update failed');
+      }
     }
     return;
   }
   
   const snakeData = keysToSnake(cleanData);
-    const { error } = await supabase.from(path).update(snakeData).eq('id', id);
-    if (error) console.error("updateDoc error:", error);
+  const { error } = await supabase.from(path).update(snakeData).eq('id', id);
+  if (error) {
+    console.error("updateDoc error:", error);
+    throw new Error(error.message || 'Database update failed');
+  }
   
   if (path === 'one_to_one_meetings' && participantIds !== undefined) {
     await supabase.from('meeting_participants').delete().eq('meeting_id', id);

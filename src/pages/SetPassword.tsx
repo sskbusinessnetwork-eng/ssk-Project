@@ -101,7 +101,6 @@ export function SetPassword() {
         account_status: 'Active',
         membershipStatus: 'ACTIVE',
         status: 'ACTIVE',
-        activated_at: nowIso,
         updatedAt: nowIso
       });
 
@@ -134,7 +133,6 @@ export function SetPassword() {
         account_status: 'Active',
         membershipStatus: 'ACTIVE',
         status: 'ACTIVE',
-        activated_at: nowIso,
         password: hashedPassword 
       };
       login(updatedProfile);

@@ -1,36 +1,70 @@
-export function isMemberActive(u: any): boolean {
-  if (!u || u.role === 'MASTER_ADMIN') return false;
+export function getSubscriptionDates(u: any): { startDate: Date | null; endDate: Date | null; startDateStr: string; endDateStr: string } {
+  if (!u) return { startDate: null, endDate: null, startDateStr: '', endDateStr: '' };
+
+  const startVal = u.subscription_start_date || u.subscriptionStartDate || u.subscription_start || u.subscriptionStart;
+  const endVal = u.subscription_end_date || u.subscriptionEndDate || u.subscription_end || u.subscriptionEnd;
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+  let startDateStr = '';
+  let endDateStr = '';
+
+  if (startVal) {
+    const s = new Date(startVal);
+    if (!isNaN(s.getTime())) {
+      startDate = s;
+      startDateStr = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
+    }
+  }
+
+  if (endVal) {
+    const e = new Date(endVal);
+    if (!isNaN(e.getTime())) {
+      endDate = e;
+      endDateStr = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
+    }
+  }
+
+  return { startDate, endDate, startDateStr, endDateStr };
+}
+
+export type SubscriptionStatusType = 'Active' | 'Inactive / Expired' | 'Pending';
+
+export function getSubscriptionStatus(u: any): SubscriptionStatusType {
+  if (!u) return 'Inactive / Expired';
+  if (u.role === 'MASTER_ADMIN') return 'Active';
+
+  const { startDateStr, endDateStr } = getSubscriptionDates(u);
+
+  // If no dates are present at all
+  if (!endDateStr && !startDateStr) {
+    const rawStatus = (u.subscription_status || u.subscriptionStatus || '').trim().toLowerCase();
+    if (rawStatus === 'active') return 'Active';
+    return 'Inactive / Expired';
+  }
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  // 1. Subscription End Date check: subscription_end_date >= CURRENT_DATE
-  const endDateVal = u.subscription_end_date || u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end;
-  if (!endDateVal) return false;
-
-  let endDateStr = '';
-  try {
-    const endDateObj = new Date(endDateVal);
-    if (isNaN(endDateObj.getTime())) return false;
-    endDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`;
-  } catch (e) {
-    return false;
+  // If today's date is after Subscription End Date -> Expired
+  if (endDateStr && todayStr > endDateStr) {
+    return 'Inactive / Expired';
   }
 
-  if (endDateStr < todayStr) return false;
+  // If subscription has not yet started -> Pending
+  if (startDateStr && todayStr < startDateStr) {
+    return 'Pending';
+  }
 
-  // 2. Subscription Status check: subscription_status = 'Active' (case-insensitive)
-  const rawSubStatus = (u.subscription_status || u.subscriptionStatus || '').trim();
-  if (rawSubStatus.toLowerCase() !== 'active') return false;
+  // Today's date is between Start Date and End Date (inclusive) -> Active
+  return 'Active';
+}
 
-  // 3. Password Changed check: password_changed = true (default password has been changed)
-  // Must NOT be pending password change
-  const isPwdChanged = (u.password_changed === true || u.passwordChanged === true) && 
-                       u.must_change_password !== true && 
-                       u.mustChangePassword !== true;
-  if (!isPwdChanged) return false;
+export function isMemberActive(u: any): boolean {
+  if (!u) return false;
+  if (u.role === 'MASTER_ADMIN') return true;
 
-  // 4. Account Status check: account_status = 'Active' (case-insensitive)
+  // Account level suspension/inactive check
   const rawAccountStatus = (
     u.account_status || 
     u.accountStatus || 
@@ -38,58 +72,42 @@ export function isMemberActive(u: any): boolean {
     u.membershipStatus || 
     u.status || 
     ''
-  ).trim();
+  ).trim().toUpperCase();
 
-  if (rawAccountStatus.toLowerCase() !== 'active') return false;
+  if (rawAccountStatus === 'SUSPENDED' || rawAccountStatus === 'INACTIVE') {
+    return false;
+  }
 
-  // Locked check if applicable
-  if (u.is_locked === true || u.locked === true) return false;
+  if (u.is_locked === true || u.locked === true) {
+    return false;
+  }
 
-  return true;
+  return getSubscriptionStatus(u) === 'Active';
 }
 
-export function getMemberStatusLabel(u: any): 'Active' | 'Inactive' {
-  return isMemberActive(u) ? 'Active' : 'Inactive';
+export function getMemberStatusLabel(u: any): 'Active' | 'Inactive / Expired' | 'Pending' {
+  if (!u) return 'Inactive / Expired';
+  if (u.role === 'MASTER_ADMIN') return 'Active';
+  return getSubscriptionStatus(u);
 }
 
 export function getMemberInactiveReasons(u: any): string[] {
   const reasons: string[] = [];
-  if (!u || u.role === 'MASTER_ADMIN') return ['Master Admin'];
+  if (!u) return ['No User'];
+  if (u.role === 'MASTER_ADMIN') return [];
 
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-  // 1. Subscription End Date
-  const endDateVal = u.subscription_end_date || u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end;
-  if (!endDateVal) {
-    reasons.push('No Subscription Date');
-  } else {
-    try {
-      const endDateObj = new Date(endDateVal);
-      const endDateStr = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`;
-      if (endDateStr < todayStr) {
-        reasons.push('Subscription Expired');
-      }
-    } catch (e) {
-      reasons.push('Invalid Subscription Date');
+  const subStatus = getSubscriptionStatus(u);
+  if (subStatus === 'Inactive / Expired') {
+    const { endDateStr } = getSubscriptionDates(u);
+    if (!endDateStr) {
+      reasons.push('No Subscription Date');
+    } else {
+      reasons.push('Subscription Expired');
     }
+  } else if (subStatus === 'Pending') {
+    reasons.push('Subscription Not Started Yet');
   }
 
-  // 2. Subscription Status
-  const rawSubStatus = (u.subscription_status || u.subscriptionStatus || '').trim();
-  if (rawSubStatus.toLowerCase() !== 'active') {
-    reasons.push(`Subscription ${rawSubStatus || 'Expired'}`);
-  }
-
-  // 3. Password Changed
-  const isPwdChanged = (u.password_changed === true || u.passwordChanged === true) && 
-                       u.must_change_password !== true && 
-                       u.mustChangePassword !== true;
-  if (!isPwdChanged) {
-    reasons.push('Default Password Not Changed');
-  }
-
-  // 4. Account Status
   const rawAccountStatus = (
     u.account_status || 
     u.accountStatus || 
@@ -97,10 +115,10 @@ export function getMemberInactiveReasons(u: any): string[] {
     u.membershipStatus || 
     u.status || 
     ''
-  ).trim();
+  ).trim().toUpperCase();
 
-  if (rawAccountStatus.toLowerCase() !== 'active') {
-    reasons.push(`Account ${rawAccountStatus || 'Inactive'}`);
+  if (rawAccountStatus === 'SUSPENDED' || rawAccountStatus === 'INACTIVE') {
+    reasons.push(`Account ${rawAccountStatus}`);
   }
 
   if (u.is_locked === true || u.locked === true) {
@@ -109,3 +127,4 @@ export function getMemberInactiveReasons(u: any): string[] {
 
   return reasons;
 }
+

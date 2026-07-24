@@ -58,7 +58,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   const menuItems: { icon: any; label: string; path: string; roles: string[]; badge?: number }[] = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath(), roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Users, label: 'Network', path: '/network', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Calendar, label: 'Meetings', path: '/meetings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Layers, label: 'One-to-One', path: '/one-to-one', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Share2, label: 'Referrals', path: '/refer', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
@@ -72,7 +71,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Tags, label: 'Manage Categories', path: '/categories', roles: ['MASTER_ADMIN'] },
     { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Settings, label: 'Settings', path: '/settings', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Settings, label: 'Settings', path: '/settings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
   ];
 
   const userRole = profile?.role || 'MEMBER';
@@ -244,9 +243,11 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
       {/* Bottom Cards (Sticky) */}
       <div className="shrink-0 p-3 flex flex-col gap-3 border-t border-[#1F2937]/50 bg-[#11131A] z-20">
         <div className="flex items-center justify-between px-1.5 pt-2 border-t border-[#1F2937]/50">
-          <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
-            <Settings size={18} />
-          </Link>
+          {userRole !== 'MEMBER' && (
+            <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
+              <Settings size={18} />
+            </Link>
+          )}
           <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
             <LogOut size={18} />
           </button>

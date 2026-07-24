@@ -9,6 +9,7 @@ import {
 import { Meeting, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
+import { getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
@@ -583,11 +584,12 @@ export function MemberCompanionView({
 
       {/* 5. Membership Subscription Status Card */}
       {(() => {
-        const rawEndDate = profile?.subscriptionEndDate || profile?.subscriptionEnd;
-        const resolvedEndDate = rawEndDate || (profile?.createdAt ? new Date(new Date(profile.createdAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : new Date(new Date().getTime() + 300 * 24 * 60 * 60 * 1000).toISOString());
+        const { endDateStr } = getSubscriptionDates(profile);
+        const resolvedEndDate = endDateStr || (profile?.createdAt ? new Date(new Date(profile.createdAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : new Date(new Date().getTime() + 300 * 24 * 60 * 60 * 1000).toISOString());
         const { daysRemaining, monthsRemaining } = calculateSubscriptionDetails(resolvedEndDate);
         
-        const isEligibleForRenewal = daysRemaining <= 30;
+        const subStatus = getSubscriptionStatus(profile);
+        const isEligibleForRenewal = daysRemaining <= 30 || subStatus === 'Inactive / Expired';
         const isAlreadyRequested = profile?.renewalRequested || false;
 
         const formatRenewBefore = (dateStr: string) => {
@@ -620,11 +622,13 @@ export function MemberCompanionView({
                   "text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border shrink-0",
                   isAlreadyRequested 
                     ? "bg-amber-500/20 text-amber-400 border-amber-500/10" 
-                    : daysRemaining < 0 
+                    : subStatus === 'Inactive / Expired'
                       ? "bg-red-500/20 text-red-400 border-red-500/10"
-                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/10"
+                      : subStatus === 'Pending'
+                        ? "bg-blue-500/20 text-blue-400 border-blue-500/10"
+                        : "bg-emerald-500/20 text-emerald-400 border-emerald-500/10"
                 )}>
-                  {isAlreadyRequested ? "Pending Approval" : daysRemaining < 0 ? "Expired" : "Active"}
+                  {isAlreadyRequested ? "Pending Approval" : subStatus}
                 </span>
               </div>
 

@@ -98,7 +98,6 @@ export function Layout() {
 
   const mobileNavItems = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
-    ...(profile?.role !== 'MEMBER' ? [{ icon: Users, label: 'Network', path: '/network' }] : []),
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
     { icon: Share2, label: 'Referrals', path: '/refer' },
     { icon: Menu, label: 'More', isAction: true, action: () => setIsBottomSheetOpen(true) },
@@ -322,16 +321,17 @@ export function Layout() {
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider px-2 mb-1">Account</span>
                   
-                  <Link to="/settings" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
-                        <Settings size={18} />
+                  {profile?.role !== 'MEMBER' && (
+                    <Link to="/settings" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
+                          <Settings size={18} />
+                        </div>
+                        <span className="font-bold text-[#E5E7EB]">Settings</span>
                       </div>
-                      <span className="font-bold text-[#E5E7EB]">Settings</span>
-                    </div>
-                    <ChevronRight size={18} className="text-[#6B7280]" />
-                  </Link>
-
+                      <ChevronRight size={18} className="text-[#6B7280]" />
+                    </Link>
+                  )}
                   <button onClick={handleLogout} className="flex items-center justify-between p-3 rounded-xl hover:bg-red-500/10 transition-colors active:bg-red-500/20 w-full text-left mt-2 border border-red-500/20">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">

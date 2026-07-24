@@ -22,7 +22,7 @@ import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
-import { isMemberActive, getMemberInactiveReasons } from '../utils/memberStatus';
+import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -309,7 +309,7 @@ export function Analytics() {
         phone: u.phone || 'N/A',
         chapterName: u.chapterName || u.chapter_name || 'N/A',
         position: getDisplayPosition(u.position, u.role),
-        subscriptionStatus: u.subscription_status || u.subscriptionStatus || 'Inactive',
+        subscriptionStatus: getSubscriptionStatus(u),
         passwordStatus: mustChangePwd ? 'Default Password' : 'Changed',
         inactiveReason: reasons.join(' & ')
       };
