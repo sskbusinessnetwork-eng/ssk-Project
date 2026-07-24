@@ -285,15 +285,12 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               name: leader.fullName.trim(),
               phone: phone,
               whatsapp_number: leader.whatsapp.trim() || phone,
-              whatsappNumber: leader.whatsapp.trim() || phone,
               email: leader.email.trim() || null,
               subscriptionStartDate: startDateFormatted,
               subscriptionStart: startDateFormatted,
               subscriptionEndDate: endDateFormatted,
               subscriptionEnd: endDateFormatted,
-              subscription_start_date: startDateFormatted,
               subscription_start: startDateFormatted,
-              subscription_end_date: endDateFormatted,
               subscription_end: endDateFormatted,
               updated_at: new Date().toISOString()
             };
@@ -305,7 +302,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
 
             if (uErr) {
               console.error(`Failed to update subscription dates for position ${pos} (user ${leader.userId}):`, uErr);
-              setErrorPopup("Failed to save subscription dates. Please try again.");
+              setErrorPopup(uErr.message || "Failed to save subscription dates. Please try again.");
               setLoading(false);
               return;
             }
@@ -320,32 +317,26 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               name: leader.fullName.trim(),
               phone: phone,
               whatsapp_number: leader.whatsapp.trim() || phone,
-              whatsappNumber: leader.whatsapp.trim() || phone,
               email: leader.email.trim() || null,
               role: userRole,
               chapter_position: chapterPosVal,
-              chapterPosition: chapterPosVal,
               chapter_id: editChapterId,
               chapter_name: formData.chapter_name.trim(),
-              chapterName: formData.chapter_name.trim(),
               position: pos,
               subscriptionStartDate: startDateFormatted,
               subscriptionStart: startDateFormatted,
               subscriptionEndDate: endDateFormatted,
               subscriptionEnd: endDateFormatted,
-              subscription_start_date: startDateFormatted,
               subscription_start: startDateFormatted,
-              subscription_end_date: endDateFormatted,
               subscription_end: endDateFormatted,
               subscriptionStatus: 'Active',
-              subscriptionType: 'Annual',
               updated_at: new Date().toISOString()
             };
 
             const { error: upsertErr } = await supabase.from('users').upsert(userUpsertPayload, { onConflict: 'id' });
             if (upsertErr) {
               console.error(`Failed to save subscription dates for ${pos}:`, upsertErr);
-              setErrorPopup("Failed to save subscription dates. Please try again.");
+              setErrorPopup(upsertErr.message || "Failed to save subscription dates. Please try again.");
               setLoading(false);
               return;
             }
@@ -385,7 +376,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
         const { data: existing, error: checkError } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
         if (checkError) {
           console.error("User check error:", checkError);
-          setErrorPopup("Failed to save subscription dates. Please try again.");
+          setErrorPopup(checkError.message || "Failed to save subscription dates. Please try again.");
           setLoading(false);
           return;
         }
@@ -419,7 +410,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
       const { error: chapterError } = await supabase.from('chapters').insert(chapterData);
       if (chapterError) {
         console.error("Chapter insert error:", chapterError);
-        setErrorPopup("Failed to save subscription dates. Please try again.");
+        setErrorPopup(chapterError.message || "Failed to save subscription dates. Please try again.");
         setLoading(false);
         return;
       }
@@ -452,38 +443,26 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
             name: leader.fullName.trim(),
             phone: phone,
             whatsapp_number: leader.whatsapp.trim() || phone,
-            whatsappNumber: leader.whatsapp.trim() || phone,
             email: leader.email.trim() || null,
             password: bcrypt.hashSync(defaultPassword, 10),
             role: userRole,
             chapter_position: chapterPosVal,
-            chapterPosition: chapterPosVal,
             created_by_role: 'MASTER_ADMIN',
             status: 'ACTIVE',
             membershipStatus: 'ACTIVE',
             membership_status: 'ACTIVE',
             account_status: 'ACTIVE',
-            accountStatus: 'ACTIVE',
             chapter_id: chapterId,
             chapter_name: formData.chapter_name.trim(),
-            chapterName: formData.chapter_name.trim(),
             position: pos,
-            password_changed: false,
-            passwordChanged: false,
             must_change_password: true,
-            mustChangePassword: true,
             subscriptionStartDate: startDateISO,
             subscriptionStart: startDateISO,
             subscriptionEndDate: endDateISO,
             subscriptionEnd: endDateISO,
-            subscription_start_date: startDateISO,
             subscription_start: startDateISO,
-            subscription_end_date: endDateISO,
             subscription_end: endDateISO,
             subscriptionStatus: 'Active',
-            subscriptionType: 'Annual',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
@@ -491,7 +470,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
           const { error: userInsertErr } = await supabase.from('users').insert(userPayload);
           if (userInsertErr) {
             console.error(`User insert error for position ${pos}:`, userInsertErr);
-            throw new Error("Failed to save subscription dates. Please try again.");
+            throw new Error(userInsertErr.message || "Failed to save subscription dates. Please try again.");
           }
         }
 
