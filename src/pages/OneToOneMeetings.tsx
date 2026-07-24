@@ -22,12 +22,18 @@ import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
-import { format, isAfter, parseISO } from 'date-fns';
+import { isAfter, parseISO, format as originalFormat, isValid } from 'date-fns';
 import { where, orderBy, collection, getDocs, query, or } from '../lib/database';
 import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 import { getCleanFullName } from '../utils/authUtils';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 const getUserFullName = (user: any): string => {
   if (!user) return '';

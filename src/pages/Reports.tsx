@@ -10,7 +10,7 @@ import {
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
   FileText, Star, X, CheckSquare, Briefcase, BarChart3, TrendingUp, Info
 } from 'lucide-react';
-import { format, isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths } from 'date-fns';
+import { isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths, format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -32,6 +32,12 @@ import {
   Pie,
   Cell
 } from 'recharts';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 export function Reports() {
   const { profile } = useAuth();

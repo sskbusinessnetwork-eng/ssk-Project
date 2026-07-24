@@ -5,9 +5,15 @@ import { Star, MessageSquare, Plus } from 'lucide-react';
 import { databaseService } from '../services/databaseService';
 import { UserProfile, Testimonial } from '../types';
 import {  where, orderBy  } from '../lib/database';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { WriteTestimonialModal } from './WriteTestimonialModal';
 import { Link } from 'react-router-dom';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 interface MemberTestimonialsProps {
   currentUser: UserProfile | null;

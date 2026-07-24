@@ -4,10 +4,16 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { Search, Filter, Shield, Calendar, CreditCard, ChevronDown, Check, X, Building, AlertTriangle } from 'lucide-react';
 import { UserProfile, Chapter } from '../types';
-import { format, differenceInDays, addYears } from 'date-fns';
+import { differenceInDays, addYears, format as originalFormat, isValid } from 'date-fns';
 import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
 import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 const formatDateForStorage = (dateStr: string) => {
   if (!dateStr) return '';

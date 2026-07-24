@@ -14,7 +14,13 @@ import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
 import {  where, orderBy, limit  } from '../lib/database';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 // Reusable animation variants
 const fadeUp = {

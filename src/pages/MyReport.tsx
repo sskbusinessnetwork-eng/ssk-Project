@@ -17,8 +17,14 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { getCleanFullName } from '../utils/authUtils';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 const getUserFullName = (user: any): string => {
   if (!user) return '';

@@ -14,7 +14,13 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 interface MemberCompanionViewProps {
   profile: UserProfile | null;

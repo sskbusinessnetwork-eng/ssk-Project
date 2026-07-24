@@ -6,8 +6,14 @@ import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn, getMemberPositionKey } from '../lib/utils';
 import { Search, User, Phone, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'member', label: 'Member' },

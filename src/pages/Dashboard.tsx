@@ -1,4 +1,4 @@
-import { format, addYears } from 'date-fns';
+import { addYears, format as originalFormat, isValid } from 'date-fns';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
@@ -23,6 +23,12 @@ import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);

@@ -17,10 +17,16 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { ThankYouSlip, Referral, UserProfile, Category } from '../types';
 import { Modal } from '../components/Modal';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import {  where, orderBy  } from '../lib/database';
 import { cn } from '../lib/utils';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 export function ThankYouSlips() {
   const { profile } = useAuth();

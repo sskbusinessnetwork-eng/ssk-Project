@@ -31,8 +31,14 @@ import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { cn } from '../lib/utils';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { MemberTestimonials } from '../components/MemberTestimonials';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 export function Profile() {
   const { profile: currentUserProfile } = useAuth();

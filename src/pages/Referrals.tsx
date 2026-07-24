@@ -15,12 +15,18 @@ import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
 import { Referral, UserProfile, ThankYouSlip } from '../types';
 import { Modal } from '../components/Modal';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
 import { getCleanFullName } from '../utils/authUtils';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 const getUserFullName = (user: any): string => {
   if (!user) return '';

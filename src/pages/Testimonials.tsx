@@ -7,9 +7,15 @@ import { notificationService } from '../services/notificationService';
 import { UserProfile, Testimonial } from '../types';
 import {  where, orderBy  } from '../lib/database';
 import { MessageSquare, Star, Search, Filter, Plus, Trash2, CheckCircle2, Clock, MapPin, Building2, User, X, Check, EyeOff } from 'lucide-react';
-import { format } from 'date-fns';
+import { format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
+
+const format = (date: any, formatStr: string, options?: any) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
+};
 
 export function Testimonials() {
   const { profile } = useAuth();
