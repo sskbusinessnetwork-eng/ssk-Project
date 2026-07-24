@@ -43,11 +43,7 @@ export function ManageSubscriptions() {
     
     const fetchUsers = async () => {
       let query = supabase.from('users').select('*');
-      if (profile.role === 'MASTER_ADMIN') {
-        // Master admin only sees Chapter Admins
-        query = query.in('role', ['CHAPTER_ADMIN']);
-        // Note: Or position === 'chapter_admin', which we will filter in JS to be safe.
-      } else {
+      if (profile.role !== 'MASTER_ADMIN') {
         // Chapter Admin sees their chapter
         query = query.eq('chapter_id', profile.chapter_id);
       }
@@ -118,19 +114,14 @@ export function ManageSubscriptions() {
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
-      // Master Admin: Only show Chapter Admins
-      if (profile?.role === 'MASTER_ADMIN') {
-        if (u.role !== 'CHAPTER_ADMIN' && u.position !== 'chapter_admin') return false;
-      } else {
-        // Chapter Admin: Show normal members (excluding Master Admin and Chapter Admin)
-        if (u.role === 'MASTER_ADMIN' || u.role === 'CHAPTER_ADMIN' || u.position === 'chapter_admin') return false;
-      }
+      if (u.role === 'MASTER_ADMIN') return false;
       
       const matchesSearch = u.name?.toLowerCase().includes(search.toLowerCase()) || 
                             u.phone?.includes(search) || 
                             u.email?.toLowerCase().includes(search.toLowerCase());
-      const matchesChapter = !chapterFilter || u.chapter_id === chapterFilter;
-      const matchesPosition = !positionFilter || (u.role || 'MEMBER').toLowerCase() === positionFilter.toLowerCase();
+      const userChapterId = String(u.chapter_id || (u as any).chapterId || '').trim();
+      const matchesChapter = !chapterFilter || userChapterId === chapterFilter;
+      const matchesPosition = !positionFilter || (u.role === 'CHAPTER_ADMIN' && positionFilter === 'chapter_admin') || (u.position || 'MEMBER').toLowerCase() === positionFilter.toLowerCase() || (u.role || 'MEMBER').toLowerCase() === positionFilter.toLowerCase();
       
       let computedStatus = 'Expired';
       const subStatus = getSubscriptionStatus(u);
@@ -352,7 +343,8 @@ export function ManageSubscriptions() {
                   statusLabel = "Expired";
                 }
                 
-                const chap = chapters.find(c => c.id === user.chapter_id);
+                const userChapterId = String(user.chapter_id || (user as any).chapterId || '').trim();
+                const chap = chapters.find(c => c.id === userChapterId);
 
                 return (
                   <tr key={user.uid} className="hover:bg-white/[0.02]">
@@ -364,7 +356,7 @@ export function ManageSubscriptions() {
                       {user.phone}
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-300">
-                      {chap?.chapter_name || 'N/A'}
+                      {user.chapterName || chap?.chapter_name || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-300 capitalize">
                       {user.position?.replace('_', ' ') || user.role}

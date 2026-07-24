@@ -1307,7 +1307,7 @@ export function Reports() {
                 </div>
 
                 <div className="pt-4 border-t border-white/5 mt-4 flex items-center justify-between text-[11px] text-[#9CA3AF] font-bold uppercase">
-                  <span>SSK Network Standard v2.1</span>
+                  <span>SSK Business Network Standard v2.1</span>
                   <span className="text-purple-400">Audited Daily</span>
                 </div>
               </div>

@@ -70,7 +70,7 @@ export function Login() {
         </div>
         <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-widest pt-4">
           <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/30 border-t-primary"></div>
-          <span>Loading SSK Network...</span>
+          <span>Loading SSK Business Network...</span>
         </div>
       </div>
     );

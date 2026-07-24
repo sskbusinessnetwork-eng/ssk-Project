@@ -18,7 +18,7 @@ export function BrandLogo({
   size = 'md', 
   showText = false, 
   lightText = true,
-  subtitle = 'BUSINESS NETWORK',
+  subtitle,
   onClick
 }: BrandLogoProps) {
   const containerSizeMap = {
@@ -59,7 +59,7 @@ export function BrandLogo({
             "text-2xl",
             lightText ? "text-white" : "text-[#0F2040]"
           )}>
-            SSK <span className="text-primary font-extrabold">NETWORKS</span>
+            SSK <span className="text-primary font-extrabold">BUSINESS NETWORK</span>
           </span>
           {subtitle && (
             <span className={cn(
