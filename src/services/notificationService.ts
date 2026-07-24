@@ -504,9 +504,9 @@ export const notificationService = {
       }
 
       // 6. Subscription Renewal Check
-      if (userProfile?.subscription_end_date || userProfile?.subscriptionEndDate) {
-        const endDateStr = userProfile.subscription_end_date || userProfile.subscriptionEndDate;
-        const diffMs = new Date(endDateStr).getTime() - new Date().getTime();
+      const { endDate } = getSubscriptionDates(userProfile);
+      if (endDate) {
+        const diffMs = endDate.getTime() - new Date().getTime();
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         if (diffDays <= 30) {
           items.push({
@@ -678,9 +678,9 @@ export const notificationService = {
       }
 
       // 3. Subscription Expire Warning
-      if (userProfile?.subscription_end_date || userProfile?.subscriptionEndDate) {
-        const endDateStr = userProfile.subscription_end_date || userProfile.subscriptionEndDate;
-        const diffMs = new Date(endDateStr).getTime() - now.getTime();
+      const { endDate } = getSubscriptionDates(userProfile);
+      if (endDate) {
+        const diffMs = endDate.getTime() - now.getTime();
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
         if ([30, 15, 7, 3, 1, 0].includes(diffDays)) {

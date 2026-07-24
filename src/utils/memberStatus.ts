@@ -1,8 +1,8 @@
 export function getSubscriptionDates(u: any): { startDate: Date | null; endDate: Date | null; startDateStr: string; endDateStr: string } {
   if (!u) return { startDate: null, endDate: null, startDateStr: '', endDateStr: '' };
 
-  const startVal = u.subscription_start_date || u.subscriptionStartDate || u.subscription_start || u.subscriptionStart;
-  const endVal = u.subscription_end_date || u.subscriptionEndDate || u.subscription_end || u.subscriptionEnd;
+  const startVal = u.subscription_start || u.subscription_start_date || u.subscriptionStartDate || u.subscriptionStart;
+  const endVal = u.subscription_end || u.subscription_end_date || u.subscriptionEndDate || u.subscriptionEnd;
 
   let startDate: Date | null = null;
   let endDate: Date | null = null;
@@ -11,17 +11,26 @@ export function getSubscriptionDates(u: any): { startDate: Date | null; endDate:
 
   const parseDateStr = (val: any): { date: Date | null, str: string } => {
     if (!val) return { date: null, str: '' };
-    const strVal = String(val);
+    const strVal = String(val).trim();
     
-    // Check if it matches YYYY-MM-DD anywhere in the string (e.g. 2026-07-23T00:00:00Z)
-    const match = strVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const parsedStr = match[0];
-      // new Date('2026-07-23') creates a Date at 00:00 UTC
+    // Check YYYY-MM-DD
+    const match1 = strVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match1) {
+      const parsedStr = match1[0];
       return { date: new Date(parsedStr), str: parsedStr };
     }
 
-    // Fallback for other formats (like DD-MM-YYYY)
+    // Check DD-MM-YYYY or DD/MM/YYYY
+    const match2 = strVal.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+    if (match2) {
+       const d = match2[1];
+       const m = match2[2];
+       const y = match2[3];
+       const parsedStr = `${y}-${m}-${d}`;
+       return { date: new Date(parsedStr), str: parsedStr };
+    }
+
+    // Fallback for other formats
     const d = new Date(strVal);
     if (!isNaN(d.getTime())) {
       const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -51,7 +60,7 @@ export function getSubscriptionStatus(u: any): SubscriptionStatusType {
 
   // If no dates are present at all
   if (!endDateStr && !startDateStr) {
-    const rawStatus = (u.subscription_status || u.subscriptionStatus || '').trim().toLowerCase();
+    const rawStatus = (u.membership_status || u.subscription_status || u.subscriptionStatus || '').trim().toLowerCase();
     if (rawStatus === 'active') return 'Active';
     return 'Inactive / Expired';
   }
@@ -78,16 +87,13 @@ export function isMemberActive(u: any): boolean {
   if (u.role === 'MASTER_ADMIN') return true;
 
   // Account level suspension/inactive check
-  const rawAccountStatus = (
-    u.account_status || 
-    u.accountStatus || 
-    u.membership_status || 
-    u.membershipStatus || 
-    u.status || 
-    ''
-  ).trim().toUpperCase();
-
+  const rawAccountStatus = (u.account_status || u.accountStatus || '').trim().toUpperCase();
   if (rawAccountStatus === 'SUSPENDED' || rawAccountStatus === 'INACTIVE') {
+    return false;
+  }
+  
+  const rawMembershipStatus = (u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
+  if (rawMembershipStatus === 'INACTIVE') {
     return false;
   }
 
@@ -99,8 +105,8 @@ export function isMemberActive(u: any): boolean {
 }
 
 export function getMemberStatusLabel(u: any): 'Active' | 'Inactive / Expired' | 'Pending' {
-  if (!u) console.log("Returning Inactive / Expired"); return 'Inactive / Expired';
-  if (u.role === 'MASTER_ADMIN') console.log("Returning Active"); return 'Active';
+  if (!u) return 'Inactive / Expired';
+  if (u.role === 'MASTER_ADMIN') return 'Active';
   return getSubscriptionStatus(u);
 }
 
@@ -121,17 +127,14 @@ export function getMemberInactiveReasons(u: any): string[] {
     reasons.push('Subscription Not Started Yet');
   }
 
-  const rawAccountStatus = (
-    u.account_status || 
-    u.accountStatus || 
-    u.membership_status || 
-    u.membershipStatus || 
-    u.status || 
-    ''
-  ).trim().toUpperCase();
-
+  const rawAccountStatus = (u.account_status || u.accountStatus || '').trim().toUpperCase();
   if (rawAccountStatus === 'SUSPENDED' || rawAccountStatus === 'INACTIVE') {
     reasons.push(`Account ${rawAccountStatus}`);
+  }
+  
+  const rawMembershipStatus = (u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
+  if (rawMembershipStatus === 'INACTIVE') {
+    reasons.push(`Membership ${rawMembershipStatus}`);
   }
 
   if (u.is_locked === true || u.locked === true) {
@@ -140,4 +143,3 @@ export function getMemberInactiveReasons(u: any): string[] {
 
   return reasons;
 }
-

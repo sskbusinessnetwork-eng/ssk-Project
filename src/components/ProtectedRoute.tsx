@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types';
 import { getDashboardPath } from '../utils/authUtils';
 import { BrandLogo } from './BrandLogo';
-import { getSubscriptionStatus } from '../utils/memberStatus';
+import { isMemberActive } from '../utils/memberStatus';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -60,10 +60,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     }
   }
 
-  // Check subscription for members and chapter admins
+  // Check subscription and status for members and chapter admins
   if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin'))) {
-    const subStatus = getSubscriptionStatus(profile);
-    if (subStatus === 'Inactive / Expired') {
+    if (!isMemberActive(profile)) {
       return <Navigate to="/subscription-expired" replace />;
     }
   }

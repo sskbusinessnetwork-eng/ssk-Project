@@ -92,9 +92,9 @@ export function ManageSubscriptions() {
 
       if (isMemberActive(u)) {
         active++;
-        const subEndStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date;
-        if (subEndStr) {
-          const daysLeft = differenceInDays(new Date(subEndStr), now);
+        const { endDate } = getSubscriptionDates(u);
+        if (endDate) {
+          const daysLeft = differenceInDays(endDate, now);
           if (daysLeft >= 0 && daysLeft <= 30) {
             expiringSoon++;
           }
@@ -160,9 +160,10 @@ export function ManageSubscriptions() {
 
   const openEditModal = (user: UserProfile) => {
     setSelectedUser(user);
+    const { startDate, endDate } = getSubscriptionDates(user);
     setEditForm({
-      subscriptionStart: user.subscriptionStartDate || user.subscriptionStart ? format(new Date(user.subscriptionStartDate || user.subscriptionStart as string), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-      subscriptionEnd: user.subscriptionEndDate || user.subscriptionEnd ? format(new Date(user.subscriptionEndDate || user.subscriptionEnd as string), 'yyyy-MM-dd') : format(addYears(new Date(), 1), 'yyyy-MM-dd'),
+      subscriptionStart: startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+      subscriptionEnd: endDate ? format(endDate, 'yyyy-MM-dd') : format(addYears(new Date(), 1), 'yyyy-MM-dd'),
       subscriptionStatus: user.subscriptionStatus || 'Active',
       membershipStatus: user.membershipStatus || 'ACTIVE'
     });
@@ -369,11 +370,21 @@ export function ManageSubscriptions() {
                       {user.position?.replace('_', ' ') || user.role}
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-300">
-                      {user.subscriptionStartDate || user.subscriptionStart ? format(new Date(user.subscriptionStartDate || user.subscriptionStart as string), 'MMM d, yyyy') : 'N/A'}
+                      {
+                        (function(){
+                          const { startDate } = getSubscriptionDates(user);
+                          return startDate ? format(startDate, 'MMM d, yyyy') : 'N/A';
+                        })()
+                      }
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-neutral-300">
-                        {subEndStr ? format(new Date(subEndStr), 'MMM d, yyyy') : 'N/A'}
+                        {
+                        (function(){
+                          const { endDate } = getSubscriptionDates(user);
+                          return endDate ? format(endDate, 'MMM d, yyyy') : 'N/A';
+                        })()
+                      }
                       </div>
                       {subEndStr && daysLeft >= 0 && (
                         <div className="text-xs text-neutral-500">{daysLeft} days left</div>

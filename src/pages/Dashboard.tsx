@@ -914,7 +914,7 @@ export function Analytics() {
     }
 
     const expiringAdmins = chapterAdmins.filter(u => {
-      const endStr = u.subscriptionEndDate || u.subscriptionEnd;
+      const endStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
       if (!endStr) return false;
       const { daysRemaining } = calculateSubscriptionDetails(endStr);
       return daysRemaining >= 0 && daysRemaining <= 30;
@@ -934,7 +934,7 @@ export function Analytics() {
     }
 
     const expiredAdmins = chapterAdmins.filter(u => {
-      const endStr = u.subscriptionEndDate || u.subscriptionEnd;
+      const endStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
       if (!endStr) return true;
       const { daysRemaining } = calculateSubscriptionDetails(endStr);
       return daysRemaining < 0;
@@ -1011,7 +1011,7 @@ export function Analytics() {
     });
 
     const expiringMembers = members.filter(u => {
-      const endStr = u.subscriptionEndDate || u.subscriptionEnd;
+      const endStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
       if (!endStr) return false;
       const { daysRemaining } = calculateSubscriptionDetails(endStr);
       return daysRemaining >= 0 && daysRemaining <= 30;
@@ -1031,7 +1031,7 @@ export function Analytics() {
     }
 
     const expiredMembers = members.filter(u => {
-      const endStr = u.subscriptionEndDate || u.subscriptionEnd;
+      const endStr = u.subscriptionEndDate || u.subscriptionEnd || u.subscription_end_date || u.subscription_end;
       if (!endStr) return true;
       const { daysRemaining } = calculateSubscriptionDetails(endStr);
       return daysRemaining < 0;
@@ -1050,7 +1050,7 @@ export function Analytics() {
       });
     }
 
-    const myEndStr = profile.subscriptionEndDate || profile.subscriptionEnd;
+    const myEndStr = profile.subscriptionEndDate || profile.subscriptionEnd || profile.subscription_end_date || profile.subscription_end;
     if (myEndStr) {
       const { daysRemaining } = calculateSubscriptionDetails(myEndStr);
       if (daysRemaining <= 30) {

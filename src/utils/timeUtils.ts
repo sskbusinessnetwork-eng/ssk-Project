@@ -73,17 +73,30 @@ export function parseTo12hParts(timeStr: string): { time: string; ampm: 'AM' | '
 
 export function calculateSubscriptionDetails(endDateStr?: string) {
   if (!endDateStr) return { daysRemaining: 0, monthsRemaining: 0, isExpired: false, isExpiring30: false };
-  const end = new Date(endDateStr);
+  
+  let end = new Date(endDateStr);
+
+  const strVal = String(endDateStr).trim();
+  const match1 = strVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const match2 = strVal.match(/^(\d{2})[-/](\d{2})[-/](\d{4})/);
+  
+  if (match1) {
+    end = new Date(`${match1[1]}-${match1[2]}-${match1[3]}T12:00:00`);
+  } else if (match2) {
+    end = new Date(`${match2[3]}-${match2[2]}-${match2[1]}T12:00:00`);
+  } else if (isNaN(end.getTime())) {
+    return { daysRemaining: 0, monthsRemaining: 0, isExpired: false, isExpiring30: false };
+  }
+
   const today = new Date();
   
-  // Set time of both to midnight to count pure full calendar days
+  // Set time of both to midnight to count pure full calendar days safely
   const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
   const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   
   const diffTime = endUtc - todayUtc;
   const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  // Months remaining: can be a rough/standard calculation, e.g. days / 30, or calendar months
   const monthsRemaining = Math.max(0, Math.round(daysRemaining / 30.4));
   
   return {

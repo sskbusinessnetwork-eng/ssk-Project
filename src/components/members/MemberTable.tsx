@@ -42,13 +42,12 @@ interface MemberTableProps {
 }
 
 const getDisplayPosition = (pos?: string, r?: string) => {
-  const role = (r || 'MEMBER').toUpperCase();
-  if (role === 'MASTER_ADMIN') return 'Master Admin';
-  if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-  if (role === 'PRESIDENT') return 'President';
-  if (role === 'VICE_PRESIDENT') return 'Vice President';
-  if (role === 'TREASURER') return 'Treasurer';
-  return 'Member';
+  if (pos && pos.toLowerCase() !== 'member') {
+    return pos.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  }
+  if (r === 'MASTER_ADMIN') return 'Master Admin';
+  if (r === 'CHAPTER_ADMIN') return 'Chapter Admin';
+  return '';
 };
 
 export function MemberTable({
@@ -128,7 +127,7 @@ export function MemberTable({
                               <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Chapter:</span> 
                               {member.chapterName || (member.chapter_id ? (adminMap[member.chapter_id] ? adminMap[member.chapter_id].replace(' Admin', '') : 'SSK Chapter') : 'SSK Chapter')}
                             </div>
-                            {isMasterAdmin && (
+                            {(getDisplayPosition(member.position, member.role) !== '') && (
                               <div>
                                 <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Position:</span> 
                                 <span className="text-primary font-bold">
@@ -293,14 +292,14 @@ export function MemberTable({
                         <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Chapter:</span> 
                         {member.chapterName || (member.chapter_id ? (adminMap[member.chapter_id] ? adminMap[member.chapter_id].replace(' Admin', '') : 'SSK Chapter') : 'SSK Chapter')}
                       </div>
-                      {isMasterAdmin && (
-                        <div>
-                          <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Position:</span> 
-                          <span className="text-primary font-bold">
-                            {getDisplayPosition(member.position, member.role)}
-                          </span>
-                        </div>
-                      )}
+                      {(getDisplayPosition(member.position, member.role) !== '') && (
+                              <div>
+                                <span className="text-neutral-500 font-semibold text-[9px] uppercase tracking-wider mr-1">Position:</span> 
+                                <span className="text-primary font-bold">
+                                  {getDisplayPosition(member.position, member.role)}
+                                </span>
+                              </div>
+                            )}
                       <div className="flex items-center gap-1 mt-0.5">
                         <Phone size={9} className="text-neutral-500" />
                         <span>{member.phone || 'No Phone'}</span>

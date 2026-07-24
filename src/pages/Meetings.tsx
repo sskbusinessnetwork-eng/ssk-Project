@@ -123,7 +123,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
   if (!adminId) return;
 
   const allMeetings = await databaseService.list<Meeting>('meetings', [
-    where('adminId', '==', adminId)
+    where('chapter_id', '==', adminId)
   ]);
 
   const now = new Date();
@@ -157,7 +157,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
     } else {
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId,
-        chapter_id: adminId, // since adminId is now used loosely, but let's see how adminId is defined.
+        chapter_id: profile?.chapter_id || adminId,
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
@@ -457,8 +457,8 @@ export function Meetings() {
     }
 
     const constraints = isMasterAdmin 
-      ? (selectedAdminId ? [where('adminId', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
-      : [where('adminId', '==', chapterId), orderBy('date', 'desc'), limit(50)];
+      ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
+      : [where('chapter_id', '==', chapterId), orderBy('date', 'desc'), limit(50)];
 
     const unsubscribe = databaseService.subscribe<Meeting>('meetings', constraints, (data) => {
       setMeetings(data);
@@ -562,7 +562,7 @@ export function Meetings() {
       
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId,
-        chapter_id: adminId, // since adminId is now used loosely, but let's see how adminId is defined.
+        chapter_id: profile?.chapter_id || adminId,
         date: meetingDate.toISOString(),
         time: scheduleData.time,
         location: scheduleData.location,
@@ -787,7 +787,7 @@ export function Meetings() {
   };
 
   const filteredMeetings = selectedAdminId 
-    ? meetings.filter(m => m.adminId === selectedAdminId)
+    ? meetings.filter(m => m.chapter_id === selectedAdminId)
     : meetings;
 
   // Upcoming: Non-completed, non-cancelled meetings that are in the future
