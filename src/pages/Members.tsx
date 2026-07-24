@@ -27,6 +27,7 @@ import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
+import { subscriptionService } from '../services/subscriptionService';
 import { UserProfile, Category, GuestInvitation } from '../types';
 import { Modal } from '../components/Modal';
 import { MemberTable } from '../components/members/MemberTable';
@@ -349,6 +350,20 @@ export function Members() {
       // 4. SAVE TO Supabase
       const res = await addDoc(collection(db, "users"), memberProfile);
       const newUserId = res.id;
+
+      // Save to member_subscriptions table
+      await subscriptionService.upsertSubscription({
+        user_id: newUserId,
+        member_name: newMemberData.name,
+        chapter_id: finalChapterId,
+        chapter_name: finalChapterName,
+        position_name: newMemberData.position || 'Member',
+        subscription_start: formatDateForStorage(newMemberData.subscriptionStart),
+        subscription_end: formatDateForStorage(newMemberData.subscriptionEnd),
+        membership_status: 'Active',
+        account_status: 'Active',
+        created_by: actualChapterAdminId
+      });
       
       // Create notifications
       await notificationService.createNotification(
@@ -461,17 +476,41 @@ export function Members() {
 
     setError(null);
     try {
-      await databaseService.update('users', selectedMember.newUserId, {
-        subscriptionStart: formatDateForStorage(subDates.subscriptionStart),
-        subscriptionStartDate: formatDateForStorage(subDates.subscriptionStart),
-        subscriptionEnd: formatDateForStorage(subDates.subscriptionEnd),
+      const targetUserId = selectedMember.uid || selectedMember.id;
+      const startDateFormatted = formatDateForStorage(subDates.subscriptionStart);
+      const endDateFormatted = formatDateForStorage(subDates.subscriptionEnd);
+
+      await databaseService.update('users', targetUserId, {
+        subscriptionStart: startDateFormatted,
+        subscriptionStartDate: startDateFormatted,
+        subscriptionEnd: endDateFormatted,
       });
+
+      // Also save to member_subscriptions table
+      const { error: subTableErr } = await subscriptionService.upsertSubscription({
+        user_id: targetUserId,
+        member_name: selectedMember.name,
+        chapter_id: selectedMember.chapter_id || (selectedMember as any).chapterId,
+        chapter_name: selectedMember.chapter_name || (selectedMember as any).chapterName,
+        position_name: selectedMember.position || selectedMember.role || 'Member',
+        subscription_start: startDateFormatted,
+        subscription_end: endDateFormatted,
+        membership_status: 'Active',
+        account_status: 'Active'
+      });
+
+      if (subTableErr && subTableErr.code !== 'PGRST205') {
+        console.error("Failed to update member_subscriptions:", subTableErr);
+        setError("Failed to save subscription details. Please try again.");
+        return;
+      }
+
       setIsSubModalOpen(false);
       setSuccessMessage('Subscription updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Error updating subscription:", err);
-      setError("Failed to update subscription. Please try again.");
+      setError("Failed to save subscription details. Please try again.");
     }
   };
 

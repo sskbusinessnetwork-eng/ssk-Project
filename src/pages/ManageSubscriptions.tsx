@@ -8,6 +8,7 @@ import { differenceInDays, addYears, format as originalFormat, isValid } from 'd
 import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
 import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
+import { subscriptionService } from '../services/subscriptionService';
 
 const format = (date: any, formatStr: string, options?: any) => {
   if (!date) return 'N/A';
@@ -51,26 +52,65 @@ export function ManageSubscriptions() {
   useEffect(() => {
     if (!profile) return;
     
-    // Chapters
+    // Fetch chapters dynamically from Supabase
+    const loadChapters = async () => {
+      const { data, error } = await supabase.from('chapters').select('*');
+      if (!error && data) {
+        setChapters(data as Chapter[]);
+      }
+    };
+    loadChapters();
     const unsubChapters = databaseService.subscribe<Chapter>('chapters', [], setChapters);
 
-    // Users
-    
-    const fetchUsers = async () => {
+    // Fetch users and merge with member_subscriptions
+    const fetchUsersAndSubscriptions = async () => {
       let query = supabase.from('users').select('*');
       if (profile.role !== 'MASTER_ADMIN') {
         // Chapter Admin sees their chapter
         query = query.eq('chapter_id', profile.chapter_id);
       }
       
-      const { data, error } = await query;
-      if (!error && data) {
-        setUsers(data as UserProfile[]);
+      const { data: userData, error: userErr } = await query;
+
+      // Also try fetching from member_subscriptions table
+      let subQuery = supabase.from('member_subscriptions').select('*');
+      if (profile.role !== 'MASTER_ADMIN') {
+        subQuery = subQuery.eq('chapter_id', profile.chapter_id);
+      }
+      const { data: subData } = await subQuery;
+
+      const subMap = new Map<string, any>();
+      if (subData) {
+        subData.forEach((s: any) => {
+          if (s.user_id) subMap.set(s.user_id, s);
+        });
+      }
+      
+      if (!userErr && userData) {
+        const merged = userData.map((u: any) => {
+          const userId = u.id || u.uid;
+          const subRec = subMap.get(userId);
+          if (subRec) {
+            return {
+              ...u,
+              subscriptionStart: subRec.subscription_start || u.subscriptionStart || u.subscription_start,
+              subscriptionEnd: subRec.subscription_end || u.subscriptionEnd || u.subscription_end,
+              subscriptionStartDate: subRec.subscription_start || u.subscriptionStartDate || u.subscription_start_date,
+              subscriptionEndDate: subRec.subscription_end || u.subscriptionEndDate || u.subscription_end_date,
+              membership_status: subRec.membership_status || u.membership_status || u.membershipStatus,
+              membershipStatus: subRec.membership_status || u.membershipStatus || u.membership_status,
+              account_status: subRec.account_status || u.account_status,
+              position: subRec.position_name || u.position || u.role
+            };
+          }
+          return u;
+        });
+        setUsers(merged as UserProfile[]);
       }
       setLoading(false);
     };
 
-    fetchUsers();
+    fetchUsersAndSubscriptions();
 
     // Listen to changes
     let constraints: any[] = [];
@@ -201,8 +241,31 @@ export function ManageSubscriptions() {
       }).eq('id', userId);
 
       if (subSaveError) {
-        console.error("Failed to save subscription dates to Supabase:", subSaveError);
-        throw new Error("Failed to save subscription dates. Please try again.");
+        console.error("Failed to save subscription dates to Supabase users table:", subSaveError);
+        throw new Error("Failed to save subscription details. Please try again.");
+      }
+
+      // Upsert to member_subscriptions table
+      const userChapterId = selectedUser.chapter_id || (selectedUser as any).chapterId || null;
+      const userChapterName = selectedUser.chapter_name || selectedUser.chapterName || null;
+      const userPos = selectedUser.position || selectedUser.chapter_position || selectedUser.role || 'Member';
+
+      const { error: subTableErr } = await subscriptionService.upsertSubscription({
+        user_id: userId,
+        member_name: selectedUser.name || '',
+        chapter_id: userChapterId,
+        chapter_name: userChapterName,
+        position_name: userPos,
+        subscription_start: startDateFormatted,
+        subscription_end: endDateFormatted,
+        membership_status: editForm.membershipStatus || editForm.subscriptionStatus || 'Active',
+        account_status: editForm.membershipStatus || 'Active',
+        created_by: profile?.uid || profile?.id || null
+      });
+
+      if (subTableErr && subTableErr.code !== 'PGRST205') {
+        console.error("Failed to save to member_subscriptions table:", subTableErr);
+        throw new Error("Failed to save subscription details. Please try again.");
       }
 
       await databaseService.update('users', userId, {
@@ -236,7 +299,8 @@ export function ManageSubscriptions() {
       setEditModalOpen(false);
       setSelectedUser(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to update subscription');
+      console.error("Subscription update error:", err);
+      setError(err.message || 'Failed to save subscription details. Please try again.');
     } finally {
       setSaving(false);
     }

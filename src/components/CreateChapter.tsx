@@ -4,6 +4,7 @@ import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, Alert
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
+import { subscriptionService } from '../services/subscriptionService';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface LeaderForm {
@@ -280,6 +281,15 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
 
           const userRole = pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER';
 
+          const posTitleMap: Record<string, string> = {
+            chapter_admin: 'Chapter Admin',
+            president: 'President',
+            vice_president: 'Vice President',
+            treasurer: 'Treasurer'
+          };
+
+          let targetUid = leader.userId || '';
+
           if (leader.userId) {
             const userUpdatePayload = {
               name: leader.fullName.trim(),
@@ -309,7 +319,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
           } else {
             // Find user by phone or create new ID
             const { data: existingUsers } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
-            const targetUid = existingUsers && existingUsers.length > 0 ? existingUsers[0].id : generateId();
+            targetUid = existingUsers && existingUsers.length > 0 ? existingUsers[0].id : generateId();
 
             const userUpsertPayload = {
               id: targetUid,
@@ -340,6 +350,22 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               setLoading(false);
               return;
             }
+          }
+
+          // Save to member_subscriptions table
+          if (targetUid) {
+            await subscriptionService.upsertSubscription({
+              user_id: targetUid,
+              member_name: leader.fullName.trim(),
+              chapter_id: editChapterId,
+              chapter_name: formData.chapter_name.trim(),
+              position_name: posTitleMap[pos] || pos,
+              subscription_start: startDateFormatted,
+              subscription_end: endDateFormatted,
+              membership_status: 'Active',
+              account_status: 'Active',
+              created_by: user?.id || user?.uid || null
+            });
           }
         }
 
@@ -471,6 +497,32 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
           if (userInsertErr) {
             console.error(`User insert error for position ${pos}:`, userInsertErr);
             throw new Error(userInsertErr.message || "Failed to save subscription dates. Please try again.");
+          }
+
+          // Save subscription record to member_subscriptions table
+          const posTitleMap: Record<string, string> = {
+            chapter_admin: 'Chapter Admin',
+            president: 'President',
+            vice_president: 'Vice President',
+            treasurer: 'Treasurer'
+          };
+
+          const { error: subInsertErr } = await subscriptionService.upsertSubscription({
+            user_id: uid,
+            member_name: leader.fullName.trim(),
+            chapter_id: chapterId,
+            chapter_name: formData.chapter_name.trim(),
+            position_name: posTitleMap[pos] || pos,
+            subscription_start: startDateISO,
+            subscription_end: endDateISO,
+            membership_status: 'Active',
+            account_status: 'Active',
+            created_by: user?.id || user?.uid || null
+          });
+
+          if (subInsertErr && subInsertErr.code !== 'PGRST205') {
+            console.error(`Subscription insert error for position ${pos}:`, subInsertErr);
+            throw new Error(subInsertErr.message || "Failed to save subscription details. Please try again.");
           }
         }
 
