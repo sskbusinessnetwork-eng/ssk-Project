@@ -595,21 +595,25 @@ export async function updateMemberPositionDirectly(
   chapterId: string,
   callerId?: string
 ) {
-  const upperInput = String(newPosition).trim().toUpperCase().replace(/[\s-]/g, '_');
+  const normalizedInput = String(newPosition).toLowerCase().trim().replace(/[\s-]/g, '_');
 
   let chapterPosVal = 'MEMBER';
   let posVal = 'member';
   let roleVal = 'MEMBER';
 
-  if (upperInput === 'PRESIDENT' || upperInput === 'CHAPTER_ADMIN') {
-    chapterPosVal = 'PRESIDENT';
-    posVal = upperInput === 'CHAPTER_ADMIN' ? 'chapter_admin' : 'president';
+  if (normalizedInput === 'chapter_admin') {
+    chapterPosVal = 'CHAPTER_ADMIN';
+    posVal = 'chapter_admin';
     roleVal = 'CHAPTER_ADMIN';
-  } else if (upperInput === 'VICE_PRESIDENT' || upperInput === 'VICE-PRESIDENT') {
+  } else if (normalizedInput === 'president') {
+    chapterPosVal = 'PRESIDENT';
+    posVal = 'president';
+    roleVal = 'MEMBER';
+  } else if (normalizedInput === 'vice_president' || normalizedInput === 'vice-president') {
     chapterPosVal = 'VICE_PRESIDENT';
     posVal = 'vice_president';
     roleVal = 'MEMBER';
-  } else if (upperInput === 'TREASURER') {
+  } else if (normalizedInput === 'treasurer') {
     chapterPosVal = 'TREASURER';
     posVal = 'treasurer';
     roleVal = 'MEMBER';
@@ -618,6 +622,27 @@ export async function updateMemberPositionDirectly(
     posVal = 'member';
     roleVal = 'MEMBER';
   }
+
+  const resolveMemberPosKey = (m: any): string => {
+    if (!m) return 'member';
+    const p = String(m.position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
+    const c = String(m.chapter_position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
+    const r = String(m.role || '').toLowerCase().trim().replace(/[\s-]/g, '_');
+
+    if (p === 'chapter_admin' || c === 'chapter_admin' || r === 'chapter_admin') {
+      return 'chapter_admin';
+    }
+    if (p === 'president' || c === 'president') {
+      return 'president';
+    }
+    if (p === 'vice_president' || c === 'vice_president') {
+      return 'vice_president';
+    }
+    if (p === 'treasurer' || c === 'treasurer') {
+      return 'treasurer';
+    }
+    return 'member';
+  };
 
   // 1. Fetch target user
   const { data: targetUser, error: targetErr } = await supabase
@@ -637,7 +662,7 @@ export async function updateMemberPositionDirectly(
   }
 
   // 2. ONE POSITION PER CHAPTER RULE
-  if (chapterPosVal !== 'MEMBER' && targetChapterId) {
+  if (posVal !== 'member' && targetChapterId) {
     const { data: chapterMembers } = await supabase
       .from('users')
       .select('id, role, position, chapter_position, name')
@@ -646,21 +671,9 @@ export async function updateMemberPositionDirectly(
     if (chapterMembers && chapterMembers.length > 0) {
       for (const member of chapterMembers) {
         if (member.id !== targetUserId) {
-          const mChapterPos = (member.chapter_position || '').toUpperCase();
-          const mPos = (member.position || '').toLowerCase().trim().replace(/[\s-]/g, '_');
-          const mRole = (member.role || '').toUpperCase().trim();
+          const currentMemberPosKey = resolveMemberPosKey(member);
 
-          let isMatchingPosition = false;
-
-          if (chapterPosVal === 'PRESIDENT') {
-            isMatchingPosition = mChapterPos === 'PRESIDENT' || mPos === 'president' || mPos === 'chapter_admin' || mRole === 'CHAPTER_ADMIN';
-          } else if (chapterPosVal === 'VICE_PRESIDENT') {
-            isMatchingPosition = mChapterPos === 'VICE_PRESIDENT' || mPos === 'vice_president';
-          } else if (chapterPosVal === 'TREASURER') {
-            isMatchingPosition = mChapterPos === 'TREASURER' || mPos === 'treasurer';
-          }
-
-          if (isMatchingPosition) {
+          if (currentMemberPosKey === posVal) {
             // Reassign existing holder of this position in this chapter to regular 'MEMBER'
             const demoteRole = member.role === 'MASTER_ADMIN' ? 'MASTER_ADMIN' : 'MEMBER';
             const { error: demoteErr } = await supabase
@@ -705,20 +718,16 @@ export async function updateMemberPositionDirectly(
       .eq('chapter_id', targetChapterId);
 
     if (updatedChapterUsers) {
-      const findIdForPos = (cPosUpper: string, pKeyLower: string) => {
-        const u = updatedChapterUsers.find(m => 
-          (m.chapter_position || '').toUpperCase() === cPosUpper ||
-          (m.position || '').toLowerCase() === pKeyLower ||
-          (cPosUpper === 'PRESIDENT' && m.role === 'CHAPTER_ADMIN')
-        );
+      const findIdForPos = (targetKey: string) => {
+        const u = updatedChapterUsers.find(m => resolveMemberPosKey(m) === targetKey);
         return u ? u.id : null;
       };
 
       await supabase.from('chapters').update({
-        chapter_admin_id: findIdForPos('PRESIDENT', 'chapter_admin') || findIdForPos('PRESIDENT', 'president'),
-        president_id: findIdForPos('PRESIDENT', 'president') || findIdForPos('PRESIDENT', 'chapter_admin'),
-        vice_president_id: findIdForPos('VICE_PRESIDENT', 'vice_president'),
-        treasurer_id: findIdForPos('TREASURER', 'treasurer')
+        chapter_admin_id: findIdForPos('chapter_admin'),
+        president_id: findIdForPos('president'),
+        vice_president_id: findIdForPos('vice_president'),
+        treasurer_id: findIdForPos('treasurer')
       }).eq('id', targetChapterId);
     }
   }

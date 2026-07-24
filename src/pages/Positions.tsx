@@ -4,7 +4,7 @@ import { db, updateMemberPositionDirectly } from '../lib/database';
 import { collection, query, where, getDocs, doc, addDoc, onSnapshot } from '../lib/database';
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { cn } from '../lib/utils';
+import { cn, getMemberPositionKey } from '../lib/utils';
 import { Search, User, Phone, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
@@ -225,18 +225,7 @@ export function Positions() {
               </thead>
               <tbody className="divide-y divide-white/[0.06]">
                 {filteredMembers.map(member => {
-                  const cPos = (member.chapter_position || '').toUpperCase().trim();
-                  const pos = (member.position || '').toLowerCase().trim();
-                  const role = (member.role || '').toUpperCase().trim();
-
-                  let currentPos = 'member';
-                  if (cPos === 'PRESIDENT' || pos === 'president' || pos === 'chapter_admin' || role === 'CHAPTER_ADMIN') {
-                    currentPos = (pos === 'chapter_admin' || role === 'CHAPTER_ADMIN') ? 'chapter_admin' : 'president';
-                  } else if (cPos === 'VICE_PRESIDENT' || pos === 'vice_president') {
-                    currentPos = 'vice_president';
-                  } else if (cPos === 'TREASURER' || pos === 'treasurer') {
-                    currentPos = 'treasurer';
-                  }
+                  const currentPos = getMemberPositionKey(member);
 
                   return (
                     <tr key={member.uid} className="hover:bg-white/5 even:bg-white/[0.02] border-b border-white/[0.06] transition-colors">
@@ -264,7 +253,7 @@ export function Positions() {
                           "inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-[0.5px]",
                           currentPos === 'member' ? "bg-[#0F172A] text-neutral-400 border border-white/10" : "bg-primary/10 text-primary border border-primary/20"
                         )}>
-                          {currentPos.replace('_', ' ')}
+                          {currentPos === 'chapter_admin' ? 'CHAPTER ADMIN' : currentPos.replace('_', ' ')}
                         </span>
                       </td>
                       <td className="p-4">

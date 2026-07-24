@@ -221,17 +221,17 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           const endDateISO = leader.subscriptionEnd ? new Date(leader.subscriptionEnd).toISOString() : new Date().toISOString();
 
           let chapterPosVal = 'MEMBER';
-          if (pos === 'chapter_admin' || pos === 'president') {
+          if (pos === 'chapter_admin') {
+            chapterPosVal = 'CHAPTER_ADMIN';
+          } else if (pos === 'president') {
             chapterPosVal = 'PRESIDENT';
           } else if (pos === 'vice_president') {
             chapterPosVal = 'VICE_PRESIDENT';
           } else if (pos === 'treasurer') {
             chapterPosVal = 'TREASURER';
-          } else if (pos === 'secretary') {
-            chapterPosVal = 'SECRETARY';
           }
 
-          const userRole = (pos === 'chapter_admin' || pos === 'president') ? 'CHAPTER_ADMIN' : 'MEMBER';
+          const userRole = pos === 'chapter_admin' ? 'CHAPTER_ADMIN' : 'MEMBER';
 
           await setDoc(doc(db, 'users', uid), {
             id: uid,

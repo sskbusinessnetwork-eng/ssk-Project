@@ -3,7 +3,7 @@ import { db, updateMemberPositionDirectly } from '../../lib/database';
 import { collection, query, where, getDocs, doc, onSnapshot } from '../../lib/database';
 import { UserProfile, ChapterPosition } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
-import { cn } from '../../lib/utils';
+import { cn, getMemberPositionKey } from '../../lib/utils';
 import { Search, X, User } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -167,23 +167,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
   };
 
   const getPositionHolder = (pos: ChapterPosition) => {
-    return members.find(m => {
-      const cPos = (m.chapter_position || '').toUpperCase();
-      const p = (m.position || '').toLowerCase();
-      const r = (m.role || '').toLowerCase();
-      const target = pos.toLowerCase();
-
-      if (target === 'chapter_admin' || target === 'president') {
-        return cPos === 'PRESIDENT' || p === 'chapter_admin' || p === 'president' || r === 'chapter_admin';
-      }
-      if (target === 'vice_president') {
-        return cPos === 'VICE_PRESIDENT' || p === 'vice_president';
-      }
-      if (target === 'treasurer') {
-        return cPos === 'TREASURER' || p === 'treasurer';
-      }
-      return p === target || r === target;
-    });
+    return members.find(m => getMemberPositionKey(m) === pos.toLowerCase());
   };
 
   const filteredMembers = members.filter(m => 
