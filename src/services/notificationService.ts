@@ -2,6 +2,7 @@ import { databaseService } from './databaseService';
 import type { UserRole, Notification } from '../types';
 import { where, doc, updateDoc, deleteDoc, db } from '../lib/database';
 import { supabase } from '../lib/supabaseClient';
+import { parseDateToYYYYMMDD } from '../utils/memberStatus';
 
 export type NotificationType = 
   | 'REFERRAL' 
@@ -40,14 +41,13 @@ export interface TaskChecklistItem {
 
 function getSubscriptionDates(user: any): { startDate: Date | null; endDate: Date | null; endDateStr: string } {
   if (!user) return { startDate: null, endDate: null, endDateStr: '' };
-  const startVal = user.subscription_start || user.subscription_start_date || user.subscriptionStartDate || user.subscriptionStart;
-  const endVal = user.subscription_end || user.subscription_end_date || user.subscriptionEndDate || user.subscriptionEnd;
+  const startVal = user.subscriptionEnd !== undefined && user.subscriptionStart !== undefined ? user.subscriptionStart : (user.subscription_start || user.subscription_start_date || user.subscriptionStartDate || user.subscriptionStart);
+  const endVal = user.subscriptionEnd !== undefined ? user.subscriptionEnd : (user.subscription_end || user.subscription_end_date || user.subscriptionEndDate || user.subscriptionEnd);
   
-  const startDate = startVal ? new Date(startVal) : null;
-  const endDate = endVal ? new Date(endVal) : null;
-  const endDateStr = endVal ? String(endVal) : '';
+  const startParsed = parseDateToYYYYMMDD(startVal);
+  const endParsed = parseDateToYYYYMMDD(endVal);
   
-  return { startDate, endDate, endDateStr };
+  return { startDate: startParsed.date, endDate: endParsed.date, endDateStr: endParsed.ymd };
 }
 
 export const notificationService = {

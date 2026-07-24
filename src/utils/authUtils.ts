@@ -18,19 +18,45 @@ export const validateUserChapterId = (profile: any): { isValid: boolean; errorMe
 };
 
 export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
-  if (!userRecord || userRecord.role === 'MASTER_ADMIN') {
-    return userRecord;
-  }
-
-  // If chapter_id is already populated, return as is
-  if (userRecord.chapter_id) {
-    return userRecord;
-  }
+  if (!userRecord) return userRecord;
 
   const userId = userRecord.id || userRecord.uid;
   if (!userId) return userRecord;
 
   try {
+    // 0. Always check member_subscriptions to ensure latest subscription end date is attached
+    const { data: subData } = await supabase
+      .from('member_subscriptions')
+      .select('subscription_start, subscription_end, membership_status, account_status')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (subData) {
+      if (subData.subscription_end) {
+        userRecord.subscriptionEnd = subData.subscription_end;
+        userRecord.subscription_end = subData.subscription_end;
+        userRecord.subscriptionEndDate = subData.subscription_end;
+      }
+      if (subData.subscription_start) {
+        userRecord.subscriptionStart = subData.subscription_start;
+        userRecord.subscription_start = subData.subscription_start;
+        userRecord.subscriptionStartDate = subData.subscription_start;
+      }
+      if (subData.membership_status) {
+        userRecord.membership_status = subData.membership_status;
+        userRecord.membershipStatus = subData.membership_status;
+      }
+    }
+
+    if (userRecord.role === 'MASTER_ADMIN') {
+      return userRecord;
+    }
+
+    // If chapter_id is already populated, return as is
+    if (userRecord.chapter_id) {
+      return userRecord;
+    }
+
     let assignedChapterId: string | null = null;
 
     // 1. Check if user's created_by user has a chapter_id
