@@ -55,7 +55,9 @@ export function Members() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [chapters, setChapters] = useState<{id: string, chapter_name: string}[]>([]);
   const [filters, setFilters] = useState({
+    chapter_id: '',
     category: '',
     state: '',
     city: '',
@@ -94,6 +96,9 @@ export function Members() {
 
     if (profile.role === 'MASTER_ADMIN' || isChapterAdminUser) {
       databaseService.list<Category>('categories').then(setCategories);
+      supabase.from('chapters').select('id, chapter_name').then(({data}) => {
+        if (data) setChapters(data);
+      });
       
       // Fetch all admins for the adminMap
       const adminsQuery = query(collection(db, 'users'), where('role', '==', 'MASTER_ADMIN'));
@@ -528,7 +533,7 @@ export function Members() {
     if (m.uid === profile?.uid) return false;
 
     // Show ONLY users with role 'MEMBER'
-    if (m.role !== 'MEMBER') return false;
+    if (m.role !== 'MEMBER' && m.role !== 'CHAPTER_ADMIN') return false;
 
     // Chapter Admin can ONLY see members they created
     const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
@@ -543,12 +548,13 @@ export function Members() {
       m.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.category?.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const matchesChapter = !filters.chapter_id || String(m.chapter_id || (m as any).chapterId || '').trim() === filters.chapter_id;
     const matchesCategory = !filters.category || m.category === filters.category;
     const matchesState = !filters.state || m.state?.toLowerCase().includes(filters.state.toLowerCase());
     const matchesCity = !filters.city || m.city?.toLowerCase().includes(filters.city.toLowerCase());
     const matchesArea = !filters.area || m.area?.toLowerCase().includes(filters.area.toLowerCase());
 
-    return matchesSearch && matchesCategory && matchesState && matchesCity && matchesArea;
+    return matchesSearch && matchesChapter && matchesCategory && matchesState && matchesCity && matchesArea;
   });
 
   return (
@@ -665,8 +671,18 @@ export function Members() {
                 </div>
                 
                 <div className="lg:col-span-8 flex flex-wrap items-center gap-3">
-                  <select
-                    value={filters.category}
+                  {isMasterAdmin && (
+                  <select value={filters.chapter_id}
+                    onChange={(e) => setFilters({ ...filters, chapter_id: e.target.value })}
+                    className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-semibold text-neutral-200 uppercase tracking-wider focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-4 focus:ring-primary/15"
+                  >
+                    <option value="" className="bg-[#151C2E] text-white">All Chapters</option>
+                    {chapters.map(chap => (
+                      <option key={chap.id} value={chap.id} className="bg-[#151C2E] text-white">{chap.chapter_name}</option>
+                    ))}
+                  </select>
+                )}
+                <select value={filters.category}
                     onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                     className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-semibold text-neutral-200 uppercase tracking-wider focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-4 focus:ring-primary/15"
                   >
@@ -685,7 +701,7 @@ export function Members() {
                   />
 
                   <button
-                    onClick={() => setFilters({ category: '', state: '', city: '', area: '' })}
+                    onClick={() => setFilters({ chapter_id: '', category: '', state: '', city: '', area: '' })}
                     className="h-11 px-4 text-[10px] font-bold text-neutral-400 hover:text-primary transition-colors uppercase tracking-widest"
                   >
                     Reset
