@@ -9,6 +9,15 @@ import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
 import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
 
+const formatDateForStorage = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+};
+
 export function ManageSubscriptions() {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -169,9 +178,13 @@ export function ManageSubscriptions() {
     setError('');
     
     try {
+      const startDateFormatted = formatDateForStorage(editForm.subscriptionStart);
+      const endDateFormatted = formatDateForStorage(editForm.subscriptionEnd);
+      
       const updates = {
-        subscriptionStart: new Date(editForm.subscriptionStart).toISOString(),
-        subscriptionEnd: new Date(editForm.subscriptionEnd).toISOString(),
+        subscriptionStart: startDateFormatted,
+        subscriptionStartDate: startDateFormatted,
+        subscriptionEnd: endDateFormatted,
         subscriptionStatus: editForm.subscriptionStatus,
         membershipStatus: editForm.membershipStatus,
         renewedAt: new Date().toISOString(),

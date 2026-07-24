@@ -9,6 +9,15 @@ import { MemberSuccessPopup } from './MemberSuccessPopup';
 import { supabase } from '../../lib/supabaseClient';
 
 
+const formatDateForStorage = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+};
+
 export function AddMemberForm() {
   const { profile } = useAuth();
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
@@ -179,8 +188,9 @@ export function AddMemberForm() {
         membershipStatus: 'INACTIVE' as any,
         account_status: 'INACTIVE',
         accountStatus: 'INACTIVE',
-        subscriptionStart: new Date(formData.subscriptionStart).toISOString(),
-        subscriptionEnd: new Date(formData.subscriptionEnd).toISOString(),
+        subscriptionStart: formatDateForStorage(formData.subscriptionStart),
+        subscriptionStartDate: formatDateForStorage(formData.subscriptionStart),
+        subscriptionEnd: formatDateForStorage(formData.subscriptionEnd),
         subscriptionStatus: new Date(formData.subscriptionEnd) > new Date() ? 'Active' : 'Expired',
         password_changed: false,
         passwordChanged: false,

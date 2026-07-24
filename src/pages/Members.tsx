@@ -44,6 +44,15 @@ import { safeFetch } from '../utils/apiUtils';
 import { supabase } from '../lib/supabaseClient';
 import bcrypt from 'bcryptjs';
 
+const formatDateForStorage = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
+};
+
 export function Members() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -323,8 +332,9 @@ export function Members() {
         adminId: actualChapterAdminId,
         created_by: actualChapterAdminId,
         createdAt: new Date().toISOString(),
-        subscriptionStart: new Date(newMemberData.subscriptionStart).toISOString(),
-        subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString(),
+        subscriptionStart: formatDateForStorage(newMemberData.subscriptionStart),
+        subscriptionStartDate: formatDateForStorage(newMemberData.subscriptionStart),
+        subscriptionEnd: formatDateForStorage(newMemberData.subscriptionEnd),
         subscriptionStatus: new Date(newMemberData.subscriptionEnd) > new Date() ? "Active" : "Expired",
         subscriptionType: "Annual",
         renewalRequested: false
@@ -446,8 +456,9 @@ export function Members() {
     setError(null);
     try {
       await databaseService.update('users', selectedMember.newUserId, {
-        subscriptionStart: new Date(subDates.subscriptionStart).toISOString(),
-        subscriptionEnd: new Date(subDates.subscriptionEnd).toISOString(),
+        subscriptionStart: formatDateForStorage(subDates.subscriptionStart),
+        subscriptionStartDate: formatDateForStorage(subDates.subscriptionStart),
+        subscriptionEnd: formatDateForStorage(subDates.subscriptionEnd),
       });
       setIsSubModalOpen(false);
       setSuccessMessage('Subscription updated successfully!');

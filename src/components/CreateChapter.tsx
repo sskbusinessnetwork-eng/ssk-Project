@@ -28,14 +28,13 @@ const getDefaultDates = () => {
 };
 
 const createEmptyLeader = (): LeaderForm => {
-  const { start, end } = getDefaultDates();
   return {
     fullName: '',
     mobile: '',
     whatsapp: '',
     email: '',
-    subscriptionStart: start,
-    subscriptionEnd: end,
+    subscriptionStart: '',
+    subscriptionEnd: '',
   };
 };
 
@@ -47,6 +46,15 @@ const generateId = () => {
     var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+};
+
+const formatDateForStorage = (dateStr: string) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  }
+  return dateStr;
 };
 
 export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
@@ -217,8 +225,8 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
           const defaultPassword = 'Welcometosskbusiness';
           createdUsers.push(uid);
 
-          const startDateISO = leader.subscriptionStart ? new Date(leader.subscriptionStart).toISOString() : new Date().toISOString();
-          const endDateISO = leader.subscriptionEnd ? new Date(leader.subscriptionEnd).toISOString() : new Date().toISOString();
+          const startDateISO = formatDateForStorage(leader.subscriptionStart);
+          const endDateISO = formatDateForStorage(leader.subscriptionEnd);
 
           let chapterPosVal = 'MEMBER';
           if (pos === 'chapter_admin') {
@@ -258,6 +266,7 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             must_change_password: true,
             mustChangePassword: true,
             subscriptionStart: startDateISO,
+            subscriptionStartDate: startDateISO,
             subscriptionEnd: endDateISO,
             subscriptionStatus: 'Active',
             subscriptionType: 'Annual',
