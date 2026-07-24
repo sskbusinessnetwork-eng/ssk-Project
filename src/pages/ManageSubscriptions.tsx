@@ -178,8 +178,8 @@ export function ManageSubscriptions() {
     
     try {
       const updates = {
-        subscriptionStartDate: editForm.subscriptionStart,
-        subscriptionEndDate: editForm.subscriptionEnd,
+        subscriptionStart: new Date(editForm.subscriptionStart).toISOString(),
+        subscriptionEnd: new Date(editForm.subscriptionEnd).toISOString(),
         subscriptionStatus: editForm.subscriptionStatus,
         membershipStatus: editForm.membershipStatus,
         renewedAt: new Date().toISOString(),

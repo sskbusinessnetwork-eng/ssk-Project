@@ -165,8 +165,6 @@ export function AddMemberForm() {
         accountStatus: 'INACTIVE',
         subscriptionStart: new Date(formData.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(formData.subscriptionEnd).toISOString(),
-        subscriptionStartDate: formData.subscriptionStart,
-        subscriptionEndDate: formData.subscriptionEnd,
         subscriptionStatus: new Date(formData.subscriptionEnd) > new Date() ? 'Active' : 'Expired',
         password_changed: false,
         passwordChanged: false,

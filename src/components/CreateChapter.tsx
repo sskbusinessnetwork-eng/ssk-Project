@@ -259,8 +259,6 @@ export function CreateChapter({ onSuccess }: { onSuccess?: () => void }) {
             mustChangePassword: true,
             subscriptionStart: startDateISO,
             subscriptionEnd: endDateISO,
-            subscriptionStartDate: leader.subscriptionStart,
-            subscriptionEndDate: leader.subscriptionEnd,
             subscriptionStatus: 'Active',
             subscriptionType: 'Annual',
             createdAt: new Date().toISOString(),

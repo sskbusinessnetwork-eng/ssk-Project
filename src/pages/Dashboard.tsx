@@ -96,13 +96,11 @@ export function Analytics() {
       const newEnd = addYears(new Date(), 1).toISOString();
       
       await supabase.from('users').update({
-        subscriptionStart: newStart,
-        subscriptionStartDate: newStart,
-        subscriptionEnd: newEnd,
-        subscriptionEndDate: newEnd,
-        subscriptionStatus: 'Active',
-        membershipStatus: 'ACTIVE',
-        renewalRequested: false
+        subscription_start: newStart,
+        subscription_end: newEnd,
+        subscription_status: 'Active',
+        membership_status: 'ACTIVE',
+        renewal_requested: false
       }).eq('id', memberId);
 
       await supabase.from('subscription_requests').update({
@@ -124,7 +122,7 @@ export function Analytics() {
       }).eq('id', requestId);
       
       await supabase.from('users').update({
-        renewalRequested: false
+        renewal_requested: false
       }).eq('id', memberId);
     } catch (e) {
       console.error('Error rejecting', e);

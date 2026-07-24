@@ -303,8 +303,6 @@ export function Members() {
         createdAt: new Date().toISOString(),
         subscriptionStart: new Date(newMemberData.subscriptionStart).toISOString(),
         subscriptionEnd: new Date(newMemberData.subscriptionEnd).toISOString(),
-        subscriptionStartDate: new Date(newMemberData.subscriptionStart).toISOString().split('T')[0],
-        subscriptionEndDate: new Date(newMemberData.subscriptionEnd).toISOString().split('T')[0],
         subscriptionStatus: new Date(newMemberData.subscriptionEnd) > new Date() ? "Active" : "Expired",
         subscriptionType: "Annual",
         renewalRequested: false

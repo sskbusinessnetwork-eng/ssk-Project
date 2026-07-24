@@ -113,9 +113,9 @@ export function SubscriptionExpired() {
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-900/10 rounded-full blur-[120px]" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#DC143C]/5 rounded-full blur-[120px]" />
 
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div 
+        
+        
         className="max-w-md w-full bg-[#111827]/60 backdrop-blur-xl rounded-[2.5rem] border border-white/5 p-8 text-center space-y-8 relative z-10 shadow-2xl shadow-black/50"
       >
         <div className="w-24 h-24 bg-red-500/10 text-[#EF4444] rounded-full flex items-center justify-center mx-auto shadow-inner border border-red-500/10">
@@ -134,9 +134,9 @@ export function SubscriptionExpired() {
         {/* Status Indicators & Submission Forms */}
         <div className="space-y-4 pt-2">
           {successMsg || isAlreadyRequested ? (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
+            <div 
+              
+              
               className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center gap-2 text-emerald-400"
             >
               <CheckCircle2 size={32} />
@@ -144,7 +144,7 @@ export function SubscriptionExpired() {
               <p className="text-xs text-[#9CA3AF] text-center">
                 Your request is currently pending approval. You will receive a notification as soon as it is approved.
               </p>
-            </motion.div>
+            </div>
           ) : (
             <button
               onClick={handleRequestRenewal}
@@ -176,7 +176,7 @@ export function SubscriptionExpired() {
             SSK Business Network
           </p>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
