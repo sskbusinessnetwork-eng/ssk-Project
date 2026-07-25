@@ -74,6 +74,46 @@ export async function saveTopPerformanceSettings(settings: TopPerformanceSetting
   }
 }
 
+export function subscribeTopPerformanceSettings(callback: (settings: TopPerformanceSettings) => void): () => void {
+  return databaseService.subscribe<any>(
+    'users',
+    [{ type: 'where', field: 'id', op: '==', val: 'global_top_performance_settings' }],
+    (docs) => {
+      const defaultSettings: TopPerformanceSettings = {
+        showOnLandingPage: true,
+        startDate: null,
+        endDate: null,
+      };
+      
+      const docData = docs.length > 0 ? docs[0] : null;
+      if (docData && docData.topPerformanceSettings) {
+        const parsed = typeof docData.topPerformanceSettings === 'string'
+          ? JSON.parse(docData.topPerformanceSettings)
+          : docData.topPerformanceSettings;
+        callback({
+          showOnLandingPage: parsed.showOnLandingPage ?? true,
+          startDate: parsed.startDate || null,
+          endDate: parsed.endDate || null,
+        });
+      } else {
+         try {
+           const local = localStorage.getItem(STORAGE_KEY);
+           if (local) {
+             const parsed = JSON.parse(local);
+             callback({
+                showOnLandingPage: parsed.showOnLandingPage ?? true,
+                startDate: parsed.startDate || null,
+                endDate: parsed.endDate || null,
+             });
+             return;
+           }
+         } catch(e) {}
+         callback(defaultSettings);
+      }
+    }
+  );
+}
+
 export async function fetchTopPerformingMembers(customSettings?: TopPerformanceSettings): Promise<TopMemberPublicItem[]> {
   const settings = customSettings || await getTopPerformanceSettings();
   if (!settings.showOnLandingPage) {

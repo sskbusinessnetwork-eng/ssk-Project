@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Trophy, Award, Crown, Sparkles, Star } from 'lucide-react';
 import { 
-  getTopPerformanceSettings, 
+  subscribeTopPerformanceSettings, 
   fetchTopPerformingMembers, 
   TopPerformanceSettings, 
   TopMemberPublicItem 
@@ -16,23 +16,26 @@ export function TopPerformingMembersSection() {
 
   useEffect(() => {
     let isMounted = true;
-    async function loadData() {
-      try {
-        const s = await getTopPerformanceSettings();
-        if (!isMounted) return;
-        setSettings(s);
-        if (s.showOnLandingPage) {
+    
+    const unsubscribe = subscribeTopPerformanceSettings(async (s) => {
+      if (!isMounted) return;
+      setSettings(s);
+      
+      if (s.showOnLandingPage) {
+        try {
           const m = await fetchTopPerformingMembers(s);
           if (isMounted) setMembers(m);
+        } catch (e) {
+          console.error('Error loading top performing members:', e);
         }
-      } catch (e) {
-        console.error('Error loading top performing members:', e);
-      } finally {
-        if (isMounted) setLoading(false);
       }
-    }
-    loadData();
-    return () => { isMounted = false; };
+      if (isMounted) setLoading(false);
+    });
+
+    return () => { 
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   if (loading) return null;

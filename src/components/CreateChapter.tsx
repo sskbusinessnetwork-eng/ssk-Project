@@ -302,6 +302,10 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               subscriptionEnd: endDateFormatted,
               subscription_start: startDateFormatted,
               subscription_end: endDateFormatted,
+              membership_status: 'ACTIVE',
+              status: 'ACTIVE',
+              membershipStatus: 'ACTIVE',
+              account_status: 'ACTIVE',
               updated_at: new Date().toISOString()
             };
 
@@ -340,6 +344,10 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               subscription_start: startDateFormatted,
               subscription_end: endDateFormatted,
               subscriptionStatus: 'Active',
+              membership_status: 'ACTIVE',
+              status: 'ACTIVE',
+              membershipStatus: 'ACTIVE',
+              account_status: 'ACTIVE',
               updated_at: new Date().toISOString()
             };
 

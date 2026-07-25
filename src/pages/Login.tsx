@@ -114,13 +114,16 @@ export function Login() {
         }
 
         login({
+          ...masterAdmin,
           uid: masterAdmin.id,
+          id: masterAdmin.id,
           name: getCleanFullName(masterAdmin.full_name),
           phone: masterAdmin.phone_number,
           role: 'MASTER_ADMIN',
           membershipStatus: 'ACTIVE',
+          membership_status: 'ACTIVE',
           createdAt: masterAdmin.created_at
-        });
+        } as any);
 
         const dashboardPath = getDashboardPath('MASTER_ADMIN');
         navigate(dashboardPath, { replace: true });
@@ -159,16 +162,24 @@ export function Login() {
         }
 
         login({
+          ...user,
           uid: user.id,
+          id: user.id,
           name: getCleanFullName(user.name),
           phone: user.phone,
           role: user.role,
           position: user.position,
           membershipStatus: user.status,
+          membership_status: user.status,
+          account_status: user.account_status,
           createdAt: user.created_at,
           chapter_id: user.chapter_id,
-          must_change_password: user.must_change_password
-        });
+          must_change_password: user.must_change_password,
+          subscription_start: user.subscription_start,
+          subscription_end: user.subscription_end,
+          subscriptionStart: user.subscription_start,
+          subscriptionEnd: user.subscription_end
+        } as any);
         
         if (user.must_change_password) {
           navigate('/set-password');
