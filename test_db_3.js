@@ -5,7 +5,8 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 async function run() {
-  const { data, error } = await supabase.from('member_subscriptions').select('*').limit(1);
-  console.log("Anon Read:", data, error);
+  const { data, error } = await supabase.from('users').select('*').eq('phone', '+919878989876');
+  if (error) { console.error(error); return; }
+  console.log(data);
 }
 run();

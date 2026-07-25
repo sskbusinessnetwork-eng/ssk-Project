@@ -62,6 +62,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   // Check subscription and status for members and chapter admins
   if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin'))) {
+    console.log("ProtectedRoute check:", { profile, isActive: isMemberActive(profile), subStatus: getSubscriptionStatus(profile) });
     if (!isMemberActive(profile)) {
       return <Navigate to="/subscription-expired" replace />;
     }

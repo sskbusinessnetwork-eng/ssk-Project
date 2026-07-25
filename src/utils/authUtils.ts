@@ -29,6 +29,8 @@ export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
       .from('member_subscriptions')
       .select('subscription_start, subscription_end, membership_status, account_status')
       .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (subData) {
@@ -45,6 +47,10 @@ export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
       if (subData.membership_status) {
         userRecord.membership_status = subData.membership_status;
         userRecord.membershipStatus = subData.membership_status;
+      }
+      if (subData.account_status) {
+        userRecord.account_status = subData.account_status;
+        userRecord.accountStatus = subData.account_status;
       }
     }
 

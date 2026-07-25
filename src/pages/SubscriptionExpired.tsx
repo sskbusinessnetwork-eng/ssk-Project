@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { LogOut, ShieldAlert, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
+import { isMemberActive } from '../utils/memberStatus';
 
 export function SubscriptionExpired() {
   const navigate = useNavigate();
@@ -14,6 +15,12 @@ export function SubscriptionExpired() {
   const [successMsg, setSuccessMsg] = useState('');
 
   const isAlreadyRequested = profile?.renewalRequested || false;
+
+  useEffect(() => {
+    if (profile && isMemberActive(profile)) {
+      navigate('/', { replace: true });
+    }
+  }, [profile, navigate]);
 
   const handleLogout = async () => {
     try {
@@ -129,6 +136,15 @@ export function SubscriptionExpired() {
           <p className="text-[#9CA3AF] font-medium text-sm leading-relaxed px-2">
             Your subscription has expired. Please renew your subscription to continue using SSK Business Network.
           </p>
+          <div className="text-[10px] text-gray-600 mt-4 break-all bg-black/50 p-2 rounded text-left">
+            DEBUG INFO:<br/>
+            Account Status: {profile?.account_status || profile?.accountStatus || 'N/A'}<br/>
+            Membership Status: {profile?.membership_status || profile?.membershipStatus || profile?.status || 'N/A'}<br/>
+            Sub Start: {profile?.subscription_start || profile?.subscriptionStart || 'N/A'}<br/>
+            Sub End: {profile?.subscription_end || profile?.subscriptionEnd || 'N/A'}<br/>
+            Role: {profile?.role}<br/>
+            Is Locked: {profile?.is_locked || profile?.locked ? 'Yes' : 'No'}
+          </div>
         </div>
 
         {/* Status Indicators & Submission Forms */}

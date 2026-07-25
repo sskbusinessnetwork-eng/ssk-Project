@@ -161,6 +161,8 @@ export function Login() {
           .from('member_subscriptions')
           .select('subscription_start, subscription_end, membership_status, account_status')
           .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (subData) {

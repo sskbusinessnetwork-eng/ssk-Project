@@ -68,7 +68,7 @@ export function getSubscriptionStatus(u: any): SubscriptionStatusType {
 
   // If no dates are present at all
   if (!endDateStr && !startDateStr) {
-    const rawStatus = (u.membership_status || u.subscription_status || u.subscriptionStatus || '').trim().toLowerCase();
+    const rawStatus = (u.membership_status || u.membershipStatus || u.subscription_status || u.subscriptionStatus || u.status || '').trim().toLowerCase();
     if (rawStatus === 'active') return 'Active';
     return 'Inactive / Expired';
   }
@@ -107,7 +107,7 @@ export function isMemberActive(u: any): boolean {
     return false;
   }
 
-  if (u.is_locked === true || u.locked === true) {
+  if (u.is_locked === true || u.isLocked === true || u.locked === true) {
     return false;
   }
 
