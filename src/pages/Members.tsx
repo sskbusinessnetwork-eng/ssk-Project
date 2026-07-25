@@ -111,7 +111,9 @@ export function Members() {
     });
 
     if (profile.role === 'MASTER_ADMIN' || isChapterAdminUser) {
-      databaseService.list<Category>('categories').then(setCategories);
+      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
+        if (data) setCategories(data as unknown as Category[]);
+      });
       supabase.from('chapters').select('id, chapter_name').then(({data}) => {
         if (data) setChapters(data);
       });

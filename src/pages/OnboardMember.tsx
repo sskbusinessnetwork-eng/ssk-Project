@@ -51,8 +51,10 @@ export function OnboardMember() {
       .then((snap: any) => setChapters((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile))));
       
     // Fetch categories
-    databaseService.list<Category>('categories').then(data => {
-      setDbCategories(data);
+    supabase.from('categories').select('id, name').order('name').then(({ data, error }) => {
+      if (data && !error) {
+        setDbCategories(data as unknown as Category[]);
+      }
     });
       
     // Subscribe to all members (for simplicity, getting all users)

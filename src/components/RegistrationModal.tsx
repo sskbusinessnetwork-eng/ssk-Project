@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Phone, User, Briefcase, Calendar, Building2, MapPin } from 'lucide-react';
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
 
 interface RegistrationModalProps {
@@ -24,8 +25,10 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
 
   React.useEffect(() => {
     if (isOpen) {
-      databaseService.list<any>('categories').then(data => {
-        setCategories(data);
+      supabase.from('categories').select('id, name').order('name').then(({ data, error }) => {
+        if (data && !error) {
+          setCategories(data);
+        }
       });
     }
   }, [isOpen]);

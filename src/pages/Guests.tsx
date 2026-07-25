@@ -52,8 +52,10 @@ export function Guests() {
     setLoading(true);
     try {
       // 1. Fetch Categories
-      const cats = await databaseService.list<Category>('categories');
-      setCategories(cats);
+      const { data: cats } = await supabase.from('categories').select('id, name').order('name');
+      if (cats) {
+        setCategories(cats as unknown as Category[]);
+      }
       
       const userId = profile.id || profile.uid;
       const userChapterId = profile.chapter_id || (profile as any).chapterId;

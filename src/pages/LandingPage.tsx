@@ -11,6 +11,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { getDashboardPath } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { UserProfile, Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
 import { TopPerformingMembersSection } from '../components/TopPerformingMembersSection';
@@ -63,20 +64,17 @@ export function LandingPage() {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    const unsubscribe = databaseService.subscribe<Category>('categories', [], (data) => {
-      // Filter Active/Enabled categories (case-insensitive checks, checking active status/enabled/isActive if present)
-      const activeCats = data.filter(cat => {
-        if ((cat as any).active === false) return false;
-        if ((cat as any).isActive === false) return false;
-        if ((cat as any).enabled === false) return false;
-        if ((cat as any).status === 'Inactive' || (cat as any).status === 'Disabled') return false;
-        return true;
-      });
-      // Sort alphabetically
-      const sorted = [...activeCats].sort((a, b) => a.name.localeCompare(b.name));
-      setCategories(sorted);
-    });
-    return () => unsubscribe();
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase.from('categories').select('id, name').order('name');
+        if (data && !error) {
+          setCategories(data as Category[]);
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    };
+    fetchCategories();
   }, []);
 
   useEffect(() => {

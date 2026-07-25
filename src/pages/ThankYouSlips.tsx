@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { ThankYouSlip, Referral, UserProfile, Category } from '../types';
 import { Modal } from '../components/Modal';
 import { format as originalFormat, isValid } from 'date-fns';
@@ -110,7 +111,9 @@ export function ThankYouSlips() {
       });
 
       // Fetch categories
-      databaseService.list<Category>('categories', []).then(setAllCategories);
+      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
+        if (data) setAllCategories(data as unknown as Category[]);
+      });
     }
 
     // Fetch members to show names
