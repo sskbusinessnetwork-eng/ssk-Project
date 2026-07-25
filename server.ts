@@ -120,6 +120,90 @@ async function startServer() {
     }
   });
 
+  // Invite Guest endpoint (Only Chapter Admin for their own chapter meeting)
+  app.post("/api/guests/invite", async (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const { newInvitation, callerId } = req.body;
+      if (!newInvitation || !callerId) {
+        return res.status(400).json({ success: false, error: "Missing required invitation data or caller ID." });
+      }
+
+      // 1. Verify caller in users table
+      const { data: caller, error: callerErr } = await supabase
+        .from('users')
+        .select('id, role, position, chapter_id, status, name')
+        .or(`id.eq.${callerId},uid.eq.${callerId}`)
+        .maybeSingle();
+
+      if (callerErr || !caller) {
+        return res.status(403).json({ success: false, error: "Unauthorized user account." });
+      }
+
+      if (caller.status !== 'ACTIVE') {
+        return res.status(403).json({ success: false, error: "Account is not active." });
+      }
+
+      const isChapterAdmin = caller.role === 'CHAPTER_ADMIN' || caller.position === 'chapter_admin';
+      const isMasterAdmin = caller.role === 'MASTER_ADMIN';
+
+      if (!isChapterAdmin && !isMasterAdmin) {
+        return res.status(403).json({ success: false, error: "Only Chapter Admins can invite guests." });
+      }
+
+      // 2. Verify selected meeting belongs to caller's chapter
+      const { data: meeting, error: meetingErr } = await supabase
+        .from('meetings')
+        .select('id, chapter_id, title, date, time, venue, location')
+        .eq('id', newInvitation.meeting_id)
+        .maybeSingle();
+
+      if (meetingErr || !meeting) {
+        return res.status(400).json({ success: false, error: "Invalid meeting selected." });
+      }
+
+      if (!isMasterAdmin && meeting.chapter_id !== caller.chapter_id) {
+        return res.status(403).json({ success: false, error: "Chapter Admin can only invite guests to meetings belonging to their own chapter." });
+      }
+
+      // 3. Prepare sanitised invitation payload
+      const invitePayload = {
+        invited_by: caller.id,
+        created_by: caller.id,
+        invited_by_name: caller.name || newInvitation.invited_by_name || 'Chapter Admin',
+        invited_by_chapter: caller.chapter_id,
+        guest_name: newInvitation.guest_name,
+        guest_phone: newInvitation.guest_phone,
+        guest_whatsapp: newInvitation.guest_whatsapp,
+        business_category: newInvitation.business_category,
+        meeting_id: meeting.id,
+        meeting_title: meeting.title || newInvitation.meeting_title || 'Weekly Chapter Meeting',
+        meeting_date: meeting.date || newInvitation.meeting_date,
+        meeting_time: meeting.time || newInvitation.meeting_time || '10:00 AM',
+        venue: meeting.venue || meeting.location || newInvitation.venue || 'SSK Business Hall',
+        status: 'Pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // 4. Perform insert using supabase
+      const { data: inserted, error: insertErr } = await supabase
+        .from('guest_invitations')
+        .insert([invitePayload])
+        .select();
+
+      if (insertErr) {
+        console.error("Guest invitation insert error:", insertErr);
+        return res.status(400).json({ success: false, error: insertErr.message || "Failed to save guest invitation." });
+      }
+
+      return res.json({ success: true, data: inserted });
+    } catch (err: any) {
+      console.error("Invite guest API error:", err);
+      return res.status(500).json({ success: false, error: err.message || "An unexpected error occurred." });
+    }
+  });
+
   // Position management endpoint (Master Admin only)
   app.post("/api/admin/update-position", async (req, res) => {
     res.setHeader('Content-Type', 'application/json');

@@ -258,6 +258,7 @@ export function Meetings() {
 
   const [isDefaultSetupOpen, setIsDefaultSetupOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [modalChapterMembers, setModalChapterMembers] = useState<UserProfile[]>([]);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isMemberHistoryModalOpen, setIsMemberHistoryModalOpen] = useState(false);
   const [isAttendanceDetailsOpen, setIsAttendanceDetailsOpen] = useState(false);
@@ -295,9 +296,28 @@ export function Meetings() {
     if (!isChapAdminRole) return false;
 
     const userChap = profile.chapter_id || (profile as any).chapterId;
-    const meetingChap = meeting.chapter_id || (meeting as any).chapterId;
+    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
 
-    if (userChap && meetingChap && userChap === meetingChap) {
+    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
+      return true;
+    }
+    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
+      return true;
+    }
+    return false;
+  };
+
+  const canUserViewReport = (meeting: Meeting | null): boolean => {
+    if (!profile || !meeting) return false;
+    if (profile.role === 'MASTER_ADMIN') return true;
+
+    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
+    if (!isChapAdminRole) return false;
+
+    const userChap = profile.chapter_id || (profile as any).chapterId;
+    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
+
+    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
       return true;
     }
     if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
@@ -308,7 +328,7 @@ export function Meetings() {
 
   const getMemberPositionLabel = (member: any): string => {
     if (!member) return 'Associate Member';
-    const pos = member.position || member.designation || member.role;
+    const pos = member.position || member.chapter_position || member.designation || member.role;
     if (pos) {
       const raw = String(pos).trim().toLowerCase();
       if (raw === 'chapter_admin' || raw === 'chapter admin' || member.role === 'CHAPTER_ADMIN') {
@@ -419,6 +439,10 @@ export function Meetings() {
   };
 
   const handleOpenAttendanceReport = async (meeting: Meeting) => {
+    if (!canUserViewReport(meeting)) {
+      setError("Unauthorized: Only the Chapter Admin for this chapter or Master Admin can view the meeting report.");
+      return;
+    }
     setReportMeeting(meeting);
     setIsAttendanceReportOpen(true);
     try {
@@ -436,9 +460,60 @@ export function Meetings() {
 
   useEffect(() => {
     if (isUpdateModalOpen && selectedMeeting) {
-      const fetchGuests = async () => {
+      const fetchModalData = async () => {
         try {
-          const { data: guests, error } = await supabase
+          // 1. Fetch meeting's chapter members directly from users table
+          const meetingChapId = 
+            selectedMeeting.chapter_id || 
+            (selectedMeeting as any).chapterId || 
+            (selectedMeeting.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || 
+            (profile?.chapter_id);
+
+          if (meetingChapId) {
+            const { data: cUsers } = await supabase
+              .from('users')
+              .select('*')
+              .eq('chapter_id', meetingChapId);
+
+            let chapterMembersList: UserProfile[] = [];
+            if (cUsers && cUsers.length > 0) {
+              chapterMembersList = cUsers
+                .filter((u: any) => u.role !== 'MASTER_ADMIN')
+                .filter((u: any) => {
+                  const st = String(u.status || u.membership_status || u.membershipStatus || 'ACTIVE').toUpperCase();
+                  return st === 'ACTIVE' || st === 'APPROVED' || !u.status;
+                })
+                .map((u: any) => ({
+                  ...u,
+                  uid: u.uid || u.id,
+                  id: u.id || u.uid,
+                  name: getCleanFullName(u.name || u.displayName),
+                  displayName: getCleanFullName(u.name || u.displayName),
+                  position: u.position || u.chapter_position || '',
+                  chapter_position: u.chapter_position || u.position || '',
+                  role: u.role,
+                  businessName: u.business_name || u.businessName || '',
+                  photoURL: u.profile_photo || u.photoURL
+                }));
+            } else {
+              chapterMembersList = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && u.chapter_id === meetingChapId);
+            }
+
+            console.log("=== DEBUG MEETING UPDATE QUERY ===");
+            console.log("Meeting ID:", selectedMeeting.id);
+            console.log("Meeting Chapter ID:", meetingChapId);
+            console.log("Logged-in User ID:", profile?.uid || profile?.id);
+            console.log("Logged-in User Role:", profile?.role);
+            console.log("Logged-in User Chapter:", profile?.chapter_id);
+            console.log("Number of matching chapter members returned from users table:", chapterMembersList.length);
+
+            setModalChapterMembers(chapterMembersList);
+          } else {
+            setModalChapterMembers([]);
+          }
+
+          // 2. Fetch guests for this meeting
+          const { data: guests } = await supabase
             .from('guest_invitations')
             .select('*')
             .eq('meeting_id', selectedMeeting.id);
@@ -450,7 +525,7 @@ export function Meetings() {
             const inviterIds = [...new Set(guests.map(g => g.invited_by).filter(Boolean))];
             
             if (inviterIds.length > 0) {
-              const { data: users, error: usersError } = await supabase
+              const { data: users } = await supabase
                 .from('users')
                 .select('*')
                 .in('uid', inviterIds);
@@ -476,11 +551,11 @@ export function Meetings() {
             setTempGuestAttendance(initialGuestAttendance);
           }
         } catch (err) {
-          console.error("Error fetching guests:", err);
+          console.error("Error fetching modal data:", err);
         }
       };
       
-      fetchGuests();
+      fetchModalData();
     }
   }, [isUpdateModalOpen, selectedMeeting]);
 
@@ -883,11 +958,11 @@ export function Meetings() {
     setError(null);
     setSuccess(null);
     try {
-      const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || selectedMeeting.adminId;
-      const meetingMembers = members.filter(m => {
+      const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || (selectedMeeting.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
+      const meetingMembers = modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
         if (m.role === 'MASTER_ADMIN') return false;
         const mChap = m.chapter_id || (m as any)?.chapterId;
-        const isSameChapter = Boolean(mChap && meetingChapId && mChap === meetingChapId);
+        const isSameChapter = Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
         const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
         return isSameChapter || isChapterAdminForMeeting;
       });
@@ -1431,8 +1506,8 @@ export function Meetings() {
                 const meetingStatus = getMeetingStatus(meeting);
 
                 // Calculate attendance summary for this meeting
-                const meetingChapId = meeting.chapter_id || meeting.adminId;
-                const chapMembers = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+                const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
+                const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
                 const totalMembersCount = chapMembers.length || Object.keys(meeting.attendance || {}).length;
                 const presentCount = chapMembers.filter(m => {
                   const st = meeting.attendance?.[m.uid];
@@ -1622,14 +1697,25 @@ export function Meetings() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {(() => {
-                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting as any)?.chapterId;
-                      const meetingMembers = members.filter(m => {
+                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting as any)?.chapterId || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
+                      const meetingMembers = modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
                         if (m.role === 'MASTER_ADMIN') return false;
                         const mChap = m.chapter_id || (m as any)?.chapterId;
-                        const isSameChapter = Boolean(mChap && meetingChapId && mChap === meetingChapId);
+                        const isSameChapter = Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
                         const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
                         return isSameChapter || isChapterAdminForMeeting;
                       });
+
+                      if (meetingMembers.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-xs text-neutral-400 font-medium">
+                              No members found for this chapter.
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       return meetingMembers.map((member) => {
                         const status = tempAttendance[member.uid];
                         const amount = tempAmount[member.uid] || 0;
@@ -2425,6 +2511,11 @@ export function Meetings() {
         title="Meeting Attendance Report"
       >
         {reportMeeting ? (
+          !canUserViewReport(reportMeeting) ? (
+            <div className="p-6 text-center bg-red-500/10 border border-red-500/20 rounded-[16px] text-red-400 font-bold text-sm">
+              Access Denied: Only the Chapter Admin for this chapter or Master Admin can view the meeting report.
+            </div>
+          ) : (
           <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
             {/* Meeting Header Details */}
             <div className="bg-[#151C2E] p-4 rounded-[16px] border border-white/5 space-y-3">
@@ -2469,8 +2560,8 @@ export function Meetings() {
 
             {/* Attendance Summary Stat Cards */}
             {(() => {
-              const meetingChapId = reportMeeting.chapter_id || reportMeeting.adminId;
-              const chapMembers = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+              const meetingChapId = reportMeeting.chapter_id || (reportMeeting as any).chapterId || (reportMeeting.adminId ? usersMap[reportMeeting.adminId]?.chapter_id : null);
+              const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
               const totalMembers = chapMembers.length || Object.keys(reportMeeting.attendance || {}).length;
               const presentCount = chapMembers.filter(m => {
                 const st = reportMeeting.attendance?.[m.uid];
@@ -2529,8 +2620,8 @@ export function Meetings() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {(() => {
-                      const meetingChapId = reportMeeting.chapter_id || reportMeeting.adminId;
-                      const members = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+                      const meetingChapId = reportMeeting.chapter_id || (reportMeeting as any).chapterId || (reportMeeting.adminId ? usersMap[reportMeeting.adminId]?.chapter_id : null);
+                      const members = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
                       
                       if (members.length === 0) {
                         return (
@@ -2554,7 +2645,7 @@ export function Meetings() {
                               {m.name || m.displayName || 'Unnamed Member'}
                             </td>
                             <td className="py-3 px-4 text-xs text-neutral-400">
-                              {m.position || m.role || 'Member'}
+                              {getMemberPositionLabel(m)}
                             </td>
                             <td className="py-3 px-4 text-center">
                               <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border inline-block", displayStatus.color)}>
@@ -2608,7 +2699,6 @@ export function Meetings() {
               </div>
             )}
 
-            {/* Meeting Notes */}
             {reportMeeting.notes && (
               <div className="p-4 bg-[#151C2E] rounded-[12px] border border-white/5 space-y-1">
                 <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Meeting Notes</h4>
@@ -2616,6 +2706,7 @@ export function Meetings() {
               </div>
             )}
           </div>
+          )
         ) : (
           <div className="p-8 text-center text-neutral-400 text-xs font-medium">
             Loading attendance report data...

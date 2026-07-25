@@ -55,13 +55,17 @@ export function Guests() {
       const cats = await databaseService.list<Category>('categories');
       setCategories(cats);
       
-      // 2. Fetch Upcoming Meetings
-      if (profile.chapter_id) {
+      const userId = profile.id || profile.uid;
+      const userChapterId = profile.chapter_id || (profile as any).chapterId;
+      const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || profile.role === 'MASTER_ADMIN';
+
+      // 2. Fetch Upcoming Meetings for user's chapter
+      if (userChapterId) {
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: fetchedMeetings } = await supabase
           .from('meetings')
           .select('*')
-          .eq('chapter_id', profile.chapter_id)
+          .eq('chapter_id', userChapterId)
           .gte('date', todayStr)
           .order('date', { ascending: true });
         
@@ -69,11 +73,16 @@ export function Guests() {
       }
       
       // 3. Fetch Guest Invitations History
-      const { data: invs } = await supabase
-        .from('guest_invitations')
-        .select('*')
-        .eq('invited_by', profile.uid)
-        .order('created_at', { ascending: false });
+      let invsQuery = supabase.from('guest_invitations').select('*');
+      if (profile.role === 'MASTER_ADMIN') {
+        // Master Admin sees all
+      } else if (isChapterAdmin && userChapterId) {
+        invsQuery = invsQuery.or(`invited_by.eq.${userId},invited_by_chapter.eq.${userChapterId}`);
+      } else {
+        invsQuery = invsQuery.eq('invited_by', userId);
+      }
+
+      const { data: invs } = await invsQuery.order('created_at', { ascending: false });
         
       if (invs) setInvitations(invs);
       
@@ -97,22 +106,36 @@ export function Guests() {
       setError("Please fill all required fields.");
       return;
     }
-    
+
+    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || profile.role === 'MASTER_ADMIN';
+    if (!isChapterAdmin) {
+      setError("ONLY the Chapter Admin can invite a guest for a meeting belonging to their chapter.");
+      return;
+    }
+
+    const userId = profile.id || profile.uid;
+    const userChapterId = profile.chapter_id || (profile as any).chapterId;
+
     setIsSubmitting(true);
     setError(null);
     try {
       const selectedMeeting = upcomingMeetings.find(m => m.id === formData.meetingId);
       if (!selectedMeeting) throw new Error("Please select a valid meeting.");
 
+      if (profile.role !== 'MASTER_ADMIN' && selectedMeeting.chapter_id !== userChapterId) {
+        throw new Error("You can only invite guests to meetings belonging to your own chapter.");
+      }
+
       const newInvitation = {
-        invited_by: profile.uid,
-        invited_by_name: profile.name || profile.full_name || 'Member',
-        invited_by_chapter: profile.chapter_id || 'Unknown',
+        invited_by: userId,
+        created_by: userId,
+        invited_by_name: profile.name || profile.full_name || 'Chapter Admin',
+        invited_by_chapter: userChapterId || selectedMeeting.chapter_id,
         guest_name: formData.guestName,
         guest_phone: formData.guestPhone,
         guest_whatsapp: formData.guestWhatsapp,
         business_category: formData.guestBusiness,
-        meeting_id: formData.meetingId,
+        meeting_id: selectedMeeting.id,
         meeting_title: selectedMeeting.title || 'Weekly Chapter Meeting',
         meeting_date: selectedMeeting.date,
         meeting_time: selectedMeeting.time || '10:00 AM',
@@ -122,13 +145,36 @@ export function Guests() {
         updated_at: new Date().toISOString()
       };
 
+      let insertSuccess = false;
       const { data, error: insertError } = await supabase
         .from('guest_invitations')
         .insert([newInvitation])
         .select();
-        
-      if (insertError) throw insertError;
-      
+
+      if (!insertError && data && data.length > 0) {
+        insertSuccess = true;
+      } else {
+        // Fall back to server API endpoint which verifies Chapter Admin and chapter meeting ownership
+        const res = await fetch('/api/guests/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newInvitation,
+            callerId: userId
+          })
+        });
+        const resData = await res.json();
+        if (resData.success) {
+          insertSuccess = true;
+        } else {
+          throw new Error(resData.error || insertError?.message || "Failed to send guest invitation.");
+        }
+      }
+
+      if (!insertSuccess) {
+        throw new Error("Failed to save guest invitation.");
+      }
+
       // Refresh list
       fetchInitialData();
       
