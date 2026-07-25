@@ -240,6 +240,26 @@ export async function getDocs(queryRef: any) {
     });
   }
 
+  if (collectionPath === 'testimonials') {
+    rows = rows.map(r => {
+      let body = r.testimonial || '';
+      let extraData: any = {};
+      if (body.includes('|||')) {
+        const parts = body.split('|||');
+        body = parts[0];
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch(e) {}
+      }
+      const camelExtra = keysToCamel(extraData);
+      return {
+        ...r,
+        testimonial: body,
+        ...camelExtra
+      };
+    });
+  }
+
   if (collectionPath === 'one_to_one_meetings' && rows.length > 0) {
     const meetingIds = rows.map(m => m.id);
     const { data: parts, error: partsErr } = await supabase
@@ -373,6 +393,20 @@ export async function getDoc(docRef: any) {
     
     camelData.participantIds = !partsErr && parts ? parts.map(p => p.user_id) : [];
   }
+
+  if (path === 'testimonials') {
+    let body = camelData.testimonial || '';
+    let extraData: any = {};
+    if (body.includes('|||')) {
+      const parts = body.split('|||');
+      body = parts[0];
+      try {
+        extraData = JSON.parse(parts[1] || '{}');
+      } catch (e) {}
+    }
+    const camelExtra = keysToCamel(extraData);
+    Object.assign(camelData, { testimonial: body }, camelExtra);
+  }
   
   return { exists: () => true, data: () => camelData, id };
 }
@@ -393,6 +427,14 @@ export async function setDoc(docRef: any, data: any, options?: any) {
   if (path === 'one_to_one_meetings') {
     participantIds = cleanData.participantIds;
     delete cleanData.participantIds;
+  }
+
+  if (path === 'testimonials') {
+    if (cleanData.title) {
+      const extra = { title: cleanData.title };
+      cleanData.testimonial = (cleanData.testimonial || '') + '|||' + JSON.stringify(extra);
+    }
+    delete cleanData.title;
   }
   
   if (path === 'users') {
@@ -469,6 +511,14 @@ export async function addDoc(collectionRef: any, data: any) {
     delete cleanData.title;
   }
 
+  if (collectionPath === 'testimonials') {
+    if (cleanData.title) {
+      const extra = { title: cleanData.title };
+      cleanData.testimonial = (cleanData.testimonial || '') + '|||' + JSON.stringify(extra);
+    }
+    delete cleanData.title;
+  }
+
   const snakeData = keysToSnake(cleanData);
   const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
   if (error) {
@@ -501,6 +551,14 @@ export async function updateDoc(docRef: any, partialData: any) {
   if (path === 'one_to_one_meetings') {
     participantIds = cleanData.participantIds;
     delete cleanData.participantIds;
+  }
+
+  if (path === 'testimonials') {
+    if (cleanData.title) {
+      const extra = { title: cleanData.title };
+      cleanData.testimonial = (cleanData.testimonial || '') + '|||' + JSON.stringify(extra);
+    }
+    delete cleanData.title;
   }
   
   if (path === 'users') {

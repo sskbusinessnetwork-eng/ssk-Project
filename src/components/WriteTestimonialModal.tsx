@@ -27,17 +27,23 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: Wri
 
     setIsSubmitting(true);
     try {
+      const authorUid = author.uid || (author as any).id;
+      const receiverUid = receiver.uid || (receiver as any).id;
+      const chapterId = receiver.chapter_id || (receiver as any).chapterId || receiver.adminId || author.chapter_id || (author as any).chapterId || author.adminId || null;
+
       await databaseService.create('testimonials', {
-        receiverMemberId: receiver.uid,
-        authorMemberId: author.uid,
-        chapterId: receiver.chapter_id || receiver.adminId || author.chapter_id || author.adminId,
+        receiverMemberId: receiverUid,
+        authorMemberId: authorUid,
+        chapterId: chapterId,
         rating,
-        title,
-        testimonial,
+        title: title ? title.trim() : '',
+        testimonial: testimonial.trim(),
         status: 'PENDING',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
+
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       // Send notification
       await notificationService.sendNotification({
