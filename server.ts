@@ -523,8 +523,13 @@ async function startServer() {
         }
       }
 
-      const { error: updateError } = await adminSupabase.from('users').update(updates).eq('id', uid);
-      if (updateError) throw updateError;
+      if (uid.startsWith('global_')) {
+        const { error: updateError } = await adminSupabase.from('users').upsert({ id: uid, ...updates }, { onConflict: 'id' });
+        if (updateError) throw updateError;
+      } else {
+        const { error: updateError } = await adminSupabase.from('users').update(updates).eq('id', uid);
+        if (updateError) throw updateError;
+      }
       
       res.json({ success: true });
     } catch (e: any) {

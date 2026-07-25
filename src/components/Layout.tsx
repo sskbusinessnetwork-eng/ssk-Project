@@ -125,9 +125,9 @@ export function Layout() {
       )}>
         
         {/* Top Header */}
-        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-3 sm:px-4 lg:px-6 flex items-center justify-between h-[62px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
+        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-2 sm:px-4 lg:px-6 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
           
-          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1 mr-2">
+          <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4 min-w-0 flex-1 mr-1 sm:mr-2">
             <button 
               onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
               className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white shrink-0 z-[10000] relative"
@@ -143,7 +143,8 @@ export function Layout() {
                 showText={true} 
                 subtitle="ENTERPRISE PLATFORM" 
                 subtitleClassName="hidden lg:block"
-                textClassName="text-[13px] sm:text-sm lg:text-sm tracking-tight sm:tracking-wider font-extrabold"
+                textClassName="text-[11px] sm:text-[13px] lg:text-sm tracking-tighter sm:tracking-tight lg:tracking-wider font-extrabold truncate"
+                className="gap-1.5 sm:gap-2.5"
               />
             </Link>
           </div>
@@ -163,22 +164,22 @@ export function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4 lg:gap-6 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-4 lg:gap-6 shrink-0">
             <div className="flex items-center">
               <Link to="/notifications" className="relative group shrink-0">
-                <div className="p-2 sm:p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5 flex items-center justify-center">
-                  <Bell size={18} strokeWidth={2} />
+                <div className="p-1.5 sm:p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5 flex items-center justify-center">
+                  <Bell size={18} strokeWidth={2} className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                 </div>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[14px] h-[14px] sm:min-w-[16px] sm:h-[16px] px-1 flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </Link>
             </div>
 
-            <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-1 sm:pl-2 sm:border-l border-white/10 shrink-0">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs sm:text-sm shrink-0 border-2 border-[#FFE4E6]/20">
+            <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0 border border-[#FFE4E6]/20 sm:border-2">
                 {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'SV'}
               </div>
               <div className="hidden lg:flex flex-col text-left mr-2">

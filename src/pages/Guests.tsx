@@ -415,10 +415,16 @@ export function Guests() {
                 onChange={(e) => setFormData({ ...formData, guestBusiness: e.target.value })}
                 className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
               >
-                <option value="" className="bg-[#111827] text-white">Select Category</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name} className="bg-[#111827] text-white">{cat.name}</option>
-                ))}
+                {categories.length > 0 ? (
+                  <>
+                    <option value="" className="bg-[#111827] text-white">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.name} className="bg-[#111827] text-white">{cat.name}</option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="" className="bg-[#111827] text-white">No Business Categories Available</option>
+                )}
               </select>
             </div>
             

@@ -684,10 +684,16 @@ export function Connections() {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
               >
-                <option value="" className="text-neutral-400">All Categories</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
+                {categories.length > 0 ? (
+                  <>
+                    <option value="" className="text-neutral-400">All Categories</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="" className="text-neutral-400">No Business Categories Available</option>
+                )}
               </select>
             </div>
 

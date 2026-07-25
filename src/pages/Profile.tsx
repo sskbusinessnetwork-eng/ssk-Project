@@ -984,10 +984,16 @@ export function Profile() {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm appearance-none cursor-pointer"
                 >
-                  <option value="" className="bg-[#111827]">Select Category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.name} className="bg-[#111827]">{cat.name}</option>
-                  ))}
+                  {categories.length > 0 ? (
+                    <>
+                      <option value="" className="bg-[#111827]">Select Category</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.name} className="bg-[#111827]">{cat.name}</option>
+                      ))}
+                    </>
+                  ) : (
+                    <option value="" className="bg-[#111827]">No Business Categories Available</option>
+                  )}
                 </select>
               </div>
             )}

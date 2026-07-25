@@ -9,22 +9,10 @@ interface RegistrationModalProps {
   onClose: () => void;
 }
 
-const CATEGORIES = [
-  'Real Estate',
-  'Financial Services',
-  'IT & Software',
-  'Healthcare',
-  'Education',
-  'Manufacturing',
-  'Retail',
-  'Consulting',
-  'Hospitality',
-  'Automobile'
-];
-
 export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
   const [step, setStep] = React.useState<'form' | 'success'>('form');
   const [loading, setLoading] = React.useState(false);
+  const [categories, setCategories] = React.useState<any[]>([]);
   const [formData, setFormData] = React.useState({
     fullName: '',
     mobile: '',
@@ -33,6 +21,14 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
     address: '',
     meetingSlot: ''
   });
+
+  React.useEffect(() => {
+    if (isOpen) {
+      databaseService.list<any>('categories').then(data => {
+        setCategories(data);
+      });
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,10 +144,16 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
                       onChange={(e) => setFormData({ ...formData, businessCategory: e.target.value })}
                       className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                     >
-                      <option value="">Select Category</option>
-                      {CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
+                      {categories.length > 0 ? (
+                        <>
+                          <option value="">Select Category</option>
+                          {categories.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
+                        </>
+                      ) : (
+                        <option value="">No Business Categories Available</option>
+                      )}
                     </select>
                   </div>
                 </div>

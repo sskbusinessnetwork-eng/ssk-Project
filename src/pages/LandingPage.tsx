@@ -210,15 +210,15 @@ export function LandingPage() {
               </Link>
             </div>
             
-            <div className="flex items-center gap-4">
-              <Link to="/login" className={`text-sm font-bold transition-colors hover:text-[#F97316] ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>
+            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+              <Link to="/login" className={`text-xs sm:text-sm font-bold transition-colors hover:text-[#F97316] ${scrolled ? 'text-[#0F2040]' : 'text-white'}`}>
                 Login
               </Link>
               <motion.button 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={scrollToForm} 
-                className="px-4 md:px-6 py-2 md:py-2.5 bg-[#F97316] text-white text-[10px] md:text-sm font-extrabold uppercase tracking-[3px] rounded-full hover:bg-[#EA580C] transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)]"
+                className="px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 bg-[#F97316] text-white text-[9px] sm:text-[10px] md:text-sm font-extrabold uppercase tracking-[1.5px] sm:tracking-[3px] rounded-full hover:bg-[#EA580C] transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] whitespace-nowrap"
               >
                 Join Meeting
               </motion.button>
@@ -268,7 +268,7 @@ export function LandingPage() {
             animate="visible"
             variants={staggerContainer}
           >
-            <motion.h1 variants={fadeUp} className="text-[34px] md:text-[42px] lg:text-[52px] font-black tracking-tight text-white mb-6 leading-[1.1]">
+            <motion.h1 variants={fadeUp} className="text-[28px] sm:text-[34px] md:text-[42px] lg:text-[52px] font-black tracking-tight text-white mb-6 leading-[1.1]">
               We Built Our Community with Values.<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F97316] to-[#FB923C] drop-shadow-[0_0_30px_rgba(249,115,22,0.3)]">
                 Now Let’s Build Our Businesses Together.

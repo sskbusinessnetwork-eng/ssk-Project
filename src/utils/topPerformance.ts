@@ -1,6 +1,7 @@
 import { databaseService } from '../services/databaseService';
 import { UserProfile } from '../types';
 import { calculateMemberGrowthScoreData } from './growthScore';
+import { where } from '../lib/database';
 
 export interface TopPerformanceSettings {
   showOnLandingPage: boolean;
@@ -77,7 +78,7 @@ export async function saveTopPerformanceSettings(settings: TopPerformanceSetting
 export function subscribeTopPerformanceSettings(callback: (settings: TopPerformanceSettings) => void): () => void {
   return databaseService.subscribe<any>(
     'users',
-    [{ type: 'where', field: 'id', op: '==', val: 'global_top_performance_settings' }],
+    [where('id', '==', 'global_top_performance_settings')],
     (docs) => {
       const defaultSettings: TopPerformanceSettings = {
         showOnLandingPage: true,

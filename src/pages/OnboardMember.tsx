@@ -6,10 +6,11 @@ import { useAuth } from '../hooks/useAuth';
 import { User, Phone, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check, RefreshCw, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
-import { UserProfile, ChapterPosition } from '../types';
+import { UserProfile, ChapterPosition, Category } from '../types';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { supabase } from '../lib/supabaseClient';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
+import { databaseService } from '../services/databaseService';
 
 export function OnboardMember() {
   const { profile } = useAuth();
@@ -17,6 +18,7 @@ export function OnboardMember() {
 
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [chapters, setChapters] = useState<UserProfile[]>([]);
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [createdMemberData, setCreatedMemberData] = useState<any>(null);
@@ -47,6 +49,11 @@ export function OnboardMember() {
     // Fetch chapters (chapter admins)
     getDocs(query(collection(db, 'users'), where('position', '==', 'chapter_admin')))
       .then((snap: any) => setChapters((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile))));
+      
+    // Fetch categories
+    databaseService.list<Category>('categories').then(data => {
+      setDbCategories(data);
+    });
       
     // Subscribe to all members (for simplicity, getting all users)
     const unsub = onSnapshot(collection(db, 'users'), snap => {
@@ -215,8 +222,6 @@ export function OnboardMember() {
     return m.role !== 'MASTER_ADMIN' && searchMatch && statusMatch && chapterMatch && categoryMatch;
   });
 
-  const categories = Array.from(new Set(members.map(m => m.category).filter(Boolean)));
-
   return (
     <div className="space-y-6 pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -275,8 +280,8 @@ export function OnboardMember() {
             className="w-full h-11 px-4 bg-neutral-50 border border-neutral-200 rounded-[12px] focus:bg-white focus:border-primary outline-none text-sm"
           >
             <option value="ALL">All Categories</option>
-            {categories.map(c => (
-              <option key={c} value={c}>{c}</option>
+            {dbCategories.map(c => (
+              <option key={c.id} value={c.name}>{c.name}</option>
             ))}
           </select>
         </div>
@@ -433,12 +438,23 @@ export function OnboardMember() {
                   
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1">Business Category</label>
-                    <input
-                      type="text"
+                    <select
+                      required
                       value={formData.category}
                       onChange={e => setFormData({...formData, category: e.target.value})}
-                      className="w-full h-12 px-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm"
-                    />
+                      className="w-full h-12 px-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm appearance-none cursor-pointer"
+                    >
+                      {dbCategories.length > 0 ? (
+                        <>
+                          <option value="">Select Category</option>
+                          {dbCategories.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
+                        </>
+                      ) : (
+                        <option value="">No Business Categories Available</option>
+                      )}
+                    </select>
                   </div>
                   
                   <div className="space-y-2">

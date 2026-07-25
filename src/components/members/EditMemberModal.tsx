@@ -102,10 +102,16 @@ export function EditMemberModal({
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white appearance-none cursor-pointer"
               >
-                <option value="" className="bg-[#151C2E] text-white">Select Category</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
-                ))}
+                {categories.length > 0 ? (
+                  <>
+                    <option value="" className="bg-[#151C2E] text-white">Select Category</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="" className="bg-[#151C2E] text-white">No Business Categories Available</option>
+                )}
               </select>
             </div>
           </div>
