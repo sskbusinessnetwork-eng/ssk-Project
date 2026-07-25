@@ -227,6 +227,9 @@ export function LandingPage() {
         </nav>
       </div>
 
+      {/* Top Performing Members Section */}
+      <TopPerformingMembersSection />
+
       {/* Hero Section */}
       <header className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-[#0F2040]">
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute inset-0 z-0">
@@ -650,9 +653,6 @@ export function LandingPage() {
           </motion.div>
         </div>
       </section>
-
-      {/* Top Performing Members Section */}
-      <TopPerformingMembersSection />
 
       {/* A Vision For The Future */}
       <section className="py-24 md:py-40 px-6 bg-[#0F2040] text-center relative overflow-hidden">
