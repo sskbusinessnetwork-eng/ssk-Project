@@ -3,8 +3,8 @@ import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from './s
 const profile = {
   account_status: 'Active',
   membership_status: 'Active',
-  subscription_start: '24-07-2026',
-  subscription_end: '24-07-2027',
+  subscription_start: '27-07-2026',
+  subscription_end: '26-07-2027',
   role: 'MEMBER'
 };
 

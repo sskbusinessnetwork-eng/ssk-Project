@@ -103,7 +103,7 @@ export function isMemberActive(u: any): boolean {
   }
   
   const rawMembershipStatus = (u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
-  if (rawMembershipStatus === 'INACTIVE') {
+  if (rawMembershipStatus === 'INACTIVE' || rawMembershipStatus === 'SUSPENDED') {
     return false;
   }
 
@@ -111,7 +111,8 @@ export function isMemberActive(u: any): boolean {
     return false;
   }
 
-  return getSubscriptionStatus(u) === 'Active';
+  const subStatus = getSubscriptionStatus(u);
+  return subStatus === 'Active' || subStatus === 'Pending';
 }
 
 export function getMemberStatusLabel(u: any): 'Active' | 'Inactive / Expired' | 'Pending' {
@@ -143,7 +144,7 @@ export function getMemberInactiveReasons(u: any): string[] {
   }
   
   const rawMembershipStatus = (u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
-  if (rawMembershipStatus === 'INACTIVE') {
+  if (rawMembershipStatus === 'INACTIVE' || rawMembershipStatus === 'SUSPENDED') {
     reasons.push(`Membership ${rawMembershipStatus}`);
   }
 
