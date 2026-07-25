@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY);
 async function run() {
-  const { data, error } = await supabase.from('users').select('*').limit(1);
+  const { data, error } = await supabase.from('member_subscriptions').select('*').limit(1);
   if (error) console.error(error);
-  else console.log(Object.keys(data[0]));
+  else console.log(Object.keys(data[0] || {}));
 }
 run();

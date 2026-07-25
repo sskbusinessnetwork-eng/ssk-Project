@@ -147,11 +147,30 @@ export function Login() {
 
         const rawAccountStatus = (user.account_status || user.accountStatus || '').trim().toUpperCase();
         const rawStatus = (user.status || '').trim().toUpperCase();
-        const rawMembershipStatus = (user.membership_status || user.membershipStatus || user.status || '').trim().toUpperCase();
         
         if (rawAccountStatus === 'DISABLED' || rawStatus === 'DISABLED' || user.disabled === true) {
           throw new Error("Your account has been disabled.");
         }
+
+        let subscriptionEnd = null;
+        let subscriptionStart = null;
+        let memStatus = user.membership_status || user.membershipStatus || user.status || '';
+        let accStatus = user.account_status;
+
+        const { data: subData } = await supabase
+          .from('member_subscriptions')
+          .select('subscription_start, subscription_end, membership_status, account_status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (subData) {
+          subscriptionEnd = subData.subscription_end;
+          subscriptionStart = subData.subscription_start;
+          if (subData.membership_status) memStatus = subData.membership_status;
+          if (subData.account_status) accStatus = subData.account_status;
+        }
+
+        const rawMembershipStatus = (memStatus || '').trim().toUpperCase();
 
         if (rawMembershipStatus === 'INACTIVE' || rawAccountStatus === 'INACTIVE' || rawStatus === 'INACTIVE') {
            throw new Error("Your membership is inactive.");
@@ -159,6 +178,42 @@ export function Login() {
         
         if (rawMembershipStatus === 'EXPIRED') {
            throw new Error("Your membership has expired.");
+        }
+
+        if (subscriptionEnd) {
+          // Parse DD/MM/YYYY or YYYY-MM-DD
+          const strVal = String(subscriptionEnd).trim();
+          let y = 0, m = 0, d = 0;
+          const matchDDMMYYYY = strVal.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+          if (matchDDMMYYYY) {
+            d = parseInt(matchDDMMYYYY[1], 10);
+            m = parseInt(matchDDMMYYYY[2], 10);
+            y = parseInt(matchDDMMYYYY[3], 10);
+          } else {
+            const matchYYYYMMDD = strVal.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+            if (matchYYYYMMDD) {
+              y = parseInt(matchYYYYMMDD[1], 10);
+              m = parseInt(matchYYYYMMDD[2], 10);
+              d = parseInt(matchYYYYMMDD[3], 10);
+            } else {
+              const dateObj = new Date(strVal);
+              if (!isNaN(dateObj.getTime())) {
+                y = dateObj.getFullYear();
+                m = dateObj.getMonth() + 1;
+                d = dateObj.getDate();
+              }
+            }
+          }
+          
+          if (y > 0) {
+            const ymd = `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const now = new Date();
+            const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            
+            if (todayYMD > ymd) {
+              throw new Error("Subscription Expired");
+            }
+          }
         }
 
         login({
@@ -169,17 +224,18 @@ export function Login() {
           phone: user.phone,
           role: user.role,
           position: user.position,
-          membershipStatus: user.status,
-          membership_status: user.status,
-          account_status: user.account_status,
+          membershipStatus: memStatus,
+          membership_status: memStatus,
+          account_status: accStatus,
           createdAt: user.created_at,
           chapter_id: user.chapter_id,
           must_change_password: user.must_change_password,
-          subscription_start: user.subscription_start,
-          subscription_end: user.subscription_end,
-          subscriptionStart: user.subscription_start,
-          subscriptionEnd: user.subscription_end
+          subscription_start: subscriptionStart || user.subscription_start,
+          subscription_end: subscriptionEnd || user.subscription_end,
+          subscriptionStart: subscriptionStart || user.subscription_start,
+          subscriptionEnd: subscriptionEnd || user.subscription_end
         } as any);
+
         
         if (user.must_change_password) {
           navigate('/set-password');
