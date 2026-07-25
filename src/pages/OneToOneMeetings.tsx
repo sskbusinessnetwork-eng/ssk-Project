@@ -141,7 +141,7 @@ export function OneToOneMeetings() {
   const [receiverAttendance, setReceiverAttendance] = useState<'PRESENT' | 'ABSENT'>('PRESENT');
 
   const [rescheduleDate, setRescheduleDate] = useState('');
-  const [rescheduleTime, setRescheduleTime] = useState('10:00 AM');
+  const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleLocationOption, setRescheduleLocationOption] = useState<'Online Meeting' | 'My Address' | 'Selected Member Address'>('Online Meeting');
 
 
@@ -1359,27 +1359,30 @@ export function OneToOneMeetings() {
                     <div className="grid grid-cols-3 gap-2">
                       <select
                         value={selectedHour}
-                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">HH</option>
                         {hoursList.map(h => (
                           <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
                         ))}
                       </select>
                       <select
                         value={selectedMinute}
-                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '10', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">MM</option>
                         {minutesList.map(m => (
                           <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
                         ))}
                       </select>
                       <select
                         value={ampmPart}
-                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '10', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">--</option>
                         <option value="AM" className="bg-[#111827] text-white">AM</option>
                         <option value="PM" className="bg-[#111827] text-white">PM</option>
                       </select>
@@ -1606,7 +1609,7 @@ export function OneToOneMeetings() {
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Time</label>
             {(() => {
-              const { time: timePart, ampm: ampmPart } = parseTo12hParts(rescheduleTime || '10:00 AM');
+              const { time: timePart, ampm: ampmPart } = parseTo12hParts(rescheduleTime);
               const [selectedHour, selectedMinute] = timePart.split(':');
               const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
               const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
@@ -1619,27 +1622,30 @@ export function OneToOneMeetings() {
                 <div className="grid grid-cols-3 gap-2">
                   <select
                     value={selectedHour}
-                    onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                    onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
                     className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
                   >
+                    <option value="" disabled className="bg-[#111827] text-white">HH</option>
                     {hoursList.map(h => (
                       <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
                     ))}
                   </select>
                   <select
                     value={selectedMinute}
-                    onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                    onChange={(e) => handleTimeUpdate(selectedHour || '10', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
                     className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
                   >
+                    <option value="" disabled className="bg-[#111827] text-white">MM</option>
                     {minutesList.map(m => (
                       <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
                     ))}
                   </select>
                   <select
                     value={ampmPart}
-                    onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                    onChange={(e) => handleTimeUpdate(selectedHour || '10', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
                     className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
                   >
+                    <option value="" disabled className="bg-[#111827] text-white">--</option>
                     <option value="AM" className="bg-[#111827] text-white">AM</option>
                     <option value="PM" className="bg-[#111827] text-white">PM</option>
                   </select>

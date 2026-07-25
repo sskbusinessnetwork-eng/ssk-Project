@@ -250,8 +250,8 @@ export function Meetings() {
   const [success, setSuccess] = useState<string | null>(null);
   const [adminAdmins, setAdminAdmins] = useState<UserProfile[]>([]);
   const [scheduleData, setScheduleData] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
-    time: '07:30',
+    date: '',
+    time: '',
     location: '',
     adminId: ''
   });
@@ -279,7 +279,7 @@ export function Meetings() {
     frequency: 'Weekly' as 'Weekly' | 'Monthly',
     day: 'Monday',
     date: 1,
-    time: '07:30',
+    time: '',
     location: '',
     enabled: false
   });
@@ -287,6 +287,13 @@ export function Meetings() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
+
+  const isDefaultSetupComplete = Boolean(
+    defaultSetupData.frequency &&
+    (defaultSetupData.frequency === 'Weekly' ? defaultSetupData.day : defaultSetupData.date) &&
+    defaultSetupData.time &&
+    defaultSetupData.location.trim()
+  );
 
   const canUserUpdateMeeting = (meeting: Meeting | null): boolean => {
     if (!profile || !meeting) return false;
@@ -430,11 +437,22 @@ export function Meetings() {
   };
 
   const [readOnlyMeeting, setReadOnlyMeeting] = useState<Meeting | null>(null);
+  const [readOnlyGuests, setReadOnlyGuests] = useState<any[]>([]);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
-  const handleOpenReadOnlyMeetingDetails = (meeting: Meeting) => {
+  const handleOpenReadOnlyMeetingDetails = async (meeting: Meeting) => {
     setReadOnlyMeeting(meeting);
     setIsReadOnlyModalOpen(false); // reset first
+    try {
+      const { data: guests } = await supabase
+        .from('guest_invitations')
+        .select('*')
+        .eq('meeting_id', meeting.id);
+      setReadOnlyGuests(guests || []);
+    } catch (err) {
+      console.error("Error fetching guests for read only:", err);
+      setReadOnlyGuests([]);
+    }
     setTimeout(() => {
       setIsReadOnlyModalOpen(true);
     }, 10);
@@ -935,6 +953,11 @@ export function Meetings() {
     setSuccess(null);
 
     try {
+      if (!isDefaultSetupComplete) {
+        setError('Please complete all required fields.');
+        setIsSubmitting(false);
+        return;
+      }
       const adminId = isChapterAdmin ? profile?.uid : defaultSetupData.adminId;
       const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
       
@@ -996,8 +1019,13 @@ export function Meetings() {
       // Perform validation for all members
       for (const member of meetingMembers) {
         const status = tempAttendance[member.uid];
-        if (!status) {
-          setError(`Attendance status is required for ${member.name || member.displayName || 'all members'} before saving.`);
+        const amount = tempAmount[member.uid];
+        
+        // If amount is undefined, we assume it's 0 (as shown in the UI)
+        const finalAmount = amount === undefined ? 0 : amount;
+
+        if (!status || finalAmount === null || finalAmount === '') {
+          setError(`Please complete all attendance details before updating the meeting.`);
           setIsSubmitting(false);
           return;
         }
@@ -1008,10 +1036,27 @@ export function Meetings() {
           setIsSubmitting(false);
           return;
         }
+        
+        // Save the assumed 0 back to tempAmount so it gets persisted correctly
+        tempAmount[member.uid] = finalAmount;
       }
 
-      // Guest Attendance Save Logic
+      // Guest Attendance Save Logic & Validation
       if (meetingGuests.length > 0) {
+        for (const guest of meetingGuests) {
+          const gStatus = tempGuestAttendance[guest.id];
+          const gAmount = tempAmount[guest.id];
+          
+          const finalGAmount = gAmount === undefined ? 0 : gAmount;
+          
+          if (!gStatus || finalGAmount === null || finalGAmount === '') {
+            setError(`Please complete all attendance details before updating the meeting.`);
+            setIsSubmitting(false);
+            return;
+          }
+          
+          tempAmount[guest.id] = finalGAmount;
+        }
         for (const guest of meetingGuests) {
           const gStatus = tempGuestAttendance[guest.id];
           if (gStatus) {
@@ -1277,6 +1322,107 @@ export function Meetings() {
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
   }
 
+  const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
+    const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
+    const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
+    const totalMembers = chapMembers.length || Object.keys(meeting.attendance || {}).length;
+    
+    let presentCount = 0;
+    let absentCount = 0;
+    let substituteCount = 0;
+    let medicalCount = 0;
+    
+    chapMembers.forEach(m => {
+      const st = (meeting.attendance?.[m.uid] || '').toUpperCase();
+      if (st === 'PRESENT' || st === 'YES') {
+        presentCount++;
+      } else if (st === 'SUBSTITUTE') {
+        substituteCount++;
+        presentCount++;
+      } else if (st === 'ABSENT' || st === 'NO') {
+        absentCount++;
+      } else if (st === 'MEDICAL') {
+        medicalCount++;
+      }
+    });
+    
+    if (chapMembers.length === 0 && meeting.attendance) {
+       Object.values(meeting.attendance).forEach(st => {
+          const uSt = String(st).toUpperCase();
+          if (uSt === 'PRESENT' || uSt === 'YES') presentCount++;
+          else if (uSt === 'SUBSTITUTE') { substituteCount++; presentCount++; }
+          else if (uSt === 'ABSENT' || uSt === 'NO') absentCount++;
+          else if (uSt === 'MEDICAL') medicalCount++;
+       });
+    }
+
+    const guestsInvited = guests.length;
+    let guestsPresent = 0;
+    let guestsAbsent = 0;
+    
+    guests.forEach(g => {
+      const gSt = (g.attendance_status || g.status || '').toUpperCase();
+      if (gSt === 'PRESENT' || gSt === 'YES') guestsPresent++;
+      else if (gSt === 'ABSENT' || gSt === 'NO') guestsAbsent++;
+    });
+
+    let totalCollected = 0;
+    if (meeting.amountCollected) {
+      Object.values(meeting.amountCollected).forEach(amt => {
+        totalCollected += (Number(amt) || 0);
+      });
+    }
+
+    return (
+      <div className="bg-[#151C2E] p-4 rounded-[16px] border border-white/5 space-y-4 mb-6">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Meeting Summary</h3>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="bg-[#111827] p-3 rounded-[12px] border border-white/5 text-center">
+            <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Total Members</p>
+            <p className="text-lg font-bold text-white mt-1">{totalMembers}</p>
+          </div>
+          <div className="bg-emerald-500/10 p-3 rounded-[12px] border border-emerald-500/20 text-center">
+            <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Present</p>
+            <p className="text-lg font-bold text-emerald-400 mt-1">{presentCount}</p>
+          </div>
+          <div className="bg-red-500/10 p-3 rounded-[12px] border border-red-500/20 text-center">
+            <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Absent</p>
+            <p className="text-lg font-bold text-red-400 mt-1">{absentCount}</p>
+          </div>
+          <div className="bg-blue-500/10 p-3 rounded-[12px] border border-blue-500/20 text-center">
+            <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">Substitute</p>
+            <p className="text-lg font-bold text-blue-400 mt-1">{substituteCount}</p>
+          </div>
+          <div className="bg-purple-500/10 p-3 rounded-[12px] border border-purple-500/20 text-center">
+            <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider">Medical</p>
+            <p className="text-lg font-bold text-purple-400 mt-1">{medicalCount}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-[#111827] p-3 rounded-[12px] border border-white/5 text-center">
+            <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Guests Invited</p>
+            <p className="text-lg font-bold text-white mt-1">{guestsInvited}</p>
+          </div>
+          <div className="bg-emerald-500/10 p-3 rounded-[12px] border border-emerald-500/20 text-center">
+            <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Guest Present</p>
+            <p className="text-lg font-bold text-emerald-400 mt-1">{guestsPresent}</p>
+          </div>
+          <div className="bg-red-500/10 p-3 rounded-[12px] border border-red-500/20 text-center">
+            <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Guest Absent</p>
+            <p className="text-lg font-bold text-red-400 mt-1">{guestsAbsent}</p>
+          </div>
+        </div>
+
+        <div className="bg-primary/10 p-4 rounded-[12px] border border-primary/20 flex items-center justify-between">
+          <span className="text-xs font-bold text-primary uppercase tracking-wider">Total Collection</span>
+          <span className="text-xl font-bold text-primary">₹{totalCollected.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
@@ -1317,6 +1463,25 @@ export function Meetings() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
             <button
               onClick={() => {
+                const targetAdminId = isMasterAdmin ? selectedAdminId : profile?.uid;
+                const adminProfile = allUsers.find(u => u.uid === targetAdminId);
+                
+                if (adminProfile?.defaultMeetingSetup) {
+                  setDefaultSetupData({
+                    ...adminProfile.defaultMeetingSetup,
+                    adminId: targetAdminId || ''
+                  });
+                } else {
+                  setDefaultSetupData({
+                    adminId: targetAdminId || '',
+                    frequency: 'Weekly',
+                    day: 'Monday',
+                    date: 1,
+                    time: '',
+                    location: '',
+                    enabled: false
+                  });
+                }
                 setIsDefaultSetupOpen(true);
               }}
               className="flex items-center justify-center gap-2 h-11 px-5 bg-[#151C2E] text-white border border-white/5 rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all active:scale-95 shadow-sm"
@@ -1938,10 +2103,10 @@ export function Meetings() {
             <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
               <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
               <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
-                {Object.values(tempAttendance).filter(s => s === 'PRESENT' || s === 'Yes' || s === 'Substitute').length}
-                {Object.values(tempGuestAttendance).filter(s => s === 'Present').length > 0 && (
+                {Object.values(tempAttendance).filter(s => ['PRESENT', 'PRESENT', 'YES', 'SUBSTITUTE'].includes(String(s).toUpperCase())).length}
+                {Object.values(tempGuestAttendance).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
                   <span className="text-xs text-emerald-400/70 font-medium mb-1">
-                    (+{Object.values(tempGuestAttendance).filter(s => s === 'Present').length} Guests)
+                    (+{Object.values(tempGuestAttendance).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
                   </span>
                 )}
               </p>
@@ -2282,27 +2447,30 @@ export function Meetings() {
                     <div className="grid grid-cols-3 gap-2">
                       <select
                         value={selectedHour}
-                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', ampmPart || 'AM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">HH</option>
                         {hoursList.map(h => (
                           <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
                         ))}
                       </select>
                       <select
                         value={selectedMinute}
-                        onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '07', e.target.value, ampmPart || 'AM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">MM</option>
                         {minutesList.map(m => (
                           <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
                         ))}
                       </select>
                       <select
                         value={ampmPart}
-                        onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '07', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
                         className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                       >
+                        <option value="" disabled className="bg-[#111827] text-white">--</option>
                         <option value="AM" className="bg-[#111827] text-white">AM</option>
                         <option value="PM" className="bg-[#111827] text-white">PM</option>
                       </select>
@@ -2328,7 +2496,7 @@ export function Meetings() {
             </div>
           </div>
 
-          <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex items-center justify-between">
+          <div className={`p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex items-center justify-between ${!isDefaultSetupComplete ? 'opacity-50' : ''}`}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[#111827] border border-white/5 rounded-[12px] flex items-center justify-center text-emerald-400 shadow-sm">
                 <Calendar size={20} />
@@ -2338,11 +2506,12 @@ export function Meetings() {
                 <p className="text-xs text-neutral-400">Automatically schedule meetings {defaultSetupData.frequency.toLowerCase()}</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className={`relative inline-flex items-center ${isDefaultSetupComplete ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
               <input 
                 type="checkbox" 
                 className="sr-only peer"
                 checked={defaultSetupData.enabled}
+                disabled={!isDefaultSetupComplete}
                 onChange={(e) => setDefaultSetupData({ ...defaultSetupData, enabled: e.target.checked })}
               />
               <div className="w-11 h-6 bg-[#111827] border border-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
@@ -2435,27 +2604,30 @@ export function Meetings() {
                   <div className="grid grid-cols-3 gap-2">
                     <select
                       value={selectedHour}
-                      onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute, ampmPart)}
+                      onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
                       className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                     >
+                      <option value="" disabled className="bg-[#111827] text-white">HH</option>
                       {hoursList.map(h => (
                         <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
                       ))}
                     </select>
                     <select
                       value={selectedMinute}
-                      onChange={(e) => handleTimeUpdate(selectedHour, e.target.value, ampmPart)}
+                      onChange={(e) => handleTimeUpdate(selectedHour || '07', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
                       className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                     >
+                      <option value="" disabled className="bg-[#111827] text-white">MM</option>
                       {minutesList.map(m => (
                         <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
                       ))}
                     </select>
                     <select
                       value={ampmPart}
-                      onChange={(e) => handleTimeUpdate(selectedHour, selectedMinute, e.target.value as 'AM' | 'PM')}
+                      onChange={(e) => handleTimeUpdate(selectedHour || '07', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
                       className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-sm"
                     >
+                      <option value="" disabled className="bg-[#111827] text-white">--</option>
                       <option value="AM" className="bg-[#111827] text-white">AM</option>
                       <option value="PM" className="bg-[#111827] text-white">PM</option>
                     </select>
@@ -2649,47 +2821,7 @@ export function Meetings() {
             </div>
 
             {/* Attendance Summary Stat Cards */}
-            {(() => {
-              const meetingChapId = reportMeeting.chapter_id || (reportMeeting as any).chapterId || (reportMeeting.adminId ? usersMap[reportMeeting.adminId]?.chapter_id : null);
-              const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
-              const totalMembers = chapMembers.length || Object.keys(reportMeeting.attendance || {}).length;
-              const presentCount = chapMembers.filter(m => {
-                const st = reportMeeting.attendance?.[m.uid];
-                if (!st) return false;
-                const uSt = st.toUpperCase();
-                return uSt === 'PRESENT' || uSt === 'YES' || uSt === 'SUBSTITUTE';
-              }).length;
-              const absentCount = totalMembers > presentCount ? totalMembers - presentCount : 0;
-              const pct = totalMembers > 0 ? Math.round((presentCount / totalMembers) * 100) : 0;
-
-              let totalCollected = 0;
-              if (reportMeeting.amountCollected) {
-                Object.values(reportMeeting.amountCollected).forEach(amt => {
-                  totalCollected += (Number(amt) || 0);
-                });
-              }
-
-              return (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-[#151C2E] p-3 rounded-[12px] border border-white/5 text-center">
-                    <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Total Roster</p>
-                    <p className="text-lg font-bold text-white mt-1">{totalMembers}</p>
-                  </div>
-                  <div className="bg-emerald-500/10 p-3 rounded-[12px] border border-emerald-500/20 text-center">
-                    <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Present</p>
-                    <p className="text-lg font-bold text-emerald-400 mt-1">{presentCount} ({pct}%)</p>
-                  </div>
-                  <div className="bg-red-500/10 p-3 rounded-[12px] border border-red-500/20 text-center">
-                    <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Absent</p>
-                    <p className="text-lg font-bold text-red-400 mt-1">{absentCount}</p>
-                  </div>
-                  <div className="bg-primary/10 p-3 rounded-[12px] border border-primary/20 text-center">
-                    <p className="text-[9px] font-bold text-primary uppercase tracking-wider">Total Fee Collected</p>
-                    <p className="text-lg font-bold text-primary mt-1">₹{totalCollected.toLocaleString()}</p>
-                  </div>
-                </div>
-              );
-            })()}
+            {renderMeetingSummary(reportMeeting, reportGuests)}
 
             {/* Member Roster Table */}
             <div className="space-y-2">
@@ -2853,6 +2985,8 @@ export function Meetings() {
                   </span>
                 </div>
               </div>
+
+              {isMeetingDone(readOnlyMeeting) && renderMeetingSummary(readOnlyMeeting, readOnlyGuests)}
 
               {(readOnlyMeeting.description || readOnlyMeeting.notes) && (
                 <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-1.5">

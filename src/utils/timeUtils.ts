@@ -36,8 +36,8 @@ export function formatTime12h(timeStr: string): string {
   return `${padHours}:${padMinutes} ${period}`;
 }
 
-export function parseTo12hParts(timeStr: string): { time: string; ampm: 'AM' | 'PM' } {
-  if (!timeStr) return { time: '07:30', ampm: 'AM' };
+export function parseTo12hParts(timeStr: string): { time: string; ampm: 'AM' | 'PM' | '' } {
+  if (!timeStr) return { time: ':', ampm: '' };
   
   const cleaned = timeStr.trim();
   const isPM = cleaned.toUpperCase().includes('PM');

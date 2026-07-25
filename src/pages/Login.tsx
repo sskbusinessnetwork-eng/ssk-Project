@@ -105,8 +105,12 @@ export function Login() {
           throw new Error('Invalid phone number or password.');
         }
 
-        if (masterAdmin.status !== 'ACTIVE') {
+        const maStatus = (masterAdmin.status || '').trim().toUpperCase();
+        if (maStatus === 'DISABLED' || masterAdmin.disabled === true) {
           throw new Error("Your account has been disabled.");
+        }
+        if (maStatus === 'INACTIVE') {
+          throw new Error("Your membership is inactive.");
         }
 
         login({
@@ -138,8 +142,20 @@ export function Login() {
           throw new Error('Invalid phone number or password.');
         }
 
-        if (user.status !== 'ACTIVE') {
+        const rawAccountStatus = (user.account_status || user.accountStatus || '').trim().toUpperCase();
+        const rawStatus = (user.status || '').trim().toUpperCase();
+        const rawMembershipStatus = (user.membership_status || user.membershipStatus || user.status || '').trim().toUpperCase();
+        
+        if (rawAccountStatus === 'DISABLED' || rawStatus === 'DISABLED' || user.disabled === true) {
           throw new Error("Your account has been disabled.");
+        }
+
+        if (rawMembershipStatus === 'INACTIVE' || rawAccountStatus === 'INACTIVE' || rawStatus === 'INACTIVE') {
+           throw new Error("Your membership is inactive.");
+        }
+        
+        if (rawMembershipStatus === 'EXPIRED') {
+           throw new Error("Your membership has expired.");
         }
 
         login({
