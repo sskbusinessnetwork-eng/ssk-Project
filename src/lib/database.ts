@@ -291,6 +291,7 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   address: true,
   city: true,
   state: true,
+  area: true,
   pincode: true,
   bio: true,
   website: true,

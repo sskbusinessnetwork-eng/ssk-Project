@@ -19,6 +19,9 @@ const format = (date: any, formatStr: string, options?: any) => {
 interface MasterAdminCompanionViewProps {
   profile: UserProfile | null;
   networkHealthScore: number;
+  membersAnalysed?: number;
+  daysAnalysedText?: string;
+  scoreText?: string;
   globalMemberCount: number;
   globalChapterCount: number;
   globalBusinessGenerated: number;
@@ -46,6 +49,9 @@ interface MasterAdminCompanionViewProps {
 export function MasterAdminCompanionView({
   profile,
   networkHealthScore,
+  membersAnalysed,
+  daysAnalysedText,
+  scoreText,
   globalMemberCount,
   globalChapterCount,
   globalBusinessGenerated,

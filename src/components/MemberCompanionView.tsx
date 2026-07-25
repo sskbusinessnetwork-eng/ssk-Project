@@ -33,6 +33,8 @@ interface MemberCompanionViewProps {
   countdown: any;
   finalRecentActivities: any[];
   businessGrowthScore: number;
+  daysAnalysedText?: string;
+  scoreText?: string;
   currentMonthMetrics: any;
   hasLoggedOneToOne: boolean;
   hasSentThankYouSlip: boolean;
@@ -57,6 +59,8 @@ export function MemberCompanionView({
   activeFocusTasks,
   handleToggleTask,
   businessGrowthScore,
+  daysAnalysedText,
+  scoreText,
   isHighlightActive,
   chapterName,
   todayTasks = [],
@@ -301,6 +305,14 @@ export function MemberCompanionView({
             {completedCount} / {displayTasks.length} COMPLETE
           </span>
         </div>
+
+        {daysAnalysedText && scoreText && (
+          <div className="mb-4 px-3.5 py-2 bg-[#0B1220]/80 border border-white/10 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 text-neutral-300 font-medium shadow-sm">
+            <span><strong className="text-emerald-400 font-bold">Growth Score:</strong> <span className="text-white font-extrabold">{businessGrowthScore}%</span></span>
+            <span><strong className="text-purple-400 font-bold">Days Analysed:</strong> <span className="text-white font-extrabold">{daysAnalysedText}</span></span>
+            <span><strong className="text-blue-400 font-bold">Score:</strong> <span className="text-white font-extrabold">{scoreText}</span></span>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3.5 w-full">
           {displayTasks.length === 0 ? (

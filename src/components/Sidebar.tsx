@@ -71,7 +71,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Tags, label: 'Manage Categories', path: '/categories', roles: ['MASTER_ADMIN'] },
     { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Settings, label: 'Settings', path: '/settings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
   ];
 
   const userRole = profile?.role || 'MEMBER';

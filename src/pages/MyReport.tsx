@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import { Meeting, Referral, OneToOneMeeting, GuestInvitation, ThankYouSlip } from '../types';
 import { cn } from '../lib/utils';
-import { calculateMemberGrowthScore } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateMemberGrowthScoreData } from '../utils/growthScore';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer 
@@ -578,20 +578,20 @@ export function MyReport() {
   }, [filteredSentThankYouSlips, filteredReceivedThankYouSlips]);
 
   // Dynamic Growth Score
-  const dynamicGrowthScore = useMemo(() => {
-    return calculateMemberGrowthScore({
-      attendancePercent: attendanceData.rate || 0,
-      completedOneToOnes: oneToOnesStats.completed,
-      referralsSent: referralsStats.passed,
-      referralsReceived: referralsStats.received,
-      thankYouSlipsSent: filteredSentThankYouSlips.length,
-      thankYouSlipsReceived: filteredReceivedThankYouSlips.length,
-      guestInvites: filteredGuestInvitations.length,
-      testimonialsSubmitted: filteredGivenTestimonials.length,
-      isProfileComplete: Boolean(profile?.name && profile?.phone && profile?.businessName),
-      isSubscriptionActive: profile?.membershipStatus === 'ACTIVE' || profile?.status === 'ACTIVE'
-    }).score;
-  }, [attendanceData, oneToOnesStats, referralsStats, filteredSentThankYouSlips, filteredReceivedThankYouSlips, filteredGuestInvitations, filteredGivenTestimonials, profile]);
+  const growthScoreData = useMemo(() => {
+    const allRefs = [...passedReferrals, ...receivedReferrals];
+    const dateRange = referralStartDate || referralEndDate ? { startDate: referralStartDate, endDate: referralEndDate } : null;
+    return calculateMemberGrowthScoreData({
+      profile,
+      activeDateRange: dateRange,
+      allReferrals: allRefs,
+      oneToOnes,
+      meetings,
+      guestInvitations
+    });
+  }, [profile, referralStartDate, referralEndDate, passedReferrals, receivedReferrals, oneToOnes, meetings, guestInvitations]);
+
+  const dynamicGrowthScore = growthScoreData.score;
 
   // MOM trend metrics calculated purely from live database data
   const parsedDatesWithMeta = useMemo(() => {
@@ -1034,6 +1034,11 @@ export function MyReport() {
             <p className="text-xs text-neutral-400 mt-1 max-w-[280px] mx-auto">
               Your score tracks meeting attendance, syncs, guest invitations, and referral outputs.
             </p>
+            <div className="mt-3 inline-flex items-center justify-center gap-2 text-xs text-neutral-300 font-semibold bg-[#0B1220] border border-white/10 rounded-xl px-3 py-1">
+              <span className="text-emerald-400 font-bold">Days Analysed:</span> {growthScoreData.daysAnalysedText}
+              <span className="text-neutral-500">•</span>
+              <span className="text-blue-400 font-bold">Score:</span> {growthScoreData.scoreText}
+            </div>
           </div>
         </div>
 

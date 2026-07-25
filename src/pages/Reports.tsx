@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
-import { calculateMemberGrowthScore } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateMemberGrowthScoreData } from '../utils/growthScore';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
@@ -330,18 +330,14 @@ export function Reports() {
       // 5. Testimonials Submitted
       const testimonialsSubmitted = reportsData.testimonials.filter(t => t.authorMemberId === member.uid).length;
 
-      // Formulaic custom Growth Score out of 100
-      const growthScore = calculateMemberGrowthScore({
-        attendancePercent,
-        completedOneToOnes: completedOneToOnesCount,
-        referralsSent: referralsPassed,
-        referralsReceived: reportsData.referrals.filter(r => (r.toUserId || r.receiver_id) === member.uid).length,
-        thankYouSlipsSent: 0,
-        thankYouSlipsReceived: 0,
-        guestInvites: guestsInvited,
-        testimonialsSubmitted,
-        isProfileComplete: Boolean(member.name && member.phone && member.businessName),
-        isSubscriptionActive: member.membershipStatus === 'ACTIVE' || member.status === 'ACTIVE'
+      // Formulaic custom Growth Score out of 100 based on Daily Task Workspace
+      const growthScore = calculateMemberGrowthScoreData({
+        profile: member,
+        activeDateRange: startDate || endDate ? { startDate, endDate } : null,
+        allReferrals: reportsData.referrals,
+        oneToOnes: reportsData.oneToOnes,
+        meetings: reportsData.meetings,
+        guestInvitations: reportsData.guests
       }).score;
 
       // Human-readable position label

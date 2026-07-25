@@ -13,6 +13,7 @@ import { getDashboardPath } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { UserProfile, Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
+import { TopPerformingMembersSection } from '../components/TopPerformingMembersSection';
 import {  where, orderBy, limit  } from '../lib/database';
 import { format as originalFormat, isValid } from 'date-fns';
 
@@ -630,7 +631,6 @@ export function LandingPage() {
               { icon: Briefcase, title: 'Real business\nopportunities' },
               { icon: GraduationCap, title: 'Continuous\nlearning' },
               { icon: Scale, title: 'Ethical business\npractices' },
-              { icon: ShieldCheck, title: 'Ethical business\npractices' },
               { icon: Handshake, title: 'Strong\nrelationships' },
               { icon: Globe, title: 'Cross-community\ncollaborations' }
             ].map((item, i) => (
@@ -650,6 +650,9 @@ export function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Top Performing Members Section */}
+      <TopPerformingMembersSection />
 
       {/* A Vision For The Future */}
       <section className="py-24 md:py-40 px-6 bg-[#0F2040] text-center relative overflow-hidden">

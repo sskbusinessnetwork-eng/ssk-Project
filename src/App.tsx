@@ -28,6 +28,7 @@ import { Notifications } from './pages/Notifications';
 import { SubscriptionExpired } from './pages/SubscriptionExpired';
 import { Reports } from './pages/Reports';
 import { ManageSubscriptions } from './pages/ManageSubscriptions';
+import { Settings } from './pages/Settings';
 
 
 import { AuthProvider } from './contexts/AuthContext';
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/categories" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Categories /></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><ManageSubscriptions /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Reports /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Settings /></ProtectedRoute>} />
               <Route path="/profile" element={<Profile />} />
             </Route>
 

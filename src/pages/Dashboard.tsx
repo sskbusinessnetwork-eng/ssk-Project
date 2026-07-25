@@ -4,8 +4,7 @@ import {
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
-  CheckSquare, User
-, AlertTriangle} from 'lucide-react';
+  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -21,7 +20,7 @@ import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
-import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 
@@ -149,6 +148,51 @@ export function Analytics() {
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
   const [analyticsModalCategory, setAnalyticsModalCategory] = useState<string | null>(null);
+
+  // Global Date Range Filter State
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+
+  const handleApplyFilter = () => {
+    if (!filterStartDate || !filterEndDate) {
+      setDateError('Please select both Start Date and End Date.');
+      return;
+    }
+
+    const start = new Date(filterStartDate + 'T00:00:00');
+    const end = new Date(filterEndDate + 'T23:59:59.999');
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      setDateError('Please enter valid dates.');
+      return;
+    }
+
+    if (start.getTime() > end.getTime()) {
+      setDateError('Start Date cannot be after End Date.');
+      return;
+    }
+
+    setDateError(null);
+    setIsFilterLoading(true);
+
+    setTimeout(() => {
+      setActiveDateRange({ start, end });
+      setIsFilterLoading(false);
+      setIsFilterModalOpen(false);
+    }, 200);
+  };
+
+  const handleClearFilter = () => {
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setDateError(null);
+    setActiveDateRange(null);
+    setIsFilterModalOpen(false);
+  };
 
   // Resolve chapter name dynamically
   useEffect(() => {
@@ -321,37 +365,68 @@ export function Analytics() {
     });
   }, [chapterUsers]);
 
+  // Effective dataset arrays filtered by global date range
+  const effectiveSlips = useMemo(() => {
+    if (!activeDateRange) return allSlips;
+    return allSlips.filter(s => isDateInRange(s.createdAt || s.created_at || s.date, activeDateRange.start, activeDateRange.end));
+  }, [allSlips, activeDateRange]);
+
+  const effectiveReferrals = useMemo(() => {
+    if (!activeDateRange) return allReferrals;
+    return allReferrals.filter(r => isDateInRange(r.createdAt || r.created_at || r.date, activeDateRange.start, activeDateRange.end));
+  }, [allReferrals, activeDateRange]);
+
+  const effectiveOneToOnes = useMemo(() => {
+    if (!activeDateRange) return oneToOnes;
+    return oneToOnes.filter(m => isDateInRange(m.createdAt || m.created_at || m.date, activeDateRange.start, activeDateRange.end));
+  }, [oneToOnes, activeDateRange]);
+
+  const effectiveMeetings = useMemo(() => {
+    if (!activeDateRange) return meetings;
+    return meetings.filter(m => isDateInRange(m.date || m.meeting_date || m.createdAt || m.created_at, activeDateRange.start, activeDateRange.end));
+  }, [meetings, activeDateRange]);
+
+  const effectiveGuestInvitations = useMemo(() => {
+    if (!activeDateRange) return guestInvitations;
+    return guestInvitations.filter(g => isDateInRange(g.createdAt || g.created_at || g.date, activeDateRange.start, activeDateRange.end));
+  }, [guestInvitations, activeDateRange]);
+
+  const effectiveTestimonials = useMemo(() => {
+    if (!activeDateRange) return allTestimonials;
+    return allTestimonials.filter(t => isDateInRange(t.createdAt || t.created_at || t.date, activeDateRange.start, activeDateRange.end));
+  }, [allTestimonials, activeDateRange]);
+
   const chapterSlips = useMemo(() => {
-    return allSlips.filter(slip => 
+    return effectiveSlips.filter(slip => 
       chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
     );
-  }, [allSlips, chapterUserIds]);
+  }, [effectiveSlips, chapterUserIds]);
 
   const chapterReferralsList = useMemo(() => {
-    return allReferrals.filter(ref => 
+    return effectiveReferrals.filter(ref => 
       chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId)
     );
-  }, [allReferrals, chapterUserIds]);
+  }, [effectiveReferrals, chapterUserIds]);
 
   const businessGeneratedTotal = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return allSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
+      return effectiveSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
     }
     return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
-  }, [allSlips, chapterSlips, profile]);
+  }, [effectiveSlips, chapterSlips, profile]);
 
-    const referralsPassedCount = useMemo(() => {
+  const referralsPassedCount = useMemo(() => {
     const isCompleted = (r: any) => ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
     if (profile?.role === 'MASTER_ADMIN') {
-      return allReferrals.filter(isCompleted).length || 0;
+      return effectiveReferrals.filter(isCompleted).length || 0;
     }
     return chapterReferralsList.filter(isCompleted).length || 0;
-  }, [allReferrals, chapterReferralsList, profile]);
+  }, [effectiveReferrals, chapterReferralsList, profile]);
 
   const upcomingSyncsCount = useMemo(() => {
     const chapterMeetings = profile?.role === 'MASTER_ADMIN'
-      ? meetings
-      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
+      ? effectiveMeetings
+      : effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id);
     const now = new Date();
     const upcomingMeetingsCount = chapterMeetings.filter(m => {
       const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
@@ -361,44 +436,44 @@ export function Analytics() {
     }).length;
 
     const chapterOneToOnes = profile?.role === 'MASTER_ADMIN'
-      ? oneToOnes
-      : oneToOnes.filter(m => 
+      ? effectiveOneToOnes
+      : effectiveOneToOnes.filter(m => 
           chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
           (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
         );
     const upcomingOneToOnesCount = chapterOneToOnes.filter(m => m.status === 'PENDING' || m.status === 'APPROVED').length;
 
     return (upcomingMeetingsCount + upcomingOneToOnesCount) || 0;
-  }, [meetings, oneToOnes, chapterUserIds, profile]);
+  }, [effectiveMeetings, effectiveOneToOnes, chapterUserIds, profile]);
 
   const oneToOneMeetingsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return oneToOnes.length;
+      return effectiveOneToOnes.length;
     }
-    const chapterOneToOnes = oneToOnes.filter(m => 
+    const chapterOneToOnes = effectiveOneToOnes.filter(m => 
       chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
       (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
     );
     return chapterOneToOnes.length;
-  }, [oneToOnes, chapterUserIds, profile]);
+  }, [effectiveOneToOnes, chapterUserIds, profile]);
 
   const visitorsAttendedCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return guestInvitations.filter(g => g.status === 'Present' || g.attendance_status === 'Present').length;
+      return effectiveGuestInvitations.filter(g => g.status === 'Present' || g.attendance_status === 'Present').length;
     }
-    const chapterGuests = guestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
+    const chapterGuests = effectiveGuestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
     return chapterGuests.filter(g => g.status === 'Present' || g.attendance_status === 'Present').length || 0;
-  }, [guestInvitations, chapterUserIds, profile]);
+  }, [effectiveGuestInvitations, chapterUserIds, profile]);
 
   const thankYouSlipsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return allSlips.length;
+      return effectiveSlips.length;
     }
-    const chapterSlips = allSlips.filter(slip => 
+    const chapterSlips = effectiveSlips.filter(slip => 
       chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
     );
     return chapterSlips.length;
-  }, [allSlips, chapterUserIds, profile]);
+  }, [effectiveSlips, chapterUserIds, profile]);
 
   const totalMembersCount = useMemo(() => {
     return chapterUsers.filter(u => u.role !== 'MASTER_ADMIN').length;
@@ -451,8 +526,8 @@ export function Analytics() {
 
   const weeklyMeetingAttendance = useMemo(() => {
     const chapterMeetings = profile?.role === 'MASTER_ADMIN' 
-      ? meetings 
-      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
+      ? effectiveMeetings 
+      : effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id);
     const completedMeetings = chapterMeetings.filter(m => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED');
     if (completedMeetings.length === 0) return 0;
     
@@ -469,7 +544,7 @@ export function Analytics() {
       }
     });
     return totalRecords === 0 ? 0 : Math.round((totalPresent / totalRecords) * 100);
-  }, [meetings, profile]);
+  }, [effectiveMeetings, profile]);
 
   const dynamicNetworkHealthScore = useMemo(() => {
     const total = totalMembersCount;
@@ -484,31 +559,34 @@ export function Analytics() {
   }, [totalMembersCount, activePartnersCount, weeklyMeetingAttendance]);
 
   const newMembersThisMonthCount = useMemo(() => {
+    if (activeDateRange) {
+      return chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end)).length;
+    }
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     return chapterUsers.filter(u => u.createdAt >= startOfMonth).length;
-  }, [chapterUsers]);
+  }, [chapterUsers, activeDateRange]);
 
   const chapterTestimonialsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return allTestimonials.filter(t => t.status === 'APPROVED').length;
+      return effectiveTestimonials.filter(t => t.status === 'APPROVED').length;
     }
-    return allTestimonials.filter(t => t.chapter_id === profile?.chapter_id && t.status === 'APPROVED').length;
-  }, [allTestimonials, profile]);
+    return effectiveTestimonials.filter(t => t.chapter_id === profile?.chapter_id && t.status === 'APPROVED').length;
+  }, [effectiveTestimonials, profile]);
 
   const chapterMeetingsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      return meetings.length;
+      return effectiveMeetings.length;
     }
-    return meetings.filter(m => m.chapter_id === profile?.chapter_id).length;
-  }, [meetings, profile]);
+    return effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id).length;
+  }, [effectiveMeetings, profile]);
 
   const topPerformingChapters = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
     
     const chapterBusinessMap: Record<string, number> = {};
     
-    allSlips.forEach(slip => {
+    effectiveSlips.forEach(slip => {
       const user = chapterUsers.find(u => u.uid === slip.fromUserId);
       if (user && user.chapterName) {
         if (!chapterBusinessMap[user.chapterName]) {
@@ -522,14 +600,14 @@ export function Analytics() {
       .map(([name, business]) => ({ name, business }))
       .sort((a, b) => b.business - a.business)
       .slice(0, 5);
-  }, [allSlips, chapterUsers, profile]);
+  }, [effectiveSlips, chapterUsers, profile]);
 
   // Dynamic Recent Activities based on real database records
   const dynamicRecentActivities = useMemo(() => {
     const activities: any[] = [];
 
     // 1. Slips (Revenue)
-    allSlips.forEach(s => {
+    effectiveSlips.forEach(s => {
       const fromName = s.fromUserName || s.from_user_name || 'Partner';
       const toName = s.toUserName || s.to_user_name || 'Partner';
       const val = Number(s.businessValue) || 0;
@@ -545,7 +623,7 @@ export function Analytics() {
     });
 
     // 2. Referrals
-    allReferrals.forEach(r => {
+    effectiveReferrals.forEach(r => {
       const fromName = r.fromUserName || 'Partner';
       const toName = r.toUserName || 'Partner';
       activities.push({
@@ -560,7 +638,7 @@ export function Analytics() {
     });
 
     // 3. One-to-Ones
-    oneToOnes.forEach(m => {
+    effectiveOneToOnes.forEach(m => {
       const creatorName = m.creatorName || 'Partner';
       const participantName = m.participantNames?.[0] || 'Partner';
       activities.push({
@@ -575,7 +653,10 @@ export function Analytics() {
     });
 
     // 4. New Members
-    chapterUsers.forEach(u => {
+    const relevantUsers = activeDateRange 
+      ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
+      : chapterUsers;
+    relevantUsers.forEach(u => {
       activities.push({
         id: u.uid,
         title: 'New Partner Joined',
@@ -592,7 +673,7 @@ export function Analytics() {
       .sort((a, b) => b.time - a.time);
 
     return sorted;
-  }, [allSlips, allReferrals, oneToOnes, chapterUsers]);
+  }, [effectiveSlips, effectiveReferrals, effectiveOneToOnes, chapterUsers, activeDateRange]);
 
   // Filtered recent activities based on role
   const filteredRecentActivities = useMemo(() => {
@@ -1084,39 +1165,41 @@ export function Analytics() {
   }, [chapterUsers, profile, subscriptionRequests, resolvedChapterName]);
 
 
-  // Dynamic Growth Score & Status calculation
-  const growthScoreData = useMemo(() => {
-    if (!profile) return { score: 0, status: 'Needs Action' as const, statusColor: 'bg-red-500/20 text-red-400 border-red-500/10' };
+  // Dynamic Growth Score calculation (Member & Chapter)
+  const memberGrowthScoreData = useMemo(() => {
+    return calculateMemberGrowthScoreData({
+      profile,
+      activeDateRange,
+      allReferrals,
+      oneToOnes,
+      meetings,
+      guestInvitations,
+      todayTasks
+    });
+  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
 
-    if (profile.role === 'MASTER_ADMIN' || profile.role === 'CHAPTER_ADMIN' || ['president', 'vice_president', 'treasurer'].includes(profile.position?.toLowerCase() || '')) {
-      // Keep admin score simple for now or use the previous logic. We'll just return a mock for admins or compute it if needed.
-      return { score: 100, status: 'Excellent' as const, statusColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10' };
-    }
+  const chapterGrowthScoreData = useMemo(() => {
+    const chapterMebs = chapterUsers.filter(u => String(u.chapter_id || u.chapterId) === String(profile?.chapter_id || profile?.chapterId));
+    return calculateChapterGrowthScoreData({
+      chapterMembers: chapterMebs,
+      activeDateRange,
+      allReferrals,
+      oneToOnes,
+      meetings,
+      guestInvitations,
+      currentProfile: profile,
+      todayTasks
+    });
+  }, [chapterUsers, profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
 
-    // For Members, calculate daily score from todayTasks
-    let totalScore = 0;
-    for (const task of todayTasks) {
-      if (task.pointsVal) {
-        totalScore += task.pointsVal;
-      }
-    }
-    
-    // Cap at 100
-    if (totalScore > 100) totalScore = 100;
+  const isChapterLeaderRole = useMemo(() => {
+    if (!profile) return false;
+    const normRole = (profile.role || '').toUpperCase();
+    const normPos = (profile.position || '').toLowerCase();
+    return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
+  }, [profile]);
 
-    let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
-    let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
-    if (totalScore >= 75) {
-      status = 'Excellent';
-      statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
-    } else if (totalScore >= 50) {
-      status = 'On Track';
-      statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
-    }
-
-    return { score: totalScore, status, statusColor };
-  }, [profile, todayTasks]);
-
+  const growthScoreData = isChapterLeaderRole ? chapterGrowthScoreData : memberGrowthScoreData;
   const dynamicGrowthScore = growthScoreData.score;
   const growthStatus = growthScoreData.status;
   const growthStatusColor = growthScoreData.statusColor;
@@ -1918,6 +2001,25 @@ export function Analytics() {
                 </motion.button>
               </Link>
             </div>
+
+            {/* Growth Score Analytics Metadata Badge */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#0B1220]/80 border border-white/10 rounded-xl px-3.5 py-1.5 shadow-md w-fit">
+              {isChapterLeaderRole ? (
+                <>
+                  <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.membersAnalysed}</span></span>
+                  <span className="text-neutral-500">•</span>
+                  <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.daysAnalysedText}</span></span>
+                  <span className="text-neutral-500">•</span>
+                  <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{chapterGrowthScoreData.scoreText}</span></span>
+                </>
+              ) : (
+                <>
+                  <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{memberGrowthScoreData.daysAnalysedText}</span></span>
+                  <span className="text-neutral-500">•</span>
+                  <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{memberGrowthScoreData.scoreText}</span></span>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Center Block: Health Score Circle (Reduced Size by 10%) */}
@@ -1964,8 +2066,8 @@ export function Analytics() {
                />
              </svg>
              <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
-               <span className="text-[30px] md:text-[34px] font-extrabold text-white leading-none tracking-tighter">{score}</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">Growth Score</span>
+               <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
+               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{isChapterLeaderRole ? 'Chapter Growth' : 'Growth Score'}</span>
                <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
                  {growthStatus}
                </div>
@@ -2055,15 +2157,50 @@ export function Analytics() {
       {/* Dynamic Chapter Analytics Heading & KPI cards - Shown for Member, Chapter Admin, President, Vice President, Treasurer, and Master Admin */}
       {profile && (
         <>
-          <div className="space-y-1 mb-2 mt-8">
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {chapterHeading}
-            </h2>
-            <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
-              {profile?.role === 'MASTER_ADMIN' 
-                ? 'Real-time analytics across all chapters.' 
-                : 'Real-time analytics and business performance for your chapter.'}
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 mt-8">
+            <div className="space-y-1">
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
+                {chapterHeading}
+              </h2>
+              <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
+                {profile?.role === 'MASTER_ADMIN' 
+                  ? 'Real-time analytics across all chapters.' 
+                  : 'Real-time analytics and business performance for your chapter.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+              {activeDateRange && (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">
+                  <span>
+                    {filterStartDate} to {filterEndDate}
+                  </span>
+                  <button
+                    onClick={handleClearFilter}
+                    className="p-1 hover:bg-red-500/20 rounded-lg text-red-300 transition-colors cursor-pointer"
+                    title="Clear Filter"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => setIsFilterModalOpen(true)}
+                className={cn(
+                  "px-4 h-10 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer border shadow-sm",
+                  activeDateRange
+                    ? "bg-red-600 text-white border-red-500 shadow-red-600/20"
+                    : "bg-[#111827] text-white hover:bg-[#1F2937] border-white/10"
+                )}
+              >
+                <Filter size={15} className={activeDateRange ? "text-white" : "text-red-400"} />
+                Filter
+                {activeDateRange && (
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                )}
+              </button>
+            </div>
           </div>
 
           <StatGrid 
@@ -2109,7 +2246,9 @@ export function Analytics() {
           nextMeeting={null}
           countdown={{ days: 0, hours: 0, minutes: 0 }}
           finalRecentActivities={filteredRecentActivities}
-          businessGrowthScore={dynamicGrowthScore}
+          businessGrowthScore={memberGrowthScoreData.score}
+          daysAnalysedText={memberGrowthScoreData.daysAnalysedText}
+          scoreText={memberGrowthScoreData.scoreText}
           currentMonthMetrics={{}}
           hasLoggedOneToOne={hasScheduledOneToOne}
           hasSentThankYouSlip={false}
@@ -2117,8 +2256,8 @@ export function Analytics() {
           isHighlightActive={isChecklistHighlighted}
           chapterName={resolvedChapterName}
           todayTasks={todayTasks}
-          allSlips={allSlips}
-          allReferrals={allReferrals}
+          allSlips={effectiveSlips}
+          allReferrals={effectiveReferrals}
         />
       )}
  
@@ -2126,7 +2265,10 @@ export function Analytics() {
       {(profile?.role === 'CHAPTER_ADMIN' || profile?.position === 'chapter_admin') && (
         <ChapterAdminCompanionView
           profile={profile}
-          chapterHealthScore={dynamicNetworkHealthScore}
+          chapterHealthScore={chapterGrowthScoreData.score}
+          membersAnalysed={chapterGrowthScoreData.membersAnalysed}
+          daysAnalysedText={chapterGrowthScoreData.daysAnalysedText}
+          scoreText={chapterGrowthScoreData.scoreText}
           chapterMemberCount={totalMembersCount}
           chapterReferrals={referralsPassedCount}
           chapterBusiness={businessGeneratedTotal}
@@ -2139,7 +2281,10 @@ export function Analytics() {
         <MasterAdminCompanionView
           tasks={masterAdminTasks}
           profile={profile}
-          networkHealthScore={dynamicNetworkHealthScore}
+          networkHealthScore={chapterGrowthScoreData.score}
+          membersAnalysed={chapterGrowthScoreData.membersAnalysed}
+          daysAnalysedText={chapterGrowthScoreData.daysAnalysedText}
+          scoreText={chapterGrowthScoreData.scoreText}
           globalMemberCount={totalMembersCount}
           globalChapterCount={totalChaptersCount}
           globalBusinessGenerated={businessGeneratedTotal}
@@ -2147,12 +2292,96 @@ export function Analytics() {
           finalRecentActivities={filteredRecentActivities}
           setActiveTab={() => {}}
           topPerformingChapters={topPerformingChapters}
-          allSlips={allSlips}
-          allReferrals={allReferrals}
+          allSlips={effectiveSlips}
+          allReferrals={effectiveReferrals}
           subscriptionStats={subscriptionStats}
           leadershipStats={leadershipStats}
         />
       )}
+
+      {/* Global Date Filter Modal */}
+      <Modal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        title="Global Date Range Filter"
+        maxWidth="max-w-md"
+      >
+        <div className="flex flex-col gap-5 p-1">
+          <p className="text-xs font-semibold text-[#9CA3AF]">
+            Select a date range to filter all dashboard metrics, analytics, and activities.
+          </p>
+
+          {dateError && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+              {dateError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-[#D1D5DB] uppercase tracking-wider">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => {
+                  setFilterStartDate(e.target.value);
+                  setDateError(null);
+                }}
+                className="w-full h-11 px-3 rounded-xl bg-[#0F172A] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-[#E53935] transition-colors"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-[#D1D5DB] uppercase tracking-wider">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => {
+                  setFilterEndDate(e.target.value);
+                  setDateError(null);
+                }}
+                className="w-full h-11 px-3 rounded-xl bg-[#0F172A] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-[#E53935] transition-colors"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+            <button
+              type="button"
+              onClick={handleClearFilter}
+              className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-[#9CA3AF] hover:text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <RotateCcw size={14} />
+              Clear / Reset
+            </button>
+
+            <button
+              type="button"
+              onClick={handleApplyFilter}
+              disabled={isFilterLoading}
+              className="px-5 h-10 rounded-xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-bold transition-all shadow-lg shadow-red-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isFilterLoading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                <>
+                  <Filter size={14} />
+                  Apply Filter
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal 
         isOpen={analyticsModalCategory !== null} 
         onClose={() => setAnalyticsModalCategory(null)} 

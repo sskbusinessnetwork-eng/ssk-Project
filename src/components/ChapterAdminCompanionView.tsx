@@ -19,6 +19,9 @@ const format = (date: any, formatStr: string, options?: any) => {
 interface ChapterAdminCompanionViewProps {
   profile: UserProfile | null;
   chapterHealthScore: number;
+  membersAnalysed?: number;
+  daysAnalysedText?: string;
+  scoreText?: string;
   chapterMemberCount: number;
   chapterReferrals: number;
   chapterBusiness: number;
@@ -32,6 +35,9 @@ interface ChapterAdminCompanionViewProps {
 export function ChapterAdminCompanionView({
   profile,
   chapterHealthScore,
+  membersAnalysed,
+  daysAnalysedText,
+  scoreText,
   chapterMemberCount,
   chapterReferrals,
   chapterBusiness,
@@ -505,9 +511,13 @@ export function ChapterAdminCompanionView({
             <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
           <div>
-            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Health</span>
+            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Chapter Growth</span>
             <div className="text-[16px] font-extrabold text-white leading-tight">{chapterHealthScore}%</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
+            {daysAnalysedText && scoreText ? (
+              <span className="text-[8px] font-bold text-emerald-400 block mt-0.5">{membersAnalysed ? `${membersAnalysed} Mebs • ` : ''}{daysAnalysedText}</span>
+            ) : (
+              <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
+            )}
           </div>
         </div>
       </motion.div>

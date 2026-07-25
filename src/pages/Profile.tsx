@@ -41,7 +41,7 @@ const format = (date: any, formatStr: string, options?: any) => {
 };
 
 export function Profile() {
-  const { profile: currentUserProfile } = useAuth();
+  const { profile: currentUserProfile, refreshProfile } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const targetUserId = searchParams.get('id');
@@ -297,7 +297,11 @@ export function Profile() {
 
       // Update formData and database
       setFormData(prev => ({ ...prev, photoURL: publicUrl }));
-      await databaseService.update('users', currentUserProfile.uid, { photoURL: publicUrl });
+      const currentUserId = currentUserProfile.id || currentUserProfile.uid;
+      await databaseService.update('users', currentUserId, { photoURL: publicUrl });
+      if (refreshProfile) {
+        await refreshProfile();
+      }
 
       setSuccessMessage('Profile picture updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -437,29 +441,57 @@ export function Profile() {
     e.preventDefault();
     if (!currentUserProfile) return;
 
+    const targetUserId = currentUserProfile.id || currentUserProfile.uid;
+    if (!targetUserId) {
+      setErrorMessage("Failed to identify user ID. Please try logging in again.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       setErrorMessage(null);
-      const normalizedPhone = normalizePhoneNumber(formData.phone);
-      const dataToUpdate = {
-        ...formData,
-        phone: normalizedPhone
+      setSuccessMessage(null);
+
+      // Only send fields that the Member is actually allowed to edit
+      const editablePayload: Record<string, any> = {
+        name: formData.name ? formData.name.trim() : '',
+        email: formData.email ? formData.email.trim() : '',
+        businessName: formData.businessName ? formData.businessName.trim() : '',
+        professionDesignation: formData.professionDesignation ? formData.professionDesignation.trim() : '',
+        website: formData.website ? formData.website.trim() : '',
+        bio: formData.bio ? formData.bio.trim() : '',
+        city: formData.city ? formData.city.trim() : '',
+        state: formData.state ? formData.state.trim() : '',
+        area: formData.area ? formData.area.trim() : '',
+        pincode: formData.pincode ? formData.pincode.trim() : '',
+        address: formData.address ? formData.address.trim() : '',
+        photoURL: formData.photoURL || ''
       };
-      
-      if (currentUserProfile?.role === 'MASTER_ADMIN') {
-        delete (dataToUpdate as any).category;
+
+      if (currentUserProfile.role !== 'MASTER_ADMIN') {
+        editablePayload.category = formData.category || '';
       }
 
-      await databaseService.update('users', currentUserProfile.uid, dataToUpdate);
-      setSuccessMessage("Profile updated successfully!");
+      console.log("Updating profile for user ID:", targetUserId, "Payload:", editablePayload);
+
+      await databaseService.update('users', targetUserId, editablePayload);
+
+      // Immediately refresh/re-fetch latest profile data
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+
+      setSuccessMessage("Profile updated successfully.");
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         setSuccessMessage(null);
       }, 3000);
+
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
-      console.error("Error updating profile:", error);
-      if (error.message === "You can only edit your own profile.") {
+      console.error("Complete Supabase profile update error:", error);
+      if (error?.message === "You can only edit your own profile.") {
         setErrorMessage("You can only edit your own profile.");
       } else {
         setErrorMessage("Failed to update profile. Please try again.");
@@ -698,32 +730,6 @@ export function Profile() {
           </div>
 
           <MemberTestimonials currentUser={currentUserProfile} targetUser={targetProfile} />
-
-          {/* Associated Chapter Admin Section */}
-          {targetProfile.role === 'MEMBER' && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-[#111827] rounded-[20px] border border-white/5 overflow-hidden">
-                {!adminData ? (
-                  <div className="p-6 text-center">
-                    <p className="text-sm font-bold text-neutral-400">
-                      {!targetProfile.chapter_id && !targetProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
-                      <Shield size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Chapter Admin</p>
-                      <p className="text-sm font-bold text-white">{adminData.name || adminData.displayName}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Subscription Management for Admins */}
           {isAdmin && targetProfile.role === 'MEMBER' && (
@@ -1082,32 +1088,6 @@ export function Profile() {
               </div>
             </div>
           </div>
-
-          {/* Associated Chapter Admin Section (My Profile) */}
-          {currentUserProfile?.role === 'MEMBER' && (
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Chapter Admin</h3>
-              <div className="bg-[#111827] rounded-[20px] border border-white/5 overflow-hidden">
-                {!adminData ? (
-                  <div className="p-6 text-center">
-                    <p className="text-sm font-bold text-neutral-400">
-                      {!currentUserProfile.chapter_id && !currentUserProfile.adminId ? "No Chapter Admin Assigned" : "Admin details not available"}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-4 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-[12px] bg-[#151C2E] flex items-center justify-center text-primary shrink-0">
-                      <Shield size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Chapter Admin</p>
-                      <p className="text-sm font-bold text-white">{adminData.name || adminData.displayName}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           <button
             type="submit"
