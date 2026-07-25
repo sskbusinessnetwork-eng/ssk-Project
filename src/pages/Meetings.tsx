@@ -1,5 +1,6 @@
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
+import { getCleanFullName } from '../utils/authUtils';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -56,18 +57,39 @@ export function getMeetingExactDateTime(meeting: Meeting): Date {
   return new Date(year, month, day, hours, minutes, 0, 0);
 }
 
+export function isMeetingCompleted(m: any): boolean {
+  if (!m) return false;
+  if (m.status === 'COMPLETED' || m.status === 'Completed') return true;
+  if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return true;
+  return false;
+}
+
+export function isMeetingCancelled(m: any): boolean {
+  if (!m) return false;
+  if (m.status === 'CANCELLED' || m.status === 'Cancelled') return true;
+  if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return true;
+  return false;
+}
+
+export function isMeetingDone(m: any): boolean {
+  return isMeetingCompleted(m) || isMeetingCancelled(m);
+}
+
 export function getAttendanceDisplay(status?: string) {
-  if (!status) return { label: 'No', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
+  if (!status) return { label: 'Absent', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
   
   const statusUpper = status.toUpperCase();
   if (statusUpper === 'PRESENT' || statusUpper === 'YES') {
-    return { label: 'Yes', color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
+    return { label: 'Present', color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
   }
   if (statusUpper === 'ABSENT' || statusUpper === 'NO') {
-    return { label: 'No', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
+    return { label: 'Absent', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
   }
   if (statusUpper === 'SUBSTITUTE') {
     return { label: 'Substitute', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
+  }
+  if (statusUpper === 'MEDICAL') {
+    return { label: 'Medical', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
   }
   return { label: status, color: 'bg-[#151C2E] text-neutral-400 border border-white/5' };
 }
@@ -224,6 +246,7 @@ export function Meetings() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [adminAdmins, setAdminAdmins] = useState<UserProfile[]>([]);
   const [scheduleData, setScheduleData] = useState({
@@ -263,6 +286,44 @@ export function Meetings() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
+
+  const canUserUpdateMeeting = (meeting: Meeting | null): boolean => {
+    if (!profile || !meeting) return false;
+    if (profile.role === 'MASTER_ADMIN') return true;
+
+    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
+    if (!isChapAdminRole) return false;
+
+    const userChap = profile.chapter_id || (profile as any).chapterId;
+    const meetingChap = meeting.chapter_id || (meeting as any).chapterId;
+
+    if (userChap && meetingChap && userChap === meetingChap) {
+      return true;
+    }
+    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
+      return true;
+    }
+    return false;
+  };
+
+  const getMemberPositionLabel = (member: any): string => {
+    if (!member) return 'Associate Member';
+    const pos = member.position || member.designation || member.role;
+    if (pos) {
+      const raw = String(pos).trim().toLowerCase();
+      if (raw === 'chapter_admin' || raw === 'chapter admin' || member.role === 'CHAPTER_ADMIN') {
+        return 'Chapter Admin';
+      }
+      if (raw === 'president') return 'President';
+      if (raw === 'vice_president' || raw === 'vice president' || raw === 'vice-president') return 'Vice President';
+      if (raw === 'treasurer') return 'Treasurer';
+      if (raw === 'secretary') return 'Secretary';
+      if (raw === 'member' || raw === 'associate_member' || raw === 'associate member') return 'Associate Member';
+      return raw.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    if (member.role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    return 'Associate Member';
+  };
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
@@ -590,6 +651,7 @@ export function Meetings() {
     if (!profile) return;
     
     setLoading(true);
+    setFetchError(null);
 
     const timeoutId = setTimeout(() => {
       if (loading) {
@@ -598,18 +660,28 @@ export function Meetings() {
       }
     }, 10000);
 
-    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+    const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
+    const chapterId = isMasterAdmin ? selectedAdminId : userChapId;
     
     if (!isMasterAdmin && !chapterId) {
-      setMeetings([]);
-      setLoading(false);
-      clearTimeout(timeoutId);
-      return;
+      // Attempt to resolve chapterId if not on profile
+      supabase.from('users').select('chapter_id').eq('id', profile.uid).maybeSingle().then(({ data: uData }) => {
+        const resolvedId = uData?.chapter_id;
+        if (resolvedId) {
+          if (refreshProfile) refreshProfile();
+        } else {
+          setMeetings([]);
+          setLoading(false);
+          clearTimeout(timeoutId);
+        }
+      });
     }
+
+    const targetChapterId = chapterId || userChapId;
 
     const constraints = isMasterAdmin 
       ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
-      : [where('chapter_id', '==', chapterId), orderBy('date', 'desc'), limit(50)];
+      : targetChapterId ? [where('chapter_id', '==', targetChapterId), orderBy('date', 'desc'), limit(50)] : [orderBy('date', 'desc'), limit(50)];
 
     const isMeetingDone = (m: Meeting) => {
       return m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
@@ -618,6 +690,7 @@ export function Meetings() {
 
     const unsubscribe = databaseService.subscribe<Meeting>('meetings', constraints, (data) => {
       setMeetings(data);
+      setFetchError(null);
 
       const now = new Date();
       const start = startOfWeek(now);
@@ -647,6 +720,7 @@ export function Meetings() {
       setLoading(false);
       clearTimeout(timeoutId);
       console.error("Meetings subscription error:", error);
+      setFetchError("Unable to load upcoming meetings. Please try again.");
     });
 
     return () => {
@@ -657,28 +731,23 @@ export function Meetings() {
 
   useEffect(() => {
     // Fetch members for attendance/details
-    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
-    
     const fetchMembers = async () => {
-      const constraints: any[] = [];
-      if (chapterId) {
-        constraints.push(where('chapter_id', '==', chapterId));
-      } else {
-        constraints.push(where('role', '==', 'MEMBER'));
-      }
       try {
-        let data = await databaseService.list<UserProfile>('users', constraints);
-        
-        if (chapterId) {
-          const admin = await databaseService.get<UserProfile>('users', chapterId);
-          if (admin && !data.find(m => m.uid === admin.uid)) {
-            data = [...data, admin];
-          }
+        const { data: usersData } = await supabase.from('users').select('*');
+        if (usersData && usersData.length > 0) {
+          const activeMembers = usersData
+            .filter(m => m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE' || !m.status)
+            .map(u => ({
+              ...u,
+              uid: u.uid || u.id,
+              name: getCleanFullName(u.name || u.displayName),
+              displayName: getCleanFullName(u.name || u.displayName)
+            }));
+          setMembers(activeMembers);
+        } else {
+          let data = await databaseService.list<UserProfile>('users', []);
+          setMembers(data);
         }
-
-        const activeMembers = data.filter(m => m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE');
-
-        setMembers(activeMembers);
       } catch (err) {
         console.error("Error fetching members:", err);
       }
@@ -698,7 +767,7 @@ export function Meetings() {
       return;
     }
     const adminId = profile?.uid || scheduleData.adminId;
-    const activeChapterId = profile?.chapter_id || (isMasterAdmin ? selectedAdminId : '');
+    const activeChapterId = profile?.chapter_id || (profile as any)?.chapterId || (isMasterAdmin ? selectedAdminId : '');
     
     if (!adminId && !activeChapterId) {
       setError('Please select or assign an admin or chapter before scheduling a meeting.');
@@ -710,24 +779,24 @@ export function Meetings() {
     setSuccess(null);
 
     try {
-      const [year, month, day] = scheduleData.date.split('-').map(Number);
-      const meetingDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-      
       let finalChapterId = activeChapterId;
       if (!finalChapterId && adminId) {
         const adminUser = await databaseService.get<UserProfile>('users', adminId);
-        if (adminUser?.chapter_id) {
-          finalChapterId = adminUser.chapter_id;
+        if (adminUser?.chapter_id || (adminUser as any)?.chapterId) {
+          finalChapterId = adminUser.chapter_id || (adminUser as any)?.chapterId;
         }
       }
-      if (!finalChapterId) {
-        finalChapterId = adminId;
+      if (!finalChapterId && adminId) {
+        const { data: cData } = await supabase.from('chapters').select('id').or(`chapter_admin_id.eq.${adminId},president_id.eq.${adminId},vice_president_id.eq.${adminId},treasurer_id.eq.${adminId}`).limit(1);
+        if (cData && cData.length > 0) {
+          finalChapterId = cData[0].id;
+        }
       }
 
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || profile?.uid || '',
-        chapter_id: finalChapterId,
-        date: meetingDate.toISOString(),
+        chapter_id: finalChapterId || adminId,
+        date: scheduleData.date,
         time: scheduleData.time,
         location: scheduleData.location,
         attendance: {},
@@ -806,13 +875,24 @@ export function Meetings() {
 
   const handleSaveUpdate = async () => {
     if (!selectedMeeting || isMasterAdmin) return;
+    if (!canUserUpdateMeeting(selectedMeeting)) {
+      setError("Only the Chapter Admin of this chapter can update this meeting.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
+    setSuccess(null);
     try {
-      // Find all active chapter members for this meeting
-      const meetingMembers = members.filter(m => m.chapter_id === selectedMeeting.adminId || m.chapter_id === selectedMeeting.chapter_id);
+      const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || selectedMeeting.adminId;
+      const meetingMembers = members.filter(m => {
+        if (m.role === 'MASTER_ADMIN') return false;
+        const mChap = m.chapter_id || (m as any)?.chapterId;
+        const isSameChapter = Boolean(mChap && meetingChapId && mChap === meetingChapId);
+        const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
+        return isSameChapter || isChapterAdminForMeeting;
+      });
       
-      // Perform validation
+      // Perform validation for all members
       for (const member of meetingMembers) {
         const status = tempAttendance[member.uid];
         if (!status) {
@@ -821,7 +901,7 @@ export function Meetings() {
           return;
         }
         
-        const allowedStatuses = ['Yes', 'No', 'Substitute', 'PRESENT', 'ABSENT', 'VISITOR', 'YES', 'NO', 'SUBSTITUTE'];
+        const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'Yes', 'No', 'YES', 'NO'];
         if (!allowedStatuses.includes(status)) {
           setError(`Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`);
           setIsSubmitting(false);
@@ -829,13 +909,11 @@ export function Meetings() {
         }
       }
 
-      
       // Guest Attendance Save Logic
       if (meetingGuests.length > 0) {
         for (const guest of meetingGuests) {
           const gStatus = tempGuestAttendance[guest.id];
           if (gStatus) {
-            // Update guest invitation status
             const updatePayload = {
               status: gStatus,
               attendance_status: gStatus,
@@ -850,47 +928,60 @@ export function Meetings() {
               .update(updatePayload)
               .eq('id', guest.id);
               
-            // Update workspace checklist and score if Present
             if (gStatus === 'Present' && guest.status !== 'Present' && guest.attendance_status !== 'Present') {
-               // Update member's growth score and checklist
-               const inviterId = guest.invited_by;
-               if (inviterId) {
-                 try {
-                   // Fetch current score
-                   const { data: inviterData } = await supabase
-                     .from('users')
-                     .select('growth_score, workspace_checklist')
-                     .eq('uid', inviterId)
-                     .single();
-                     
-                   if (inviterData) {
-                     const currentScore = inviterData.growth_score || 0;
-                     const checklist = inviterData.workspace_checklist || {};
-                     
-                     await supabase
-                       .from('users')
-                       .update({
-                         growth_score: currentScore + 10,
-                         workspace_checklist: {
-                           ...checklist,
-                           'Invite a New Guest': true
-                         }
-                       })
-                       .eq('uid', inviterId);
-                   }
-                 } catch (scoreErr) {
-                   console.error("Failed to update growth score for guest:", scoreErr);
-                 }
-               }
+              const inviterId = guest.invited_by;
+              if (inviterId) {
+                try {
+                  const { data: inviterData } = await supabase
+                    .from('users')
+                    .select('growth_score, workspace_checklist')
+                    .eq('uid', inviterId)
+                    .single();
+                    
+                  if (inviterData) {
+                    const currentScore = inviterData.growth_score || 0;
+                    const checklist = inviterData.workspace_checklist || {};
+                    
+                    await supabase
+                      .from('users')
+                      .update({
+                        growth_score: currentScore + 10,
+                        workspace_checklist: {
+                          ...checklist,
+                          'Invite a New Guest': true
+                        }
+                      })
+                      .eq('uid', inviterId);
+                  }
+                } catch (scoreErr) {
+                  console.error("Failed to update growth score for guest:", scoreErr);
+                }
+              }
             }
           }
         }
       }
       
-      // Dispatch event to refresh analytics instantly
-      await refreshProfile();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-  
+      // Update direct Supabase table first
+      const { error: dbErr } = await supabase
+        .from('meetings')
+        .update({
+          attendance: tempAttendance,
+          amount_collected: tempAmount,
+          member_notes: tempMemberNotes,
+          is_completed: true,
+          status: 'COMPLETED',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedMeeting.id);
+
+      if (dbErr) {
+        console.error("Supabase error updating meeting attendance:", dbErr);
+        setError("Failed to update meeting attendance. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
       await databaseService.update('meetings', selectedMeeting.id, { 
         attendance: tempAttendance,
         amountCollected: tempAmount,
@@ -899,14 +990,19 @@ export function Meetings() {
         status: 'COMPLETED',
         updatedAt: new Date().toISOString()
       });
-      setSuccess('Meeting data updated and moved to history!');
+
+      if (refreshProfile) await refreshProfile();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+      setSuccess('Meeting attendance & collection updated successfully and moved to history!');
       setTimeout(() => {
         setIsUpdateModalOpen(false);
         setSuccess(null);
         setSelectedMeeting(null);
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to update meeting data.');
+      console.error("Error updating meeting:", err);
+      setError("Failed to update meeting attendance. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -935,15 +1031,37 @@ export function Meetings() {
 
   const handleCancelMeeting = async () => {
     if (!selectedMeeting || isMasterAdmin) return;
+    if (!canUserUpdateMeeting(selectedMeeting)) {
+      setError("Only the Chapter Admin of this chapter can cancel this meeting.");
+      return;
+    }
     if (!window.confirm('Are you sure you want to cancel this meeting?')) return;
     setIsSubmitting(true);
     setError(null);
     try {
+      const { error: dbErr } = await supabase
+        .from('meetings')
+        .update({
+          is_completed: false,
+          status: 'CANCELLED',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedMeeting.id);
+
+      if (dbErr) {
+        console.error("Error cancelling meeting in Supabase:", dbErr);
+        setError("Failed to cancel meeting. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+
       await databaseService.update('meetings', selectedMeeting.id, {
         isCancelled: true,
+        isCompleted: false,
         status: 'CANCELLED',
         updatedAt: new Date().toISOString()
       });
+
       setSuccess('Meeting cancelled and moved to history.');
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setTimeout(() => {
@@ -952,7 +1070,7 @@ export function Meetings() {
         setSelectedMeeting(null);
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to cancel meeting.');
+      setError('Failed to cancel meeting. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -969,24 +1087,33 @@ export function Meetings() {
     : 0;
 
   const isMeetingDone = (m: Meeting) => {
-    return m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
-           m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+    return isMeetingCompleted(m) || isMeetingCancelled(m);
   };
 
   const getMeetingStatus = (meeting: Meeting) => {
-    if (meeting.isCancelled || (meeting.isCancelled as any) === 'true' || meeting.status === 'CANCELLED') {
+    if (isMeetingCancelled(meeting)) {
       return { label: 'Cancelled', color: 'bg-red-500/10 text-red-400 border-red-500/20' };
     }
-    if (meeting.isCompleted || (meeting.isCompleted as any) === 'true' || meeting.status === 'COMPLETED') {
+    if (isMeetingCompleted(meeting)) {
       return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+    }
+    const now = new Date();
+    const meetingDateTime = getMeetingExactDateTime(meeting);
+    if (meetingDateTime < now) {
+      return { label: 'UPDATE REQUIRED', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-black' };
     }
     return { label: 'Upcoming', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
   };
 
-  const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+  const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
+  const activeChapterId = isMasterAdmin ? selectedAdminId : userChapId;
 
   const filteredMeetings = activeChapterId 
-    ? meetings.filter(m => m.chapter_id === activeChapterId || m.adminId === activeChapterId)
+    ? meetings.filter(m => {
+        const mChap = m.chapter_id || (m as any).chapterId;
+        const mAdmin = m.adminId || (m as any).admin_id;
+        return mChap === activeChapterId || mAdmin === activeChapterId || (profile?.uid && mAdmin === profile.uid);
+      })
     : meetings;
 
   // Upcoming: Non-completed, non-cancelled meetings sorted by exact date/time ascending
@@ -1066,6 +1193,22 @@ export function Meetings() {
           </div>
         )}
       </header>
+
+      {fetchError && (
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-[16px] flex items-center justify-between text-red-400">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="shrink-0" size={20} />
+            <p className="text-sm font-medium">{fetchError}</p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => window.location.reload()} 
+            className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 text-xs font-bold rounded-lg transition-all"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {isPending && (
         <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-[16px] flex items-center gap-3 text-amber-400">
@@ -1150,7 +1293,7 @@ export function Meetings() {
                           <FileText size={12} />
                           View Attendance Report
                         </button>
-                      ) : isChapterAdmin ? (
+                      ) : canUserUpdateMeeting(meeting) ? (
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
@@ -1160,8 +1303,10 @@ export function Meetings() {
                               const normalizedAttendance: Record<string, any> = {};
                               if (meeting.attendance) {
                                 Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
-                                  else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                                  if (val === 'PRESENT' || val === 'YES' || val === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (val === 'ABSENT' || val === 'NO' || val === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (val === 'SUBSTITUTE' || val === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (val === 'MEDICAL' || val === 'Medical') normalizedAttendance[uid] = 'Medical';
                                   else normalizedAttendance[uid] = val;
                                 });
                               }
@@ -1364,7 +1509,7 @@ export function Meetings() {
                           <FileText size={12} />
                           View Attendance Report
                         </button>
-                      ) : isChapterAdmin ? (
+                      ) : canUserUpdateMeeting(meeting) ? (
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
@@ -1374,8 +1519,10 @@ export function Meetings() {
                               const normalizedAttendance: Record<string, any> = {};
                               if (meeting.attendance) {
                                 Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
-                                  else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                                  if (val === 'PRESENT' || val === 'YES' || val === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (val === 'ABSENT' || val === 'NO' || val === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (val === 'SUBSTITUTE' || val === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (val === 'MEDICAL' || val === 'Medical') normalizedAttendance[uid] = 'Medical';
                                   else normalizedAttendance[uid] = val;
                                 });
                               }
@@ -1468,66 +1615,73 @@ export function Meetings() {
                   <thead>
                     <tr className="border-b border-white/5">
                       <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Position</th>
                       <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
-                      <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Note</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {members.filter(m => m.chapter_id === selectedMeeting?.adminId).map((member) => {
-                      const status = tempAttendance[member.uid];
-                      const amount = tempAmount[member.uid] || 0;
-                      const note = tempMemberNotes[member.uid] || '';
-                      return (
-                        <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <Avatar src={member.photoURL} name={member.name} size="w-8 h-8" className="rounded-lg shrink-0" fallbackClassName="rounded-lg text-xs" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
-                                <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>
+                    {(() => {
+                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting as any)?.chapterId;
+                      const meetingMembers = members.filter(m => {
+                        if (m.role === 'MASTER_ADMIN') return false;
+                        const mChap = m.chapter_id || (m as any)?.chapterId;
+                        const isSameChapter = Boolean(mChap && meetingChapId && mChap === meetingChapId);
+                        const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
+                        return isSameChapter || isChapterAdminForMeeting;
+                      });
+                      return meetingMembers.map((member) => {
+                        const status = tempAttendance[member.uid];
+                        const amount = tempAmount[member.uid] || 0;
+                        return (
+                          <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <Avatar src={member.photoURL} name={member.name} size="w-8 h-8" className="rounded-lg shrink-0" fallbackClassName="rounded-lg text-xs" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
+                                  {member.businessName && <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-4 text-center">
-                            <select
-                              id={`attendance-select-${member.uid}`}
-                              value={status || ''}
-                              onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
-                              className={cn(
-                                "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white border-white/5 cursor-pointer",
-                                status === 'Yes' || status === 'PRESENT' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
-                                status === 'No' || status === 'ABSENT' ? "border-red-500/30 text-red-400 bg-red-500/10" :
-                                status === 'Substitute' ? "border-amber-500/30 text-amber-400 bg-amber-500/10" :
-                                "border-white/5 text-neutral-400"
-                              )}
-                            >
-                              <option value="" className="bg-[#111827] text-white">Select Status</option>
-                              <option value="Yes" className="bg-[#111827] text-white">Yes</option>
-                              <option value="No" className="bg-[#111827] text-white">No</option>
-                              <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
-                            </select>
-                          </td>
-                          <td className="py-4">
-                            <input
-                              type="number"
-                              value={amount}
-                              onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
-                              className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
-                            />
-                          </td>
-                          <td className="py-4 px-4">
-                            <input
-                              type="text"
-                              value={note}
-                              onChange={(e) => setTempMemberNotes(prev => ({ ...prev, [member.uid]: e.target.value }))}
-                              placeholder="Private note..."
-                              className="w-full px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-indigo-500 outline-none text-xs text-white placeholder-neutral-500"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-xs font-semibold text-neutral-300">
+                                {getMemberPositionLabel(member)}
+                              </span>
+                            </td>
+                            <td className="py-4 text-center">
+                              <select
+                                id={`attendance-select-${member.uid}`}
+                                value={status || ''}
+                                onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white cursor-pointer",
+                                  status === 'Present' || status === 'PRESENT' || status === 'Yes' || status === 'YES' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
+                                  status === 'Absent' || status === 'ABSENT' || status === 'No' || status === 'NO' ? "border-red-500/30 text-red-400 bg-red-500/10" :
+                                  status === 'Substitute' || status === 'SUBSTITUTE' ? "border-amber-500/30 text-amber-400 bg-amber-500/10" :
+                                  status === 'Medical' || status === 'MEDICAL' ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10" :
+                                  "border-white/5 text-neutral-400"
+                                )}
+                              >
+                                <option value="" className="bg-[#111827] text-white">Select Status</option>
+                                <option value="Present" className="bg-[#111827] text-white">Present</option>
+                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                                <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
+                                <option value="Medical" className="bg-[#111827] text-white">Medical</option>
+                              </select>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
+                                className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -1545,14 +1699,15 @@ export function Meetings() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-white/5">
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Guest Info</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invited By</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Guest Name</th>
                         <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {meetingGuests.map((guest) => {
                         const status = tempGuestAttendance[guest.id] || '';
+                        const amount = tempAmount[guest.id] || 0;
                         const inviter = guestInviters[guest.invited_by];
                         
                         return (
@@ -1560,14 +1715,8 @@ export function Meetings() {
                             <td className="py-4 px-4">
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-white truncate">{guest.guest_name}</p>
-                                <p className="text-[10px] text-neutral-400 truncate mt-0.5">{guest.business_category} • {guest.guest_phone}</p>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-emerald-400 truncate">{inviter?.name || guest.invited_by_name || 'Member'}</p>
                                 <p className="text-[10px] text-neutral-400 truncate mt-0.5">
-                                  {inviter?.position || 'Member'} • {inviter?.chapter_id || guest.invited_by_chapter || 'Chapter'}
+                                  Invited by {inviter?.name || guest.invited_by_name || 'Member'} • {guest.business_category || 'Guest'}
                                 </p>
                               </div>
                             </td>
@@ -1576,7 +1725,7 @@ export function Meetings() {
                                 value={status}
                                 onChange={(e) => setTempGuestAttendance(prev => ({ ...prev, [guest.id]: e.target.value }))}
                                 className={cn(
-                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white border-white/5 cursor-pointer",
+                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white cursor-pointer",
                                   status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
                                   status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10" :
                                   "border-white/5 text-neutral-400"
@@ -1586,6 +1735,14 @@ export function Meetings() {
                                 <option value="Present" className="bg-[#111827] text-white">Present</option>
                                 <option value="Absent" className="bg-[#111827] text-white">Absent</option>
                               </select>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setTempAmount(prev => ({ ...prev, [guest.id]: parseInt(e.target.value) || 0 }))}
+                                className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
+                              />
                             </td>
                           </tr>
                         );

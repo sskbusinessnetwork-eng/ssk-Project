@@ -100,7 +100,12 @@ export function keysToCamel(obj: any): any {
     if (obj instanceof Date) return obj;
     const n: any = {};
     Object.keys(obj).forEach(k => {
-      n[snakeToCamel(k)] = keysToCamel(obj[k]);
+      const camelKey = snakeToCamel(k);
+      const val = keysToCamel(obj[k]);
+      n[camelKey] = val;
+      if (k !== camelKey) {
+        n[k] = val;
+      }
     });
     return n;
   }

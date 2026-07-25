@@ -453,7 +453,7 @@ export function Analytics() {
     const chapterMeetings = profile?.role === 'MASTER_ADMIN' 
       ? meetings 
       : meetings.filter(m => m.chapter_id === profile?.chapter_id);
-    const completedMeetings = chapterMeetings.filter(m => m.isCompleted);
+    const completedMeetings = chapterMeetings.filter(m => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED');
     if (completedMeetings.length === 0) return 0;
     
     let totalPresent = 0;
@@ -617,7 +617,7 @@ export function Analytics() {
   const hasAttendedMeeting = useMemo(() => {
     if (!profile) return false;
     const relevantMeetings = profile.adminId ? meetings.filter(m => m.chapter_id === profile.chapter_id) : meetings;
-    return relevantMeetings.some(m => m.isCompleted && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[profile.uid]));
+    return relevantMeetings.some(m => (m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED') && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[profile.uid]));
   }, [meetings, profile]);
 
   const hasPassedReferral = useMemo(() => {
@@ -851,7 +851,7 @@ export function Analytics() {
     if (hasChapterToday) {
       const mChap = todayChapter[0];
       const pastChapTime = isPastTime(mChap.time || mChap.meeting_time);
-      const isChapCompleted = mChap.isCompleted || mChap.status === 'COMPLETED';
+      const isChapCompleted = mChap.isCompleted === true || (mChap.isCompleted as any) === 'true' || mChap.status === 'COMPLETED';
       const chapAtt = (mChap.attendance || {})[profile.uid];
       const isChapPresent = chapAtt === 'Present' || chapAtt === 'PRESENT' || chapAtt === 'Yes' || chapAtt === 'YES' || chapAtt === 'Substitute' || chapAtt === 'SUBSTITUTE';
       const isChapAbsent = chapAtt === 'Absent' || chapAtt === 'ABSENT' || chapAtt === 'No' || chapAtt === 'NO';
@@ -1540,11 +1540,20 @@ export function Analytics() {
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{attendanceRate}</td>
                     <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        m.isCompleted ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {m.isCompleted ? 'Completed' : 'Upcoming'}
-                      </span>
+                      {(() => {
+                        const isMCompleted = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
+                        const isMCancelled = m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+                        return (
+                          <span className={cn(
+                            "px-2 py-1 rounded-[8px] text-[11px] font-black uppercase",
+                            isMCancelled ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                            isMCompleted ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                            "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          )}>
+                            {isMCancelled ? 'Cancelled' : isMCompleted ? 'Completed' : 'Upcoming'}
+                          </span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );
@@ -1618,8 +1627,8 @@ export function Analytics() {
 
   const renderAttendanceDetails = () => {
     const list = profile?.role === 'MASTER_ADMIN' 
-      ? meetings.filter(m => m.isCompleted)
-      : meetings.filter(m => m.chapter_id === profile?.chapter_id && m.isCompleted);
+      ? meetings.filter(m => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED')
+      : meetings.filter(m => m.chapter_id === profile?.chapter_id && (m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED'));
     return (
       <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
         <table className="w-full text-left border-collapse min-w-[800px]">
