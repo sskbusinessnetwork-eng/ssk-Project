@@ -426,16 +426,7 @@ export function Meetings() {
   };
 
   const getScheduledByName = (m: Meeting): string => {
-    if (!m) return 'Chapter Admin';
-    if (m.adminId && usersMap[m.adminId]?.name) {
-      return usersMap[m.adminId].name;
-    }
-    const cId = m.chapter_id;
-    if (cId) {
-      const chapterAdmin = allUsers.find(u => u.chapter_id === cId && (u.position === 'chapter_admin' || u.role === 'CHAPTER_ADMIN'));
-      if (chapterAdmin?.name) return chapterAdmin.name;
-    }
-    return 'Chapter Admin';
+    return getChapterName(m);
   };
 
   const handleOpenAttendanceReport = async (meeting: Meeting) => {
@@ -962,9 +953,7 @@ export function Meetings() {
       const meetingMembers = modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
         if (m.role === 'MASTER_ADMIN') return false;
         const mChap = m.chapter_id || (m as any)?.chapterId;
-        const isSameChapter = Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
-        const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
-        return isSameChapter || isChapterAdminForMeeting;
+        return Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
       });
       
       // Perform validation for all members
@@ -1701,9 +1690,7 @@ export function Meetings() {
                       const meetingMembers = modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
                         if (m.role === 'MASTER_ADMIN') return false;
                         const mChap = m.chapter_id || (m as any)?.chapterId;
-                        const isSameChapter = Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
-                        const isChapterAdminForMeeting = Boolean(selectedMeeting?.adminId && (m.uid === selectedMeeting.adminId || m.id === selectedMeeting.adminId));
-                        return isSameChapter || isChapterAdminForMeeting;
+                        return Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
                       });
 
                       if (meetingMembers.length === 0) {
