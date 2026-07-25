@@ -77,8 +77,7 @@ export function SetPassword() {
         throw new Error('User record not found.');
       }
 
-      const isMatch = userData.password === currentPassword || 
-                      (userData.password && userData.password.startsWith('$2') && bcrypt.compareSync(currentPassword, userData.password));
+      const isMatch = userData.password && userData.password.startsWith('$2') && bcrypt.compareSync(currentPassword, userData.password);
       if (!isMatch) {
         newErrors.currentPassword = "❌ Incorrect current password. Please try again.";
         setErrors(newErrors);
