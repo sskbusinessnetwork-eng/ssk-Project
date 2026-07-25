@@ -854,8 +854,15 @@ export function OneToOneMeetings() {
       if (m.status === 'COMPLETED' || m.status === 'CANCELLED') return false;
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
-        chapterMemberIds.push(profile!.uid);
-        return chapterMemberIds.includes(m.creatorId) || m.participantIds.some(id => chapterMemberIds.includes(id));
+        if (profile?.uid) chapterMemberIds.push(profile.uid);
+        if (profile?.id) chapterMemberIds.push(profile.id);
+        return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds.some(id => chapterMemberIds.includes(id));
+      }
+      if (!isAdmin && !isChapterAdmin) {
+        const uid = String(profile?.uid || profile?.id || '');
+        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
+        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
+        return senderId === uid || receiverId === uid || m.participantIds?.map(String).includes(uid);
       }
       return true;
     })
@@ -865,8 +872,15 @@ export function OneToOneMeetings() {
     if (m.status !== 'COMPLETED' && m.status !== 'CANCELLED' && m.status !== 'NOT_COMPLETED') return false;
     if (isChapterAdmin) {
       const chapterMemberIds = members.map(mem => mem.uid);
-      chapterMemberIds.push(profile!.uid);
-      return chapterMemberIds.includes(m.creatorId) || m.participantIds.some(id => chapterMemberIds.includes(id));
+      if (profile?.uid) chapterMemberIds.push(profile.uid);
+      if (profile?.id) chapterMemberIds.push(profile.id);
+      return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds.some(id => chapterMemberIds.includes(id));
+    }
+    if (!isAdmin && !isChapterAdmin) {
+      const uid = String(profile?.uid || profile?.id || '');
+      const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
+      const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
+      return senderId === uid || receiverId === uid || m.participantIds?.map(String).includes(uid);
     }
     return true;
   });

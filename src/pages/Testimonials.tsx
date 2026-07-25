@@ -27,6 +27,8 @@ export function Testimonials() {
   
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
+  const userChapterId = profile?.chapter_id || (profile as any)?.chapterId || profile?.adminId;
+
   useEffect(() => {
     if (!profile) return;
     
@@ -35,7 +37,7 @@ export function Testimonials() {
       try {
         const allUsers = await databaseService.list<UserProfile>('users');
         const userMap: Record<string, UserProfile> = {};
-        allUsers.forEach(u => { userMap[u.uid] = u; });
+        allUsers.forEach(u => { userMap[u.uid] = u; userMap[u.id] = u; });
         setUsers(userMap);
       } catch (e) {
         console.error("Error loading users", e);
@@ -43,28 +45,10 @@ export function Testimonials() {
     };
     loadUsers();
     
-    // Subscribe to testimonials based on role
-    let constraints: any[] = [];
-    if (profile.role === 'MASTER_ADMIN') {
-      // no constraint
-    } else if (isChapterAdmin) {
-      const adminId = profile.chapter_id || profile.uid;
-      constraints = [where('chapterId', '==', adminId)];
-    } else {
-      // For MEMBER, we only fetch what they wrote or received, BUT wait,
-      // "View public testimonials" - maybe members can see all chapter testimonials?
-      // Let's fetch all chapter testimonials if member, to allow search.
-      const adminId = profile.chapter_id || profile.adminId;
-      if (adminId) {
-        constraints = [where('chapterId', '==', adminId)];
-      } else {
-        constraints = [where('receiverMemberId', '==', profile.uid)];
-      }
-    }
-    
+    // Subscribe to testimonials
     const unsubscribe = databaseService.subscribe(
       'testimonials',
-      constraints,
+      [],
       (data: any[]) => {
         setTestimonials(data as Testimonial[]);
         setLoading(false);
@@ -87,6 +71,21 @@ export function Testimonials() {
   
   const filteredTestimonials = useMemo(() => {
     let filtered = testimonials;
+
+    // Chapter isolation for Chapter Admin
+    if (profile?.role === 'MASTER_ADMIN') {
+      // Master Admin sees all
+    } else if (isChapterAdmin) {
+      filtered = filtered.filter(t => {
+        const cId = t.chapterId || (t as any).chapter_id;
+        const authorChap = users[t.authorMemberId]?.chapter_id || users[t.authorMemberId]?.adminId;
+        const receiverChap = users[t.receiverMemberId]?.chapter_id || users[t.receiverMemberId]?.adminId;
+        return (cId && cId === userChapterId) || (authorChap && authorChap === userChapterId) || (receiverChap && receiverChap === userChapterId);
+      });
+    } else {
+      // Non-admins cannot view testimonials page
+      return [];
+    }
     
     // Tab filter
     if (activeTab === 'received') {
@@ -94,7 +93,7 @@ export function Testimonials() {
     } else if (activeTab === 'written') {
       filtered = filtered.filter(t => t.authorMemberId === profile?.uid);
     } else if (activeTab === 'chapter') {
-      // everything already fetched is chapter for chapter admin
+      // already isolated to chapter above
     }
     
     // Search filter
@@ -110,7 +109,7 @@ export function Testimonials() {
     }
     
     return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [testimonials, activeTab, searchQuery, profile, users]);
+  }, [testimonials, activeTab, searchQuery, profile, isChapterAdmin, userChapterId, users]);
   
   return (
     <div className="space-y-6 pb-20">
