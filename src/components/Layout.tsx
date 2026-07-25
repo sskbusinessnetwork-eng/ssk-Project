@@ -96,11 +96,16 @@ export function Layout() {
 
   const getDashboardPath = () => getDashboardPathUtil(profile?.role, profile?.position);
 
+  const userRole = profile?.role || 'MEMBER';
+  const isMasterAdmin = userRole === 'MASTER_ADMIN';
+  const isChapterAdmin = profile?.position === 'chapter_admin' || userRole === 'CHAPTER_ADMIN';
+  const canAccessSettings = isMasterAdmin || isChapterAdmin;
+
   const mobileNavItems = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
     { icon: Share2, label: 'Referrals', path: '/refer' },
-    { icon: Menu, label: 'More', isAction: true, action: () => setIsBottomSheetOpen(true) },
+    { icon: Menu, label: 'Side Menu', isAction: true, action: () => setIsMobileSidebarOpen(true) },
   ];
 
   return (
@@ -321,7 +326,7 @@ export function Layout() {
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider px-2 mb-1">Account</span>
                   
-                  {profile?.role !== 'MEMBER' && (
+                  {canAccessSettings && (
                     <Link to="/settings" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">

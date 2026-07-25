@@ -75,12 +75,18 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
   ];
 
   const userRole = profile?.role || 'MEMBER';
-  const isChapterAdmin = profile?.position === 'chapter_admin' || profile?.role === 'CHAPTER_ADMIN';
+  const isMasterAdmin = userRole === 'MASTER_ADMIN';
+  const isChapterAdmin = profile?.position === 'chapter_admin' || userRole === 'CHAPTER_ADMIN';
+  const canAccessSettings = isMasterAdmin || isChapterAdmin;
+
   const visibleMenuItems = menuItems.filter(item => {
-    if (userRole === 'MASTER_ADMIN') {
+    if (isMasterAdmin) {
       return item.roles.includes('MASTER_ADMIN');
     }
-    return item.roles.includes('MEMBER') || (isChapterAdmin && item.roles.includes('CHAPTER_ADMIN'));
+    if (isChapterAdmin) {
+      return item.roles.includes('CHAPTER_ADMIN') || item.roles.includes('MEMBER');
+    }
+    return item.roles.includes('MEMBER') && item.label !== 'Settings';
   });
 
   return (
@@ -240,18 +246,28 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
         })}
       </div>
 
-      {/* Bottom Cards (Sticky) */}
-      <div className="shrink-0 p-3 flex flex-col gap-3 border-t border-[#1F2937]/50 bg-[#11131A] z-20">
-        <div className="flex items-center justify-between px-1.5 pt-2 border-t border-[#1F2937]/50">
-          {userRole !== 'MEMBER' && (
-            <Link to="/settings" className="text-neutral-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#1F2937]">
-              <Settings size={18} />
-            </Link>
-          )}
-          <button onClick={handleLogout} className="text-neutral-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-primary/10">
-            <LogOut size={18} />
-          </button>
-        </div>
+      {/* Bottom Actions (Sticky) */}
+      <div className="shrink-0 p-3 flex flex-col gap-1.5 border-t border-[#1F2937]/50 bg-[#11131A] z-20">
+        {canAccessSettings && (
+          <Link 
+            to="/settings" 
+            onClick={() => onClose?.()}
+            className="flex items-center gap-3 px-3 h-[42px] rounded-[14px] text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white transition-all font-medium"
+          >
+            <Settings size={20} className="shrink-0" />
+            {!isCollapsed && <span className="text-[14px] font-semibold">Settings</span>}
+          </Link>
+        )}
+        <button 
+          onClick={() => {
+            onClose?.();
+            handleLogout();
+          }} 
+          className="flex items-center gap-3 px-3 h-[42px] w-full rounded-[14px] text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all font-medium text-left cursor-pointer"
+        >
+          <LogOut size={20} className="shrink-0" />
+          {!isCollapsed && <span className="text-[14px] font-semibold">Logout</span>}
+        </button>
       </div>
     </div>
   );

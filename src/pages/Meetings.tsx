@@ -1198,24 +1198,73 @@ export function Meetings() {
   const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
   const activeChapterId = isMasterAdmin ? selectedAdminId : userChapId;
 
+  const getMeetingCanonicalChapterKey = (m: Meeting): string => {
+    if (m.chapter_id) return m.chapter_id;
+    if ((m as any).chapterId) return (m as any).chapterId;
+    const adminUser = m.adminId ? usersMap[m.adminId] : null;
+    if (adminUser?.chapter_id) return adminUser.chapter_id;
+    if (adminUser?.uid) return adminUser.uid;
+    const name = getChapterName(m);
+    if (name && name !== 'SSK Chapter') return name;
+    return m.adminId || 'unassigned';
+  };
+
   const filteredMeetings = activeChapterId 
     ? meetings.filter(m => {
         const mChap = m.chapter_id || (m as any).chapterId;
         const mAdmin = m.adminId || (m as any).admin_id;
-        return mChap === activeChapterId || mAdmin === activeChapterId || (profile?.uid && mAdmin === profile.uid);
+        const cKey = getMeetingCanonicalChapterKey(m);
+        return mChap === activeChapterId || mAdmin === activeChapterId || cKey === activeChapterId || (profile?.uid && mAdmin === profile.uid);
       })
     : meetings;
 
-  // Upcoming: Non-completed, non-cancelled meetings sorted by exact date/time ascending
-  const scheduledMeetings = [...filteredMeetings.filter(m => !isMeetingDone(m))]
-    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
-  
   // History: Completed meetings OR Cancelled meetings in reverse chronological order
   const completedMeetings = [...filteredMeetings.filter(m => isMeetingDone(m))]
     .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
 
-  // For Master Admin, find the single latest/upcoming meeting
-  const masterAdminUpcoming = scheduledMeetings[0];
+  // Upcoming Meetings calculation:
+  let scheduledMeetings: Meeting[] = [];
+
+  if (isMasterAdmin) {
+    // Master Admin upcoming meetings: ONE nearest upcoming meeting PER chapter
+    const rawUpcoming = meetings.filter(m => !isMeetingDone(m));
+    
+    // Filter by selected chapter if a filter is active
+    const upcomingToGroup = activeChapterId
+      ? rawUpcoming.filter(m => {
+          const mChap = m.chapter_id || (m as any).chapterId;
+          const mAdmin = m.adminId || (m as any).admin_id;
+          const cKey = getMeetingCanonicalChapterKey(m);
+          return mChap === activeChapterId || mAdmin === activeChapterId || cKey === activeChapterId;
+        })
+      : rawUpcoming;
+
+    // Group upcoming meetings by chapter key
+    const chapterGroups: Record<string, Meeting[]> = {};
+    upcomingToGroup.forEach(m => {
+      const chapKey = getMeetingCanonicalChapterKey(m);
+      if (!chapterGroups[chapKey]) {
+        chapterGroups[chapKey] = [];
+      }
+      chapterGroups[chapKey].push(m);
+    });
+
+    // Select nearest upcoming meeting (index 0 when sorted by date/time ascending) for each chapter
+    const nearestPerChapter: Meeting[] = [];
+    Object.values(chapterGroups).forEach(group => {
+      group.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+      if (group[0]) {
+        nearestPerChapter.push(group[0]);
+      }
+    });
+
+    // Sort resulting per-chapter nearest meetings chronologically
+    scheduledMeetings = nearestPerChapter.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+  } else {
+    // Chapter Admin / Member: show all upcoming meetings for their chapter sorted by date/time ascending
+    scheduledMeetings = [...filteredMeetings.filter(m => !isMeetingDone(m))]
+      .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8">
@@ -1378,10 +1427,10 @@ export function Meetings() {
                             e.stopPropagation();
                             handleOpenAttendanceReport(meeting);
                           }}
-                          className="w-full py-2 bg-primary/10 text-primary border border-primary/20 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-1.5"
+                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
                         >
-                          <FileText size={12} />
-                          View Attendance Report
+                          <Info size={12} />
+                          View Details
                         </button>
                       ) : canUserUpdateMeeting(meeting) ? (
                         <div className="grid grid-cols-2 gap-2">
@@ -1393,10 +1442,11 @@ export function Meetings() {
                               const normalizedAttendance: Record<string, any> = {};
                               if (meeting.attendance) {
                                 Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  if (val === 'PRESENT' || val === 'YES' || val === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (val === 'ABSENT' || val === 'NO' || val === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (val === 'SUBSTITUTE' || val === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (val === 'MEDICAL' || val === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                  const v = String(val);
+                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
                                   else normalizedAttendance[uid] = val;
                                 });
                               }
@@ -1609,10 +1659,11 @@ export function Meetings() {
                               const normalizedAttendance: Record<string, any> = {};
                               if (meeting.attendance) {
                                 Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  if (val === 'PRESENT' || val === 'YES' || val === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (val === 'ABSENT' || val === 'NO' || val === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (val === 'SUBSTITUTE' || val === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (val === 'MEDICAL' || val === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                  const v = String(val);
+                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
                                   else normalizedAttendance[uid] = val;
                                 });
                               }

@@ -29,6 +29,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { databaseService } from '../services/databaseService';
 import { Modal } from '../components/Modal';
+import { Avatar } from '../components/Avatar';
 
 export function Connections() {
   const { profile } = useAuth();
@@ -43,43 +44,50 @@ export function Connections() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const getPositionTitleAndStyle = (member: UserProfile) => {
+    const pos = String(member.position || (member as any).position_name || '').trim();
+    const role = String(member.role || '').trim().toUpperCase();
+
+    let label = 'Associate Member';
+    let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+
+    const pLower = pos.toLowerCase();
+
+    if (pLower === 'president' || role === 'PRESIDENT') {
+      label = 'President';
+      classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+    } else if (pLower === 'vice_president' || pLower === 'vice president' || pLower === 'vice-president' || role === 'VICE_PRESIDENT') {
+      label = 'Vice President';
+      classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    } else if (pLower === 'treasurer' || role === 'TREASURER') {
+      label = 'Treasurer';
+      classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+    } else if (pLower === 'secretary' || role === 'SECRETARY') {
+      label = 'Secretary';
+      classes = 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+    } else if (pLower === 'chapter_admin' || pLower === 'chapter admin' || role === 'CHAPTER_ADMIN') {
+      label = 'Chapter Admin';
+      classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+    } else if (pLower === 'master_admin' || pLower === 'master admin' || role === 'MASTER_ADMIN') {
+      label = 'Master Admin';
+      classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+    } else if (pos && pLower !== 'member' && pLower !== 'associate_member' && pLower !== 'associate member') {
+      label = pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      classes = 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+    } else {
+      label = 'Associate Member';
+      classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+    }
+
+    return { label, classes };
+  };
+
   const getDisplayPosition = (pos?: string, role?: string) => {
-    if (!role) return 'Member';
-    const r = role.toUpperCase();
-    if (r === 'MASTER_ADMIN') return 'Master Admin';
-    if (r === 'CHAPTER_ADMIN') return 'Chapter Admin';
-    if (r === 'PRESIDENT') return 'President';
-    if (r === 'VICE_PRESIDENT') return 'Vice President';
-    if (r === 'TREASURER') return 'Treasurer';
-    if (r === 'MEMBER') return 'Member';
-    return 'Member';
+    return getPositionTitleAndStyle({ position: pos, role } as UserProfile).label;
   };
 
   const getPositionBadge = (member: UserProfile) => {
-    const role = (member.role || 'MEMBER').toUpperCase();
-    
-    let label = 'Member';
-    let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
-
-    if (role === 'MASTER_ADMIN') {
-      label = 'Master Admin';
-      classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-    } else if (role === 'CHAPTER_ADMIN') {
-      label = 'Chapter Admin';
-      classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-    } else if (role === 'PRESIDENT') {
-      label = 'President';
-      classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-    } else if (role === 'VICE_PRESIDENT') {
-      label = 'Vice President';
-      classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-    } else if (role === 'TREASURER') {
-      label = 'Treasurer';
-      classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
-    } else if (role === 'MEMBER') {
-      label = 'Member';
-    }
-
+    const { label, classes } = getPositionTitleAndStyle(member);
     return (
       <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border shrink-0", classes)}>
         {label}
@@ -805,13 +813,12 @@ export function Connections() {
                 onClick={() => navigate(`/profile?id=${member.uid}`)}
                 className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-all duration-300 cursor-pointer group"
               >
-                <div className="w-12 h-12 rounded-full bg-[#0F172A] flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-inner">
-                  <img
-                    src={member.photoURL || `https://picsum.photos/seed/${member.uid}/100/100`}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
+                <Avatar 
+                  src={member.photoURL} 
+                  name={member.name} 
+                  size="w-12 h-12 text-base" 
+                  className="border border-white/10 shadow-inner shrink-0" 
+                />
                 
                 <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
