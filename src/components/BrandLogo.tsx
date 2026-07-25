@@ -9,6 +9,8 @@ interface BrandLogoProps {
   showText?: boolean;
   lightText?: boolean;
   subtitle?: string;
+  subtitleClassName?: string;
+  textClassName?: string;
   onClick?: () => void;
 }
 
@@ -19,11 +21,13 @@ export function BrandLogo({
   showText = false, 
   lightText = true,
   subtitle,
+  subtitleClassName,
+  textClassName,
   onClick
 }: BrandLogoProps) {
   const containerSizeMap = {
     xs: 'w-7 h-7 rounded-lg p-0.5',
-    sm: 'w-9 h-9 rounded-xl p-1',
+    sm: 'w-9 h-9 sm:w-10 sm:h-10 rounded-xl p-1',
     md: 'w-11 h-11 rounded-[12px] p-1.5',
     lg: 'w-16 h-16 rounded-[18px] p-2',
     xl: 'w-24 h-24 rounded-[24px] p-2.5',
@@ -33,7 +37,7 @@ export function BrandLogo({
   return (
     <div 
       onClick={onClick}
-      className={cn("flex items-center gap-3 shrink-0 select-none", onClick && "cursor-pointer", className)}
+      className={cn("flex items-center gap-2.5 sm:gap-3 shrink-0 select-none min-w-0", onClick && "cursor-pointer", className)}
     >
       <div className={cn(
         "bg-white border border-white/20 shadow-lg shadow-black/10 flex items-center justify-center shrink-0 overflow-hidden transition-transform duration-300 hover:scale-[1.02]", 
@@ -51,21 +55,23 @@ export function BrandLogo({
       {showText && (
         <div className="flex flex-col min-w-0">
           <span className={cn(
-            "font-black tracking-wider leading-none uppercase",
+            "font-black tracking-wider leading-none uppercase truncate",
             size === 'xs' ? "text-[11px]" :
-            size === 'sm' ? "text-xs" :
+            size === 'sm' ? "text-[13px] sm:text-sm lg:text-sm" :
             size === 'md' ? "text-sm sm:text-base" :
             size === 'lg' ? "text-lg sm:text-xl" :
             "text-2xl",
-            lightText ? "text-white" : "text-[#0F2040]"
+            lightText ? "text-white" : "text-[#0F2040]",
+            textClassName
           )}>
             SSK <span className="text-primary font-extrabold">BUSINESS NETWORK</span>
           </span>
           {subtitle && (
             <span className={cn(
               "font-extrabold tracking-[0.2em] uppercase mt-0.5 leading-tight truncate",
-              size === 'xs' || size === 'sm' ? "text-[7px]" : "text-[8px] sm:text-[9px]",
-              lightText ? "text-neutral-400" : "text-neutral-500"
+              size === 'xs' || size === 'sm' ? "text-[7px] sm:text-[8px]" : "text-[8px] sm:text-[9px]",
+              lightText ? "text-neutral-400" : "text-neutral-500",
+              subtitleClassName
             )}>
               {subtitle}
             </span>

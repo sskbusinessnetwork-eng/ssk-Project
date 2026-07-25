@@ -295,19 +295,8 @@ export function calculateChapterGrowthScoreData(input: {
 
   if (N > 0 && D > 0) {
     for (const m of applicableMembers) {
-      const mId = m.uid || m.id;
-      const isCurrent = currentProfile && (currentProfile.uid || currentProfile.id) === mId;
-
       for (const dStr of dateList) {
-        if (dStr === todayKey && isCurrent && todayTasks && todayTasks.length > 0) {
-          let todayScore = 0;
-          for (const t of todayTasks) {
-            if (t.pointsVal) todayScore += t.pointsVal;
-          }
-          totalEarned += Math.min(100, todayScore);
-        } else {
-          totalEarned += calculateUserDailyTaskScore(m, dStr, allReferrals, oneToOnes, meetings, guestInvitations);
-        }
+        totalEarned += calculateUserDailyTaskScore(m, dStr, allReferrals, oneToOnes, meetings, guestInvitations);
       }
     }
   }

@@ -429,9 +429,20 @@ export function Meetings() {
     return getChapterName(m);
   };
 
+  const [readOnlyMeeting, setReadOnlyMeeting] = useState<Meeting | null>(null);
+  const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
+
+  const handleOpenReadOnlyMeetingDetails = (meeting: Meeting) => {
+    setReadOnlyMeeting(meeting);
+    setIsReadOnlyModalOpen(false); // reset first
+    setTimeout(() => {
+      setIsReadOnlyModalOpen(true);
+    }, 10);
+  };
+
   const handleOpenAttendanceReport = async (meeting: Meeting) => {
     if (!canUserViewReport(meeting)) {
-      setError("Unauthorized: Only the Chapter Admin for this chapter or Master Admin can view the meeting report.");
+      handleOpenReadOnlyMeetingDetails(meeting);
       return;
     }
     setReportMeeting(meeting);
@@ -2791,6 +2802,87 @@ export function Meetings() {
             Loading attendance report data...
           </div>
         )}
+      </Modal>
+
+      {/* Read-Only Meeting Details Modal for Members */}
+      <Modal
+        isOpen={isReadOnlyModalOpen}
+        onClose={() => {
+          setIsReadOnlyModalOpen(false);
+          setReadOnlyMeeting(null);
+        }}
+        title="MEETING DETAILS"
+      >
+        {readOnlyMeeting && (() => {
+          const meetingChapId = readOnlyMeeting.chapter_id || (readOnlyMeeting as any).chapterId || (readOnlyMeeting.adminId ? usersMap[readOnlyMeeting.adminId]?.chapter_id : null);
+          const chapterObj = meetingChapId ? chaptersMap[meetingChapId] : null;
+          const scheduledBy = chapterObj?.name || chapterObj?.title || profile?.chapter_name || 'Chapter Admin';
+
+          return (
+            <div className="space-y-5">
+              <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Title:</span>
+                  <span className="font-bold text-white text-sm">{readOnlyMeeting.title || readOnlyMeeting.topic || 'Weekly Chapter Meeting'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Scheduled By:</span>
+                  <span className="font-bold text-primary text-xs">{scheduledBy}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Date:</span>
+                  <span className="font-bold text-white text-xs">{readOnlyMeeting.date ? format(new Date(readOnlyMeeting.date), 'EEEE, dd MMM yyyy') : 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Time:</span>
+                  <span className="font-bold text-white text-xs">{readOnlyMeeting.time ? formatTime12h(readOnlyMeeting.time) : 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Location:</span>
+                  <span className="font-bold text-white text-xs">{readOnlyMeeting.location || 'Meeting Venue'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-bold uppercase tracking-wider">Status:</span>
+                  <span className={cn(
+                    "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
+                    isMeetingDone(readOnlyMeeting) ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                    readOnlyMeeting.isCancelled ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                    "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  )}>
+                    {isMeetingDone(readOnlyMeeting) ? 'Completed' : readOnlyMeeting.isCancelled ? 'Cancelled' : 'Upcoming'}
+                  </span>
+                </div>
+              </div>
+
+              {(readOnlyMeeting.description || readOnlyMeeting.notes) && (
+                <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-1.5">
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Description / Agenda</p>
+                  <p className="text-xs text-neutral-300 font-medium leading-relaxed">{readOnlyMeeting.description || readOnlyMeeting.notes}</p>
+                </div>
+              )}
+
+              {readOnlyMeeting.fee && (
+                <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20 flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Meeting Fee</span>
+                  <span className="text-base font-extrabold text-white">₹{readOnlyMeeting.fee}</span>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsReadOnlyModalOpen(false);
+                    setReadOnlyMeeting(null);
+                  }}
+                  className="w-full py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[12px] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

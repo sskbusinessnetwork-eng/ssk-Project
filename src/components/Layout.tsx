@@ -125,20 +125,26 @@ export function Layout() {
       )}>
         
         {/* Top Header */}
-        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-6 py-4 flex items-center justify-between h-[80px] border-b border-white/5">
+        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-3 sm:px-4 lg:px-6 flex items-center justify-between h-[62px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 min-w-0 flex-1 mr-2">
             <button 
               onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-              className="lg:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white z-[10000] relative"
+              className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white shrink-0 z-[10000] relative"
               aria-label={isMobileSidebarOpen ? "Close menu" : "Open menu"}
             >
               {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
             
             {/* Header Logo branding */}
-            <Link to="/dashboard" className="flex items-center">
-              <BrandLogo size="sm" showText={true} subtitle="ENTERPRISE PLATFORM" />
+            <Link to="/dashboard" className="flex items-center min-w-0 shrink">
+              <BrandLogo 
+                size="sm" 
+                showText={true} 
+                subtitle="ENTERPRISE PLATFORM" 
+                subtitleClassName="hidden lg:block"
+                textClassName="text-[13px] sm:text-sm lg:text-sm tracking-tight sm:tracking-wider font-extrabold"
+              />
             </Link>
           </div>
 
@@ -157,24 +163,22 @@ export function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 sm:gap-6">
-            <div className="flex items-center gap-4">
-              <Link to="/notifications" className="relative group">
-                <div className="p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5">
+          <div className="flex items-center gap-2.5 sm:gap-4 lg:gap-6 shrink-0">
+            <div className="flex items-center">
+              <Link to="/notifications" className="relative group shrink-0">
+                <div className="p-2 sm:p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5 flex items-center justify-center">
                   <Bell size={18} strokeWidth={2} />
                 </div>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </Link>
-              
-
             </div>
 
-            <Link to="/profile" className="flex items-center gap-3 hover:opacity-95 transition-opacity pl-2 sm:border-l border-white/10">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[14px] border-2 border-[#FFE4E6]/20">
+            <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-1 sm:pl-2 sm:border-l border-white/10 shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-xs sm:text-sm shrink-0 border-2 border-[#FFE4E6]/20">
                 {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'SV'}
               </div>
               <div className="hidden lg:flex flex-col text-left mr-2">

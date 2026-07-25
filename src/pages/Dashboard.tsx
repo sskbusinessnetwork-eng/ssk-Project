@@ -1165,6 +1165,8 @@ export function Analytics() {
   }, [chapterUsers, profile, subscriptionRequests, resolvedChapterName]);
 
 
+  const [viewingMeetingDetails, setViewingMeetingDetails] = useState<any | null>(null);
+
   // Dynamic Growth Score calculation (Member & Chapter)
   const memberGrowthScoreData = useMemo(() => {
     return calculateMemberGrowthScoreData({
@@ -1179,7 +1181,10 @@ export function Analytics() {
   }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
 
   const chapterGrowthScoreData = useMemo(() => {
-    const chapterMebs = chapterUsers.filter(u => String(u.chapter_id || u.chapterId) === String(profile?.chapter_id || profile?.chapterId));
+    const userChapId = profile?.chapter_id || profile?.chapterId || profile?.adminId;
+    const chapterMebs = profile?.role === 'MASTER_ADMIN'
+      ? chapterUsers
+      : chapterUsers.filter(u => String(u.chapter_id || u.chapterId || u.adminId) === String(userChapId));
     return calculateChapterGrowthScoreData({
       chapterMembers: chapterMebs,
       activeDateRange,
@@ -1199,10 +1204,10 @@ export function Analytics() {
     return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
   }, [profile]);
 
-  const growthScoreData = isChapterLeaderRole ? chapterGrowthScoreData : memberGrowthScoreData;
-  const dynamicGrowthScore = growthScoreData.score;
-  const growthStatus = growthScoreData.status;
-  const growthStatusColor = growthScoreData.statusColor;
+  const growthScoreData = chapterGrowthScoreData;
+  const dynamicGrowthScore = chapterGrowthScoreData.score;
+  const growthStatus = chapterGrowthScoreData.status;
+  const growthStatusColor = chapterGrowthScoreData.statusColor;
 
   // Calculate Weekly and Monthly Growth Trends from live Supabase data
   const { weeklyGrowth, monthlyGrowth } = useMemo(() => {
@@ -1615,7 +1620,7 @@ export function Analytics() {
                   }
                 }
                 return (
-                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                  <tr key={m.id} onClick={() => setViewingMeetingDetails(m)} className="hover:bg-white/[0.04] transition-colors duration-200 cursor-pointer">
                     <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.title || m.topic || 'Weekly Sync'}</td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">
                       {m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}
@@ -1623,20 +1628,29 @@ export function Analytics() {
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
                     <td className="p-4 text-sm text-white/80 whitespace-nowrap">{attendanceRate}</td>
                     <td className="p-4 text-sm text-right whitespace-nowrap">
-                      {(() => {
-                        const isMCompleted = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
-                        const isMCancelled = m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
-                        return (
-                          <span className={cn(
-                            "px-2 py-1 rounded-[8px] text-[11px] font-black uppercase",
-                            isMCancelled ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                            isMCompleted ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                            "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          )}>
-                            {isMCancelled ? 'Cancelled' : isMCompleted ? 'Completed' : 'Upcoming'}
-                          </span>
-                        );
-                      })()}
+                      <div className="flex items-center justify-end gap-2">
+                        {(() => {
+                          const isMCompleted = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
+                          const isMCancelled = m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+                          return (
+                            <span className={cn(
+                              "px-2 py-1 rounded-[8px] text-[11px] font-black uppercase",
+                              isMCancelled ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                              isMCompleted ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                              "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            )}>
+                              {isMCancelled ? 'Cancelled' : isMCompleted ? 'Completed' : 'Upcoming'}
+                            </span>
+                          );
+                        })()}
+                        <button 
+                          type="button" 
+                          onClick={(e) => { e.stopPropagation(); setViewingMeetingDetails(m); }} 
+                          className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-[8px] text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer"
+                        >
+                          View
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -2004,21 +2018,11 @@ export function Analytics() {
 
             {/* Growth Score Analytics Metadata Badge */}
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#0B1220]/80 border border-white/10 rounded-xl px-3.5 py-1.5 shadow-md w-fit">
-              {isChapterLeaderRole ? (
-                <>
-                  <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.membersAnalysed}</span></span>
-                  <span className="text-neutral-500">•</span>
-                  <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.daysAnalysedText}</span></span>
-                  <span className="text-neutral-500">•</span>
-                  <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{chapterGrowthScoreData.scoreText}</span></span>
-                </>
-              ) : (
-                <>
-                  <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{memberGrowthScoreData.daysAnalysedText}</span></span>
-                  <span className="text-neutral-500">•</span>
-                  <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{memberGrowthScoreData.scoreText}</span></span>
-                </>
-              )}
+              <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.membersAnalysed}</span></span>
+              <span className="text-neutral-500">•</span>
+              <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.daysAnalysedText}</span></span>
+              <span className="text-neutral-500">•</span>
+              <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{chapterGrowthScoreData.scoreText}</span></span>
             </div>
           </div>
 
@@ -2067,7 +2071,7 @@ export function Analytics() {
              </svg>
              <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
                <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{isChapterLeaderRole ? 'Chapter Growth' : 'Growth Score'}</span>
+               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">Chapter Growth</span>
                <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
                  {growthStatus}
                </div>
@@ -2390,6 +2394,78 @@ export function Analytics() {
       > 
         {renderAnalyticsDetails()} 
       </Modal> 
+
+      <Modal
+        isOpen={viewingMeetingDetails !== null}
+        onClose={() => setViewingMeetingDetails(null)}
+        title="MEETING DETAILS"
+      >
+        {viewingMeetingDetails && (
+          <div className="space-y-5">
+            <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Title:</span>
+                <span className="font-bold text-white text-sm">{viewingMeetingDetails.title || viewingMeetingDetails.topic || 'Weekly Chapter Meeting'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Scheduled By:</span>
+                <span className="font-bold text-primary text-xs">
+                  {resolvedChapterName || 'Chapter'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Date:</span>
+                <span className="font-bold text-white text-xs">
+                  {viewingMeetingDetails.date ? new Date(viewingMeetingDetails.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Time:</span>
+                <span className="font-bold text-white text-xs">{viewingMeetingDetails.time || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Location:</span>
+                <span className="font-bold text-white text-xs">{viewingMeetingDetails.location || viewingMeetingDetails.venue || 'Chapter Meeting Venue'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider">Status:</span>
+                <span className={cn(
+                  "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
+                  viewingMeetingDetails.isCancelled || viewingMeetingDetails.status === 'CANCELLED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                  viewingMeetingDetails.isCompleted || viewingMeetingDetails.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                  "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                )}>
+                  {viewingMeetingDetails.isCancelled || viewingMeetingDetails.status === 'CANCELLED' ? 'Cancelled' : viewingMeetingDetails.isCompleted || viewingMeetingDetails.status === 'COMPLETED' ? 'Completed' : 'Upcoming'}
+                </span>
+              </div>
+            </div>
+
+            {(viewingMeetingDetails.description || viewingMeetingDetails.notes || viewingMeetingDetails.topic) && (
+              <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-1.5">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Meeting Description / Agenda</p>
+                <p className="text-xs text-neutral-300 font-medium leading-relaxed">{viewingMeetingDetails.description || viewingMeetingDetails.notes || viewingMeetingDetails.topic}</p>
+              </div>
+            )}
+
+            {viewingMeetingDetails.fee && (
+              <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20 flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Meeting Fee</span>
+                <span className="text-base font-extrabold text-white">₹{viewingMeetingDetails.fee}</span>
+              </div>
+            )}
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setViewingMeetingDetails(null)}
+                className="w-full py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[12px] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div> 
   ); 
 }

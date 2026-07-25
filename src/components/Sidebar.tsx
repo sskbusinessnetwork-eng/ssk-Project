@@ -64,7 +64,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: FileText, label: 'Directory', path: '/directory', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
+    { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonial Reports', path: '/testimonial-reports', roles: ['MASTER_ADMIN'] },
     { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN'] },
     { icon: Users, label: 'Manage Members', path: '/members', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },

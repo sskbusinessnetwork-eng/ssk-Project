@@ -62,7 +62,7 @@ export default function App() {
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/refer" element={<Referrals />} />
               <Route path="/thank-you-slips" element={<ThankYouSlips />} />
-              <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Testimonials /></ProtectedRoute>} />
+              <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER']}><Testimonials /></ProtectedRoute>} />
               <Route path="/testimonial-reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TestimonialReports /></ProtectedRoute>} />
               <Route path="/positions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Positions /></ProtectedRoute>} />
               <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
