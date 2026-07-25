@@ -453,7 +453,7 @@ export function Meetings() {
     if (isUpdateModalOpen && selectedMeeting) {
       const fetchModalData = async () => {
         try {
-          // 1. Fetch meeting's chapter members directly from users table
+          // 1. Fetch meeting's chapter members directly from users table using chapter_id
           const meetingChapId = 
             selectedMeeting.chapter_id || 
             (selectedMeeting as any).chapterId || 
@@ -466,9 +466,23 @@ export function Meetings() {
               .select('*')
               .eq('chapter_id', meetingChapId);
 
+            let fetchedList: any[] = cUsers ? [...cUsers] : [];
+
+            // Ensure meeting's chapter admin is included if not already in fetchedList
+            if (selectedMeeting.adminId) {
+              const { data: adminUser } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', selectedMeeting.adminId)
+                .maybeSingle();
+              if (adminUser && !fetchedList.some((u: any) => (u.id || u.uid) === (adminUser.id || adminUser.uid))) {
+                fetchedList.push(adminUser);
+              }
+            }
+
             let chapterMembersList: UserProfile[] = [];
-            if (cUsers && cUsers.length > 0) {
-              chapterMembersList = cUsers
+            if (fetchedList.length > 0) {
+              chapterMembersList = fetchedList
                 .filter((u: any) => u.role !== 'MASTER_ADMIN')
                 .filter((u: any) => {
                   const st = String(u.status || u.membership_status || u.membershipStatus || 'ACTIVE').toUpperCase();
@@ -483,6 +497,7 @@ export function Meetings() {
                   position: u.position || u.chapter_position || '',
                   chapter_position: u.chapter_position || u.position || '',
                   role: u.role,
+                  chapter_id: u.chapter_id,
                   businessName: u.business_name || u.businessName || '',
                   photoURL: u.profile_photo || u.photoURL
                 }));
@@ -490,13 +505,24 @@ export function Meetings() {
               chapterMembersList = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && u.chapter_id === meetingChapId);
             }
 
-            console.log("=== DEBUG MEETING UPDATE QUERY ===");
-            console.log("Meeting ID:", selectedMeeting.id);
-            console.log("Meeting Chapter ID:", meetingChapId);
-            console.log("Logged-in User ID:", profile?.uid || profile?.id);
-            console.log("Logged-in User Role:", profile?.role);
-            console.log("Logged-in User Chapter:", profile?.chapter_id);
-            console.log("Number of matching chapter members returned from users table:", chapterMembersList.length);
+            // Sort members so Chapter Admin is listed at the top, followed by Executive Committee and Members
+            const getPositionRank = (u: any) => {
+              const role = String(u.role || '').toUpperCase();
+              const pos = String(u.position || u.chapter_position || '').toLowerCase();
+              if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
+              if (pos === 'president') return 2;
+              if (pos.includes('vice')) return 3;
+              if (pos === 'secretary') return 4;
+              if (pos === 'treasurer') return 5;
+              return 6;
+            };
+
+            chapterMembersList.sort((a, b) => {
+              const rankA = getPositionRank(a);
+              const rankB = getPositionRank(b);
+              if (rankA !== rankB) return rankA - rankB;
+              return (a.name || '').localeCompare(b.name || '');
+            });
 
             setModalChapterMembers(chapterMembersList);
           } else {
@@ -1686,11 +1712,26 @@ export function Meetings() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {(() => {
-                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting as any)?.chapterId || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
-                      const meetingMembers = modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
+                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
+                      const getPositionRank = (u: any) => {
+                        const role = String(u.role || '').toUpperCase();
+                        const pos = String(u.position || u.chapter_position || '').toLowerCase();
+                        if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
+                        if (pos === 'president') return 2;
+                        if (pos.includes('vice')) return 3;
+                        if (pos === 'secretary') return 4;
+                        if (pos === 'treasurer') return 5;
+                        return 6;
+                      };
+
+                      const meetingMembers = (modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
                         if (m.role === 'MASTER_ADMIN') return false;
-                        const mChap = m.chapter_id || (m as any)?.chapterId;
-                        return Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
+                        return Boolean(m.chapter_id && meetingChapId && String(m.chapter_id).trim() === String(meetingChapId).trim());
+                      })).sort((a, b) => {
+                        const rankA = getPositionRank(a);
+                        const rankB = getPositionRank(b);
+                        if (rankA !== rankB) return rankA - rankB;
+                        return (a.name || '').localeCompare(b.name || '');
                       });
 
                       if (meetingMembers.length === 0) {

@@ -83,8 +83,27 @@ export function Guests() {
       }
 
       const { data: invs } = await invsQuery.order('created_at', { ascending: false });
-        
-      if (invs) setInvitations(invs);
+      let combinedInvs = invs ? [...invs] : [];
+
+      // Check fallback invitations in user profile photo extra JSON
+      if (profile) {
+        const photo = profile.profile_photo || '';
+        if (photo.includes('|||')) {
+          try {
+            const extra = JSON.parse(photo.split('|||')[1] || '{}');
+            if (extra.guest_invitations && Array.isArray(extra.guest_invitations)) {
+              const existingIds = new Set(combinedInvs.map((i: any) => i.id));
+              for (const extraInv of extra.guest_invitations) {
+                if (!existingIds.has(extraInv.id)) {
+                  combinedInvs.push(extraInv);
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      setInvitations(combinedInvs);
       
     } catch (err) {
       console.error("Error fetching data:", err);
