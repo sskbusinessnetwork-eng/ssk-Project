@@ -441,7 +441,7 @@ export function Analytics() {
           chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
           (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
         );
-    const upcomingOneToOnesCount = chapterOneToOnes.filter(m => m.status === 'PENDING' || m.status === 'APPROVED').length;
+    const upcomingOneToOnesCount = chapterOneToOnes.filter(m => m.status === 'UPCOMING' || m.status === 'SCHEDULED' || m.status === 'RESCHEDULED' || m.status === 'PENDING' || m.status === 'APPROVED').length;
 
     return (upcomingMeetingsCount + upcomingOneToOnesCount) || 0;
   }, [effectiveMeetings, effectiveOneToOnes, chapterUserIds, profile]);

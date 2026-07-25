@@ -144,7 +144,7 @@ export function calculateUserDailyTaskScore(
     const mDate = formatDateKey(m.date || m.created_at || m.createdAt);
     if (!isParticipant || mDate !== dateStr) return false;
     const userAtt = (m.attendance || {})[userId];
-    return m.status === 'COMPLETED' || userAtt === 'PRESENT' || (m.status !== 'NOT_COMPLETED' && userAtt !== 'ABSENT');
+    return m.status === 'COMPLETED' || userAtt === 'PRESENT';
   });
 
   // 5. Referral Received updated (10 pts)

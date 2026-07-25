@@ -466,9 +466,7 @@ export function OneToOneMeetings() {
         finalLocation = "Online Meeting";
       }
 
-      const meetingDate = parseISO(formData.date);
-      const now = new Date();
-      const status = isAfter(meetingDate, now) ? 'UPCOMING' : 'COMPLETED';
+      const status = 'UPCOMING';
 
       const meetingTitle = formData.title?.trim() || `1:1 Meeting - ${getUserFullName(senderRecord)} & ${getUserFullName(receiverRecord)}`;
 
@@ -669,6 +667,40 @@ export function OneToOneMeetings() {
     }
   };
 
+  const handleCancelMeeting = async () => {
+    if (!updatingMeeting || !updatingMeeting.id) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const payload = {
+        status: 'CANCELLED',
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: dbErr } = await supabase
+        .from('one_to_one_meetings')
+        .update(payload)
+        .eq('id', updatingMeeting.id);
+
+      if (dbErr) {
+        console.warn("Direct update error, trying databaseService fallback:", dbErr);
+        await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
+      }
+
+      await fetchMeetingsAndUsers();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+      setIsAttendanceModalOpen(false);
+      setUpdatingMeeting(null);
+    } catch (err: any) {
+      console.error("Error cancelling meeting:", err);
+      setError(err.message || "Failed to cancel meeting.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSaveReschedule = async () => {
     if (!updatingMeeting || !updatingMeeting.id) return;
     if (!rescheduleDate) {
@@ -711,7 +743,7 @@ export function OneToOneMeetings() {
         time: rescheduleTime,
         meeting_location: finalLocation,
         venue: finalLocation,
-        status: 'RESCHEDULED',
+        status: 'UPCOMING',
         updated_at: new Date().toISOString()
       };
 
@@ -819,7 +851,7 @@ export function OneToOneMeetings() {
 
   const upcomingMeetings = meetings
     .filter(m => {
-      if (m.status !== 'UPCOMING') return false;
+      if (m.status === 'COMPLETED' || m.status === 'CANCELLED') return false;
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
         chapterMemberIds.push(profile!.uid);
@@ -830,7 +862,7 @@ export function OneToOneMeetings() {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const pastMeetings = meetings.filter(m => {
-    if (m.status === 'UPCOMING') return false;
+    if (m.status !== 'COMPLETED' && m.status !== 'CANCELLED' && m.status !== 'NOT_COMPLETED') return false;
     if (isChapterAdmin) {
       const chapterMemberIds = members.map(mem => mem.uid);
       chapterMemberIds.push(profile!.uid);
@@ -1498,16 +1530,6 @@ export function OneToOneMeetings() {
 
                   <button
                     type="button"
-                    onClick={handleNotCompleted}
-                    disabled={isSubmitting}
-                    className="w-full py-3.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-[14px] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                  >
-                    <X size={16} />
-                    <span>Not Completed</span>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => {
                       setIsAttendanceModalOpen(false);
                       setIsRescheduleModalOpen(true);
@@ -1517,6 +1539,16 @@ export function OneToOneMeetings() {
                   >
                     <RotateCcw size={16} className="text-primary" />
                     <span>Reschedule Meeting</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCancelMeeting}
+                    disabled={isSubmitting}
+                    className="w-full py-3.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 rounded-[14px] font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    <X size={16} />
+                    <span>Cancel Meeting</span>
                   </button>
                 </div>
               </div>
@@ -1739,6 +1771,36 @@ interface MeetingCardProps {
   onUpdate?: () => void;
 }
 
+function isMeetingOverdue(meeting: OneToOneMeeting): boolean {
+  if (meeting.status === 'COMPLETED' || meeting.status === 'CANCELLED') {
+    return false;
+  }
+  if (!meeting.date) return false;
+
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (meeting.date < todayStr) {
+      return true;
+    }
+    if (meeting.date === todayStr && meeting.time) {
+      const { time, ampm } = parseTo12hParts(meeting.time);
+      const [hStr, mStr] = time.split(':');
+      let hours = parseInt(hStr, 10) || 0;
+      const minutes = parseInt(mStr, 10) || 0;
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+
+      const meetingDateTime = new Date();
+      meetingDateTime.setHours(hours, minutes, 0, 0);
+
+      return new Date() > meetingDateTime;
+    }
+  } catch (e) {
+    console.warn("Error checking overdue status:", e);
+  }
+  return false;
+}
+
 const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapterMap, isCreator, isAdmin, onUpdate }) => {
   const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
   const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
@@ -1770,7 +1832,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
     }
   }
 
-  const isOverdue = meeting.status === 'UPCOMING' && isAfter(new Date(), new Date(meeting.date + 'T23:59:59'));
+  const isOverdue = isMeetingOverdue(meeting);
 
   return (
     <motion.div
@@ -1780,20 +1842,20 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
       className={cn(
         "group relative bg-[#111827] p-5 rounded-[16px] border transition-all duration-300 flex flex-col h-full overflow-hidden",
         isOverdue 
-          ? "border-red-500/20 shadow-sm bg-red-500/10" 
+          ? "border-amber-500/30 shadow-sm bg-amber-500/5" 
           : "border-white/5 shadow-sm hover:border-white/10 hover:shadow-2xl"
       )}
     >
       <div className={cn(
         "absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 transition-transform duration-700 group-hover:scale-110 opacity-70",
-        isOverdue ? "bg-red-500/5" : "bg-primary/5"
+        isOverdue ? "bg-amber-500/5" : "bg-primary/5"
       )} />
       
       <div className="relative z-10 flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className={cn(
             "w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300",
-            isOverdue ? "bg-red-500 text-white" : (isCreator ? "bg-primary text-white" : "bg-[#151C2E] text-white")
+            isOverdue ? "bg-amber-500 text-black font-bold" : (isCreator ? "bg-primary text-white" : "bg-[#151C2E] text-white")
           )}>
             <Users size={22} strokeWidth={2} />
           </div>
@@ -1809,11 +1871,11 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
         <div className={cn(
           "px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider border shrink-0 flex items-center gap-1.5",
           isOverdue 
-            ? "bg-red-500/10 text-red-400 border-red-500/20" 
+            ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
             : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
         )}>
-          {isOverdue && <AlertTriangle size={12} />}
-          {isOverdue ? 'Action Pending' : 'Upcoming'}
+          {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
+          {isOverdue ? 'Due for Update' : 'Upcoming'}
         </div>
       </div>
 
@@ -1883,13 +1945,13 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
       <button 
         onClick={onUpdate}
         className={cn(
-          "relative z-10 w-full py-3 rounded-[12px] font-bold uppercase tracking-[0.2em] text-[8px] transition-all duration-500 flex items-center justify-center gap-2 mt-auto",
+          "relative z-10 w-full py-3 rounded-[12px] font-bold uppercase tracking-[0.2em] text-[8px] transition-all duration-300 flex items-center justify-center gap-2 mt-auto cursor-pointer",
           isOverdue 
-            ? "bg-red-600 text-white shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-red-500/30 hover:bg-red-700" 
+            ? "bg-amber-500 hover:bg-amber-400 text-black font-extrabold shadow-lg shadow-amber-500/20" 
             : "bg-[#151C2E] text-neutral-400 group-hover:bg-primary group-hover:text-white group-hover:shadow-2xl"
         )}
       >
-        <span>{isOverdue ? 'Update Now' : 'Update Meeting'}</span>
+        <span>{isOverdue ? 'Due for Update — Update Now' : 'Update Meeting'}</span>
         <ChevronRight size={12} className="group-hover:translate-x-1 transition-transform" />
       </button>
     </motion.div>
