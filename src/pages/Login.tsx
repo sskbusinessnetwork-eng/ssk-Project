@@ -100,7 +100,7 @@ export function Login() {
       if (masterAdmins && masterAdmins.length > 0) {
         const masterAdmin = masterAdmins[0];
         
-        const isMasterMatch = masterAdmin.password && masterAdmin.password.startsWith('$2') && bcrypt.compareSync(password, masterAdmin.password);
+        const isMasterMatch = masterAdmin.password === password || (masterAdmin.password && masterAdmin.password.startsWith('$2') && bcrypt.compareSync(password, masterAdmin.password));
         if (!isMasterMatch) {
           throw new Error('Invalid phone number or password.');
         }
@@ -140,7 +140,7 @@ export function Login() {
       if (users && users.length > 0) {
         const user = users[0];
         
-        const isUserMatch = user.password && user.password.startsWith('$2') && bcrypt.compareSync(password, user.password);
+        const isUserMatch = user.password === password || (user.password && user.password.startsWith('$2') && bcrypt.compareSync(password, user.password));
         if (!isUserMatch) {
           throw new Error('Invalid phone number or password.');
         }
