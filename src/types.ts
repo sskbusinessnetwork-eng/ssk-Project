@@ -7,6 +7,7 @@ export type ChapterPosition = 'member' | 'chapter_admin' | 'president' | 'vice_p
 
 export interface UserProfile {
   uid: string;
+  id?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -69,6 +70,7 @@ export interface Meeting {
   isCompleted?: boolean;
   isRecurring?: boolean;
   isCancelled?: boolean;
+  status?: string;
 }
 
 export interface Referral {

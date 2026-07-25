@@ -112,6 +112,7 @@ export function Connections() {
   const [selectedPositionFilter, setSelectedPositionFilter] = useState('');
   const [currentUserChapterId, setCurrentUserChapterId] = useState<string | null>(null);
   const [currentUserChapterName, setCurrentUserChapterName] = useState<string | null>(null);
+  const [currentUserChapter, setCurrentUserChapter] = useState<string | null>(null);
 
   const handleRefer = (member: UserProfile) => {
     setSelectedMember(member);
@@ -123,33 +124,54 @@ export function Connections() {
     member: UserProfile,
     userChapId: string | null | undefined,
     userChapName: string | null | undefined,
+    userChapVal: string | null | undefined,
     profileObj: any
   ) => {
     if (profileObj?.role === 'MASTER_ADMIN') {
+      if (masterSelectedChapterId) {
+        const selId = String(masterSelectedChapterId).trim().toLowerCase();
+        const memId = String(member.chapter_id || (member as any).chapterId || '').trim().toLowerCase();
+        const memName = String(member.chapterName || (member as any).chapter_name || (member as any).chapter || '').trim().toLowerCase();
+        return memId === selId || memName === selId;
+      }
       return true;
     }
 
-    const myId = String(userChapId || profileObj?.chapter_id || profileObj?.chapterId || '').trim();
-    const myName = String(userChapName || profileObj?.chapterName || profileObj?.chapter_name || '').trim().toLowerCase();
+    const myId = String(userChapId || profileObj?.chapter_id || profileObj?.chapterId || '').trim().toLowerCase();
+    const myName = String(userChapName || userChapVal || profileObj?.chapterName || (profileObj as any)?.chapter_name || profileObj?.chapter || '').trim().toLowerCase();
 
-    const memId = String(member.chapter_id || (member as any).chapterId || '').trim();
-    const memName = String(member.chapterName || (member as any).chapter_name || '').trim().toLowerCase();
+    const memId = String(member.chapter_id || (member as any).chapterId || '').trim().toLowerCase();
+    const memName = String(member.chapterName || (member as any).chapter_name || (member as any).chapter || '').trim().toLowerCase();
 
-    // 1. If both chapter_ids exist, they MUST match
-    if (myId && memId && myId !== memId) {
-      return false;
+    // 1. Non-empty chapter ID match
+    if (myId && memId && myId === memId) {
+      return true;
     }
 
-    // 2. If both chapter_names exist, they MUST match
-    if (myName && memName && myName !== memName) {
-      return false;
+    // 2. Non-empty chapter Name match
+    if (myName && memName && myName === memName) {
+      return true;
     }
 
-    // 3. Must have at least one valid identifier match
-    if (!memId && !memName) return false;
-    if (!myId && !myName) return false;
+    // 3. ID equals Name cross match
+    if (myId && memName && myId === memName) {
+      return true;
+    }
+    if (myName && memId && myName === memId) {
+      return true;
+    }
 
-    return true;
+    // 4. Mapped chapter name check
+    if (memId && chapterNames[memId]) {
+      const mapped = chapterNames[memId].trim().toLowerCase();
+      if (myName && mapped === myName) return true;
+    }
+    if (myId && chapterNames[myId]) {
+      const mapped = chapterNames[myId].trim().toLowerCase();
+      if (memName && mapped === memName) return true;
+    }
+
+    return false;
   };
 
   const submitReferral = async (e: React.FormEvent) => {
@@ -267,68 +289,38 @@ export function Connections() {
 
         // Fetch fresh logged-in user's details directly from Supabase 'users' table
         const loggedInUserId = profile?.uid || profile?.id;
-        let fetchedChapterId = null;
-        let fetchedChapterName = null;
+        let fetchedChapterId: string | null = null;
+        let fetchedChapterName: string | null = null;
+        let fetchedChapter: string | null = null;
+
         if (loggedInUserId) {
           const { data: dbUser, error: dbUserErr } = await supabase
             .from('users')
             .select('*')
             .eq('id', loggedInUserId)
-            .single();
+            .maybeSingle();
 
           if (!dbUserErr && dbUser) {
             fetchedChapterId = dbUser.chapter_id || null;
             fetchedChapterName = dbUser.chapter_name || null;
+            fetchedChapter = dbUser.chapter || null;
             setCurrentUserChapterId(fetchedChapterId);
             setCurrentUserChapterName(fetchedChapterName);
-            console.log("Fresh logged-in user chapter details fetched:", {
-              chapter_id: fetchedChapterId,
-              chapter_name: fetchedChapterName
-            });
+            setCurrentUserChapter(fetchedChapter);
           } else {
-            console.warn("Could not fetch fresh logged-in user from users table. Fallback to profile:", dbUserErr);
             fetchedChapterId = profile.chapter_id || (profile as any).chapterId || null;
             fetchedChapterName = profile.chapterName || (profile as any).chapter_name || null;
+            fetchedChapter = (profile as any).chapter || null;
             setCurrentUserChapterId(fetchedChapterId);
             setCurrentUserChapterName(fetchedChapterName);
+            setCurrentUserChapter(fetchedChapter);
           }
         }
 
-        // Fetch All Active Members from Supabase 'users' table
-        const fallbackId = profile.chapter_id || (profile as any).chapterId || null;
-        const currentChapterId = fetchedChapterId || fallbackId;
-
-        let queryBuilder = supabase
+        // Fetch All Members from Supabase 'users' table without SQL chapter restrictions
+        const { data: usersData, error: usersError } = await supabase
           .from('users')
-          .select('*')
-          .eq('status', 'ACTIVE');
-
-        if (activeTab === 'chapter') {
-          if (profile.role === 'MASTER_ADMIN') {
-            if (masterSelectedChapterId) {
-              queryBuilder = queryBuilder.eq('chapter_id', masterSelectedChapterId);
-            } else {
-              const chaps = await databaseService.list<any>('chapters');
-              if (chaps && chaps.length > 0) {
-                queryBuilder = queryBuilder.eq('chapter_id', chaps[0].id);
-              } else {
-                setMembers([]);
-                setLoading(false);
-                return;
-              }
-            }
-          } else {
-            if (currentChapterId) {
-              queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
-            } else {
-              setMembers([]);
-              setLoading(false);
-              return;
-            }
-          }
-        }
-
-        const { data: usersData, error: usersError } = await queryBuilder;
+          .select('*');
 
         if (usersError) {
           console.error("Supabase load members error:", usersError);
@@ -339,6 +331,11 @@ export function Connections() {
         }
 
         const allActiveUsers: UserProfile[] = (usersData || [])
+          .filter((row: any) => {
+            const status = String(row.status || '').toUpperCase();
+            if (status === 'INACTIVE') return false;
+            return true;
+          })
           .map((row: any) => ({
             uid: row.id,
             id: row.id,
@@ -355,12 +352,13 @@ export function Connections() {
             photoURL: row.profile_photo,
             createdAt: row.created_at,
             chapter_id: row.chapter_id,
-            chapter_name: row.chapter_name,
+            chapter_name: row.chapter_name || row.chapter,
+            chapter: row.chapter || row.chapter_name || row.chapter_id,
             businessName: row.businessName || row.business_name || '',
             state: row.state || '',
             city: row.city || '',
             area: row.area || '',
-            chapterName: chapMap[row.chapter_id || ''] || row.chapter_name || 'SSK Chapter',
+            chapterName: row.chapter_name || row.chapter || chapMap[row.chapter_id || ''] || 'SSK Chapter',
           }))
           .filter(m => m.role !== 'MASTER_ADMIN');
         
@@ -396,16 +394,20 @@ export function Connections() {
     // Listen for manual re-fetch events
     const handleRefresh = () => fetchData();
     window.addEventListener('dashboard-refresh', handleRefresh);
+
+    // Subscribe to realtime updates on Supabase 'users' table
+    const channel = supabase
+      .channel('public:users:directory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
     return () => {
       window.removeEventListener('dashboard-refresh', handleRefresh);
+      supabase.removeChannel(channel);
     };
-  }, [profile, activeTab, masterSelectedChapterId]);
-
-  useEffect(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      setActiveTab('all');
-    }
-  }, [profile, activeTab, masterSelectedChapterId]);
+  }, [profile]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN' && chaptersList.length > 0 && !masterSelectedChapterId) {
@@ -417,12 +419,14 @@ export function Connections() {
     // 1. Tab Filtering
     if (activeTab === 'chapter') {
       if (profile?.role === 'MASTER_ADMIN') {
-        const selectedChap = (masterSelectedChapterId || '').trim();
-        if (!selectedChap) return false;
-        const memberChapId = (member.chapter_id || '').trim();
-        if (memberChapId !== selectedChap) return false;
+        const selectedChap = (masterSelectedChapterId || '').trim().toLowerCase();
+        if (selectedChap) {
+          const memId = (member.chapter_id || '').trim().toLowerCase();
+          const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
+          if (memId !== selectedChap && memName !== selectedChap) return false;
+        }
       } else {
-        if (!isSameChapter(member, currentUserChapterId, currentUserChapterName, profile)) {
+        if (!isSameChapter(member, currentUserChapterId, currentUserChapterName, currentUserChapter, profile)) {
           return false;
         }
       }
@@ -432,13 +436,13 @@ export function Connections() {
     const term = searchTerm.toLowerCase().trim();
     if (term) {
       const displayPos = getDisplayPosition(member.position, member.role).toLowerCase();
-      const chName = (member.chapterName || '').toLowerCase();
+      const chName = (member.chapterName || member.chapter_name || (member as any).chapter || '').toLowerCase();
       
       const nameMatch = (member.name || '').toLowerCase().includes(term);
       const businessMatch = (member.businessName || '').toLowerCase().includes(term);
       const phoneMatch = (member.phone || '').includes(term) || (member.whatsappNumber || '').includes(term);
       const positionMatch = displayPos.includes(term);
-      const chapterMatch = activeTab === 'all' && chName.includes(term);
+      const chapterMatch = chName.includes(term);
       
       if (!(nameMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
         return false;
@@ -450,21 +454,27 @@ export function Connections() {
     if (selectedCategory && member.category !== selectedCategory) return false;
     
     // Chapter Filter
-    if (selectedChapterIdFilter && member.chapter_id !== selectedChapterIdFilter) return false;
+    if (selectedChapterIdFilter) {
+      const filterVal = selectedChapterIdFilter.trim().toLowerCase();
+      const memId = (member.chapter_id || '').trim().toLowerCase();
+      const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
+      if (memId !== filterVal && memName !== filterVal) return false;
+    }
     
     // Position Filter
     if (selectedPositionFilter) {
       const role = (member.role || 'MEMBER').toUpperCase();
+      const pos = (member.position || '').toLowerCase();
       if (selectedPositionFilter === 'chapter_admin') {
-        if (role !== 'CHAPTER_ADMIN') return false;
+        if (role !== 'CHAPTER_ADMIN' && pos !== 'chapter_admin') return false;
       } else if (selectedPositionFilter === 'president') {
-        if (role !== 'PRESIDENT') return false;
+        if (role !== 'PRESIDENT' && pos !== 'president') return false;
       } else if (selectedPositionFilter === 'vice_president') {
-        if (role !== 'VICE_PRESIDENT') return false;
+        if (role !== 'VICE_PRESIDENT' && pos !== 'vice_president') return false;
       } else if (selectedPositionFilter === 'treasurer') {
-        if (role !== 'TREASURER') return false;
+        if (role !== 'TREASURER' && pos !== 'treasurer') return false;
       } else if (selectedPositionFilter === 'member') {
-        if (role !== 'MEMBER') return false;
+        if (role !== 'MEMBER' && pos !== 'member') return false;
       }
     }
 
@@ -484,10 +494,13 @@ export function Connections() {
   // Calculate total counts
   const totalChapterCount = members.filter(m => {
     if (profile?.role === 'MASTER_ADMIN') {
-      const selectedChap = (masterSelectedChapterId || '').trim();
-      return (m.chapter_id || '').trim() === selectedChap;
+      const selectedChap = (masterSelectedChapterId || '').trim().toLowerCase();
+      if (!selectedChap) return true;
+      const memId = (m.chapter_id || '').trim().toLowerCase();
+      const memName = (m.chapterName || m.chapter_name || (m as any).chapter || '').trim().toLowerCase();
+      return memId === selectedChap || memName === selectedChap;
     } else {
-      return isSameChapter(m, currentUserChapterId, currentUserChapterName, profile);
+      return isSameChapter(m, currentUserChapterId, currentUserChapterName, currentUserChapter, profile);
     }
   }).length;
 

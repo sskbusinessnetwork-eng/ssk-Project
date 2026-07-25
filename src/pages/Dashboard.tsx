@@ -23,6 +23,7 @@ import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
+import { getMeetingExactDateTime } from './Meetings';
 
 const format = (date: any, formatStr: string, options?: any) => {
   if (!date) return 'N/A';
@@ -348,11 +349,16 @@ export function Analytics() {
   }, [allReferrals, chapterReferralsList, profile]);
 
   const upcomingSyncsCount = useMemo(() => {
-    const nowStr = new Date().toISOString();
     const chapterMeetings = profile?.role === 'MASTER_ADMIN'
       ? meetings
       : meetings.filter(m => m.chapter_id === profile?.chapter_id);
-    const upcomingMeetingsCount = chapterMeetings.filter(m => !m.isCompleted).length;
+    const now = new Date();
+    const upcomingMeetingsCount = chapterMeetings.filter(m => {
+      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
+                     m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      if (isDone) return false;
+      return getMeetingExactDateTime(m) > now;
+    }).length;
 
     const chapterOneToOnes = profile?.role === 'MASTER_ADMIN'
       ? oneToOnes

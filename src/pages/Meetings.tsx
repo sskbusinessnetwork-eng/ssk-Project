@@ -19,7 +19,8 @@ import {
   Settings,
   Shield,
   Filter,
-  Info
+  Info,
+  Building
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -37,9 +38,22 @@ const format = (date: any, formatStr: string, options?: any) => {
 };
 
 export function getMeetingExactDateTime(meeting: Meeting): Date {
-  const d = new Date(meeting.date);
+  if (!meeting || !meeting.date) return new Date();
+  const dateStr = typeof meeting.date === 'string' ? meeting.date.split('T')[0] : '';
+  let year: number, month: number, day: number;
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-').map(Number);
+    year = parts[0];
+    month = parts[1] - 1;
+    day = parts[2];
+  } else {
+    const d = new Date(meeting.date);
+    year = d.getFullYear();
+    month = d.getMonth();
+    day = d.getDate();
+  }
   const { hours, minutes } = parseTimeTo24h(meeting.time || '07:30');
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hours, minutes, 0, 0);
+  return new Date(year, month, day, hours, minutes, 0, 0);
 }
 
 export function getAttendanceDisplay(status?: string) {
@@ -118,7 +132,7 @@ function calculateOccurrences(
   return dates;
 }
 
-async function syncDefaultMeetings(adminId: string, setup: {
+async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   frequency: 'Weekly' | 'Monthly';
   day: string;
   date: number;
@@ -126,19 +140,22 @@ async function syncDefaultMeetings(adminId: string, setup: {
   location: string;
   enabled: boolean;
 }) {
-  if (!adminId) return;
+  const targetChapterId = chapterId || adminId;
+  if (!targetChapterId) return;
 
   const allMeetings = await databaseService.list<Meeting>('meetings', [
-    where('chapter_id', '==', adminId)
+    where('chapter_id', '==', targetChapterId)
   ]);
 
   const now = new Date();
 
+  const isDone = (m: Meeting) => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
+
   if (!setup.enabled) {
     const toDelete = allMeetings.filter(m => 
-      !m.isCompleted && 
+      !isDone(m) && 
       m.isRecurring && 
-      new Date(m.date) >= startOfDay(now)
+      getMeetingExactDateTime(m) >= startOfDay(now)
     );
     for (const m of toDelete) {
       await databaseService.delete('meetings', m.id);
@@ -150,20 +167,22 @@ async function syncDefaultMeetings(adminId: string, setup: {
   const occurrenceIdsToPreserve = new Set<string>();
 
   for (const occurrenceDate of occurrences) {
-    const existingMeeting = allMeetings.find(m => isSameDay(new Date(m.date), occurrenceDate));
+    const existingMeeting = allMeetings.find(m => isSameDay(getMeetingExactDateTime(m), occurrenceDate));
 
     if (existingMeeting) {
       await databaseService.update('meetings', existingMeeting.id, {
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
-        isRecurring: true
+        isRecurring: true,
+        chapter_id: targetChapterId,
+        adminId: adminId || targetChapterId
       });
       occurrenceIdsToPreserve.add(existingMeeting.id);
     } else {
       const newMeeting: Omit<Meeting, 'id'> = {
-        adminId,
-        chapter_id: adminId,
+        adminId: adminId || targetChapterId,
+        chapter_id: targetChapterId,
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
@@ -172,6 +191,7 @@ async function syncDefaultMeetings(adminId: string, setup: {
         memberNotes: {},
         notes: '',
         isCompleted: false,
+        status: 'UPCOMING',
         isRecurring: true
       };
       const newId = await databaseService.create('meetings', newMeeting);
@@ -182,9 +202,9 @@ async function syncDefaultMeetings(adminId: string, setup: {
   }
 
   const obsoleteMeetings = allMeetings.filter(m => 
-    !m.isCompleted && 
+    !isDone(m) && 
     m.isRecurring && 
-    new Date(m.date) >= startOfDay(now) && 
+    getMeetingExactDateTime(m) >= startOfDay(now) && 
     !occurrenceIdsToPreserve.has(m.id)
   );
 
@@ -246,6 +266,111 @@ export function Meetings() {
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
+
+  const [chaptersMap, setChaptersMap] = useState<Record<string, any>>({});
+  const [chaptersList, setChaptersList] = useState<any[]>([]);
+  const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+  const [isAttendanceReportOpen, setIsAttendanceReportOpen] = useState(false);
+  const [reportMeeting, setReportMeeting] = useState<Meeting | null>(null);
+  const [reportGuests, setReportGuests] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadChaptersAndUsers = async () => {
+      try {
+        const { data: chData } = await supabase.from('chapters').select('*');
+        if (chData) {
+          const cMap: Record<string, any> = {};
+          chData.forEach(c => {
+            cMap[c.id] = c;
+          });
+          setChaptersMap(cMap);
+          setChaptersList(chData);
+        }
+
+        const { data: uData } = await supabase.from('users').select('*');
+        if (uData) {
+          const uMap: Record<string, UserProfile> = {};
+          const uList: UserProfile[] = uData.map((row: any) => {
+            const prof: UserProfile = {
+              uid: row.id,
+              id: row.id,
+              name: row.name || row.displayName || row.full_name || 'Member',
+              email: row.email,
+              phone: row.phone,
+              businessName: row.businessName || row.business_name || '',
+              chapterName: row.chapter_name || row.chapter || '',
+              category: row.category || '',
+              role: row.role,
+              position: row.position || '',
+              membershipStatus: row.status || row.membershipStatus || 'ACTIVE',
+              createdAt: row.created_at,
+              photoURL: row.profile_photo,
+              chapter_id: row.chapter_id,
+              adminId: row.admin_id || row.adminId || row.created_by,
+              status: row.status || 'ACTIVE'
+            };
+            uMap[row.id] = prof;
+            return prof;
+          });
+          setUsersMap(uMap);
+          setAllUsers(uList);
+        }
+      } catch (err) {
+        console.error("Error loading chapters or users in Meetings:", err);
+      }
+    };
+
+    loadChaptersAndUsers();
+  }, []);
+
+  const getChapterName = (m: Meeting): string => {
+    if (!m) return 'SSK Chapter';
+    const cId = m.chapter_id;
+    if (cId && chaptersMap[cId]?.chapter_name) {
+      return chaptersMap[cId].chapter_name;
+    }
+    const adminUser = m.adminId ? usersMap[m.adminId] : null;
+    if (adminUser?.chapterName) return adminUser.chapterName;
+    if (adminUser?.chapter_id && chaptersMap[adminUser.chapter_id]?.chapter_name) {
+      return chaptersMap[adminUser.chapter_id].chapter_name;
+    }
+    if (cId && usersMap[cId]?.chapterName) return usersMap[cId].chapterName;
+    if (cId) {
+      const matched = allUsers.find(u => u.chapter_id === cId && u.chapterName);
+      if (matched?.chapterName) return matched.chapterName;
+    }
+    return 'SSK Chapter';
+  };
+
+  const getScheduledByName = (m: Meeting): string => {
+    if (!m) return 'Chapter Admin';
+    if (m.adminId && usersMap[m.adminId]?.name) {
+      return usersMap[m.adminId].name;
+    }
+    const cId = m.chapter_id;
+    if (cId) {
+      const chapterAdmin = allUsers.find(u => u.chapter_id === cId && (u.position === 'chapter_admin' || u.role === 'CHAPTER_ADMIN'));
+      if (chapterAdmin?.name) return chapterAdmin.name;
+    }
+    return 'Chapter Admin';
+  };
+
+  const handleOpenAttendanceReport = async (meeting: Meeting) => {
+    setReportMeeting(meeting);
+    setIsAttendanceReportOpen(true);
+    try {
+      const { data: guests } = await supabase
+        .from('guest_invitations')
+        .select('*')
+        .eq('meeting_id', meeting.id);
+      setReportGuests(guests || []);
+    } catch (err) {
+      console.error("Error fetching guests for report:", err);
+      setReportGuests([]);
+    }
+  };
 
 
   useEffect(() => {
@@ -375,7 +500,7 @@ export function Meetings() {
 
   useEffect(() => {
     const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
-    if (!chapterId) {
+    if (!chapterId && !profile?.uid) {
       setDefaultSetupData({
         adminId: '',
         frequency: 'Weekly',
@@ -391,27 +516,47 @@ export function Meetings() {
     const loadAndSyncSetup = async () => {
       try {
         const venue = await fetchChapterMeetingVenue(chapterId);
-        const adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', chapterId);
-        if (adminProfile && adminProfile.defaultMeetingSetup) {
+
+        // Find Chapter Admin user for this chapter
+        let adminUserId = isChapterAdmin ? profile?.uid : null;
+        if (!adminUserId && chapterId) {
+          const admins = await databaseService.list<UserProfile>('users', [
+            where('chapter_id', '==', chapterId),
+            where('position', '==', 'chapter_admin')
+          ]);
+          if (admins && admins.length > 0) {
+            adminUserId = admins[0].uid || admins[0].id;
+          }
+        }
+        if (!adminUserId) adminUserId = profile?.uid || chapterId || '';
+
+        let adminProfile = adminUserId ? await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', adminUserId) : null;
+        
+        let setupDataObj = adminProfile?.defaultMeetingSetup;
+        if (!setupDataObj && isChapterAdmin && profile?.defaultMeetingSetup) {
+          setupDataObj = profile.defaultMeetingSetup;
+        }
+
+        if (setupDataObj) {
           const setup = {
-            adminId: chapterId,
-            frequency: adminProfile.defaultMeetingSetup.frequency || 'Weekly',
-            day: adminProfile.defaultMeetingSetup.day || 'Monday',
-            date: adminProfile.defaultMeetingSetup.date || 1,
-            time: adminProfile.defaultMeetingSetup.time || '07:30',
-            location: adminProfile.defaultMeetingSetup.location || venue,
-            enabled: adminProfile.defaultMeetingSetup.enabled || false
+            adminId: adminUserId,
+            frequency: setupDataObj.frequency || 'Weekly',
+            day: setupDataObj.day || 'Monday',
+            date: setupDataObj.date || 1,
+            time: setupDataObj.time || '07:30',
+            location: setupDataObj.location || venue,
+            enabled: setupDataObj.enabled || false
           };
           setDefaultSetupData(setup);
 
-          if (setup.enabled) {
-            syncDefaultMeetings(chapterId, setup).catch(err => {
+          if (setup.enabled && (chapterId || adminUserId)) {
+            syncDefaultMeetings(adminUserId, chapterId || adminUserId || '', setup).catch(err => {
               console.error("Background default meetings sync error:", err);
             });
           }
         } else {
           setDefaultSetupData({
-            adminId: chapterId,
+            adminId: adminUserId,
             frequency: 'Weekly',
             day: 'Monday',
             date: 1,
@@ -466,15 +611,19 @@ export function Meetings() {
       ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
       : [where('chapter_id', '==', chapterId), orderBy('date', 'desc'), limit(50)];
 
+    const isMeetingDone = (m: Meeting) => {
+      return m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
+             m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+    };
+
     const unsubscribe = databaseService.subscribe<Meeting>('meetings', constraints, (data) => {
       setMeetings(data);
 
       const now = new Date();
-      // Default to current week's meeting or the most recent one
       const start = startOfWeek(now);
       const end = endOfWeek(now);
       
-      const actionableMeetings = data.filter(m => !m.isCompleted && !m.isCancelled && getMeetingExactDateTime(m) >= now);
+      const actionableMeetings = data.filter(m => !isMeetingDone(m) && getMeetingExactDateTime(m) >= startOfDay(now));
       const thisWeekMeeting = actionableMeetings.find(m => {
         const mDate = getMeetingExactDateTime(m);
         return mDate >= start && mDate <= end;
@@ -504,27 +653,22 @@ export function Meetings() {
       unsubscribe();
       clearTimeout(timeoutId);
     };
-  }, [profile]);
+  }, [profile, selectedAdminId, isMasterAdmin]);
 
   useEffect(() => {
     // Fetch members for attendance/details
-    // For Master Admin, we might need all members if no chapter is selected, 
-    // but usually we want to filter by the chapter of the meeting being viewed.
     const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
     
     const fetchMembers = async () => {
       const constraints: any[] = [];
       if (chapterId) {
-        // If we have a chapterId, we want members of that chapter
         constraints.push(where('chapter_id', '==', chapterId));
       } else {
-        // If no chapterId (Master Admin "All Chapters"), we want all members and admins
         constraints.push(where('role', '==', 'MEMBER'));
       }
       try {
         let data = await databaseService.list<UserProfile>('users', constraints);
         
-        // If chapterId is set, we also need to fetch the Chapter Admin themselves
         if (chapterId) {
           const admin = await databaseService.get<UserProfile>('users', chapterId);
           if (admin && !data.find(m => m.uid === admin.uid)) {
@@ -532,7 +676,6 @@ export function Meetings() {
           }
         }
 
-        // Filter ACTIVE in memory
         const activeMembers = data.filter(m => m.status === 'ACTIVE' || m.membershipStatus === 'ACTIVE');
 
         setMembers(activeMembers);
@@ -550,10 +693,15 @@ export function Meetings() {
 
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isMasterAdmin) {
+      setError('Master Admin has view-only access to meetings.');
+      return;
+    }
     const adminId = profile?.uid || scheduleData.adminId;
+    const activeChapterId = profile?.chapter_id || (isMasterAdmin ? selectedAdminId : '');
     
-    if (!adminId) {
-      setError('Please select or assign an admin before scheduling a meeting.');
+    if (!adminId && !activeChapterId) {
+      setError('Please select or assign an admin or chapter before scheduling a meeting.');
       return;
     }
     
@@ -562,22 +710,35 @@ export function Meetings() {
     setSuccess(null);
 
     try {
-      // Create date object from date string
       const [year, month, day] = scheduleData.date.split('-').map(Number);
-      const meetingDate = new Date(year, month - 1, day);
+      const meetingDate = new Date(year, month - 1, day, 0, 0, 0, 0);
       
+      let finalChapterId = activeChapterId;
+      if (!finalChapterId && adminId) {
+        const adminUser = await databaseService.get<UserProfile>('users', adminId);
+        if (adminUser?.chapter_id) {
+          finalChapterId = adminUser.chapter_id;
+        }
+      }
+      if (!finalChapterId) {
+        finalChapterId = adminId;
+      }
+
       const newMeeting: Omit<Meeting, 'id'> = {
-        adminId,
-        chapter_id: profile?.chapter_id || adminId,
+        adminId: adminId || profile?.uid || '',
+        chapter_id: finalChapterId,
         date: meetingDate.toISOString(),
         time: scheduleData.time,
         location: scheduleData.location,
         attendance: {},
-        isCompleted: false
+        isCompleted: false,
+        status: 'UPCOMING'
       };
 
       await databaseService.create('meetings', newMeeting);
       
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
       setSuccess('Meeting scheduled successfully!');
       setTimeout(() => {
         setIsScheduleModalOpen(false);
@@ -593,12 +754,18 @@ export function Meetings() {
 
   const handleUpdateDefaultSetup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isMasterAdmin) {
+      setError('Master Admin has view-only access to meetings.');
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
 
     try {
       const adminId = isChapterAdmin ? profile?.uid : defaultSetupData.adminId;
+      const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+      
       if (!adminId) {
         throw new Error('No chapter admin associated or selected.');
       }
@@ -618,9 +785,13 @@ export function Meetings() {
       });
 
       // Synchronize recurring meetings to meetings collection
-      await syncDefaultMeetings(adminId, defaultSetupDoc);
+      const targetChapterId = activeChapterId || adminId;
+      await syncDefaultMeetings(adminId, targetChapterId, defaultSetupDoc);
 
-      setSuccess('Default meeting setup updated and synchronized!');
+      await refreshProfile();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+      setSuccess('Default setup saved successfully!');
       setTimeout(() => {
         setIsDefaultSetupOpen(false);
         setSuccess(null);
@@ -634,12 +805,12 @@ export function Meetings() {
   };
 
   const handleSaveUpdate = async () => {
-    if (!selectedMeeting) return;
+    if (!selectedMeeting || isMasterAdmin) return;
     setIsSubmitting(true);
     setError(null);
     try {
       // Find all active chapter members for this meeting
-      const meetingMembers = members.filter(m => m.chapter_id === selectedMeeting.adminId);
+      const meetingMembers = members.filter(m => m.chapter_id === selectedMeeting.adminId || m.chapter_id === selectedMeeting.chapter_id);
       
       // Perform validation
       for (const member of meetingMembers) {
@@ -725,6 +896,7 @@ export function Meetings() {
         amountCollected: tempAmount,
         memberNotes: tempMemberNotes,
         isCompleted: true,
+        status: 'COMPLETED',
         updatedAt: new Date().toISOString()
       });
       setSuccess('Meeting data updated and moved to history!');
@@ -741,26 +913,46 @@ export function Meetings() {
   };
 
   const handleSaveNotes = async () => {
-    if (!selectedMeeting) return;
+    if (!selectedMeeting || isMasterAdmin) return;
     setIsSubmitting(true);
     try {
-      const meetingDate = new Date(selectedMeeting.date);
-      const now = new Date();
-      const shouldComplete = meetingDate < now;
-
       await databaseService.update('meetings', selectedMeeting.id, { 
         notes: tempNotes,
-        isCompleted: shouldComplete || selectedMeeting.isCompleted,
         updatedAt: new Date().toISOString()
       });
-      setSuccess(shouldComplete ? 'Meeting notes updated and moved to history!' : 'Meeting notes updated!');
+      setSuccess('Meeting notes updated!');
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setTimeout(() => {
         setIsNotesModalOpen(false);
         setSuccess(null);
-        if (shouldComplete) setSelectedMeeting(null);
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to update meeting notes.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelMeeting = async () => {
+    if (!selectedMeeting || isMasterAdmin) return;
+    if (!window.confirm('Are you sure you want to cancel this meeting?')) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await databaseService.update('meetings', selectedMeeting.id, {
+        isCancelled: true,
+        status: 'CANCELLED',
+        updatedAt: new Date().toISOString()
+      });
+      setSuccess('Meeting cancelled and moved to history.');
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      setTimeout(() => {
+        setIsUpdateModalOpen(false);
+        setSuccess(null);
+        setSelectedMeeting(null);
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel meeting.');
     } finally {
       setIsSubmitting(false);
     }
@@ -776,33 +968,34 @@ export function Meetings() {
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
     : 0;
 
-  const getMeetingStatus = (meeting: Meeting) => {
-    if (meeting.isCancelled) {
-      return { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200' };
-    }
-    if (meeting.isCompleted) {
-      return { label: 'Completed', color: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' };
-    }
-    const meetingDate = getMeetingExactDateTime(meeting);
-    
-    if (meetingDate < currentTime) {
-      return { label: 'Completed', color: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' };
-    }
-    
-    return { label: 'Upcoming', color: 'bg-blue-100 text-primary border-blue-200' };
+  const isMeetingDone = (m: Meeting) => {
+    return m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
+           m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
   };
 
-  const filteredMeetings = selectedAdminId 
-    ? meetings.filter(m => m.chapter_id === selectedAdminId)
+  const getMeetingStatus = (meeting: Meeting) => {
+    if (meeting.isCancelled || (meeting.isCancelled as any) === 'true' || meeting.status === 'CANCELLED') {
+      return { label: 'Cancelled', color: 'bg-red-500/10 text-red-400 border-red-500/20' };
+    }
+    if (meeting.isCompleted || (meeting.isCompleted as any) === 'true' || meeting.status === 'COMPLETED') {
+      return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+    }
+    return { label: 'Upcoming', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+  };
+
+  const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+
+  const filteredMeetings = activeChapterId 
+    ? meetings.filter(m => m.chapter_id === activeChapterId || m.adminId === activeChapterId)
     : meetings;
 
-  // Upcoming: Non-completed, non-cancelled meetings that are in the future
-  const scheduledMeetings = [...filteredMeetings.filter(m => !m.isCompleted && !m.isCancelled && getMeetingExactDateTime(m) >= currentTime)]
+  // Upcoming: Non-completed, non-cancelled meetings sorted by exact date/time ascending
+  const scheduledMeetings = [...filteredMeetings.filter(m => !isMeetingDone(m))]
     .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
   
-  // History: Completed meetings OR past meetings OR cancelled meetings in chronological order
-  const completedMeetings = [...filteredMeetings.filter(m => m.isCompleted || m.isCancelled || getMeetingExactDateTime(m) < currentTime)]
-    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+  // History: Completed meetings OR Cancelled meetings in reverse chronological order
+  const completedMeetings = [...filteredMeetings.filter(m => isMeetingDone(m))]
+    .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
 
   // For Master Admin, find the single latest/upcoming meeting
   const masterAdminUpcoming = scheduledMeetings[0];
@@ -833,8 +1026,11 @@ export function Meetings() {
               className="bg-transparent text-xs font-bold text-white outline-none flex-1 md:min-w-[150px] appearance-none cursor-pointer uppercase tracking-wider"
             >
               <option value="" className="bg-[#111827]">All Chapters</option>
-              {adminAdmins.map(admin => (
-                <option key={admin.uid} value={admin.uid} className="bg-[#111827]">{admin.name || admin.displayName}</option>
+              {chaptersList.map(chap => (
+                <option key={chap.id} value={chap.id} className="bg-[#111827]">{chap.chapter_name}</option>
+              ))}
+              {adminAdmins.filter(a => !chaptersList.some(c => c.id === a.uid || c.id === a.chapter_id)).map(admin => (
+                <option key={admin.uid} value={admin.chapter_id || admin.uid} className="bg-[#111827]">{admin.chapterName || admin.name}</option>
               ))}
             </select>
           </div>
@@ -883,240 +1079,351 @@ export function Meetings() {
       {/* Main Content Area */}
       <div className="space-y-12">
         {/* 1. Upcoming Meetings */}
-        {scheduledMeetings.length > 0 && (
+        {scheduledMeetings.length > 0 ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-primary rounded-full" />
-                <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">Upcoming Meetings</h2>
+                <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">
+                  Upcoming Meetings ({scheduledMeetings.length})
+                </h2>
               </div>
-              {scheduledMeetings.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllFutureMeetings(!showAllFutureMeetings)}
-                  className="text-xs text-emerald-400 font-bold hover:text-emerald-500 hover:underline transition-all"
-                >
-                  {showAllFutureMeetings ? "Show Next Meeting Only" : `View All Scheduled Meetings (${scheduledMeetings.length})`}
-                </button>
-              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(showAllFutureMeetings ? scheduledMeetings : scheduledMeetings.slice(0, 1)).map((meeting) => (
-                <div 
-                  key={meeting.id} 
-                  onClick={() => setSelectedMeeting(meeting)}
-                  className={cn(
-                    "bg-[#111827] p-3.5 rounded-[12px] border hover:bg-[#1C2538] transition-all flex flex-col h-full cursor-pointer",
-                    selectedMeeting?.id === meeting.id ? "border-primary ring-2 ring-primary/10" : "border-white/5"
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-9 h-9 bg-[#151C2E] rounded-lg flex items-center justify-center text-primary shrink-0">
-                      <Calendar size={18} />
-                    </div>
-                    {(() => {
-                      const status = getMeetingStatus(meeting);
-                      return (
-                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", status.color)}>
-                          {status.label}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {scheduledMeetings.map((meeting) => {
+                const chapterName = getChapterName(meeting);
+                const scheduledBy = getScheduledByName(meeting);
+                const meetingTitle = `${chapterName} Meeting`;
+                const meetingStatus = getMeetingStatus(meeting);
+
+                return (
+                  <div 
+                    key={meeting.id} 
+                    onClick={() => handleOpenAttendanceReport(meeting)}
+                    className="bg-[#111827] p-4 rounded-[16px] border border-white/5 hover:border-primary/40 hover:bg-[#1C2538] transition-all flex flex-col justify-between cursor-pointer group shadow-sm"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                          <Building size={11} />
+                          {chapterName}
                         </span>
-                      );
-                    })()}
+                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", meetingStatus.color)}>
+                          {meetingStatus.label}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm font-bold text-white uppercase tracking-tight leading-snug mb-2 group-hover:text-primary transition-colors">
+                        {meetingTitle}
+                      </h3>
+
+                      <div className="space-y-1.5 mb-4 text-[11px] text-neutral-300">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={13} className="text-primary shrink-0" />
+                          <span className="font-semibold text-white">{format(new Date(meeting.date), 'EEEE, MMM do yyyy')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock size={13} className="text-primary shrink-0" />
+                          <span>{formatTime12h(meeting.time || '07:30')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin size={13} className="text-primary shrink-0" />
+                          <span className="truncate">{meeting.location || 'Meeting Venue'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-neutral-400">
+                          <Users size={12} className="text-neutral-400 shrink-0" />
+                          <span>Scheduled By: <strong className="text-white font-bold">{scheduledBy}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/5">
+                      {isMasterAdmin ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttendanceReport(meeting);
+                          }}
+                          className="w-full py-2 bg-primary/10 text-primary border border-primary/20 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <FileText size={12} />
+                          View Attendance Report
+                        </button>
+                      ) : isChapterAdmin ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              const normalizedAttendance: Record<string, any> = {};
+                              if (meeting.attendance) {
+                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                  if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
+                                  else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                                  else normalizedAttendance[uid] = val;
+                                });
+                              }
+                              setTempAttendance(normalizedAttendance);
+                              setTempAmount(meeting.amountCollected || {});
+                              setTempMemberNotes(meeting.memberNotes || {});
+                              setIsUpdateModalOpen(true);
+                            }}
+                            className="py-1.5 bg-emerald-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center justify-center gap-1"
+                          >
+                            <Settings size={11} />
+                            Update
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAttendanceReport(meeting);
+                            }}
+                            className="py-1.5 bg-[#151C2E] text-primary border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1"
+                          >
+                            <FileText size={11} />
+                            Report
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttendanceReport(meeting);
+                          }}
+                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Info size={12} />
+                          View Details
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-1.5 mb-3 flex-grow min-w-0">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-tight leading-none truncate" title={format(new Date(meeting.date), 'EEEE, MMM do')}>
-                      {format(new Date(meeting.date), 'EEEE, MMM do')}
-                    </h3>
-                    <div className="flex items-center gap-2 text-[11px] text-neutral-400 font-medium">
-                      <Clock size={12} className="text-primary shrink-0" />
-                      <span className="truncate">{formatTime12h(meeting.time || '07:30')}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-neutral-400 font-medium">
-                      <MapPin size={12} className="text-primary shrink-0" />
-                      <span className="truncate">{meeting.location || 'Meeting Venue'}</span>
-                    </div>
-                  </div>
-                  
-                  {(isChapterAdmin || isMasterAdmin) && (
-                    <div className="grid grid-cols-2 gap-2 mt-auto">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedMeeting(meeting);
-                          const normalizedAttendance: Record<string, any> = {};
-                          if (meeting.attendance) {
-                            Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                              if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
-                              else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
-                              else normalizedAttendance[uid] = val;
-                            });
-                          }
-                          setTempAttendance(normalizedAttendance);
-                          setTempAmount(meeting.amountCollected || {});
-                          setTempMemberNotes(meeting.memberNotes || {});
-                          setIsUpdateModalOpen(true);
-                        }}
-                        className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-emerald-500/20"
-                      >
-                        <Settings size={10} />
-                        Update
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedMeeting(meeting);
-                          setTempNotes(meeting.notes || '');
-                          setIsNotesModalOpen(true);
-                        }}
-                        className="flex-1 py-1.5 bg-[#151C2E] text-primary border border-white/5 rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <FileText size={10} />
-                        Notes
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-1.5 h-6 bg-primary rounded-full" />
+              <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">Upcoming Meetings</h2>
+            </div>
+            <div className="p-12 text-center bg-[#111827] rounded-[24px] border border-dashed border-white/5">
+              <div className="w-12 h-12 bg-[#151C2E] rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-400">
+                <Calendar size={24} />
+              </div>
+              <h3 className="text-base font-bold text-white">No upcoming meetings scheduled.</h3>
+              <p className="text-xs text-neutral-400 mt-1">
+                {isChapterAdmin 
+                  ? "Click the button above to schedule a new meeting." 
+                  : "No upcoming meetings scheduled for the selected view."}
+              </p>
             </div>
           </div>
         )}
 
-        {scheduledMeetings.length === 0 && (
-          <div className="p-12 text-center bg-[#111827] rounded-[24px] border border-dashed border-white/5">
-            <div className="w-12 h-12 bg-[#151C2E] rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-400">
-              <Calendar size={24} />
-            </div>
-            <h3 className="text-base font-bold text-white">No upcoming meetings</h3>
-            <p className="text-xs text-neutral-400 mt-1">
-              {isChapterAdmin 
-                ? "Click the button above to schedule a new meeting." 
-                : "Your admin hasn't scheduled any meetings yet."}
-            </p>
-          </div>
-        )}
-
-        {/* 2. Your Meeting History */}
+        {/* 2. Meeting History */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <div className="w-1.5 h-6 bg-secondary rounded-full" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">Your Meeting History</h2>
+            <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">Meeting History</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Total Meetings Card */}
-            <div className="bg-[#111827] p-5 rounded-[16px] border border-white/5 flex items-center gap-4">
-              <div className="w-12 h-12 bg-[#151C2E] rounded-[12px] flex items-center justify-center text-neutral-400">
-                <Calendar size={24} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Meetings</p>
-                <p className="text-2xl font-bold text-white tracking-tight">{completedMeetings.length}</p>
-                <p className="text-[9px] text-neutral-400 font-medium mt-1 uppercase tracking-wider">Under same chapter</p>
-              </div>
-            </div>
 
-            {/* Attendance Count Card */}
-            <div 
-              onClick={() => setIsMemberHistoryModalOpen(true)}
-              className="bg-[#111827] p-5 rounded-[16px] border border-white/5 flex items-center justify-between cursor-pointer group hover:border-primary transition-all"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-500/10 rounded-[12px] flex items-center justify-center text-emerald-400 border border-emerald-500/20 group-hover:bg-primary group-hover:text-white transition-colors">
-                  <CheckCircle2 size={24} />
+          {!isMasterAdmin && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Total Meetings Card */}
+              <div className="bg-[#111827] p-5 rounded-[16px] border border-white/5 flex items-center gap-4">
+                <div className="w-12 h-12 bg-[#151C2E] rounded-[12px] flex items-center justify-center text-neutral-400">
+                  <Calendar size={24} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Attendance Count</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">
-                    {completedMeetings.filter(m => {
-                      const status = m.attendance?.[profile?.uid || ''];
-                      if (!status) return false;
-                      const uStatus = status.toUpperCase();
-                      return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE';
-                    }).length}
-                  </p>
-                  <p className="text-[9px] text-neutral-400 font-medium mt-1 uppercase tracking-wider">Meetings Attended</p>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Meetings</p>
+                  <p className="text-2xl font-bold text-white tracking-tight">{completedMeetings.length}</p>
+                  <p className="text-[9px] text-neutral-400 font-medium mt-1 uppercase tracking-wider">Completed / Cancelled</p>
                 </div>
               </div>
-              <div className="w-8 h-8 rounded-full bg-[#151C2E] flex items-center justify-center text-neutral-400 group-hover:bg-primary group-hover:text-white transition-all">
-                <ChevronRight size={16} />
+
+              {/* Attendance Count Card */}
+              <div 
+                onClick={() => setIsMemberHistoryModalOpen(true)}
+                className="bg-[#111827] p-5 rounded-[16px] border border-white/5 flex items-center justify-between cursor-pointer group hover:border-primary transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500/10 rounded-[12px] flex items-center justify-center text-emerald-400 border border-emerald-500/20 group-hover:bg-primary group-hover:text-white transition-colors">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Attendance Count</p>
+                    <p className="text-2xl font-bold text-white tracking-tight">
+                      {completedMeetings.filter(m => {
+                        const status = m.attendance?.[profile?.uid || ''];
+                        if (!status) return false;
+                        const uStatus = status.toUpperCase();
+                        return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE';
+                      }).length}
+                    </p>
+                    <p className="text-[9px] text-neutral-400 font-medium mt-1 uppercase tracking-wider">Meetings Attended</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-[#151C2E] flex items-center justify-center text-neutral-400 group-hover:bg-primary group-hover:text-white transition-all">
+                  <ChevronRight size={16} />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Meeting History List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {completedMeetings.map((meeting) => (
-              <div 
-                key={meeting.id} 
-                onClick={() => {
-                  setDetailsMeeting(meeting);
-                  setIsMeetingDetailsModalOpen(true);
-                }}
-                className="bg-[#111827] p-4 rounded-[12px] border border-white/5 hover:bg-[#1C2538] transition-all flex flex-col cursor-pointer group"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-8 h-8 bg-[#151C2E] rounded-lg flex items-center justify-center text-neutral-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                    <Calendar size={16} />
+          {completedMeetings.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {completedMeetings.map((meeting) => {
+                const chapterName = getChapterName(meeting);
+                const scheduledBy = getScheduledByName(meeting);
+                const meetingTitle = `${chapterName} Meeting`;
+                const meetingStatus = getMeetingStatus(meeting);
+
+                // Calculate attendance summary for this meeting
+                const meetingChapId = meeting.chapter_id || meeting.adminId;
+                const chapMembers = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+                const totalMembersCount = chapMembers.length || Object.keys(meeting.attendance || {}).length;
+                const presentCount = chapMembers.filter(m => {
+                  const st = meeting.attendance?.[m.uid];
+                  if (!st) return false;
+                  const uSt = st.toUpperCase();
+                  return uSt === 'PRESENT' || uSt === 'YES' || uSt === 'SUBSTITUTE';
+                }).length;
+                const absentCount = totalMembersCount > presentCount ? totalMembersCount - presentCount : 0;
+                const attendancePct = totalMembersCount > 0 ? Math.round((presentCount / totalMembersCount) * 100) : 0;
+
+                return (
+                  <div 
+                    key={meeting.id} 
+                    onClick={() => handleOpenAttendanceReport(meeting)}
+                    className="bg-[#111827] p-4 rounded-[16px] border border-white/5 hover:border-primary/40 hover:bg-[#1C2538] transition-all flex flex-col justify-between cursor-pointer group shadow-sm"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-widest bg-secondary/10 text-secondary border border-secondary/20 flex items-center gap-1">
+                          <Building size={11} />
+                          {chapterName}
+                        </span>
+                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", meetingStatus.color)}>
+                          {meetingStatus.label}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm font-bold text-white uppercase tracking-tight leading-snug mb-2 group-hover:text-primary transition-colors">
+                        {meetingTitle}
+                      </h3>
+
+                      <div className="space-y-1.5 mb-3 text-[11px] text-neutral-300">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={13} className="text-secondary shrink-0" />
+                          <span className="font-semibold text-white">{format(new Date(meeting.date), 'EEEE, MMM do yyyy')}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock size={13} className="text-secondary shrink-0" />
+                          <span>{formatTime12h(meeting.time || '07:30')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-neutral-400">
+                          <Users size={12} className="text-neutral-400 shrink-0" />
+                          <span>Scheduled By: <strong className="text-white font-bold">{scheduledBy}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Attendance Summary */}
+                      <div className="p-2.5 bg-[#151C2E] rounded-[12px] border border-white/5 mb-3 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold">
+                          <span className="text-neutral-400 uppercase tracking-wider">Attendance Rate</span>
+                          <span className="text-emerald-400">{attendancePct}%</span>
+                        </div>
+                        <div className="w-full bg-[#111827] h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${attendancePct}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-neutral-400 pt-0.5 font-medium">
+                          <span className="text-emerald-400 font-bold">Present: {presentCount}</span>
+                          <span className="text-red-400 font-bold">Absent: {absentCount}</span>
+                          <span>Total: {totalMembersCount}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/5">
+                      {isMasterAdmin ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttendanceReport(meeting);
+                          }}
+                          className="w-full py-2 bg-primary/10 text-primary border border-primary/20 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <FileText size={12} />
+                          View Attendance Report
+                        </button>
+                      ) : isChapterAdmin ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              const normalizedAttendance: Record<string, any> = {};
+                              if (meeting.attendance) {
+                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                  if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
+                                  else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
+                                  else normalizedAttendance[uid] = val;
+                                });
+                              }
+                              setTempAttendance(normalizedAttendance);
+                              setTempAmount(meeting.amountCollected || {});
+                              setTempMemberNotes(meeting.memberNotes || {});
+                              setIsUpdateModalOpen(true);
+                            }}
+                            className="py-1.5 bg-[#151C2E] text-white border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-500/10 hover:text-emerald-400 transition-all flex items-center justify-center gap-1"
+                          >
+                            <Settings size={11} />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenAttendanceReport(meeting);
+                            }}
+                            className="py-1.5 bg-[#151C2E] text-primary border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1"
+                          >
+                            <FileText size={11} />
+                            Report
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenAttendanceReport(meeting);
+                          }}
+                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Info size={12} />
+                          View Details
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {(() => {
-                    const status = getMeetingStatus(meeting);
-                    return (
-                      <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", status.color)}>
-                        {status.label}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div className="space-y-1 mb-3">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-tight truncate">
-                    {format(new Date(meeting.date), 'EEEE, MMM do yyyy')}
-                  </h3>
-                  <div className="flex items-center gap-2 text-[10px] text-neutral-400 font-medium">
-                    <Clock size={10} className="text-primary shrink-0" />
-                    <span>{formatTime12h(meeting.time || '07:30')}</span>
-                  </div>
-                </div>
-                
-                {(isChapterAdmin || isMasterAdmin) && (
-                  <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-white/5">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedMeeting(meeting);
-                        const normalizedAttendance: Record<string, any> = {};
-                        if (meeting.attendance) {
-                          Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                            if (val === 'PRESENT') normalizedAttendance[uid] = 'Yes';
-                            else if (val === 'ABSENT') normalizedAttendance[uid] = 'No';
-                            else normalizedAttendance[uid] = val;
-                          });
-                        }
-                        setTempAttendance(normalizedAttendance);
-                        setTempAmount(meeting.amountCollected || {});
-                        setTempMemberNotes(meeting.memberNotes || {});
-                        setIsUpdateModalOpen(true);
-                      }}
-                      className="py-1 bg-[#151C2E] text-white border border-white/5 rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all flex items-center justify-center gap-1"
-                    >
-                      <Settings size={10} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedMeeting(meeting);
-                        setTempNotes(meeting.notes || '');
-                        setIsNotesModalOpen(true);
-                      }}
-                      className="py-1 bg-[#151C2E] text-white border border-white/5 rounded-lg text-[8px] font-bold uppercase tracking-widest hover:bg-primary/10 hover:text-primary transition-all flex items-center justify-center gap-1"
-                    >
-                      <FileText size={10} />
-                      Notes
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-8 text-center bg-[#111827] rounded-[20px] border border-dashed border-white/5 text-neutral-400 text-xs font-medium">
+              No meeting history available for the selected view.
+            </div>
+          )}
         </div>
       </div>
 
@@ -1313,13 +1620,25 @@ export function Meetings() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleSaveUpdate}
-            disabled={isSubmitting}
-            className="w-full py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
-          >
-            {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save & Complete Meeting'}
-          </button>
+          <div className="flex gap-3">
+            {selectedMeeting && !isMeetingDone(selectedMeeting) && (
+              <button
+                type="button"
+                onClick={handleCancelMeeting}
+                disabled={isSubmitting}
+                className="px-4 py-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-[12px] font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 uppercase tracking-widest text-xs shrink-0"
+              >
+                Cancel Meeting
+              </button>
+            )}
+            <button
+              onClick={handleSaveUpdate}
+              disabled={isSubmitting}
+              className="flex-1 py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+            >
+              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save & Complete Meeting'}
+            </button>
+          </div>
         </div>
       </Modal>
 
@@ -1937,6 +2256,214 @@ export function Meetings() {
             </table>
           </div>
         </div>
+      </Modal>
+
+      {/* Attendance Report Modal (Master Admin & View-Only Report) */}
+      <Modal
+        isOpen={isAttendanceReportOpen}
+        onClose={() => {
+          setIsAttendanceReportOpen(false);
+          setReportMeeting(null);
+        }}
+        title="Meeting Attendance Report"
+      >
+        {reportMeeting ? (
+          <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
+            {/* Meeting Header Details */}
+            <div className="bg-[#151C2E] p-4 rounded-[16px] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Building size={14} />
+                  {getChapterName(reportMeeting)}
+                </span>
+                {(() => {
+                  const statusObj = getMeetingStatus(reportMeeting);
+                  return (
+                    <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border", statusObj.color)}>
+                      {statusObj.label}
+                    </span>
+                  );
+                })()}
+              </div>
+
+              <h2 className="text-lg font-bold text-white uppercase tracking-tight">
+                {getChapterName(reportMeeting)} Meeting
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-neutral-300">
+                <div className="flex items-center gap-2">
+                  <Calendar size={14} className="text-primary shrink-0" />
+                  <span>Date: <strong className="text-white">{format(new Date(reportMeeting.date), 'EEEE, MMMM do yyyy')}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-primary shrink-0" />
+                  <span>Time: <strong className="text-white">{formatTime12h(reportMeeting.time || '07:30')}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin size={14} className="text-primary shrink-0" />
+                  <span>Venue: <strong className="text-white">{reportMeeting.location || 'N/A'}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users size={14} className="text-primary shrink-0" />
+                  <span>Scheduled By: <strong className="text-white">{getScheduledByName(reportMeeting)}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Attendance Summary Stat Cards */}
+            {(() => {
+              const meetingChapId = reportMeeting.chapter_id || reportMeeting.adminId;
+              const chapMembers = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+              const totalMembers = chapMembers.length || Object.keys(reportMeeting.attendance || {}).length;
+              const presentCount = chapMembers.filter(m => {
+                const st = reportMeeting.attendance?.[m.uid];
+                if (!st) return false;
+                const uSt = st.toUpperCase();
+                return uSt === 'PRESENT' || uSt === 'YES' || uSt === 'SUBSTITUTE';
+              }).length;
+              const absentCount = totalMembers > presentCount ? totalMembers - presentCount : 0;
+              const pct = totalMembers > 0 ? Math.round((presentCount / totalMembers) * 100) : 0;
+
+              let totalCollected = 0;
+              if (reportMeeting.amountCollected) {
+                Object.values(reportMeeting.amountCollected).forEach(amt => {
+                  totalCollected += (Number(amt) || 0);
+                });
+              }
+
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-[#151C2E] p-3 rounded-[12px] border border-white/5 text-center">
+                    <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Total Roster</p>
+                    <p className="text-lg font-bold text-white mt-1">{totalMembers}</p>
+                  </div>
+                  <div className="bg-emerald-500/10 p-3 rounded-[12px] border border-emerald-500/20 text-center">
+                    <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Present</p>
+                    <p className="text-lg font-bold text-emerald-400 mt-1">{presentCount} ({pct}%)</p>
+                  </div>
+                  <div className="bg-red-500/10 p-3 rounded-[12px] border border-red-500/20 text-center">
+                    <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Absent</p>
+                    <p className="text-lg font-bold text-red-400 mt-1">{absentCount}</p>
+                  </div>
+                  <div className="bg-primary/10 p-3 rounded-[12px] border border-primary/20 text-center">
+                    <p className="text-[9px] font-bold text-primary uppercase tracking-wider">Total Fee Collected</p>
+                    <p className="text-lg font-bold text-primary mt-1">₹{totalCollected.toLocaleString()}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Member Roster Table */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Users size={14} className="text-primary" />
+                Member Attendance Roster
+              </h3>
+              <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-[#111827]">
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Name</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Position</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-center">Status</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-right">Fee (₹)</th>
+                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {(() => {
+                      const meetingChapId = reportMeeting.chapter_id || reportMeeting.adminId;
+                      const members = allUsers.filter(u => u.chapter_id === meetingChapId || u.adminId === meetingChapId);
+                      
+                      if (members.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={5} className="py-6 text-center text-xs text-neutral-400 font-medium">
+                              No member records found for this chapter.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return members.map(m => {
+                        const rawStatus = reportMeeting.attendance?.[m.uid];
+                        const displayStatus = getAttendanceDisplay(rawStatus);
+                        const fee = reportMeeting.amountCollected?.[m.uid] || 0;
+                        const note = reportMeeting.memberNotes?.[m.uid] || '-';
+
+                        return (
+                          <tr key={m.uid} className="hover:bg-[#1C2538] transition-colors">
+                            <td className="py-3 px-4 text-xs font-bold text-white">
+                              {m.name || m.displayName || 'Unnamed Member'}
+                            </td>
+                            <td className="py-3 px-4 text-xs text-neutral-400">
+                              {m.position || m.role || 'Member'}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border inline-block", displayStatus.color)}>
+                                {displayStatus.label}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-xs font-bold text-right text-white">
+                              ₹{Number(fee).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 text-xs text-neutral-400 truncate max-w-[150px]" title={note}>
+                              {note}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Guest Attendees Section */}
+            {reportGuests.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <UserPlus size={14} className="text-secondary" />
+                  Guest Attendees ({reportGuests.length})
+                </h3>
+                <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
+                  <table className="w-full text-left border-collapse min-w-[600px]">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-[#111827]">
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Guest Name</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Category</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Invited By</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Mobile</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {reportGuests.map(g => (
+                        <tr key={g.id || g.uid} className="hover:bg-[#1C2538] transition-colors">
+                          <td className="py-3 px-4 text-xs font-bold text-white">{g.name || 'Guest'}</td>
+                          <td className="py-3 px-4 text-xs text-neutral-400">{g.businessCategory || g.category || 'N/A'}</td>
+                          <td className="py-3 px-4 text-xs text-neutral-300 font-medium">{g.invitedBy || 'Member'}</td>
+                          <td className="py-3 px-4 text-xs text-neutral-400">{g.mobile || g.phone || 'N/A'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Meeting Notes */}
+            {reportMeeting.notes && (
+              <div className="p-4 bg-[#151C2E] rounded-[12px] border border-white/5 space-y-1">
+                <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Meeting Notes</h4>
+                <p className="text-xs text-neutral-200 whitespace-pre-wrap leading-relaxed">{reportMeeting.notes}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-neutral-400 text-xs font-medium">
+            Loading attendance report data...
+          </div>
+        )}
       </Modal>
     </div>
   );

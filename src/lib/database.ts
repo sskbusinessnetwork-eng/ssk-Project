@@ -296,6 +296,10 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   renewal_requested: true,
   renewed_by: true,
   renewed_at: true,
+  default_meeting_setup: true,
+  defaultMeetingSetup: true,
+  workspace_checklist: true,
+  growth_score: true,
 };
 
 function prepareUserPayload(partialData: any, existingPhoto: string = '') {
