@@ -1878,7 +1878,7 @@ export function Analytics() {
               )}
             </div>
             <p className="text-[14px] md:text-[16px] lg:text-[18px] font-medium text-[#D1D5DB] max-w-[420px] leading-relaxed">
-              Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong> Here is your enterprise operations overview for today.
+              Welcome back to <strong className="text-[#E53935] font-semibold">SSK Business Network.</strong>
             </p>
             
             {/* CTA Buttons */}

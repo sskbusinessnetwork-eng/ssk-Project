@@ -105,7 +105,6 @@ export function Layout() {
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
     { icon: Share2, label: 'Referrals', path: '/refer' },
-    { icon: Menu, label: 'Side Menu', isAction: true, action: () => setIsMobileSidebarOpen(true) },
   ];
 
   return (
