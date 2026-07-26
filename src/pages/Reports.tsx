@@ -54,7 +54,8 @@ export function Reports() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
 
   // Filters state
-  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('ALL');
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('ALL');
   const [startDate, setStartDate] = useState<string>(() => {
     // Default to start of 6 months ago
     const d = subMonths(new Date(), 6);
@@ -93,9 +94,8 @@ export function Reports() {
         if (profile.role === 'MASTER_ADMIN') {
           const chaptersList = await databaseService.list<Chapter>('chapters');
           setChapters(chaptersList);
-          if (chaptersList.length > 0) {
-            setSelectedChapterId(chaptersList[0].id);
-          }
+          setSelectedChapterId('ALL');
+          setSelectedMemberId('ALL');
         } else if (profile.chapter_id) {
           setSelectedChapterId(profile.chapter_id);
         }
@@ -181,63 +181,113 @@ export function Reports() {
   const parsedStart = useMemo(() => new Date(startDate + 'T00:00:00'), [startDate]);
   const parsedEnd = useMemo(() => new Date(endDate + 'T23:59:59'), [endDate]);
 
-  // Filtered members belonging to selected chapter
+  // Available members for dropdown based on selected chapter
+  const availableMemberOptions = useMemo(() => {
+    let list = users.filter(u => u.role !== 'MASTER_ADMIN');
+    if (selectedChapterId && selectedChapterId !== 'ALL') {
+      list = list.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId);
+    }
+    return list;
+  }, [users, selectedChapterId]);
+
+  // Filtered members belonging to selected chapter and member filters
   const filteredMembers = useMemo(() => {
-    if (!selectedChapterId) return [];
-    
-    // Support filtering by chapter
-    let results = users.filter(u => u.chapter_id === selectedChapterId);
-    
-    // Filter out MASTER_ADMINs from the general member roster reports
-    results = results.filter(u => u.role !== 'MASTER_ADMIN');
+    let results = users.filter(u => u.role !== 'MASTER_ADMIN');
+
+    if (selectedChapterId && selectedChapterId !== 'ALL') {
+      results = results.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId);
+    }
+
+    if (selectedMemberId && selectedMemberId !== 'ALL') {
+      results = results.filter(u => u.uid === selectedMemberId || u.id === selectedMemberId);
+    }
 
     if (statusFilter !== 'ALL') {
       results = results.filter(u => u.membershipStatus === statusFilter);
     }
 
     return results;
-  }, [users, selectedChapterId, statusFilter]);
+  }, [users, selectedChapterId, selectedMemberId, statusFilter]);
 
   // Derived filtered transactions based on date filter & chapter boundaries
   const currentChapterMemberIds = useMemo(() => {
-    return filteredMembers.map(m => m.uid);
+    return filteredMembers.map(m => m.uid || m.id);
   }, [filteredMembers]);
 
   const reportsData = useMemo(() => {
     const filteredRefs = referrals.filter(ref => {
       const isDateValid = isWithinDateRange(ref.createdAt, parsedStart, parsedEnd);
-      const isChapterValid = currentChapterMemberIds.includes(ref.fromUserId) || currentChapterMemberIds.includes(ref.toUserId);
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
+        isScopeValid = chapterMemberUids.includes(ref.fromUserId) || chapterMemberUids.includes(ref.toUserId);
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = ref.fromUserId === selectedMemberId || ref.toUserId === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     const filteredMeetings = meetings.filter(m => {
       const isDateValid = isWithinDateRange(m.date, parsedStart, parsedEnd);
-      const isChapterValid = m.chapter_id === selectedChapterId;
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        isScopeValid = m.chapter_id === selectedChapterId || m.chapterId === selectedChapterId;
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = (m.attendance && !!m.attendance[selectedMemberId]) || m.createdBy === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     const filteredOneToOnes = oneToOnes.filter(m => {
       const isDateValid = isWithinDateRange(m.date, parsedStart, parsedEnd);
-      const isChapterValid = currentChapterMemberIds.includes((m.organizer_id || m.creatorId)) || (m.participantIds && m.participantIds.some(pid => currentChapterMemberIds.includes(pid)));
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
+        isScopeValid = chapterMemberUids.includes(m.organizer_id || m.creatorId) || (m.participantIds && m.participantIds.some(pid => chapterMemberUids.includes(pid)));
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = (m.organizer_id || m.creatorId) === selectedMemberId || (m.participantIds && m.participantIds.includes(selectedMemberId)) || m.member_id === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     const filteredGuests = guestInvitations.filter(g => {
       const isDateValid = isWithinDateRange(g.createdAt, parsedStart, parsedEnd);
-      const isChapterValid = g.chapter_id === selectedChapterId || currentChapterMemberIds.includes(g.createdBy);
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        isScopeValid = g.chapter_id === selectedChapterId || g.chapterId === selectedChapterId;
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = g.createdBy === selectedMemberId || g.userId === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     const filteredTestimonials = testimonials.filter(t => {
       const isDateValid = isWithinDateRange(t.createdAt, parsedStart, parsedEnd);
-      const isChapterValid = t.chapterId === selectedChapterId || currentChapterMemberIds.includes(t.authorMemberId);
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        isScopeValid = t.chapterId === selectedChapterId || t.chapter_id === selectedChapterId;
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = t.authorMemberId === selectedMemberId || t.recipientMemberId === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     const filteredSlips = thankYouSlips.filter(s => {
       const isDateValid = isWithinDateRange(s.createdAt, parsedStart, parsedEnd);
-      const isChapterValid = currentChapterMemberIds.includes(s.fromUserId) || currentChapterMemberIds.includes(s.toUserId);
-      return isDateValid && isChapterValid;
+      let isScopeValid = true;
+      if (selectedChapterId && selectedChapterId !== 'ALL') {
+        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
+        isScopeValid = chapterMemberUids.includes(s.fromUserId) || chapterMemberUids.includes(s.toUserId);
+      }
+      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
+        isScopeValid = s.fromUserId === selectedMemberId || s.toUserId === selectedMemberId;
+      }
+      return isDateValid && isScopeValid;
     });
 
     return {
@@ -248,7 +298,7 @@ export function Reports() {
       testimonials: filteredTestimonials,
       slips: filteredSlips
     };
-  }, [referrals, meetings, oneToOnes, guestInvitations, testimonials, thankYouSlips, selectedChapterId, currentChapterMemberIds, parsedStart, parsedEnd]);
+  }, [referrals, meetings, oneToOnes, guestInvitations, testimonials, thankYouSlips, selectedChapterId, selectedMemberId, users, parsedStart, parsedEnd]);
 
   // Aggregate stats cards
   const statsSummary = useMemo(() => {
@@ -504,7 +554,8 @@ export function Reports() {
 
   // Get active chapter name
   const currentChapterName = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN' && selectedChapterId) {
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (selectedChapterId === 'ALL' || !selectedChapterId) return 'All Chapters';
       const ch = chapters.find(c => c.id === selectedChapterId);
       return ch ? ch.chapter_name : 'Selected Chapter';
     }
@@ -758,17 +809,52 @@ export function Reports() {
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             {/* Master Admin Chapter Selector */}
-            {profile?.role === 'MASTER_ADMIN' && chapters.length > 0 && (
+            {profile?.role === 'MASTER_ADMIN' && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Audit Chapter</label>
+                <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Chapter</label>
                 <div className="relative">
                   <select
                     value={selectedChapterId}
-                    onChange={(e) => setSelectedChapterId(e.target.value)}
-                    className="bg-[#0B1220] border border-white/10 rounded-[12px] text-xs font-bold text-white px-3 py-2.5 pr-8 appearance-none focus:outline-none focus:border-[#E53935] min-w-[180px]"
+                    onChange={(e) => {
+                      const newChapterId = e.target.value;
+                      setSelectedChapterId(newChapterId);
+                      if (newChapterId !== 'ALL') {
+                        const memberBelongs = availableMemberOptions.some(u => 
+                          (u.uid === selectedMemberId || u.id === selectedMemberId) && 
+                          (u.chapter_id === newChapterId || u.chapterId === newChapterId)
+                        );
+                        if (!memberBelongs) {
+                          setSelectedMemberId('ALL');
+                        }
+                      }
+                    }}
+                    className="bg-[#0B1220] border border-white/10 rounded-[12px] text-xs font-bold text-white px-3 py-2.5 pr-8 appearance-none focus:outline-none focus:border-[#E53935] min-w-[150px]"
                   >
+                    <option value="ALL">All Chapters</option>
                     {chapters.map(c => (
                       <option key={c.id} value={c.id}>{c.chapter_name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" size={14} />
+                </div>
+              </div>
+            )}
+
+            {/* Master Admin Member Selector */}
+            {profile?.role === 'MASTER_ADMIN' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Member</label>
+                <div className="relative">
+                  <select
+                    value={selectedMemberId}
+                    onChange={(e) => setSelectedMemberId(e.target.value)}
+                    className="bg-[#0B1220] border border-white/10 rounded-[12px] text-xs font-bold text-white px-3 py-2.5 pr-8 appearance-none focus:outline-none focus:border-[#E53935] min-w-[150px]"
+                  >
+                    <option value="ALL">All Members</option>
+                    {availableMemberOptions.map(m => (
+                      <option key={m.uid || m.id} value={m.uid || m.id}>
+                        {m.name || 'Unnamed'} {m.chapterName ? `(${m.chapterName})` : ''}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" size={14} />

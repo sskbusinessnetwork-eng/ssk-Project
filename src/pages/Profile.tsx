@@ -825,6 +825,26 @@ export function Profile() {
     );
   }
 
+  if (currentUserProfile?.role === 'MASTER_ADMIN' && !isViewMode) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-6 space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
+          <Shield size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-white">Master Admin Profile</h2>
+        <p className="text-sm text-neutral-400 max-w-md">
+          Master Admin is an organizational management account and does not require a member profile or personal subscription.
+        </p>
+        <button
+          onClick={() => navigate('/admin/home')}
+          className="mt-4 px-6 h-11 bg-primary text-white font-bold rounded-xl text-xs uppercase tracking-wider hover:bg-red-700 transition-all cursor-pointer shadow-lg shadow-red-600/20"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#05070D] pb-24">
       {successMessage && (

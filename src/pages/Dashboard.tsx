@@ -149,38 +149,55 @@ export function Analytics() {
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
   const [analyticsModalCategory, setAnalyticsModalCategory] = useState<string | null>(null);
 
-  // Global Date Range Filter State
+  // Global Date Range, Chapter & Member Filter State
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [selectedChapterFilter, setSelectedChapterFilter] = useState<string>('ALL');
+  const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('ALL');
+  const [appliedChapterFilter, setAppliedChapterFilter] = useState<string>('ALL');
+  const [appliedMemberFilter, setAppliedMemberFilter] = useState<string>('ALL');
   const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [isFilterLoading, setIsFilterLoading] = useState(false);
 
+  const availableMembersForFilter = useMemo(() => {
+    let list = allUsersList.filter(u => u.role !== 'MASTER_ADMIN');
+    if (selectedChapterFilter !== 'ALL') {
+      list = list.filter(u => u.chapter_id === selectedChapterFilter || u.chapterId === selectedChapterFilter);
+    }
+    return list;
+  }, [allUsersList, selectedChapterFilter]);
+
   const handleApplyFilter = () => {
-    if (!filterStartDate || !filterEndDate) {
-      setDateError('Please select both Start Date and End Date.');
-      return;
-    }
+    let range: { start: Date; end: Date } | null = null;
+    if (filterStartDate || filterEndDate) {
+      if (!filterStartDate || !filterEndDate) {
+        setDateError('Please select both Start Date and End Date.');
+        return;
+      }
+      const start = new Date(filterStartDate + 'T00:00:00');
+      const end = new Date(filterEndDate + 'T23:59:59.999');
 
-    const start = new Date(filterStartDate + 'T00:00:00');
-    const end = new Date(filterEndDate + 'T23:59:59.999');
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        setDateError('Please enter valid dates.');
+        return;
+      }
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      setDateError('Please enter valid dates.');
-      return;
-    }
-
-    if (start.getTime() > end.getTime()) {
-      setDateError('Start Date cannot be after End Date.');
-      return;
+      if (start.getTime() > end.getTime()) {
+        setDateError('Start Date cannot be after End Date.');
+        return;
+      }
+      range = { start, end };
     }
 
     setDateError(null);
     setIsFilterLoading(true);
 
     setTimeout(() => {
-      setActiveDateRange({ start, end });
+      setActiveDateRange(range);
+      setAppliedChapterFilter(selectedChapterFilter);
+      setAppliedMemberFilter(selectedMemberFilter);
       setIsFilterLoading(false);
       setIsFilterModalOpen(false);
     }, 200);
@@ -189,6 +206,10 @@ export function Analytics() {
   const handleClearFilter = () => {
     setFilterStartDate('');
     setFilterEndDate('');
+    setSelectedChapterFilter('ALL');
+    setSelectedMemberFilter('ALL');
+    setAppliedChapterFilter('ALL');
+    setAppliedMemberFilter('ALL');
     setDateError(null);
     setActiveDateRange(null);
     setIsFilterModalOpen(false);
@@ -365,36 +386,106 @@ export function Analytics() {
     });
   }, [chapterUsers]);
 
-  // Effective dataset arrays filtered by global date range
+  // Effective dataset arrays filtered by global date range, chapter, and member
   const effectiveSlips = useMemo(() => {
-    if (!activeDateRange) return allSlips;
-    return allSlips.filter(s => isDateInRange(s.createdAt || s.created_at || s.date, activeDateRange.start, activeDateRange.end));
-  }, [allSlips, activeDateRange]);
+    let list = allSlips;
+    if (activeDateRange) {
+      list = list.filter(s => isDateInRange(s.createdAt || s.created_at || s.date, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        const chapterMemberUids = allUsersList.filter(u => u.chapter_id === appliedChapterFilter || u.chapterId === appliedChapterFilter).map(u => u.uid || u.id);
+        list = list.filter(s => s.chapter_id === appliedChapterFilter || s.chapterId === appliedChapterFilter || chapterMemberUids.includes(s.fromUserId) || chapterMemberUids.includes(s.toUserId));
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(s => s.fromUserId === appliedMemberFilter || s.toUserId === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [allSlips, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
 
   const effectiveReferrals = useMemo(() => {
-    if (!activeDateRange) return allReferrals;
-    return allReferrals.filter(r => isDateInRange(r.createdAt || r.created_at || r.date, activeDateRange.start, activeDateRange.end));
-  }, [allReferrals, activeDateRange]);
+    let list = allReferrals;
+    if (activeDateRange) {
+      list = list.filter(r => isDateInRange(r.createdAt || r.created_at || r.date, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        const chapterMemberUids = allUsersList.filter(u => u.chapter_id === appliedChapterFilter || u.chapterId === appliedChapterFilter).map(u => u.uid || u.id);
+        list = list.filter(r => r.chapter_id === appliedChapterFilter || r.chapterId === appliedChapterFilter || chapterMemberUids.includes(r.fromUserId) || chapterMemberUids.includes(r.toUserId));
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(r => r.fromUserId === appliedMemberFilter || r.toUserId === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [allReferrals, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
 
   const effectiveOneToOnes = useMemo(() => {
-    if (!activeDateRange) return oneToOnes;
-    return oneToOnes.filter(m => isDateInRange(m.createdAt || m.created_at || m.date, activeDateRange.start, activeDateRange.end));
-  }, [oneToOnes, activeDateRange]);
+    let list = oneToOnes;
+    if (activeDateRange) {
+      list = list.filter(m => isDateInRange(m.createdAt || m.created_at || m.date, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        const chapterMemberUids = allUsersList.filter(u => u.chapter_id === appliedChapterFilter || u.chapterId === appliedChapterFilter).map(u => u.uid || u.id);
+        list = list.filter(m => chapterMemberUids.includes(m.organizer_id || m.creatorId) || (m.participantIds && m.participantIds.some(pid => chapterMemberUids.includes(pid))));
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(m => (m.organizer_id || m.creatorId) === appliedMemberFilter || (m.participantIds && m.participantIds.includes(appliedMemberFilter)) || m.member_id === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [oneToOnes, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
 
   const effectiveMeetings = useMemo(() => {
-    if (!activeDateRange) return meetings;
-    return meetings.filter(m => isDateInRange(m.date || m.meeting_date || m.createdAt || m.created_at, activeDateRange.start, activeDateRange.end));
-  }, [meetings, activeDateRange]);
+    let list = meetings;
+    if (activeDateRange) {
+      list = list.filter(m => isDateInRange(m.date || m.meeting_date || m.createdAt || m.created_at, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        list = list.filter(m => m.chapter_id === appliedChapterFilter || m.chapterId === appliedChapterFilter);
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(m => (m.attendance && !!m.attendance[appliedMemberFilter]) || m.createdBy === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [meetings, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter]);
 
   const effectiveGuestInvitations = useMemo(() => {
-    if (!activeDateRange) return guestInvitations;
-    return guestInvitations.filter(g => isDateInRange(g.createdAt || g.created_at || g.date, activeDateRange.start, activeDateRange.end));
-  }, [guestInvitations, activeDateRange]);
+    let list = guestInvitations;
+    if (activeDateRange) {
+      list = list.filter(g => isDateInRange(g.createdAt || g.created_at || g.date, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        list = list.filter(g => g.chapter_id === appliedChapterFilter || g.chapterId === appliedChapterFilter);
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(g => g.createdBy === appliedMemberFilter || g.userId === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [guestInvitations, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter]);
 
   const effectiveTestimonials = useMemo(() => {
-    if (!activeDateRange) return allTestimonials;
-    return allTestimonials.filter(t => isDateInRange(t.createdAt || t.created_at || t.date, activeDateRange.start, activeDateRange.end));
-  }, [allTestimonials, activeDateRange]);
+    let list = allTestimonials;
+    if (activeDateRange) {
+      list = list.filter(t => isDateInRange(t.createdAt || t.created_at || t.date, activeDateRange.start, activeDateRange.end));
+    }
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        const chapterMemberUids = allUsersList.filter(u => u.chapter_id === appliedChapterFilter || u.chapterId === appliedChapterFilter).map(u => u.uid || u.id);
+        list = list.filter(t => t.chapter_id === appliedChapterFilter || t.chapterId === appliedChapterFilter || chapterMemberUids.includes(t.authorMemberId) || chapterMemberUids.includes(t.recipientMemberId));
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(t => t.authorMemberId === appliedMemberFilter || t.recipientMemberId === appliedMemberFilter);
+      }
+    }
+    return list;
+  }, [allTestimonials, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
 
   const chapterSlips = useMemo(() => {
     return effectiveSlips.filter(slip => 
@@ -1979,42 +2070,44 @@ export function Analytics() {
             </p>
             
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
-              <motion.button 
-                onClick={handleGrowScoreClick}
-                onMouseEnter={() => setIsRocketHovered(true)}
-                onMouseLeave={() => setIsRocketHovered(false)}
-                whileHover={{ y: -4, scale: 1.03, boxShadow: "0 0 20px rgba(229,57,53,0.4)" }}
-                whileTap={{ scale: 0.97 }}
-                className="w-full sm:w-auto bg-[#E53935] hover:bg-[#D32F2F] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 transition-all duration-300"
-              >
-                <motion.div
-                  animate={isRocketHovered ? { y: -3, x: 3, scale: 1.1 } : { y: 0, x: 0, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                >
-                  <Rocket size={16} />
-                </motion.div>
-                Grow Your Score
-              </motion.button>
-              
-              <Link to="/member/my-report" className="w-full sm:w-auto">
+            {profile?.role !== 'MASTER_ADMIN' && (
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
                 <motion.button 
-                  onMouseEnter={() => setIsReportHovered(true)}
-                  onMouseLeave={() => setIsReportHovered(false)}
-                  whileHover={{ y: -4, scale: 1.03, bg: "rgba(31, 41, 55, 0.9)" }}
+                  onClick={handleGrowScoreClick}
+                  onMouseEnter={() => setIsRocketHovered(true)}
+                  onMouseLeave={() => setIsRocketHovered(false)}
+                  whileHover={{ y: -4, scale: 1.03, boxShadow: "0 0 20px rgba(229,57,53,0.4)" }}
                   whileTap={{ scale: 0.97 }}
-                  className="w-full bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300 w-full"
+                  className="w-full sm:w-auto bg-[#E53935] hover:bg-[#D32F2F] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 transition-all duration-300"
                 >
                   <motion.div
-                    animate={isReportHovered ? { rotate: [0, 10, -10, 0], scale: 1.1 } : { rotate: 0, scale: 1 }}
-                    transition={{ duration: 0.4 }}
+                    animate={isRocketHovered ? { y: -3, x: 3, scale: 1.1 } : { y: 0, x: 0, scale: 1 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 15 }}
                   >
-                    <Activity size={16} />
+                    <Rocket size={16} />
                   </motion.div>
-                  My Report
+                  Grow Your Score
                 </motion.button>
-              </Link>
-            </div>
+                
+                <Link to="/member/my-report" className="w-full sm:w-auto">
+                  <motion.button 
+                    onMouseEnter={() => setIsReportHovered(true)}
+                    onMouseLeave={() => setIsReportHovered(false)}
+                    whileHover={{ y: -4, scale: 1.03, bg: "rgba(31, 41, 55, 0.9)" }}
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300 w-full"
+                  >
+                    <motion.div
+                      animate={isReportHovered ? { rotate: [0, 10, -10, 0], scale: 1.1 } : { rotate: 0, scale: 1 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <Activity size={16} />
+                    </motion.div>
+                    My Report
+                  </motion.button>
+                </Link>
+              </div>
+            )}
 
             {/* Growth Score Analytics Metadata Badge */}
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#0B1220]/80 border border-white/10 rounded-xl px-3.5 py-1.5 shadow-md w-fit">
@@ -2174,10 +2267,12 @@ export function Analytics() {
             </div>
 
             <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
-              {activeDateRange && (
+              {(activeDateRange || appliedChapterFilter !== 'ALL' || appliedMemberFilter !== 'ALL') && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold">
                   <span>
-                    {filterStartDate} to {filterEndDate}
+                    {activeDateRange ? `${filterStartDate} to ${filterEndDate}` : 'Filtered'}
+                    {appliedChapterFilter !== 'ALL' && ` • Chapter: ${allChapters.find(c => c.id === appliedChapterFilter)?.chapter_name || appliedChapterFilter}`}
+                    {appliedMemberFilter !== 'ALL' && ` • Member: ${allUsersList.find(u => u.uid === appliedMemberFilter || u.id === appliedMemberFilter)?.name || appliedMemberFilter}`}
                   </span>
                   <button
                     onClick={handleClearFilter}
@@ -2193,14 +2288,14 @@ export function Analytics() {
                 onClick={() => setIsFilterModalOpen(true)}
                 className={cn(
                   "px-4 h-10 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer border shadow-sm",
-                  activeDateRange
+                  (activeDateRange || appliedChapterFilter !== 'ALL' || appliedMemberFilter !== 'ALL')
                     ? "bg-red-600 text-white border-red-500 shadow-red-600/20"
                     : "bg-[#111827] text-white hover:bg-[#1F2937] border-white/10"
                 )}
               >
-                <Filter size={15} className={activeDateRange ? "text-white" : "text-red-400"} />
+                <Filter size={15} className={(activeDateRange || appliedChapterFilter !== 'ALL' || appliedMemberFilter !== 'ALL') ? "text-white" : "text-red-400"} />
                 Filter
-                {activeDateRange && (
+                {(activeDateRange || appliedChapterFilter !== 'ALL' || appliedMemberFilter !== 'ALL') && (
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 )}
               </button>
@@ -2303,22 +2398,74 @@ export function Analytics() {
         />
       )}
 
-      {/* Global Date Filter Modal */}
+      {/* Global Filter Modal */}
       <Modal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        title="Global Date Range Filter"
+        title="Organization Analytics Filter"
         maxWidth="max-w-md"
       >
         <div className="flex flex-col gap-5 p-1">
           <p className="text-xs font-semibold text-[#9CA3AF]">
-            Select a date range to filter all dashboard metrics, analytics, and activities.
+            Filter organization analytics by date range, chapter, and member.
           </p>
 
           {dateError && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
               {dateError}
+            </div>
+          )}
+
+          {profile?.role === 'MASTER_ADMIN' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-[#D1D5DB] uppercase tracking-wider">
+                  Chapter
+                </label>
+                <select
+                  value={selectedChapterFilter}
+                  onChange={(e) => {
+                    const newChap = e.target.value;
+                    setSelectedChapterFilter(newChap);
+                    if (newChap !== 'ALL') {
+                      const memberBelongs = availableMembersForFilter.some(u => 
+                        (u.uid === selectedMemberFilter || u.id === selectedMemberFilter) && 
+                        (u.chapter_id === newChap || u.chapterId === newChap)
+                      );
+                      if (!memberBelongs) {
+                        setSelectedMemberFilter('ALL');
+                      }
+                    }
+                  }}
+                  className="w-full h-11 px-3 rounded-xl bg-[#0F172A] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-[#E53935] transition-colors"
+                >
+                  <option value="ALL">All Chapters</option>
+                  {allChapters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.chapter_name || c.name || `Chapter ${c.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-[#D1D5DB] uppercase tracking-wider">
+                  Member
+                </label>
+                <select
+                  value={selectedMemberFilter}
+                  onChange={(e) => setSelectedMemberFilter(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl bg-[#0F172A] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-[#E53935] transition-colors"
+                >
+                  <option value="ALL">All Members</option>
+                  {availableMembersForFilter.map((u) => (
+                    <option key={u.uid || u.id} value={u.uid || u.id}>
+                      {u.name || 'Unnamed Member'} {u.chapterName ? `(${u.chapterName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

@@ -178,20 +178,36 @@ export function Layout() {
               </Link>
             </div>
 
-            <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0">
-              <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0 border border-[#FFE4E6]/20 sm:border-2">
-                {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'SV'}
+            {profile?.role === 'MASTER_ADMIN' ? (
+              <div className="flex items-center gap-2 sm:gap-3 pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0">
+                <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-amber-500 flex items-center justify-center text-black font-bold text-[10px] sm:text-sm shrink-0 border border-amber-400/20 sm:border-2">
+                  {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'MA'}
+                </div>
+                <div className="hidden lg:flex flex-col text-left mr-2">
+                  <span className="text-[14px] font-bold text-white leading-tight">
+                    {profile?.name || 'Master Admin'}
+                  </span>
+                  <span className="text-[12px] text-amber-400 font-bold">
+                    Master Admin
+                  </span>
+                </div>
               </div>
-              <div className="hidden lg:flex flex-col text-left mr-2">
-                <span className="text-[14px] font-bold text-white leading-tight">
-                  {profile?.name || 'Sudarshan Vagale'}
-                </span>
-                <span className="text-[12px] text-[#9CA3AF] font-medium">
-                  Platinum Member
-                </span>
-              </div>
-              <ChevronDown size={16} className="text-[#9CA3AF] hidden lg:block" />
-            </Link>
+            ) : (
+              <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0">
+                <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0 border border-[#FFE4E6]/20 sm:border-2">
+                  {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'SV'}
+                </div>
+                <div className="hidden lg:flex flex-col text-left mr-2">
+                  <span className="text-[14px] font-bold text-white leading-tight">
+                    {profile?.name || 'Sudarshan Vagale'}
+                  </span>
+                  <span className="text-[12px] text-[#9CA3AF] font-medium">
+                    Platinum Member
+                  </span>
+                </div>
+                <ChevronDown size={16} className="text-[#9CA3AF] hidden lg:block" />
+              </Link>
+            )}
           </div>
         </header>
 
@@ -286,18 +302,32 @@ export function Layout() {
               </div>
               
               <div className="overflow-y-auto px-4 pb-8 custom-scrollbar">
-                <Link to="/profile" className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5 hover:bg-[#374151] transition-colors active:bg-[#4B5563]">
-                  <div className="flex items-center gap-4">
-                    <Avatar src={profile?.photoURL} name={profile?.name} size="w-12 h-12" className="border border-white/10 shadow-sm" fallbackClassName="text-lg" />
-                    <div className="flex flex-col">
-                      <span className="font-bold text-white">{profile?.name || 'User'}</span>
-                      <span className="text-[12px] font-bold text-primary flex items-center gap-1">
-                        <Crown size={12} /> Platinum Member
-                      </span>
+                {profile?.role === 'MASTER_ADMIN' ? (
+                  <div className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5">
+                    <div className="flex items-center gap-4">
+                      <Avatar src={profile?.photoURL} name={profile?.name} size="w-12 h-12" className="border border-white/10 shadow-sm" fallbackClassName="text-lg" />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-white">{profile?.name || 'Master Admin'}</span>
+                        <span className="text-[12px] font-bold text-amber-400 flex items-center gap-1">
+                          <Crown size={12} /> Master Admin
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <ChevronRight size={18} className="text-[#9CA3AF]" />
-                </Link>
+                ) : (
+                  <Link to="/profile" className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5 hover:bg-[#374151] transition-colors active:bg-[#4B5563]">
+                    <div className="flex items-center gap-4">
+                      <Avatar src={profile?.photoURL} name={profile?.name} size="w-12 h-12" className="border border-white/10 shadow-sm" fallbackClassName="text-lg" />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-white">{profile?.name || 'User'}</span>
+                        <span className="text-[12px] font-bold text-primary flex items-center gap-1">
+                          <Crown size={12} /> Platinum Member
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} className="text-[#9CA3AF]" />
+                  </Link>
+                )}
 
                 <div className="flex flex-col gap-1 mt-4">
                   <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider px-2 mb-1">Navigation</span>
