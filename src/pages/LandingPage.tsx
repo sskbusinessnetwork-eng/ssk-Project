@@ -59,7 +59,7 @@ export function LandingPage() {
     meetingTime: '',
     meetingVenue: ''
   });
-  const [chapterAdmins, setChapterAdmins] = useState<UserProfile[]>([]);
+  const [chaptersList, setChaptersList] = useState<{ chapterId: string; chapterName: string; adminId: string; adminName: string }[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -78,11 +78,59 @@ export function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const fetchAdmins = async () => {
-      const admins = await databaseService.list<UserProfile>('users', [where('position', '==', 'chapter_admin')]);
-      setChapterAdmins(admins);
+    const fetchChaptersAndAdmins = async () => {
+      try {
+        const { data: chaptersData } = await supabase.from('chapters').select('*');
+        const { data: adminUsers } = await supabase.from('users').select('*').or('role.eq.CHAPTER_ADMIN,position.eq.chapter_admin');
+
+        const list: { chapterId: string; chapterName: string; adminId: string; adminName: string }[] = [];
+        const addedChapterIds = new Set<string>();
+
+        if (chaptersData) {
+          chaptersData.forEach((ch: any) => {
+            const admin = adminUsers?.find((u: any) => u.id === ch.chapter_admin_id || u.chapter_id === ch.id);
+            const rawName = ch.chapter_name || 'Chapter';
+            const formattedName = rawName.toLowerCase().includes('chapter')
+              ? rawName.charAt(0).toUpperCase() + rawName.slice(1)
+              : `${rawName.charAt(0).toUpperCase() + rawName.slice(1)} Chapter`;
+
+            list.push({
+              chapterId: ch.id,
+              chapterName: formattedName,
+              adminId: admin ? admin.id : (ch.chapter_admin_id || ''),
+              adminName: admin ? (admin.name || admin.displayName || 'Admin') : 'Admin'
+            });
+            addedChapterIds.add(ch.id);
+          });
+        }
+
+        if (adminUsers) {
+          adminUsers.forEach((admin: any) => {
+            const adminChapterId = admin.chapter_id;
+            if (adminChapterId && !addedChapterIds.has(adminChapterId)) {
+              const rawName = admin.chapterName || admin.chapter_name || admin.name || 'Chapter';
+              const formattedName = rawName.toLowerCase().includes('chapter')
+                ? rawName.charAt(0).toUpperCase() + rawName.slice(1)
+                : `${rawName.charAt(0).toUpperCase() + rawName.slice(1)} Chapter`;
+
+              list.push({
+                chapterId: adminChapterId,
+                chapterName: formattedName,
+                adminId: admin.id,
+                adminName: admin.name || 'Admin'
+              });
+              addedChapterIds.add(adminChapterId);
+            }
+          });
+        }
+
+        setChaptersList(list);
+      } catch (err) {
+        console.error('Error fetching chapters:', err);
+      }
     };
-    fetchAdmins();
+
+    fetchChaptersAndAdmins();
   }, []);
 
   useEffect(() => {
@@ -92,25 +140,32 @@ export function LandingPage() {
       return;
     }
 
+    const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
+    if (!selectedChapter) {
+      setSelectedMeeting(null);
+      setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      return;
+    }
+
     const fetchMeeting = async () => {
       try {
-        const now = new Date().toISOString();
-        const meetings = await databaseService.list<any>('meetings', [
-          where('adminId', '==', formData.adminId),
-          where('isCompleted', '==', false),
-          where('date', '>=', now),
-          orderBy('date', 'asc'),
-          limit(1)
-        ]);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: meetingsData } = await supabase
+          .from('meetings')
+          .select('*')
+          .or(`chapter_id.eq.${selectedChapter.chapterId},admin_id.eq.${selectedChapter.adminId}`)
+          .gte('date', todayStr)
+          .order('date', { ascending: true });
 
-        if (meetings.length > 0) {
-          const meeting = meetings[0];
-          setSelectedMeeting(meeting);
+        const upcoming = meetingsData?.find(m => m.status !== 'COMPLETED' && m.is_completed !== 'true' && m.isCompleted !== true);
+
+        if (upcoming) {
+          setSelectedMeeting(upcoming);
           setFormData(prev => ({
             ...prev,
-            meetingDate: meeting.date,
-            meetingTime: meeting.time || '',
-            meetingVenue: meeting.location || ''
+            meetingDate: upcoming.date,
+            meetingTime: upcoming.time || '',
+            meetingVenue: upcoming.venue || upcoming.location || ''
           }));
         } else {
           setSelectedMeeting(null);
@@ -124,7 +179,7 @@ export function LandingPage() {
     };
 
     fetchMeeting();
-  }, [formData.adminId]);
+  }, [formData.adminId, chaptersList]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -139,28 +194,56 @@ export function LandingPage() {
     setIsSubmitting(true);
     setFormError(null);
     try {
-      const guestId = await databaseService.create('guest_registrations', {
-        ...formData,
-        createdAt: new Date().toISOString(),
-        status: 'PENDING',
-        isWhatsAppShared: false,
-        isCalled: false
-      });
-      
+      if (!formData.adminId) {
+        throw new Error('Please select a Chapter.');
+      }
+
+      const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
+      const chapterId = selectedChapter?.chapterId || formData.adminId;
+      const chapterAdminId = selectedChapter?.adminId || formData.adminId;
+      const chapterName = selectedChapter?.chapterName || 'Chapter';
+
+      const guestPayload = {
+        guest_name: formData.fullName.trim(),
+        guest_phone: formData.phone.trim(),
+        guest_whatsapp: formData.phone.trim(),
+        guest_business: formData.businessName.trim(),
+        business_category: formData.businessCategory,
+        invited_by: chapterAdminId,
+        invited_by_chapter: chapterId,
+        chapter_id: chapterId,
+        created_by: chapterAdminId || null,
+        status: 'Pending',
+        meeting_id: selectedMeeting?.id || null,
+        meeting_title: selectedMeeting?.title || `${chapterName} Meeting`,
+        meeting_date: selectedMeeting?.date || formData.meetingDate || null,
+        meeting_time: selectedMeeting?.time || formData.meetingTime || null,
+        meeting_venue: selectedMeeting?.venue || selectedMeeting?.location || formData.meetingVenue || null,
+        created_at: new Date().toISOString()
+      };
+
+      const { data: invResult, error: invError } = await supabase
+        .from('guest_invitations')
+        .insert([guestPayload])
+        .select();
+
+      if (invError) {
+        console.error('Error saving guest invitation:', invError);
+        throw new Error(invError.message || 'Failed to submit guest registration.');
+      }
+
       // Send notification to the selected Chapter Admin
-      if (formData.adminId) {
-        const selectedAdmin = chapterAdmins.find(a => a.uid === formData.adminId);
-        const chapterName = selectedAdmin?.chapterName || 'your chapter';
-        
-        await databaseService.create('notifications', {
-          userId: formData.adminId,
-          role: 'CHAPTER_ADMIN',
-          type: 'GUEST_REGISTRATION',
-          message: `New Guest Registration received. Guest: ${formData.fullName}, Contact: ${formData.phone}, Chapter: ${chapterName}`,
-          read: false,
-          relatedUserId: guestId, // Store guest ID to highlight it
-          createdAt: new Date().toISOString()
-        });
+      if (chapterAdminId) {
+        try {
+          await supabase.from('notifications').insert([{
+            user_id: chapterAdminId,
+            message: `New Guest Registration received for ${chapterName}. Guest: ${formData.fullName.trim()}, Contact: ${formData.phone.trim()}|||{"role":"CHAPTER_ADMIN","type":"GUEST_REGISTRATION"}`,
+            type: 'GUEST_REGISTRATION',
+            created_at: new Date().toISOString()
+          }]);
+        } catch (e) {
+          console.warn('Could not insert notification:', e);
+        }
       }
 
       setFormSuccess(true);
@@ -830,8 +913,8 @@ export function LandingPage() {
                     <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Preferred Chapter Name</label>
                     <select required value={formData.adminId} onChange={e => setFormData({...formData, adminId: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040]">
                       <option value="">Select Chapter</option>
-                      {chapterAdmins.map(admin => (
-                        <option key={admin.uid} value={admin.uid}>{admin.chapterName || admin.name || admin.displayName}</option>
+                      {chaptersList.map(chap => (
+                        <option key={chap.chapterId} value={chap.chapterId}>{chap.chapterName}</option>
                       ))}
                     </select>
                   </div>
