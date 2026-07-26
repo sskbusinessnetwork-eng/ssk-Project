@@ -7,6 +7,7 @@ interface BrandLogoProps {
   imgClassName?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   showText?: boolean;
+  hideTextOnMobile?: boolean;
   lightText?: boolean;
   subtitle?: string;
   subtitleClassName?: string;
@@ -19,6 +20,7 @@ export function BrandLogo({
   imgClassName,
   size = 'md', 
   showText = false, 
+  hideTextOnMobile = false,
   lightText = true,
   subtitle,
   subtitleClassName,
@@ -53,7 +55,7 @@ export function BrandLogo({
       </div>
 
       {showText && (
-        <div className="flex flex-col min-w-0">
+        <div className={cn("flex flex-col min-w-0", hideTextOnMobile && "hidden sm:flex")}>
           <span className={cn(
             "font-black tracking-wider leading-none uppercase truncate",
             size === 'xs' ? "text-[11px]" :

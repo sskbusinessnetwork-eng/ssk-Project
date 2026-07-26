@@ -137,7 +137,7 @@ export function ChapterAdminCompanionView({
     { icon: Calendar, label: 'Start Meeting', desc: 'Organize logs', path: '/meetings', color: 'text-red-500', bg: 'bg-red-500/10' },
     { icon: CheckCircle2, label: 'Attendance', desc: 'Verify rosters', path: '/meetings', color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { icon: UserPlus, label: 'Add Visitor', desc: 'Onboard guests', path: '/guests', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { icon: Users, label: 'Manage Roster', desc: 'Moderate members', path: '/members', color: 'text-orange-400', bg: 'bg-orange-500/10' }
+    { icon: Users, label: 'Directory', desc: 'Chapter roster', path: '/directory', color: 'text-orange-400', bg: 'bg-orange-500/10' }
   ];
 
   return (

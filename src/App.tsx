@@ -58,7 +58,7 @@ export default function App() {
               <Route path="/member/my-report" element={<ProtectedRoute allowedRoles={['MEMBER', 'MASTER_ADMIN', 'CHAPTER_ADMIN']}><MyReport /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Analytics /></ProtectedRoute>} />
               <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />
-              <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Members /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Members /></ProtectedRoute>} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/refer" element={<Referrals />} />
               <Route path="/thank-you-slips" element={<ThankYouSlips />} />
@@ -74,7 +74,7 @@ export default function App() {
               <Route path="/directory" element={<Connections />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/categories" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Categories /></ProtectedRoute>} />
-              <Route path="/subscriptions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><ManageSubscriptions /></ProtectedRoute>} />
+              <Route path="/subscriptions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageSubscriptions /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Settings /></ProtectedRoute>} />
               <Route path="/profile" element={<Profile />} />
