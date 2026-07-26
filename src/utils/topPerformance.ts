@@ -1,7 +1,7 @@
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
 import { calculateMemberGrowthScoreData } from './growthScore';
-import { where } from '../lib/database';
 
 export interface TopPerformanceSettings {
   showOnLandingPage: boolean;
@@ -19,8 +19,6 @@ export interface TopMemberPublicItem {
   totalEarned?: number;
 }
 
-const STORAGE_KEY = 'top_performance_settings';
-
 export async function getTopPerformanceSettings(): Promise<TopPerformanceSettings> {
   const defaultSettings: TopPerformanceSettings = {
     showOnLandingPage: true,
@@ -29,90 +27,109 @@ export async function getTopPerformanceSettings(): Promise<TopPerformanceSetting
   };
 
   try {
-    const docData = await databaseService.get<any>('users', 'global_top_performance_settings');
-    if (docData && docData.topPerformanceSettings) {
-      const parsed = typeof docData.topPerformanceSettings === 'string'
-        ? JSON.parse(docData.topPerformanceSettings)
-        : docData.topPerformanceSettings;
+    const { data, error } = await supabase
+      .from('assessments')
+      .select('details')
+      .eq('title', 'global_top_performance_settings')
+      .maybeSingle();
+
+    if (data && data.details) {
+      const details = typeof data.details === 'string' ? JSON.parse(data.details) : data.details;
       return {
-        showOnLandingPage: parsed.showOnLandingPage ?? true,
-        startDate: parsed.startDate || null,
-        endDate: parsed.endDate || null,
+        showOnLandingPage: details.showOnLandingPage ?? true,
+        startDate: details.startDate || null,
+        endDate: details.endDate || null,
       };
     }
   } catch (e) {
-    console.warn('Could not fetch top performance settings from database:', e);
+    console.warn('Could not fetch global top performance settings:', e);
   }
-
-  try {
-    const local = localStorage.getItem(STORAGE_KEY);
-    if (local) {
-      const parsed = JSON.parse(local);
-      return {
-        showOnLandingPage: parsed.showOnLandingPage ?? true,
-        startDate: parsed.startDate || null,
-        endDate: parsed.endDate || null,
-      };
-    }
-  } catch (e) {}
 
   return defaultSettings;
 }
 
 export async function saveTopPerformanceSettings(settings: TopPerformanceSettings): Promise<void> {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch (e) {}
+  const payload = {
+    showOnLandingPage: settings.showOnLandingPage,
+    startDate: settings.startDate || null,
+    endDate: settings.endDate || null,
+  };
 
   try {
-    await databaseService.create(
-      'users',
-      { topPerformanceSettings: JSON.stringify(settings) },
-      'global_top_performance_settings'
-    );
+    const { data: existing } = await supabase
+      .from('assessments')
+      .select('id')
+      .eq('title', 'global_top_performance_settings')
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('assessments')
+        .update({
+          details: payload,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('assessments')
+        .insert([{
+          title: 'global_top_performance_settings',
+          details: payload
+        }]);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('global_top_performance_settings_updated', { detail: payload }));
+    }
   } catch (e) {
-    console.error('Error saving top performance settings to database:', e);
+    console.error('Error saving global top performance settings:', e);
   }
 }
 
 export function subscribeTopPerformanceSettings(callback: (settings: TopPerformanceSettings) => void): () => void {
-  return databaseService.subscribe<any>(
-    'users',
-    [where('id', '==', 'global_top_performance_settings')],
-    (docs) => {
-      const defaultSettings: TopPerformanceSettings = {
-        showOnLandingPage: true,
-        startDate: null,
-        endDate: null,
-      };
-      
-      const docData = docs.length > 0 ? docs[0] : null;
-      if (docData && docData.topPerformanceSettings) {
-        const parsed = typeof docData.topPerformanceSettings === 'string'
-          ? JSON.parse(docData.topPerformanceSettings)
-          : docData.topPerformanceSettings;
-        callback({
-          showOnLandingPage: parsed.showOnLandingPage ?? true,
-          startDate: parsed.startDate || null,
-          endDate: parsed.endDate || null,
-        });
-      } else {
-         try {
-           const local = localStorage.getItem(STORAGE_KEY);
-           if (local) {
-             const parsed = JSON.parse(local);
-             callback({
-                showOnLandingPage: parsed.showOnLandingPage ?? true,
-                startDate: parsed.startDate || null,
-                endDate: parsed.endDate || null,
-             });
-             return;
-           }
-         } catch(e) {}
-         callback(defaultSettings);
+  // Fetch initial settings from Supabase
+  getTopPerformanceSettings().then(callback);
+
+  // Realtime postgres changes channel
+  const channel = supabase
+    .channel('realtime_global_top_performance_settings')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'assessments',
+        filter: 'title=eq.global_top_performance_settings',
+      },
+      async () => {
+        const fresh = await getTopPerformanceSettings();
+        callback(fresh);
       }
+    )
+    .subscribe();
+
+  // Local window event listener for same-tab updates
+  const handleLocalUpdate = (e: any) => {
+    if (e.detail) {
+      callback({
+        showOnLandingPage: e.detail.showOnLandingPage ?? true,
+        startDate: e.detail.startDate || null,
+        endDate: e.detail.endDate || null,
+      });
     }
-  );
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('global_top_performance_settings_updated', handleLocalUpdate);
+  }
+
+  return () => {
+    supabase.removeChannel(channel);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('global_top_performance_settings_updated', handleLocalUpdate);
+    }
+  };
 }
 
 export async function fetchTopPerformingMembers(customSettings?: TopPerformanceSettings): Promise<TopMemberPublicItem[]> {

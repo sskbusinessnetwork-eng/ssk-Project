@@ -99,7 +99,7 @@ export function Layout() {
   const userRole = profile?.role || 'MEMBER';
   const isMasterAdmin = userRole === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.position === 'chapter_admin' || userRole === 'CHAPTER_ADMIN';
-  const canAccessSettings = isMasterAdmin || isChapterAdmin;
+  const canAccessSettings = isMasterAdmin;
 
   const mobileNavItems: { icon: any; label: string; path?: string; isAction?: boolean; action?: () => void }[] = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },

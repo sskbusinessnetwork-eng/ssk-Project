@@ -76,7 +76,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
   const userRole = profile?.role || 'MEMBER';
   const isMasterAdmin = userRole === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.position === 'chapter_admin' || userRole === 'CHAPTER_ADMIN';
-  const canAccessSettings = isMasterAdmin || isChapterAdmin;
+  const canAccessSettings = isMasterAdmin;
 
   const visibleMenuItems = menuItems.filter(item => {
     if (isMasterAdmin) {
