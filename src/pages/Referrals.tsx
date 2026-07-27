@@ -765,6 +765,11 @@ export function Referrals() {
 
       // Requirement 6: Close modal, show success message, refresh list automatically
       setIsModalOpen(false);
+      if (searchParams.has('to')) {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('to');
+        setSearchParams(newParams, { replace: true });
+      }
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
       setSuccessMessage("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 4000);
@@ -1402,7 +1407,14 @@ export function Referrals() {
       {/* Pass Referral Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          if (searchParams.has('to')) {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('to');
+            setSearchParams(newParams, { replace: true });
+          }
+        }}
         title="Pass a New Referral"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -1450,12 +1462,13 @@ export function Referrals() {
             <select
               id="referral-toUserId"
               required
+              disabled={!!searchParams.get('to')}
               value={formData.toUserId}
               onChange={(e) => {
                 const selectedMemberId = e.target.value;
                 setFormData({ ...formData, toUserId: selectedMemberId });
               }}
-              className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium"
+              className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium disabled:opacity-75 disabled:cursor-not-allowed"
             >
               <option value="" className="bg-[#111827] text-white">Choose a member...</option>
               {filteredMembers.map((m) => {

@@ -108,45 +108,42 @@ export function Login() {
         const sPwd = String(storedPassword).trim();
         const inputPwd = password.trim();
         if (sPwd === inputPwd) return true;
-        if (sPwd.startsWith('$2')) {
-          try {
-            return bcrypt.compareSync(inputPwd, sPwd);
-          } catch (err) {
-            console.warn("bcrypt comparison failed:", err);
-          }
+        try {
+          if (bcrypt.compareSync(inputPwd, sPwd)) return true;
+        } catch (err) {
+          // Ignore compare error if not a valid hash
         }
         return false;
       };
 
       // 1. Check Master Admins first
-      let masterAdminMatch: any = null;
+      const masterAdminCandidates: any[] = [];
 
-      const { data: masterAdminsByNum } = await supabase
+      const { data: maByNum } = await supabase
         .from('master_admins')
         .select('*')
         .in('phone_number', phoneVariants);
+      if (maByNum) masterAdminCandidates.push(...maByNum);
 
-      if (masterAdminsByNum && masterAdminsByNum.length > 0) {
-        masterAdminMatch = masterAdminsByNum.find(ma => matchesPassword(ma.password)) || masterAdminsByNum[0];
+      const { data: maByPhone } = await supabase
+        .from('master_admins')
+        .select('*')
+        .in('phone', phoneVariants);
+      if (maByPhone) masterAdminCandidates.push(...maByPhone);
+
+      const { data: allMa } = await supabase.from('master_admins').select('*');
+      if (allMa) {
+        const maMatched = allMa.filter(ma => {
+          const p = String(ma.phone_number || ma.phone || '').replace(/\D/g, '');
+          return last10Digits.length === 10 && p.slice(-10) === last10Digits;
+        });
+        masterAdminCandidates.push(...maMatched);
       }
 
-      if (!masterAdminMatch) {
-        const { data: masterAdminsByPhone } = await supabase
-          .from('master_admins')
-          .select('*')
-          .in('phone', phoneVariants);
-
-        if (masterAdminsByPhone && masterAdminsByPhone.length > 0) {
-          masterAdminMatch = masterAdminsByPhone.find(ma => matchesPassword(ma.password)) || masterAdminsByPhone[0];
-        }
-      }
+      const masterAdminMatch = masterAdminCandidates.find(ma => matchesPassword(ma.password));
 
       if (masterAdminMatch) {
         const masterAdmin = masterAdminMatch;
-        const isMasterMatch = matchesPassword(masterAdmin.password);
-        if (!isMasterMatch) {
-          throw new Error('Invalid phone number or password.');
-        }
 
         const maStatus = (masterAdmin.status || '').trim().toUpperCase();
         if (maStatus === 'DISABLED' || masterAdmin.disabled === true) {
@@ -173,49 +170,49 @@ export function Login() {
         return;
       }
 
-      // 2. Check regular users in Supabase by 'phone' or 'phone_number'
-      let userMatch: any = null;
+      // 2. Check regular users
+      const userCandidates: any[] = [];
 
       const { data: usersByPhone } = await supabase
         .from('users')
         .select('*')
         .in('phone', phoneVariants);
+      if (usersByPhone) userCandidates.push(...usersByPhone);
 
-      if (usersByPhone && usersByPhone.length > 0) {
-        userMatch = usersByPhone.find(u => matchesPassword(u.password)) || usersByPhone[0];
+      const { data: usersByPhoneNumber } = await supabase
+        .from('users')
+        .select('*')
+        .in('phone_number', phoneVariants);
+      if (usersByPhoneNumber) userCandidates.push(...usersByPhoneNumber);
+
+      const { data: allUsers } = await supabase.from('users').select('*');
+      if (allUsers) {
+        const matchedAll = allUsers.filter(u => {
+          const p = String(u.phone || u.phone_number || (u as any).phoneNumber || '').replace(/\D/g, '');
+          return last10Digits.length === 10 && p.slice(-10) === last10Digits;
+        });
+        userCandidates.push(...matchedAll);
       }
 
-      if (!userMatch) {
-        const { data: usersByPhoneNumber } = await supabase
-          .from('users')
-          .select('*')
-          .in('phone_number', phoneVariants);
-
-        if (usersByPhoneNumber && usersByPhoneNumber.length > 0) {
-          userMatch = usersByPhoneNumber.find(u => matchesPassword(u.password)) || usersByPhoneNumber[0];
-        }
+      try {
+        const allDbUsers = await databaseService.list<UserProfile>('users');
+        const matchedDb = allDbUsers.filter(u => {
+          const p = String(u.phone || (u as any).phoneNumber || (u as any).phone_number || '').replace(/\D/g, '');
+          return last10Digits.length === 10 && p.slice(-10) === last10Digits;
+        });
+        userCandidates.push(...matchedDb);
+      } catch (e) {
+        console.warn("Database service lookup fallback failed:", e);
       }
 
-      // 3. Fallback check in databaseService (Firestore / Local DB)
-      if (!userMatch) {
-        try {
-          const allDbUsers = await databaseService.list<UserProfile>('users');
-          userMatch = allDbUsers.find(u => {
-            const uPhone = String(u.phone || (u as any).phoneNumber || (u as any).phone_number || '').trim();
-            const uClean = uPhone.replace(/\D/g, '').slice(-10);
-            return last10Digits.length === 10 && uClean === last10Digits;
-          });
-        } catch (e) {
-          console.warn("Database service lookup fallback failed:", e);
-        }
-      }
+      const uniqueUserCandidates = Array.from(
+        new Map(userCandidates.filter(u => u && (u.id || u.uid)).map(u => [u.id || u.uid, u])).values()
+      );
+
+      const userMatch = uniqueUserCandidates.find(u => matchesPassword(u.password));
 
       if (userMatch) {
         const user = userMatch;
-        const isUserMatch = matchesPassword(user.password);
-        if (!isUserMatch) {
-          throw new Error('Invalid phone number or password.');
-        }
 
         const rawAccountStatus = (user.account_status || user.accountStatus || '').trim().toUpperCase();
         const rawStatus = (user.status || '').trim().toUpperCase();
