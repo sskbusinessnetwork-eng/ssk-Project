@@ -9,7 +9,10 @@ import {
   AlertCircle,
   Share2,
   Users,
-  Building2
+  Building2,
+  FileText,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
@@ -19,6 +22,7 @@ import { format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { notificationService } from '../services/notificationService';
+import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { getCleanFullName } from '../utils/authUtils';
 
@@ -77,6 +81,14 @@ export function Referrals() {
     notes: ''
   });
 
+  // Master Admin All Referral Report Filters
+  const [chaptersList, setChaptersList] = useState<{ id: string; name: string }[]>([]);
+  const [masterStartDate, setMasterStartDate] = useState('');
+  const [masterEndDate, setMasterEndDate] = useState('');
+  const [masterChapterFilter, setMasterChapterFilter] = useState('ALL');
+  const [masterMemberFilter, setMasterMemberFilter] = useState('ALL');
+  const [masterStatusFilter, setMasterStatusFilter] = useState('ALL');
+
   // Form state
   const [formData, setFormData] = useState({
     toUserId: '',
@@ -91,12 +103,22 @@ export function Referrals() {
     if (toUserId) {
       setFormData(prev => ({ ...prev, toUserId }));
       setIsModalOpen(true);
+      setMemberFilter('all');
     }
     const tab = searchParams.get('tab');
     if (tab === 'passed' || tab === 'received') {
       setFilter(tab);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (formData.toUserId && allMembers.length > 0) {
+      const match = allMembers.find(m => String(m.id) === String(formData.toUserId) || String(m.uid) === String(formData.toUserId));
+      if (match && formData.toUserId !== match.id) {
+        setFormData(prev => ({ ...prev, toUserId: match.id }));
+      }
+    }
+  }, [allMembers, formData.toUserId]);
 
   useEffect(() => {
     const updateId = searchParams.get('update');
@@ -125,14 +147,7 @@ export function Referrals() {
     try {
       const currentUserId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
 
-      if (!currentUserId) {
-        setLoading(false);
-        return;
-      }
-
-      // Master Admin cannot send or receive referrals
-      if (profile?.role === 'MASTER_ADMIN') {
-        setReferrals([]);
+      if (!currentUserId && profile?.role !== 'MASTER_ADMIN') {
         setLoading(false);
         return;
       }
@@ -143,14 +158,17 @@ export function Referrals() {
         .select('id, name, chapter_name');
 
       const chapterMap = new Map<string, string>();
+      const cList: { id: string; name: string }[] = [];
       if (chaptersData) {
         chaptersData.forEach((c: any) => {
           const cName = c.chapter_name || c.name || '';
           if (c.id && cName) {
             chapterMap.set(String(c.id).trim().toLowerCase(), cName);
+            cList.push({ id: String(c.id), name: cName });
           }
         });
       }
+      setChaptersList(cList);
 
       // Query referrals from Supabase with sender and receiver joins
       let refRows: any[] = [];
@@ -166,7 +184,9 @@ export function Referrals() {
         .order('created_at', { ascending: false });
 
       if (!joinedErr && joinedData) {
-        if (filter === 'passed') {
+        if (profile?.role === 'MASTER_ADMIN') {
+          refRows = joinedData;
+        } else if (filter === 'passed') {
           refRows = joinedData.filter((r: any) => String(r.sender_id) === String(currentUserId) || String(r.from_user_id) === String(currentUserId));
         } else {
           refRows = joinedData.filter((r: any) => String(r.receiver_id) === String(currentUserId) || String(r.to_user_id) === String(currentUserId));
@@ -180,7 +200,9 @@ export function Referrals() {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (filter === 'passed') {
+        if (profile?.role === 'MASTER_ADMIN') {
+          // fetch all
+        } else if (filter === 'passed') {
           fallbackQuery = fallbackQuery.or(`sender_id.eq.${currentUserId},from_user_id.eq.${currentUserId}`);
         } else {
           fallbackQuery = fallbackQuery.or(`receiver_id.eq.${currentUserId},to_user_id.eq.${currentUserId}`);
@@ -256,13 +278,15 @@ export function Referrals() {
 
         const senderFullName = senderUser ? getUserFullName(senderUser) : 'Member';
         const senderRoleFormatted = senderUser ? formatUserRoleOrPosition(senderUser) : '';
-        const senderChapterName = senderUser?.chapter_id ? (chapterMap.get(String(senderUser.chapter_id).trim().toLowerCase()) || '') : '';
+        const senderChapId = senderUser?.chapter_id || senderUser?.chapterId || '';
+        const senderChapterName = senderChapId ? (chapterMap.get(String(senderChapId).trim().toLowerCase()) || '') : '';
         const senderCategoryName = senderUser ? (senderUser.category || senderUser.business_category || senderUser.businessName || senderUser.business_name || '') : '';
         const senderPhotoUrl = senderUser ? (senderUser.photo_url || senderUser.photoURL || senderUser.avatar_url || senderUser.profile_photo || senderUser.image_url || '') : '';
 
         const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member';
         const receiverRoleFormatted = receiverUser ? formatUserRoleOrPosition(receiverUser) : '';
-        const receiverChapterName = receiverUser?.chapter_id ? (chapterMap.get(String(receiverUser.chapter_id).trim().toLowerCase()) || '') : '';
+        const receiverChapId = receiverUser?.chapter_id || receiverUser?.chapterId || '';
+        const receiverChapterName = receiverChapId ? (chapterMap.get(String(receiverChapId).trim().toLowerCase()) || '') : '';
         const receiverCategoryName = receiverUser ? (receiverUser.category || receiverUser.business_category || receiverUser.businessName || receiverUser.business_name || '') : '';
         const receiverPhotoUrl = receiverUser ? (receiverUser.photo_url || receiverUser.photoURL || receiverUser.avatar_url || receiverUser.profile_photo || receiverUser.image_url || '') : '';
 
@@ -279,11 +303,13 @@ export function Referrals() {
           senderFullName,
           senderRole: senderRoleFormatted,
           senderChapter: senderChapterName,
+          senderChapterId: senderChapId ? String(senderChapId) : '',
           senderCategory: senderCategoryName,
           senderPhoto: senderPhotoUrl,
           receiverFullName,
           receiverRole: receiverRoleFormatted,
           receiverChapter: receiverChapterName,
+          receiverChapterId: receiverChapId ? String(receiverChapId) : '',
           receiverCategory: receiverCategoryName,
           receiverPhoto: receiverPhotoUrl,
           contactName: r.contact_name || r.customer_name || 'N/A',
@@ -482,6 +508,80 @@ export function Referrals() {
       return memberChapId === myChapId;
     }).length;
   }, [allMembers, effectiveUserChapterId]);
+
+  const masterAdminMemberList = useMemo(() => {
+    if (masterChapterFilter === 'ALL') {
+      return allMembers;
+    }
+    return allMembers.filter(m => {
+      const mChap = String(m.chapter_id || m.chapterId || '').trim().toLowerCase();
+      return mChap === String(masterChapterFilter).trim().toLowerCase();
+    });
+  }, [allMembers, masterChapterFilter]);
+
+  const filteredMasterReferrals = useMemo(() => {
+    if (profile?.role !== 'MASTER_ADMIN') return referrals;
+
+    return referrals.filter(ref => {
+      // 1. Chapter Filter
+      if (masterChapterFilter !== 'ALL') {
+        const sChap = String(ref.senderChapterId || '').trim().toLowerCase();
+        const rChap = String(ref.receiverChapterId || '').trim().toLowerCase();
+        const targetChap = String(masterChapterFilter).trim().toLowerCase();
+
+        if (sChap !== targetChap && rChap !== targetChap) {
+          return false;
+        }
+      }
+
+      // 2. Member Filter
+      if (masterMemberFilter !== 'ALL') {
+        const targetMem = String(masterMemberFilter).trim().toLowerCase();
+        const sId = String(ref.sender_id || ref.fromUserId || '').trim().toLowerCase();
+        const rId = String(ref.receiver_id || ref.toUserId || '').trim().toLowerCase();
+
+        if (sId !== targetMem && rId !== targetMem) {
+          return false;
+        }
+      }
+
+      // 3. Status Filter
+      if (masterStatusFilter !== 'ALL') {
+        const s = String(ref.status || '').toUpperCase().trim();
+        const ms = String(masterStatusFilter).toUpperCase().trim();
+
+        if (ms === 'PENDING') {
+          if (s !== 'PENDING' && s !== 'NEW') return false;
+        } else if (ms === 'CONVERTED') {
+          if (s !== 'COMPLETED' && s !== 'CONVERTED') return false;
+        } else if (ms === 'REJECTED') {
+          if (s !== 'REJECTED' && s !== 'NOT_CONVERTED' && s !== 'CLOSED') return false;
+        } else if (ms === 'ACCEPTED') {
+          if (s !== 'ACCEPTED' && s !== 'CONTACTED' && s !== 'IN_PROGRESS') return false;
+        } else if (s !== ms) {
+          return false;
+        }
+      }
+
+      // 4. Start Date Filter
+      if (masterStartDate) {
+        const rDate = new Date(ref.createdAt);
+        const sDate = new Date(masterStartDate);
+        sDate.setHours(0, 0, 0, 0);
+        if (!isNaN(rDate.getTime()) && rDate < sDate) return false;
+      }
+
+      // 5. End Date Filter
+      if (masterEndDate) {
+        const rDate = new Date(ref.createdAt);
+        const eDate = new Date(masterEndDate);
+        eDate.setHours(23, 59, 59, 999);
+        if (!isNaN(rDate.getTime()) && rDate > eDate) return false;
+      }
+
+      return true;
+    });
+  }, [referrals, profile, masterChapterFilter, masterMemberFilter, masterStatusFilter, masterStartDate, masterEndDate]);
 
   useEffect(() => {
     if (!profile) return;
@@ -928,19 +1028,19 @@ export function Referrals() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto pb-24 px-4 sm:px-0 py-6 md:py-8">
+    <div className={cn("space-y-6 mx-auto pb-24 px-4 sm:px-0 py-6 md:py-8", isMasterAdmin ? "max-w-6xl" : "max-w-2xl")}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6 mb-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-            <Users size={24} />
+            {isMasterAdmin ? <FileText size={24} /> : <Users size={24} />}
           </div>
           <div>
             <h1 className="text-lg md:text-xl font-bold text-white tracking-tight uppercase">
-              My Referrals
+              {isMasterAdmin ? 'All Referral Report' : 'My Referrals'}
             </h1>
             <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-[0.12em] mt-0.5">
-              Pass and receive business opportunities
+              {isMasterAdmin ? 'Organization-wide referral monitoring and analytics' : 'Pass and receive business opportunities'}
             </p>
           </div>
         </div>
@@ -978,29 +1078,164 @@ export function Referrals() {
         </motion.div>
       )}
 
-      {/* Tabs & Action */}
-      <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5 space-y-4">
-        <div className="flex gap-2 p-1 bg-[#05070D] rounded-[12px]">
-          <button
-            onClick={() => setFilter('received')}
-            className={cn(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-              filter === 'received' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:bg-[#1C2538]"
-            )}
-          >
-            Received
-          </button>
-          <button
-            onClick={() => setFilter('passed')}
-            className={cn(
-              "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-              filter === 'passed' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:bg-[#1C2538]"
-            )}
-          >
-            Given
-          </button>
+      {/* Role-Specific View: Master Admin Report Filters OR Member Tabs */}
+      {isMasterAdmin ? (
+        <div className="space-y-6">
+          {/* Master Admin Report Filters */}
+          <div className="bg-[#111827] p-5 rounded-[20px] border border-white/5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider">
+                <Filter size={16} className="text-primary" />
+                <span>Report Filters</span>
+              </div>
+              {(masterStartDate || masterEndDate || masterChapterFilter !== 'ALL' || masterMemberFilter !== 'ALL' || masterStatusFilter !== 'ALL') && (
+                <button
+                  onClick={() => {
+                    setMasterStartDate('');
+                    setMasterEndDate('');
+                    setMasterChapterFilter('ALL');
+                    setMasterMemberFilter('ALL');
+                    setMasterStatusFilter('ALL');
+                  }}
+                  className="flex items-center gap-1.5 text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                >
+                  <RotateCcw size={12} />
+                  <span>Reset Filters</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* Start Date */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Start Date</label>
+                <input 
+                  type="date"
+                  value={masterStartDate}
+                  onChange={(e) => setMasterStartDate(e.target.value)}
+                  className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
+                />
+              </div>
+
+              {/* End Date */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">End Date</label>
+                <input 
+                  type="date"
+                  value={masterEndDate}
+                  onChange={(e) => setMasterEndDate(e.target.value)}
+                  className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
+                />
+              </div>
+
+              {/* Chapter */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Chapter</label>
+                <select
+                  value={masterChapterFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setMasterChapterFilter(val);
+                    setMasterMemberFilter('ALL');
+                  }}
+                  className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
+                >
+                  <option value="ALL">All Chapters</option>
+                  {chaptersList.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Member */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</label>
+                <select
+                  value={masterMemberFilter}
+                  onChange={(e) => setMasterMemberFilter(e.target.value)}
+                  className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
+                >
+                  <option value="ALL">All Members</option>
+                  {masterAdminMemberList.map(m => (
+                    <option key={m.id || m.uid} value={m.id || m.uid}>
+                      {m.name || m.displayName} ({m.chapterName || 'No Chapter'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Status</label>
+                <select
+                  value={masterStatusFilter}
+                  onChange={(e) => setMasterStatusFilter(e.target.value)}
+                  className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="PENDING">Pending / New</option>
+                  <option value="CONVERTED">Converted to Business</option>
+                  <option value="REJECTED">Closed - Not Converted</option>
+                  <option value="ACCEPTED">Contacted / In Progress</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Analytics Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-[#111827] p-4 rounded-[16px] border border-white/5">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Total Referrals</p>
+              <p className="text-xl font-black text-white mt-1">{filteredMasterReferrals.length}</p>
+            </div>
+            <div className="bg-[#111827] p-4 rounded-[16px] border border-emerald-500/20 bg-emerald-500/5">
+              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Converted</p>
+              <p className="text-xl font-black text-emerald-400 mt-1">
+                {filteredMasterReferrals.filter(r => r.status === 'Completed' || r.status === 'COMPLETED' || r.status === 'CONVERTED').length}
+              </p>
+            </div>
+            <div className="bg-[#111827] p-4 rounded-[16px] border border-amber-500/20 bg-amber-500/5">
+              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Pending</p>
+              <p className="text-xl font-black text-amber-400 mt-1">
+                {filteredMasterReferrals.filter(r => r.status === 'Pending' || r.status === 'PENDING' || r.status === 'New').length}
+              </p>
+            </div>
+            <div className="bg-[#111827] p-4 rounded-[16px] border border-primary/20 bg-primary/5">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Business Value</p>
+              <p className="text-xl font-black text-white mt-1">
+                ₹{filteredMasterReferrals.reduce((sum, r) => {
+                  const slip = thankYouSlips.find(s => String(s.referralId || s.referral_id) === String(r.id));
+                  return sum + (slip ? Number(slip.businessValue || 0) : 0);
+                }, 0).toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* Tabs for Members */
+        <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5 space-y-4">
+          <div className="flex gap-2 p-1 bg-[#05070D] rounded-[12px]">
+            <button
+              onClick={() => setFilter('received')}
+              className={cn(
+                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                filter === 'received' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:bg-[#1C2538]"
+              )}
+            >
+              Received
+            </button>
+            <button
+              onClick={() => setFilter('passed')}
+              className={cn(
+                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                filter === 'passed' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:bg-[#1C2538]"
+              )}
+            >
+              Given
+            </button>
+          </div>
+        </div>
+      )}
 
       {isPending && (
         <div className="p-4 bg-amber-950/20 border border-amber-900/30 rounded-[14px] flex items-center gap-3 text-amber-400">
@@ -1011,19 +1246,85 @@ export function Referrals() {
         </div>
       )}
 
-      {/* Referral List */}
+      {/* Referral List / Report Table */}
       <div className="space-y-3">
         {loading ? (
-          <div className="py-8 text-center">
+          <div className="py-12 text-center bg-[#111827] rounded-[20px] border border-white/5">
             <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
             <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Referrals...</p>
           </div>
         ) : isMasterAdmin ? (
-          <div className="py-20 text-center bg-[#111827] rounded-[14px] border border-dashed border-white/5">
-            <Users size={40} className="mx-auto text-neutral-500 mb-3" />
-            <h3 className="text-sm font-bold text-white">Master Admin Account</h3>
-            <p className="text-xs text-neutral-400 mt-1">Master Admins do not send or receive business referrals.</p>
-          </div>
+          /* Master Admin Table View */
+          filteredMasterReferrals.length > 0 ? (
+            <div className="bg-[#111827] rounded-[20px] border border-white/5 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-[#05070D]/50 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                      <th className="p-4">Date & ID</th>
+                      <th className="p-4">Referral Sender</th>
+                      <th className="p-4">Referral Receiver</th>
+                      <th className="p-4">Contact & Requirement</th>
+                      <th className="p-4 text-center">Status</th>
+                      <th className="p-4 text-right">Business Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-xs text-neutral-300">
+                    {filteredMasterReferrals.map((ref) => {
+                      const slip = thankYouSlips.find(s => String(s.referralId || s.referral_id) === String(ref.id));
+                      return (
+                        <tr 
+                          key={ref.id}
+                          onClick={() => {
+                            setSelectedReferral(ref);
+                            setIsDetailModalOpen(true);
+                          }}
+                          className="hover:bg-white/[0.02] cursor-pointer transition-colors"
+                        >
+                          <td className="p-4 align-top whitespace-nowrap">
+                            <p className="text-white font-bold text-xs">{formatDateSafely(ref.createdAt)}</p>
+                            <p className="text-[10px] text-neutral-500 font-mono mt-0.5">#{String(ref.id).slice(0, 8)}</p>
+                          </td>
+                          <td className="p-4 align-top">
+                            <p className="font-bold text-white">{ref.senderName}</p>
+                            <p className="text-[10px] text-neutral-400">{ref.senderChapter || 'N/A'}</p>
+                          </td>
+                          <td className="p-4 align-top">
+                            <p className="font-bold text-white">{ref.receiverName}</p>
+                            <p className="text-[10px] text-neutral-400">{ref.receiverChapter || 'N/A'}</p>
+                          </td>
+                          <td className="p-4 align-top max-w-xs">
+                            <p className="font-semibold text-white truncate">{ref.contactName} {ref.contactPhone ? `(${ref.contactPhone})` : ''}</p>
+                            <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">{ref.requirement}</p>
+                          </td>
+                          <td className="p-4 align-top text-center whitespace-nowrap">
+                            <span className={cn(
+                              "inline-block text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+                              (ref.status === 'Pending' || ref.status === 'PENDING') && "text-amber-400 bg-amber-500/10 border border-amber-500/20",
+                              (ref.status === 'Completed' || ref.status === 'COMPLETED' || ref.status === 'CONVERTED') && "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
+                              (ref.status === 'Rejected' || ref.status === 'NOT_CONVERTED') && "text-red-400 bg-red-500/10 border border-red-500/20",
+                              (ref.status === 'Accepted' || ref.status === 'CONTACTED') && "text-blue-400 bg-blue-500/10 border border-blue-500/20"
+                            )}>
+                              {ref.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="p-4 align-top text-right whitespace-nowrap font-bold text-white">
+                            {slip ? `₹${Number(slip.businessValue || 0).toLocaleString('en-IN')}` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="py-20 text-center bg-[#111827] rounded-[20px] border border-dashed border-white/5">
+              <FileText size={40} className="mx-auto text-neutral-500 mb-3" />
+              <h3 className="text-sm font-bold text-white">No referrals found</h3>
+              <p className="text-xs text-neutral-400 mt-1">No organization referrals match the selected filters.</p>
+            </div>
+          )
         ) : referrals.length > 0 ? (
           referrals.map((ref, i) => (
             <motion.div

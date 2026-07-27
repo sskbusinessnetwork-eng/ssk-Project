@@ -88,11 +88,13 @@ export interface Referral {
   senderFullName?: string;
   senderRole?: string;
   senderChapter?: string;
+  senderChapterId?: string;
   senderCategory?: string;
   senderPhoto?: string;
   receiverFullName?: string;
   receiverRole?: string;
   receiverChapter?: string;
+  receiverChapterId?: string;
   receiverCategory?: string;
   receiverPhoto?: string;
   contactName: string;

@@ -223,7 +223,7 @@ export function ThankYouSlips() {
         databaseService.list<Referral>('referrals', [
           where('toUserId', '==', currentUid)
         ]).then(list => {
-          setReferrals(list.filter(r => r.status === 'CONVERTED' || r.status === 'Completed' || r.status === 'COMPLETED'));
+          setReferrals(list.filter(r => (r.status as string) === 'CONVERTED' || (r.status as string) === 'Completed' || r.status === 'COMPLETED'));
         });
       }
     };

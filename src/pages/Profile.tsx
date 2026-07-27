@@ -593,13 +593,13 @@ export function Profile() {
                 <Phone size={18} />
                 Call
               </a>
-              {currentUserProfile?.role === 'MEMBER' && (
+              {currentUserProfile && (
                 <button 
-                  onClick={handleQuickRefer}
-                  className="flex-1 h-11 bg-[#151C2E] border border-white/5 text-white rounded-[12px] flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest active:scale-95 transition-all hover:bg-[#1C2538]"
+                  onClick={() => navigate(`/referrals?to=${targetProfile.uid || targetProfile.id || targetUserId}`)}
+                  className="flex-1 h-11 bg-[#151C2E] border border-white/5 text-white rounded-[12px] flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest active:scale-95 transition-all hover:bg-[#1C2538] cursor-pointer"
                 >
                   <Send size={18} className="text-primary" />
-                  Refer
+                  Pass Referral
                 </button>
               )}
             </div>

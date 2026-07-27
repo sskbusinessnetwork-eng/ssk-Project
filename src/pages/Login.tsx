@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath, getCleanFullName } from '../utils/authUtils';
+import { databaseService } from '../services/databaseService';
 import {  db, doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit  } from '../lib/database';
 import { UserProfile } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
@@ -81,26 +82,68 @@ export function Login() {
     setLoading(true);
     setError(null);
     try {
-      const phone = formData.identifier.trim();
+      const rawInput = formData.identifier.trim();
       const password = formData.password.trim();
 
-      if (!phone || !password) {
+      if (!rawInput || !password) {
         throw new Error('Phone number and password are required.');
       }
 
-      const normalizedPhone = normalizePhoneNumber(phone);
-      
+      const cleanDigits = rawInput.replace(/\D/g, '');
+      const last10Digits = cleanDigits.slice(-10);
+
+      const phoneVariants = Array.from(new Set([
+        rawInput,
+        normalizePhoneNumber(rawInput),
+        cleanDigits,
+        last10Digits,
+        `+91${last10Digits}`,
+        `91${last10Digits}`,
+        `+91 ${last10Digits}`,
+        `0${last10Digits}`
+      ])).filter(Boolean);
+
+      const matchesPassword = (storedPassword?: string | null) => {
+        if (!storedPassword) return false;
+        const sPwd = String(storedPassword).trim();
+        const inputPwd = password.trim();
+        if (sPwd === inputPwd) return true;
+        if (sPwd.startsWith('$2')) {
+          try {
+            return bcrypt.compareSync(inputPwd, sPwd);
+          } catch (err) {
+            console.warn("bcrypt comparison failed:", err);
+          }
+        }
+        return false;
+      };
+
       // 1. Check Master Admins first
-      const { data: masterAdmins, error: masterAdminError } = await supabase
+      let masterAdminMatch: any = null;
+
+      const { data: masterAdminsByNum } = await supabase
         .from('master_admins')
         .select('*')
-        .in('phone_number', [phone, normalizedPhone])
-        .limit(1);
+        .in('phone_number', phoneVariants);
 
-      if (masterAdmins && masterAdmins.length > 0) {
-        const masterAdmin = masterAdmins[0];
-        
-        const isMasterMatch = masterAdmin.password === password || (masterAdmin.password && masterAdmin.password.startsWith('$2') && bcrypt.compareSync(password, masterAdmin.password));
+      if (masterAdminsByNum && masterAdminsByNum.length > 0) {
+        masterAdminMatch = masterAdminsByNum.find(ma => matchesPassword(ma.password)) || masterAdminsByNum[0];
+      }
+
+      if (!masterAdminMatch) {
+        const { data: masterAdminsByPhone } = await supabase
+          .from('master_admins')
+          .select('*')
+          .in('phone', phoneVariants);
+
+        if (masterAdminsByPhone && masterAdminsByPhone.length > 0) {
+          masterAdminMatch = masterAdminsByPhone.find(ma => matchesPassword(ma.password)) || masterAdminsByPhone[0];
+        }
+      }
+
+      if (masterAdminMatch) {
+        const masterAdmin = masterAdminMatch;
+        const isMasterMatch = matchesPassword(masterAdmin.password);
         if (!isMasterMatch) {
           throw new Error('Invalid phone number or password.');
         }
@@ -117,8 +160,8 @@ export function Login() {
           ...masterAdmin,
           uid: masterAdmin.id,
           id: masterAdmin.id,
-          name: getCleanFullName(masterAdmin.full_name),
-          phone: masterAdmin.phone_number,
+          name: getCleanFullName(masterAdmin.full_name || masterAdmin.name),
+          phone: masterAdmin.phone_number || masterAdmin.phone || rawInput,
           role: 'MASTER_ADMIN',
           membershipStatus: 'ACTIVE',
           membership_status: 'ACTIVE',
@@ -130,17 +173,46 @@ export function Login() {
         return;
       }
 
-      // 2. Check regular users
-      const { data: users, error: userError } = await supabase
+      // 2. Check regular users in Supabase by 'phone' or 'phone_number'
+      let userMatch: any = null;
+
+      const { data: usersByPhone } = await supabase
         .from('users')
         .select('*')
-        .in('phone', [phone, normalizedPhone])
-        .limit(1);
+        .in('phone', phoneVariants);
 
-      if (users && users.length > 0) {
-        const user = users[0];
-        
-        const isUserMatch = user.password === password || (user.password && user.password.startsWith('$2') && bcrypt.compareSync(password, user.password));
+      if (usersByPhone && usersByPhone.length > 0) {
+        userMatch = usersByPhone.find(u => matchesPassword(u.password)) || usersByPhone[0];
+      }
+
+      if (!userMatch) {
+        const { data: usersByPhoneNumber } = await supabase
+          .from('users')
+          .select('*')
+          .in('phone_number', phoneVariants);
+
+        if (usersByPhoneNumber && usersByPhoneNumber.length > 0) {
+          userMatch = usersByPhoneNumber.find(u => matchesPassword(u.password)) || usersByPhoneNumber[0];
+        }
+      }
+
+      // 3. Fallback check in databaseService (Firestore / Local DB)
+      if (!userMatch) {
+        try {
+          const allDbUsers = await databaseService.list<UserProfile>('users');
+          userMatch = allDbUsers.find(u => {
+            const uPhone = String(u.phone || (u as any).phoneNumber || (u as any).phone_number || '').trim();
+            const uClean = uPhone.replace(/\D/g, '').slice(-10);
+            return last10Digits.length === 10 && uClean === last10Digits;
+          });
+        } catch (e) {
+          console.warn("Database service lookup fallback failed:", e);
+        }
+      }
+
+      if (userMatch) {
+        const user = userMatch;
+        const isUserMatch = matchesPassword(user.password);
         if (!isUserMatch) {
           throw new Error('Invalid phone number or password.');
         }
@@ -223,7 +295,7 @@ export function Login() {
           uid: user.id,
           id: user.id,
           name: getCleanFullName(user.name),
-          phone: user.phone,
+          phone: user.phone || user.phone_number || rawInput,
           role: user.role,
           position: user.position,
           membershipStatus: memStatus,
@@ -238,7 +310,6 @@ export function Login() {
           subscriptionEnd: subscriptionEnd || user.subscription_end
         } as any);
 
-        
         if (user.must_change_password) {
           navigate('/set-password');
         } else {
