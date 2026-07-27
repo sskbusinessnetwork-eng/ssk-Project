@@ -77,20 +77,76 @@ export function ThankYouSlips() {
   useEffect(() => {
     if (!profile) return;
 
+    const currentUid = profile.uid || profile.id;
+
+    // Fetch sent slips (where fromUserId == currentUid, i.e. logged-in user created/sent the slip)
     const unsubscribeSent = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
-      where('toUserId', '==', profile.uid),
+      where('fromUserId', '==', currentUid),
       orderBy('createdAt', 'desc')
     ], (data) => {
-      setSlips(data);
-      setLoading(false);
+      if (data && data.length > 0) {
+        setSlips(data);
+        setLoading(false);
+      }
     });
 
+    // Fetch received slips (where toUserId == currentUid, i.e. logged-in user receives the slip)
     const unsubscribeReceived = databaseService.subscribe<ThankYouSlip>('thank_you_slips', [
-      where('fromUserId', '==', profile.uid),
+      where('toUserId', '==', currentUid),
       orderBy('createdAt', 'desc')
     ], (data) => {
-      setReceivedSlips(data);
+      if (data && data.length > 0) {
+        setReceivedSlips(data);
+      }
     });
+
+    // Supabase fallback / sync for Sent & Received slips
+    const fetchSupabaseSlips = async () => {
+      if (!currentUid) return;
+
+      const { data: sentData } = await supabase
+        .from('thank_you_slips')
+        .select('*')
+        .or(`from_user_id.eq.${currentUid},sender_id.eq.${currentUid}`)
+        .order('created_at', { ascending: false });
+
+      if (sentData) {
+        const mappedSent: ThankYouSlip[] = sentData.map((s: any) => ({
+          id: String(s.id),
+          referralId: String(s.referral_id || s.referralId || ''),
+          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
+          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
+          customerName: s.customer_name || s.customerName || '',
+          businessValue: Number(s.business_value || s.businessValue || 0),
+          notes: s.notes || '',
+          createdAt: s.created_at || s.createdAt || new Date().toISOString()
+        }));
+        setSlips(mappedSent);
+        setLoading(false);
+      }
+
+      const { data: receivedData } = await supabase
+        .from('thank_you_slips')
+        .select('*')
+        .or(`to_user_id.eq.${currentUid},receiver_id.eq.${currentUid}`)
+        .order('created_at', { ascending: false });
+
+      if (receivedData) {
+        const mappedReceived: ThankYouSlip[] = receivedData.map((s: any) => ({
+          id: String(s.id),
+          referralId: String(s.referral_id || s.referralId || ''),
+          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
+          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
+          customerName: s.customer_name || s.customerName || '',
+          businessValue: Number(s.business_value || s.businessValue || 0),
+          notes: s.notes || '',
+          createdAt: s.created_at || s.createdAt || new Date().toISOString()
+        }));
+        setReceivedSlips(mappedReceived);
+      }
+    };
+
+    fetchSupabaseSlips();
 
     let unsubscribeAll = () => {};
     if (isMasterAdmin || isChapterAdmin) {
@@ -105,7 +161,8 @@ export function ThankYouSlips() {
         setAllUsers(users);
         const names: Record<string, string> = {};
         users.forEach(u => {
-          names[u.uid] = u.name || u.displayName || 'Member Not Found';
+          const uKey = u.uid || u.id;
+          if (uKey) names[uKey] = u.name || u.displayName || 'Member Not Found';
         });
         setMemberNames(prev => ({ ...prev, ...names }));
       });
@@ -120,16 +177,58 @@ export function ThankYouSlips() {
     databaseService.list<UserProfile>('users', []).then(users => {
       const names: Record<string, string> = {};
       users.forEach(u => {
-        names[u.uid] = u.name || u.displayName || 'Member Not Found';
+        const uKey = u.uid || u.id;
+        if (uKey) names[uKey] = u.name || u.displayName || 'Member Not Found';
       });
       setMemberNames(prev => ({ ...prev, ...names }));
     });
 
-    // Fetch converted referrals for the form
-    databaseService.list<Referral>('referrals', [
-      where('toUserId', '==', profile.uid),
-      where('status', '==', 'CONVERTED')
-    ]).then(setReferrals);
+    // Also fetch users from Supabase for complete name resolution
+    supabase.from('users').select('*').then(({ data: sbUsers }) => {
+      if (sbUsers) {
+        const sbNames: Record<string, string> = {};
+        sbUsers.forEach(u => {
+          const uKey = u.uid || u.id;
+          if (uKey) sbNames[uKey] = u.name || u.displayName || 'Member Not Found';
+        });
+        setMemberNames(prev => ({ ...prev, ...sbNames }));
+      }
+    });
+
+    // Fetch converted referrals where current user is the receiver (Member B) for the form
+    const fetchConvertedReferrals = async () => {
+      if (!currentUid) return;
+
+      const { data: rawRefs } = await supabase
+        .from('referrals')
+        .select('*')
+        .or(`receiver_id.eq.${currentUid},to_user_id.eq.${currentUid}`);
+
+      if (rawRefs && rawRefs.length > 0) {
+        const converted = rawRefs.filter((r: any) => 
+          r.status === 'Completed' || r.status === 'COMPLETED' || r.status === 'CONVERTED'
+        ).map((r: any) => ({
+          id: String(r.id),
+          sender_id: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
+          fromUserId: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
+          receiver_id: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
+          toUserId: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
+          contactName: r.contact_name || r.customer_name || 'Client',
+          requirement: r.business_requirement || r.requirement || '',
+          status: r.status,
+          createdAt: r.created_at || r.createdAt
+        } as Referral));
+        setReferrals(converted);
+      } else {
+        databaseService.list<Referral>('referrals', [
+          where('toUserId', '==', currentUid)
+        ]).then(list => {
+          setReferrals(list.filter(r => r.status === 'CONVERTED' || r.status === 'Completed' || r.status === 'COMPLETED'));
+        });
+      }
+    };
+
+    fetchConvertedReferrals();
 
     return () => {
       unsubscribeSent();
@@ -148,27 +247,61 @@ export function ThankYouSlips() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const newSlip: Omit<ThankYouSlip, 'id'> = {
-        referralId: formData.referralId,
-        fromUserId: profile.uid,
-        toUserId: selectedReferral.fromUserId,
-        customerName: formData.customerName,
+      const currentUserId = profile.uid || profile.id;
+
+      // Fetch exact referral record from database to obtain original sender ID
+      let originalSenderId = selectedReferral.sender_id || selectedReferral.fromUserId;
+
+      const { data: refRow } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('id', selectedReferral.id)
+        .maybeSingle();
+
+      if (refRow) {
+        originalSenderId = refRow.sender_id || refRow.from_user_id || refRow.fromUserId || originalSenderId;
+      }
+
+      if (!originalSenderId) {
+        throw new Error("Could not find the original sender of this referral.");
+      }
+
+      // Thank You Slip Relationship:
+      // Sender (from_user_id / fromUserId) = Member B (converting user, i.e. current logged in user)
+      // Receiver (to_user_id / toUserId) = Member A (original referral sender)
+      const newSlip = {
+        referral_id: selectedReferral.id,
+        referralId: selectedReferral.id,
+        from_user_id: currentUserId,
+        fromUserId: currentUserId,
+        to_user_id: originalSenderId,
+        toUserId: originalSenderId,
+        customer_name: formData.customerName || selectedReferral.contactName,
+        customerName: formData.customerName || selectedReferral.contactName,
+        business_value: Number(formData.businessValue),
         businessValue: Number(formData.businessValue),
         notes: formData.notes,
+        created_at: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
 
-      await databaseService.create('thank_you_slips', newSlip);
-      
-      // Close the referral status
-      await databaseService.update('referrals', formData.referralId, { status: 'CLOSED' });
-      
-      const receiver = allUsers.find(u => u.uid === selectedReferral.fromUserId) || null;
+      await supabase.from('thank_you_slips').insert([newSlip]);
+      try {
+        await databaseService.create('thank_you_slips', newSlip);
+      } catch (dbErr) {}
+
+      // Close / complete the referral status
+      await supabase.from('referrals').update({ status: 'Completed', updated_at: new Date().toISOString() }).eq('id', selectedReferral.id);
+      try {
+        await databaseService.update('referrals', formData.referralId, { status: 'Completed' });
+      } catch (dbErr) {}
+
+      const receiver = allUsers.find(u => u.uid === originalSenderId || u.id === originalSenderId) || null;
       setTestimonialReceiver(receiver);
-      
+
       setShowSuccess(true);
       setFormData({ referralId: '', customerName: '', businessValue: '', notes: '' });
-      
+
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
@@ -733,19 +866,19 @@ export function ThankYouSlips() {
                       {activeTab === 'sent' 
                         ? (
                           <Link 
-                            to={`/profile?id=${slip.fromUserId}`}
+                            to={`/profile?id=${slip.toUserId}`}
                             className="text-[13px] font-semibold text-white hover:text-primary transition-colors truncate"
                           >
-                            {memberNames[slip.fromUserId] || '...'}
+                            {memberNames[slip.toUserId] || 'Member'}
                           </Link>
                         ) 
                         : activeTab === 'received'
                         ? (
                           <Link 
-                            to={`/profile?id=${slip.toUserId}`}
+                            to={`/profile?id=${slip.fromUserId}`}
                             className="text-[13px] font-semibold text-white hover:text-primary transition-colors truncate"
                           >
-                            {memberNames[slip.toUserId] || '...'}
+                            {memberNames[slip.fromUserId] || 'Member'}
                           </Link>
                         )
                         : (

@@ -693,17 +693,47 @@ export function Referrals() {
     setErrorMessage(null);
 
     try {
+      // Fetch exact referral record from database to obtain original sender ID
+      let referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+
+      const { data: refRecord } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('id', selectedReferral.id)
+        .maybeSingle();
+
+      if (refRecord) {
+        referrerId = refRecord.sender_id || refRecord.from_user_id || refRecord.fromUserId || referrerId;
+      }
+
+      if (!referrerId) {
+        throw new Error("Could not determine original referral sender ID.");
+      }
+
+      const currentUserId = profile.uid || profile.id;
+
       const newSlip = {
         referral_id: selectedReferral.id,
-        from_user_id: profile.uid || profile.id,
-        to_user_id: selectedReferral.sender_id || selectedReferral.fromUserId,
-        customer_name: selectedReferral.contactName,
+        referralId: selectedReferral.id,
+        from_user_id: currentUserId,
+        fromUserId: currentUserId,
+        to_user_id: referrerId,
+        toUserId: referrerId,
+        customer_name: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
+        customerName: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
         business_value: Number(thankYouData.businessValue),
+        businessValue: Number(thankYouData.businessValue),
         notes: thankYouData.notes,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        createdAt: new Date().toISOString()
       };
 
       await supabase.from('thank_you_slips').insert([newSlip]);
+      try {
+        await databaseService.create('thank_you_slips', newSlip);
+      } catch (dbErr) {
+        console.warn("databaseService create slip notice:", dbErr);
+      }
 
       const { error: updateErr } = await supabase
         .from('referrals')
@@ -715,8 +745,11 @@ export function Referrals() {
 
       if (updateErr) throw updateErr;
 
-      // Send notifications to the referrer
-      const referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+      try {
+        await databaseService.update('referrals', selectedReferral.id, { status: 'Completed' });
+      } catch (dbErr) {}
+
+      // Send notifications to the referrer (Member A, the original referral sender)
       if (referrerId) {
         try {
           await notificationService.sendNotification({
