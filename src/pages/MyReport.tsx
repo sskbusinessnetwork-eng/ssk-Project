@@ -376,8 +376,15 @@ export function MyReport() {
           ));
 
           // 6. Thank You Slips: Sent (sender_id = currentUser.id), Received (receiver_id = currentUser.id)
-          setSentThankYouSlips(allUniqueSlips.filter(s => String(s.fromUserId) === currentUserId));
-          setReceivedThankYouSlips(allUniqueSlips.filter(s => String(s.toUserId) === currentUserId));
+          const myUserIds = [String(profile.id || '').trim(), String(profile.uid || '').trim()].filter(Boolean);
+          setSentThankYouSlips(allUniqueSlips.filter(s => {
+            const sender = String(s.fromUserId || (s as any).from_user_id || (s as any).sender_id || '').trim();
+            return myUserIds.includes(sender);
+          }));
+          setReceivedThankYouSlips(allUniqueSlips.filter(s => {
+            const receiver = String(s.toUserId || (s as any).to_user_id || (s as any).receiver_id || '').trim();
+            return myUserIds.includes(receiver);
+          }));
 
           // 7. Testimonials: Given (sender_id = currentUser.id), Received (receiver_id = currentUser.id)
           setGivenTestimonials(allUniqueTests.filter(t => String(t.authorMemberId) === currentUserId));

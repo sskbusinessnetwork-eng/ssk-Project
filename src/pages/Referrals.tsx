@@ -329,14 +329,14 @@ export function Referrals() {
       const { data: slips } = await supabase.from('thank_you_slips').select('*');
       if (slips) {
         setThankYouSlips(slips.map((s: any) => ({
-          id: s.id,
-          referralId: s.referral_id || s.referralId,
-          fromUserId: s.from_user_id || s.fromUserId,
-          toUserId: s.to_user_id || s.toUserId,
-          customerName: s.customer_name || s.customerName,
-          businessValue: s.business_value || s.businessValue || 0,
+          id: String(s.id),
+          referralId: String(s.referral_id || s.referralId || ''),
+          fromUserId: String(s.from_user_id || s.fromUserId || s.sender_id || s.senderId || ''),
+          toUserId: String(s.to_user_id || s.toUserId || s.receiver_id || s.receiverId || ''),
+          customerName: s.customer_name || s.customerName || '',
+          businessValue: Number(s.business_value || s.businessValue || 0),
           notes: s.notes || '',
-          createdAt: s.created_at || s.createdAt
+          createdAt: s.created_at || s.createdAt || new Date().toISOString()
         })));
       }
 
@@ -799,7 +799,7 @@ export function Referrals() {
 
     try {
       // Fetch exact referral record from database to obtain original sender ID
-      let referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id;
+      let referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id || selectedReferral.senderId;
 
       const { data: refRecord } = await supabase
         .from('referrals')
@@ -808,27 +808,32 @@ export function Referrals() {
         .maybeSingle();
 
       if (refRecord) {
-        referrerId = refRecord.sender_id || refRecord.from_user_id || refRecord.fromUserId || referrerId;
+        referrerId = refRecord.sender_id || refRecord.from_user_id || refRecord.fromUserId || refRecord.senderId || refRecord.by_user_id || refRecord.user_id || referrerId;
       }
 
       if (!referrerId) {
         throw new Error("Could not determine original referral sender ID.");
       }
 
-      const currentUserId = profile.uid || profile.id;
+      const currentUserId = String(profile.uid || profile.id);
+      const targetReferrerId = String(referrerId);
 
       const newSlip = {
-        referral_id: selectedReferral.id,
-        referralId: selectedReferral.id,
+        referral_id: String(selectedReferral.id),
+        referralId: String(selectedReferral.id),
         from_user_id: currentUserId,
         fromUserId: currentUserId,
-        to_user_id: referrerId,
-        toUserId: referrerId,
+        sender_id: currentUserId,
+        senderId: currentUserId,
+        to_user_id: targetReferrerId,
+        toUserId: targetReferrerId,
+        receiver_id: targetReferrerId,
+        receiverId: targetReferrerId,
         customer_name: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
         customerName: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
         business_value: Number(thankYouData.businessValue),
         businessValue: Number(thankYouData.businessValue),
-        notes: thankYouData.notes,
+        notes: thankYouData.notes || '',
         created_at: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
@@ -855,10 +860,10 @@ export function Referrals() {
       } catch (dbErr) {}
 
       // Send notifications to the referrer (Member A, the original referral sender)
-      if (referrerId) {
+      if (targetReferrerId) {
         try {
           await notificationService.sendNotification({
-            userId: referrerId,
+            userId: targetReferrerId,
             type: 'REFERRAL',
             title: 'Referral Completed',
             message: `Your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} has been completed.`,
@@ -866,11 +871,11 @@ export function Referrals() {
           });
 
           await notificationService.sendNotification({
-            userId: referrerId,
+            userId: targetReferrerId,
             type: 'THANKYOU',
             title: 'Thank You Slip Received',
             message: `You received a Thank You Slip from ${profile.name || 'a member'} for ₹${Number(thankYouData.businessValue).toLocaleString('en-IN')}.`,
-            link: '/my-report'
+            link: '/thank-you-slips'
           });
         } catch (nErr) {
           console.warn("Notification error:", nErr);

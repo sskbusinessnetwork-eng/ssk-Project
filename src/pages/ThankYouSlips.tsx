@@ -22,6 +22,7 @@ import { format as originalFormat, isValid } from 'date-fns';
 import {  where, orderBy  } from '../lib/database';
 import { cn } from '../lib/utils';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
+import { notificationService } from '../services/notificationService';
 
 const format = (date: any, formatStr: string, options?: any) => {
   if (!date) return 'N/A';
@@ -77,6 +78,7 @@ export function ThankYouSlips() {
   useEffect(() => {
     if (!profile) return;
 
+    const userCandidateIds = Array.from(new Set([profile.id, profile.uid].filter(Boolean))).map(String);
     const currentUid = profile.uid || profile.id;
 
     // Fetch sent slips (where fromUserId == currentUid, i.e. logged-in user created/sent the slip)
@@ -102,12 +104,13 @@ export function ThankYouSlips() {
 
     // Supabase fallback / sync for Sent & Received slips
     const fetchSupabaseSlips = async () => {
-      if (!currentUid) return;
+      if (userCandidateIds.length === 0) return;
 
+      const sentOrClause = userCandidateIds.map(id => `from_user_id.eq.${id},sender_id.eq.${id}`).join(',');
       const { data: sentData } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .or(`from_user_id.eq.${currentUid},sender_id.eq.${currentUid}`)
+        .or(sentOrClause)
         .order('created_at', { ascending: false });
 
       if (sentData) {
@@ -125,10 +128,11 @@ export function ThankYouSlips() {
         setLoading(false);
       }
 
+      const receivedOrClause = userCandidateIds.map(id => `to_user_id.eq.${id},receiver_id.eq.${id}`).join(',');
       const { data: receivedData } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .or(`to_user_id.eq.${currentUid},receiver_id.eq.${currentUid}`)
+        .or(receivedOrClause)
         .order('created_at', { ascending: false });
 
       if (receivedData) {
@@ -161,8 +165,9 @@ export function ThankYouSlips() {
         setAllUsers(users);
         const names: Record<string, string> = {};
         users.forEach(u => {
-          const uKey = u.uid || u.id;
-          if (uKey) names[uKey] = u.name || u.displayName || 'Member Not Found';
+          const name = u.name || u.displayName || 'Member Not Found';
+          if (u.uid) names[String(u.uid)] = name;
+          if (u.id) names[String(u.id)] = name;
         });
         setMemberNames(prev => ({ ...prev, ...names }));
       });
@@ -177,8 +182,9 @@ export function ThankYouSlips() {
     databaseService.list<UserProfile>('users', []).then(users => {
       const names: Record<string, string> = {};
       users.forEach(u => {
-        const uKey = u.uid || u.id;
-        if (uKey) names[uKey] = u.name || u.displayName || 'Member Not Found';
+        const name = u.name || u.displayName || 'Member Not Found';
+        if (u.uid) names[String(u.uid)] = name;
+        if (u.id) names[String(u.id)] = name;
       });
       setMemberNames(prev => ({ ...prev, ...names }));
     });
@@ -188,8 +194,9 @@ export function ThankYouSlips() {
       if (sbUsers) {
         const sbNames: Record<string, string> = {};
         sbUsers.forEach(u => {
-          const uKey = u.uid || u.id;
-          if (uKey) sbNames[uKey] = u.name || u.displayName || 'Member Not Found';
+          const name = u.name || u.displayName || 'Member Not Found';
+          if (u.uid) sbNames[String(u.uid)] = name;
+          if (u.id) sbNames[String(u.id)] = name;
         });
         setMemberNames(prev => ({ ...prev, ...sbNames }));
       }
@@ -197,12 +204,13 @@ export function ThankYouSlips() {
 
     // Fetch converted referrals where current user is the receiver (Member B) for the form
     const fetchConvertedReferrals = async () => {
-      if (!currentUid) return;
+      if (userCandidateIds.length === 0) return;
 
+      const recOrClause = userCandidateIds.map(id => `receiver_id.eq.${id},to_user_id.eq.${id}`).join(',');
       const { data: rawRefs } = await supabase
         .from('referrals')
         .select('*')
-        .or(`receiver_id.eq.${currentUid},to_user_id.eq.${currentUid}`);
+        .or(recOrClause);
 
       if (rawRefs && rawRefs.length > 0) {
         const converted = rawRefs.filter((r: any) => 
@@ -247,10 +255,10 @@ export function ThankYouSlips() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const currentUserId = profile.uid || profile.id;
+      const currentUserId = String(profile.uid || profile.id);
 
       // Fetch exact referral record from database to obtain original sender ID
-      let originalSenderId = selectedReferral.sender_id || selectedReferral.fromUserId;
+      let originalSenderId = selectedReferral.sender_id || selectedReferral.fromUserId || (selectedReferral as any).from_user_id;
 
       const { data: refRow } = await supabase
         .from('referrals')
@@ -259,28 +267,34 @@ export function ThankYouSlips() {
         .maybeSingle();
 
       if (refRow) {
-        originalSenderId = refRow.sender_id || refRow.from_user_id || refRow.fromUserId || originalSenderId;
+        originalSenderId = refRow.sender_id || refRow.from_user_id || refRow.fromUserId || refRow.senderId || refRow.by_user_id || refRow.user_id || originalSenderId;
       }
 
       if (!originalSenderId) {
         throw new Error("Could not find the original sender of this referral.");
       }
 
+      const targetSenderId = String(originalSenderId);
+
       // Thank You Slip Relationship:
-      // Sender (from_user_id / fromUserId) = Member B (converting user, i.e. current logged in user)
-      // Receiver (to_user_id / toUserId) = Member A (original referral sender)
+      // Sender (from_user_id / fromUserId / sender_id) = Member B (converting user, i.e. current logged in user)
+      // Receiver (to_user_id / toUserId / receiver_id) = Member A (original referral sender)
       const newSlip = {
-        referral_id: selectedReferral.id,
-        referralId: selectedReferral.id,
+        referral_id: String(selectedReferral.id),
+        referralId: String(selectedReferral.id),
         from_user_id: currentUserId,
         fromUserId: currentUserId,
-        to_user_id: originalSenderId,
-        toUserId: originalSenderId,
-        customer_name: formData.customerName || selectedReferral.contactName,
-        customerName: formData.customerName || selectedReferral.contactName,
+        sender_id: currentUserId,
+        senderId: currentUserId,
+        to_user_id: targetSenderId,
+        toUserId: targetSenderId,
+        receiver_id: targetSenderId,
+        receiverId: targetSenderId,
+        customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
+        customerName: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
         business_value: Number(formData.businessValue),
         businessValue: Number(formData.businessValue),
-        notes: formData.notes,
+        notes: formData.notes || '',
         created_at: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
@@ -296,7 +310,20 @@ export function ThankYouSlips() {
         await databaseService.update('referrals', formData.referralId, { status: 'Completed' });
       } catch (dbErr) {}
 
-      const receiver = allUsers.find(u => u.uid === originalSenderId || u.id === originalSenderId) || null;
+      // Send notification to Member A
+      try {
+        await notificationService.sendNotification({
+          userId: targetSenderId,
+          type: 'THANKYOU',
+          title: 'Thank You Slip Received',
+          message: `You received a Thank You Slip from ${profile.name || profile.displayName || 'a member'} for ₹${Number(formData.businessValue).toLocaleString('en-IN')}.`,
+          link: '/thank-you-slips'
+        });
+      } catch (notifErr) {
+        console.warn('Notification send notice:', notifErr);
+      }
+
+      const receiver = allUsers.find(u => String(u.uid) === targetSenderId || String(u.id) === targetSenderId) || null;
       setTestimonialReceiver(receiver);
 
       setShowSuccess(true);

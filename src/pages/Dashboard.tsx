@@ -289,6 +289,28 @@ export function Analytics() {
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], setAllSlips);
     const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
 
+    // Fetch thank_you_slips from Supabase as well
+    supabase.from('thank_you_slips').select('*').then(({ data: sbSlips }) => {
+      if (sbSlips && sbSlips.length > 0) {
+        const mappedSbSlips = sbSlips.map((s: any) => ({
+          id: String(s.id),
+          referralId: String(s.referral_id || s.referralId || ''),
+          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
+          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
+          customerName: s.customer_name || s.customerName || '',
+          businessValue: Number(s.business_value || s.businessValue || 0),
+          notes: s.notes || '',
+          createdAt: s.created_at || s.createdAt || new Date().toISOString()
+        }));
+        setAllSlips(prev => {
+          const map = new Map();
+          prev.forEach(item => map.set(String(item.id), item));
+          mappedSbSlips.forEach(item => map.set(String(item.id), item));
+          return Array.from(map.values());
+        });
+      }
+    });
+
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
       setAllReferrals(data);
@@ -560,9 +582,15 @@ export function Analytics() {
     if (profile?.role === 'MASTER_ADMIN') {
       return effectiveSlips.length;
     }
-    const chapterSlips = effectiveSlips.filter(slip => 
-      chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
-    );
+    const userIds = [profile?.id, profile?.uid].filter(Boolean).map(String);
+    const chapterSlips = effectiveSlips.filter(slip => {
+      const from = String(slip.fromUserId || slip.from_user_id || slip.sender_id || '');
+      const to = String(slip.toUserId || slip.to_user_id || slip.receiver_id || '');
+      if (profile?.role === 'MEMBER') {
+        return userIds.includes(from) || userIds.includes(to);
+      }
+      return chapterUserIds.includes(from) || chapterUserIds.includes(to) || userIds.includes(from) || userIds.includes(to);
+    });
     return chapterSlips.length;
   }, [effectiveSlips, chapterUserIds, profile]);
 
@@ -780,8 +808,9 @@ export function Analytics() {
       );
     }
     // MEMBER role
+    const userIds = [profile.id, profile.uid].filter(Boolean).map(String);
     return dynamicRecentActivities.filter(a => 
-      a.fromUserId === profile.uid || a.toUserId === profile.uid
+      userIds.includes(String(a.fromUserId)) || userIds.includes(String(a.toUserId))
     );
   }, [dynamicRecentActivities, profile, chapterUserIds]);
 

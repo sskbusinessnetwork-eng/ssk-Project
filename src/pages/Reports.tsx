@@ -280,12 +280,14 @@ export function Reports() {
     const filteredSlips = thankYouSlips.filter(s => {
       const isDateValid = isWithinDateRange(s.createdAt, parsedStart, parsedEnd);
       let isScopeValid = true;
+      const from = s.fromUserId || (s as any).from_user_id || (s as any).sender_id;
+      const to = s.toUserId || (s as any).to_user_id || (s as any).receiver_id;
       if (selectedChapterId && selectedChapterId !== 'ALL') {
         const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
-        isScopeValid = chapterMemberUids.includes(s.fromUserId) || chapterMemberUids.includes(s.toUserId);
+        isScopeValid = chapterMemberUids.includes(from) || chapterMemberUids.includes(to);
       }
       if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = s.fromUserId === selectedMemberId || s.toUserId === selectedMemberId;
+        isScopeValid = from === selectedMemberId || to === selectedMemberId;
       }
       return isDateValid && isScopeValid;
     });
