@@ -104,53 +104,94 @@ export function ThankYouSlips() {
 
     // Supabase fallback / sync for Sent & Received slips
     const fetchSupabaseSlips = async () => {
-      if (userCandidateIds.length === 0) return;
-
-      const sentOrClause = userCandidateIds.map(id => `from_user_id.eq.${id},sender_id.eq.${id}`).join(',');
-      const { data: sentData } = await supabase
-        .from('thank_you_slips')
-        .select('*')
-        .or(sentOrClause)
-        .order('created_at', { ascending: false });
-
-      if (sentData) {
-        const mappedSent: ThankYouSlip[] = sentData.map((s: any) => ({
-          id: String(s.id),
-          referralId: String(s.referral_id || s.referralId || ''),
-          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
-          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
-          customerName: s.customer_name || s.customerName || '',
-          businessValue: Number(s.business_value || s.businessValue || 0),
-          notes: s.notes || '',
-          createdAt: s.created_at || s.createdAt || new Date().toISOString()
-        }));
-        setSlips(mappedSent);
+      if (userCandidateIds.length === 0) {
         setLoading(false);
+        return;
       }
 
-      const receivedOrClause = userCandidateIds.map(id => `to_user_id.eq.${id},receiver_id.eq.${id}`).join(',');
-      const { data: receivedData } = await supabase
-        .from('thank_you_slips')
-        .select('*')
-        .or(receivedOrClause)
-        .order('created_at', { ascending: false });
+      setError(null);
+      try {
+        const sentOrClause = userCandidateIds.map(id => `from_user_id.eq.${id}`).join(',');
+        const receivedOrClause = userCandidateIds.map(id => `to_user_id.eq.${id}`).join(',');
 
-      if (receivedData) {
-        const mappedReceived: ThankYouSlip[] = receivedData.map((s: any) => ({
-          id: String(s.id),
-          referralId: String(s.referral_id || s.referralId || ''),
-          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
-          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
-          customerName: s.customer_name || s.customerName || '',
-          businessValue: Number(s.business_value || s.businessValue || 0),
-          notes: s.notes || '',
-          createdAt: s.created_at || s.createdAt || new Date().toISOString()
-        }));
-        setReceivedSlips(mappedReceived);
+        const [sentRes, recRes] = await Promise.all([
+          supabase.from('thank_you_slips').select('*').or(sentOrClause).order('created_at', { ascending: false }),
+          supabase.from('thank_you_slips').select('*').or(receivedOrClause).order('created_at', { ascending: false })
+        ]);
+
+        if (sentRes.error) {
+          console.error("Error fetching sent thank you slips:", sentRes.error);
+          setError(`Failed to load sent slips: ${sentRes.error.message}`);
+        } else if (sentRes.data) {
+          const mappedSent: ThankYouSlip[] = sentRes.data.map((s: any) => ({
+            id: String(s.id),
+            referralId: String(s.referral_id || s.referralId || ''),
+            fromUserId: String(s.from_user_id || s.fromUserId || ''),
+            toUserId: String(s.to_user_id || s.toUserId || ''),
+            customerName: s.customer_name || s.customerName || '',
+            businessValue: Number(s.business_value || s.businessValue || 0),
+            notes: s.notes || '',
+            createdAt: s.created_at || s.createdAt || new Date().toISOString()
+          }));
+          setSlips(mappedSent);
+        }
+
+        if (recRes.error) {
+          console.error("Error fetching received thank you slips:", recRes.error);
+          setError(`Failed to load received slips: ${recRes.error.message}`);
+        } else if (recRes.data) {
+          const mappedReceived: ThankYouSlip[] = recRes.data.map((s: any) => ({
+            id: String(s.id),
+            referralId: String(s.referral_id || s.referralId || ''),
+            fromUserId: String(s.from_user_id || s.fromUserId || ''),
+            toUserId: String(s.to_user_id || s.toUserId || ''),
+            customerName: s.customer_name || s.customerName || '',
+            businessValue: Number(s.business_value || s.businessValue || 0),
+            notes: s.notes || '',
+            createdAt: s.created_at || s.createdAt || new Date().toISOString()
+          }));
+          setReceivedSlips(mappedReceived);
+        }
+
+        if (isMasterAdmin || isChapterAdmin) {
+          const { data: allData, error: allError } = await supabase
+            .from('thank_you_slips')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (allError) {
+            console.error("Error fetching all thank you slips:", allError);
+          } else if (allData) {
+            const mappedAll: ThankYouSlip[] = allData.map((s: any) => ({
+              id: String(s.id),
+              referralId: String(s.referral_id || s.referralId || ''),
+              fromUserId: String(s.from_user_id || s.fromUserId || ''),
+              toUserId: String(s.to_user_id || s.toUserId || ''),
+              customerName: s.customer_name || s.customerName || '',
+              businessValue: Number(s.business_value || s.businessValue || 0),
+              notes: s.notes || '',
+              createdAt: s.created_at || s.createdAt || new Date().toISOString()
+            }));
+            setAllSlips(mappedAll);
+          }
+        }
+      } catch (err: any) {
+        console.error("Error in fetchSupabaseSlips:", err);
+        setError("Failed to fetch thank you slips. Please try again.");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchSupabaseSlips();
+
+    // Subscribe to Supabase Realtime changes for immediate updates
+    const realtimeChannel = supabase
+      .channel('public:thank_you_slips_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => {
+        fetchSupabaseSlips();
+      })
+      .subscribe();
 
     let unsubscribeAll = () => {};
     if (isMasterAdmin || isChapterAdmin) {
@@ -852,96 +893,118 @@ export function ThankYouSlips() {
           </div>
         ) : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {(activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).map((slip) => (
-              <motion.div
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                key={slip.id}
-                className="group bg-[#111827] p-6 rounded-[16px] border border-white/5 shadow-sm hover:border-white/10 transition-all duration-300"
-              >
-                <div className="flex items-start justify-between mb-6">
-                  <div className={cn(
-                    "w-12 h-12 rounded-[12px] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform duration-300",
-                    activeTab === 'sent' ? "bg-emerald-500/10 text-emerald-400" : 
-                    activeTab === 'received' ? "bg-primary/10 text-primary" : "bg-[#151C2E] text-neutral-400"
-                  )}>
-                    {activeTab === 'sent' ? <TrendingUp size={20} /> : <Award size={20} />}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
-                      {format(new Date(slip.createdAt), 'dd MMM yyyy')}
-                    </span>
-                    {activeTab === 'chapter' && (
-                      <span className="text-[10px] font-semibold text-primary uppercase tracking-wider bg-primary/5 px-2.5 py-1 rounded-full border border-primary/10">
-                        {allUsers.find(u => u.uid === slip.toUserId)?.category || 'General'}
+            {(activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).map((slip) => {
+              const targetUser = activeTab === 'sent'
+                ? allUsers.find(u => String(u.uid) === String(slip.toUserId) || String(u.id) === String(slip.toUserId))
+                : allUsers.find(u => String(u.uid) === String(slip.fromUserId) || String(u.id) === String(slip.fromUserId));
+              const businessCategory = targetUser?.category || targetUser?.businessCategory || 'General';
+
+              return (
+                <motion.div
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  key={slip.id}
+                  className="group bg-[#111827] p-6 rounded-[16px] border border-white/5 shadow-sm hover:border-white/10 transition-all duration-300 space-y-4"
+                >
+                  {/* Top Bar: Slip Number, Status Badge & Date/Time */}
+                  <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-9 h-9 rounded-lg flex items-center justify-center shadow-sm",
+                        activeTab === 'sent' ? "bg-emerald-500/10 text-emerald-400" : 
+                        activeTab === 'received' ? "bg-primary/10 text-primary" : "bg-[#151C2E] text-neutral-400"
+                      )}>
+                        {activeTab === 'sent' ? <TrendingUp size={18} /> : <Award size={18} />}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-white tracking-wide block">
+                          #TYS-{slip.id.slice(-6).toUpperCase()}
+                        </span>
+                        <span className="inline-block px-2 py-0.5 text-[9px] font-bold uppercase rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mt-0.5">
+                          Completed
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-medium text-neutral-400 block">
+                        {format(new Date(slip.createdAt), 'dd MMM yyyy, hh:mm a')}
                       </span>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Customer</p>
-                    <p className="text-[13px] font-semibold text-white truncate">{slip.customerName}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
-                      {activeTab === 'sent' ? 'Referred To' : activeTab === 'received' ? 'Referred By' : 'Members'}
-                    </p>
-                    <div className="flex flex-col gap-1">
-                      {activeTab === 'sent' 
-                        ? (
-                          <Link 
-                            to={`/profile?id=${slip.toUserId}`}
-                            className="text-[13px] font-semibold text-white hover:text-primary transition-colors truncate"
-                          >
-                            {memberNames[slip.toUserId] || 'Member'}
-                          </Link>
-                        ) 
-                        : activeTab === 'received'
-                        ? (
-                          <Link 
-                            to={`/profile?id=${slip.fromUserId}`}
-                            className="text-[13px] font-semibold text-white hover:text-primary transition-colors truncate"
-                          >
-                            {memberNames[slip.fromUserId] || 'Member'}
-                          </Link>
-                        )
-                        : (
-                          <>
-                            <Link 
-                              to={`/profile?id=${slip.fromUserId}`}
-                              className="text-xs font-medium text-white hover:text-primary transition-colors truncate"
-                            >
-                              From: {memberNames[slip.fromUserId] || '...'}
-                            </Link>
-                            <Link 
-                              to={`/profile?id=${slip.toUserId}`}
-                              className="text-xs font-medium text-white hover:text-primary transition-colors truncate"
-                            >
-                              To: {memberNames[slip.toUserId] || '...'}
-                            </Link>
-                          </>
-                        )}
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between pt-5 border-t border-white/5">
-                  <div>
-                    <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Business Value</p>
-                    <p className="text-xl font-bold text-emerald-400 tracking-tight">
-                      <span className="text-lg mr-1">₹</span>
-                      {slip.businessValue.toLocaleString()}
-                    </p>
+                  {/* Grid Details */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-2">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Referral ID</p>
+                      <p className="text-xs font-bold text-primary truncate">
+                        #REF-{(slip.referralId || 'N/A').slice(-6).toUpperCase()}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                        {activeTab === 'sent' ? 'Referral Receiver' : activeTab === 'received' ? 'Referral Sender' : 'Members'}
+                      </p>
+                      {activeTab === 'sent' ? (
+                        <Link 
+                          to={`/profile?id=${slip.toUserId}`}
+                          className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
+                        >
+                          {memberNames[slip.toUserId] || 'Member'}
+                        </Link>
+                      ) : activeTab === 'received' ? (
+                        <Link 
+                          to={`/profile?id=${slip.fromUserId}`}
+                          className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
+                        >
+                          {memberNames[slip.fromUserId] || 'Member'}
+                        </Link>
+                      ) : (
+                        <div className="text-xs font-medium text-white">
+                          <div>From: {memberNames[slip.fromUserId] || '...'}</div>
+                          <div>To: {memberNames[slip.toUserId] || '...'}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Category</p>
+                      <span className="inline-block px-2 py-0.5 text-[10px] font-semibold text-neutral-300 bg-white/5 rounded-md border border-white/10 truncate max-w-full">
+                        {businessCategory}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Customer</p>
+                      <p className="text-xs font-semibold text-white truncate">{slip.customerName || 'N/A'}</p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Slip Date</p>
+                      <p className="text-xs font-semibold text-white">
+                        {format(new Date(slip.createdAt), 'dd MMM yyyy')}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Business Amount</p>
+                      <p className="text-sm font-bold text-emerald-400 tracking-tight">
+                        ₹{slip.businessValue.toLocaleString('en-IN')}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right max-w-[50%]">
-                    <p className="text-xs text-neutral-400 italic line-clamp-2 leading-relaxed">"{slip.notes || 'No notes provided'}"</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+
+                  {/* Notes / Footer */}
+                  {slip.notes && (
+                    <div className="pt-3 border-t border-white/5">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Notes</p>
+                      <p className="text-xs text-neutral-300 italic line-clamp-2 leading-relaxed">"{slip.notes}"</p>
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         ) : (
           <div className="py-32 text-center bg-[#111827] rounded-[2.5rem] border border-dashed border-white/5">
