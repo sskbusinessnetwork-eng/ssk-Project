@@ -119,19 +119,16 @@ function calculateOccurrences(
     let checkDate = startOfDay(now);
     checkDate.setHours(hours, minutes, 0, 0);
     
-    let count = 0;
     for (let i = 0; i < 90; i++) {
       if (checkDate.getDay() === targetDayNum) {
         if (isAfter(checkDate, now) || isSameDay(checkDate, now)) {
           dates.push(new Date(checkDate));
-          count++;
-          if (count >= 5) break;
+          break; // Requirement 2 & 7: Create only the single first upcoming meeting occurrence
         }
       }
       checkDate = addDays(checkDate, 1);
     }
   } else {
-    let count = 0;
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     
@@ -145,8 +142,7 @@ function calculateOccurrences(
       
       if (isAfter(monthDate, now) || isSameDay(monthDate, now)) {
         dates.push(new Date(monthDate));
-        count++;
-        if (count >= 5) break;
+        break; // Requirement 2 & 7: Create only the single first upcoming meeting occurrence
       }
     }
   }
@@ -170,68 +166,90 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   ]);
 
   const now = new Date();
-
   const isDone = (m: Meeting) => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
 
+  // Requirement 4: If recurring is disabled, remove all future pending recurring meetings
   if (!setup.enabled) {
     const toDelete = allMeetings.filter(m => 
       !isDone(m) && 
-      m.isRecurring && 
+      (m.isRecurring || (m as any).is_recurring) && 
       getMeetingExactDateTime(m) >= startOfDay(now)
     );
     for (const m of toDelete) {
-      await databaseService.delete('meetings', m.id);
+      try {
+        await supabase.from('meetings').delete().eq('id', m.id);
+      } catch (e) {}
+      try {
+        await databaseService.delete('meetings', m.id);
+      } catch (e) {}
     }
     return;
   }
 
   const occurrences = calculateOccurrences(setup.frequency, setup.day, setup.date, setup.time);
+  if (occurrences.length === 0) return;
+
+  const occurrenceDate = occurrences[0];
   const occurrenceIdsToPreserve = new Set<string>();
 
-  for (const occurrenceDate of occurrences) {
-    const existingMeeting = allMeetings.find(m => isSameDay(getMeetingExactDateTime(m), occurrenceDate));
+  const existingMeeting = allMeetings.find(m => !isDone(m) && (m.isRecurring || (m as any).is_recurring) && getMeetingExactDateTime(m) >= startOfDay(now));
 
-    if (existingMeeting) {
-      await databaseService.update('meetings', existingMeeting.id, {
+  if (existingMeeting) {
+    await databaseService.update('meetings', existingMeeting.id, {
+      date: occurrenceDate.toISOString(),
+      time: setup.time,
+      location: setup.location,
+      isRecurring: true,
+      chapter_id: targetChapterId,
+      adminId: adminId || targetChapterId
+    });
+    try {
+      await supabase.from('meetings').update({
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
-        isRecurring: true,
+        is_recurring: true,
         chapter_id: targetChapterId,
-        adminId: adminId || targetChapterId
-      });
-      occurrenceIdsToPreserve.add(existingMeeting.id);
-    } else {
-      const newMeeting: Omit<Meeting, 'id'> = {
-        adminId: adminId || targetChapterId,
-        chapter_id: targetChapterId,
-        date: occurrenceDate.toISOString(),
-        time: setup.time,
-        location: setup.location,
-        attendance: {},
-        amountCollected: {},
-        memberNotes: {},
-        notes: '',
-        isCompleted: false,
-        status: 'UPCOMING',
-        isRecurring: true
-      };
-      const newId = await databaseService.create('meetings', newMeeting);
-      if (newId) {
-        occurrenceIdsToPreserve.add(newId);
-      }
+        admin_id: adminId || targetChapterId
+      }).eq('id', existingMeeting.id);
+    } catch (e) {}
+    occurrenceIdsToPreserve.add(existingMeeting.id);
+  } else {
+    const newMeeting: Omit<Meeting, 'id'> = {
+      adminId: adminId || targetChapterId,
+      chapter_id: targetChapterId,
+      date: occurrenceDate.toISOString(),
+      time: setup.time,
+      location: setup.location,
+      attendance: {},
+      amountCollected: {},
+      memberNotes: {},
+      notes: '',
+      isCompleted: false,
+      status: 'UPCOMING',
+      isRecurring: true
+    };
+    const newId = await databaseService.create('meetings', newMeeting);
+    if (newId) {
+      occurrenceIdsToPreserve.add(newId);
     }
   }
 
+  // Purge any excess future recurring meetings beyond the single upcoming meeting
   const obsoleteMeetings = allMeetings.filter(m => 
     !isDone(m) && 
-    m.isRecurring && 
+    (m.isRecurring || (m as any).is_recurring) && 
     getMeetingExactDateTime(m) >= startOfDay(now) && 
     !occurrenceIdsToPreserve.has(m.id)
   );
 
   for (const m of obsoleteMeetings) {
-    await databaseService.delete('meetings', m.id);
+    try {
+      await supabase.from('meetings').delete().eq('id', m.id);
+    } catch (e) {}
+    try {
+      await databaseService.delete('meetings', m.id);
+    } catch (e) {}
   }
 }
 
@@ -719,19 +737,19 @@ export function Meetings() {
           setupDataObj = profile.defaultMeetingSetup;
         }
 
-        if (setupDataObj) {
+        if (setupDataObj && setupDataObj.enabled) {
           const setup = {
             adminId: adminUserId,
             frequency: setupDataObj.frequency || 'Weekly',
             day: setupDataObj.day || 'Monday',
             date: setupDataObj.date || 1,
-            time: setupDataObj.time || '07:30',
+            time: setupDataObj.time || '',
             location: setupDataObj.location || venue,
-            enabled: setupDataObj.enabled || false
+            enabled: true
           };
           setDefaultSetupData(setup);
 
-          if (setup.enabled && (chapterId || adminUserId)) {
+          if (chapterId || adminUserId) {
             syncDefaultMeetings(adminUserId, chapterId || adminUserId || '', setup).catch(err => {
               console.error("Background default meetings sync error:", err);
             });
@@ -742,8 +760,8 @@ export function Meetings() {
             frequency: 'Weekly',
             day: 'Monday',
             date: 1,
-            time: '07:30',
-            location: venue,
+            time: '',
+            location: venue || '',
             enabled: false
           });
         }
@@ -953,16 +971,64 @@ export function Meetings() {
     setSuccess(null);
 
     try {
-      if (!isDefaultSetupComplete) {
-        setError('Please complete all required fields.');
-        setIsSubmitting(false);
-        return;
-      }
       const adminId = isChapterAdmin ? profile?.uid : defaultSetupData.adminId;
       const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
       
       if (!adminId) {
         throw new Error('No chapter admin associated or selected.');
+      }
+
+      const adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', adminId);
+      const wasPreviouslyEnabled = Boolean(adminProfile?.defaultMeetingSetup?.enabled);
+
+      if (!defaultSetupData.enabled) {
+        if (!wasPreviouslyEnabled) {
+          setError('Please enable Recurring Meetings to save the default meeting setup.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const defaultSetupDoc = {
+          frequency: defaultSetupData.frequency,
+          day: defaultSetupData.day,
+          date: defaultSetupData.date,
+          time: defaultSetupData.time,
+          location: defaultSetupData.location,
+          enabled: false
+        };
+
+        await databaseService.update('users', adminId, {
+          defaultMeetingSetup: defaultSetupDoc
+        });
+
+        const targetChapterId = activeChapterId || adminId;
+        await syncDefaultMeetings(adminId, targetChapterId, defaultSetupDoc);
+
+        setDefaultSetupData({
+          adminId,
+          frequency: 'Weekly',
+          day: 'Monday',
+          date: 1,
+          time: '',
+          location: '',
+          enabled: false
+        });
+
+        await refreshProfile();
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+
+        setSuccess('Recurring meetings disabled and future meetings cleared.');
+        setTimeout(() => {
+          setIsDefaultSetupOpen(false);
+          setSuccess(null);
+        }, 1500);
+        return;
+      }
+
+      if (!defaultSetupData.time || !defaultSetupData.location.trim()) {
+        setError('Please complete all required fields.');
+        setIsSubmitting(false);
+        return;
       }
 
       const defaultSetupDoc = {
@@ -971,15 +1037,13 @@ export function Meetings() {
         date: defaultSetupData.date,
         time: defaultSetupData.time,
         location: defaultSetupData.location,
-        enabled: defaultSetupData.enabled
+        enabled: true
       };
 
-      // Save to Chapter Admin's user profile document inside users collection
       await databaseService.update('users', adminId, {
         defaultMeetingSetup: defaultSetupDoc
       });
 
-      // Synchronize recurring meetings to meetings collection
       const targetChapterId = activeChapterId || adminId;
       await syncDefaultMeetings(adminId, targetChapterId, defaultSetupDoc);
 
@@ -1136,6 +1200,21 @@ export function Meetings() {
         status: 'COMPLETED',
         updatedAt: new Date().toISOString()
       });
+
+      // Auto-generate next recurring meeting after completion if setup is enabled
+      try {
+        const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || profile?.chapter_id;
+        const meetingAdminId = selectedMeeting.adminId || profile?.uid || '';
+        if (meetingAdminId) {
+          const adminProf = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', meetingAdminId);
+          const setupObj = adminProf?.defaultMeetingSetup;
+          if (setupObj && setupObj.enabled) {
+            await syncDefaultMeetings(meetingAdminId, meetingChapId || meetingAdminId, setupObj);
+          }
+        }
+      } catch (autoErr) {
+        console.error("Error generating next recurring meeting after completion:", autoErr);
+      }
 
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
@@ -1317,9 +1396,10 @@ export function Meetings() {
     // Sort resulting per-chapter nearest meetings chronologically
     scheduledMeetings = nearestPerChapter.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
   } else {
-    // Chapter Admin / Member: show all upcoming meetings for their chapter sorted by date/time ascending
-    scheduledMeetings = [...filteredMeetings.filter(m => !isMeetingDone(m))]
+    // Chapter Admin / Member: show only the single next upcoming recurring meeting for their chapter
+    const upcomingList = [...filteredMeetings.filter(m => !isMeetingDone(m))]
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+    scheduledMeetings = upcomingList.slice(0, 1);
   }
 
   const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
@@ -2496,7 +2576,7 @@ export function Meetings() {
             </div>
           </div>
 
-          <div className={`p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex items-center justify-between ${!isDefaultSetupComplete ? 'opacity-50' : ''}`}>
+          <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[#111827] border border-white/5 rounded-[12px] flex items-center justify-center text-emerald-400 shadow-sm">
                 <Calendar size={20} />
@@ -2506,12 +2586,11 @@ export function Meetings() {
                 <p className="text-xs text-neutral-400">Automatically schedule meetings {defaultSetupData.frequency.toLowerCase()}</p>
               </div>
             </div>
-            <label className={`relative inline-flex items-center ${isDefaultSetupComplete ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+            <label className="relative inline-flex items-center cursor-pointer">
               <input 
                 type="checkbox" 
                 className="sr-only peer"
                 checked={defaultSetupData.enabled}
-                disabled={!isDefaultSetupComplete}
                 onChange={(e) => setDefaultSetupData({ ...defaultSetupData, enabled: e.target.checked })}
               />
               <div className="w-11 h-6 bg-[#111827] border border-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
