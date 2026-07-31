@@ -70,10 +70,10 @@ export function ThankYouSlips() {
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
   useEffect(() => {
-    if (isMasterAdmin || isChapterAdmin) {
-      setActiveTab('all');
+    if (isMasterAdmin) {
+      setActiveTab('all' as any);
     }
-  }, [isMasterAdmin, isChapterAdmin]);
+  }, [isMasterAdmin]);
 
   useEffect(() => {
     if (!profile) return;
@@ -111,8 +111,8 @@ export function ThankYouSlips() {
 
       setError(null);
       try {
-        const sentOrClause = userCandidateIds.map(id => `from_user_id.eq.${id}`).join(',');
-        const receivedOrClause = userCandidateIds.map(id => `to_user_id.eq.${id}`).join(',');
+        const sentOrClause = userCandidateIds.flatMap(id => [`from_user_id.eq.${id}`, `submitted_by.eq.${id}`, `receiver_id.eq.${id}`]).join(',');
+        const receivedOrClause = userCandidateIds.flatMap(id => [`to_user_id.eq.${id}`, `sender_id.eq.${id}`]).join(',');
 
         const [sentRes, recRes] = await Promise.all([
           supabase.from('thank_you_slips').select('*').or(sentOrClause).order('created_at', { ascending: false }),
@@ -123,37 +123,45 @@ export function ThankYouSlips() {
           console.error("Error fetching sent thank you slips:", sentRes.error);
           setError(`Failed to load sent slips: ${sentRes.error.message}`);
         } else if (sentRes.data) {
-          const mappedSent: ThankYouSlip[] = sentRes.data.map((s: any) => ({
-            id: String(s.id),
-            referralId: String(s.referral_id || s.referralId || ''),
-            fromUserId: String(s.from_user_id || s.fromUserId || ''),
-            toUserId: String(s.to_user_id || s.toUserId || ''),
-            customerName: s.customer_name || s.customerName || '',
-            businessValue: Number(s.business_value || s.businessValue || 0),
-            notes: s.notes || '',
-            createdAt: s.created_at || s.createdAt || new Date().toISOString()
-          }));
-          setSlips(mappedSent);
+          const mapSent = new Map<string, ThankYouSlip>();
+          sentRes.data.forEach((s: any) => {
+            const item: ThankYouSlip = {
+              id: String(s.id),
+              referralId: String(s.referral_id || s.referralId || ''),
+              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
+              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
+              customerName: s.customer_name || s.customerName || '',
+              businessValue: Number(s.business_value || s.businessValue || 0),
+              notes: s.notes || s.thank_you_message || '',
+              createdAt: s.created_at || s.createdAt || new Date().toISOString()
+            };
+            mapSent.set(item.id, item);
+          });
+          setSlips(Array.from(mapSent.values()));
         }
 
         if (recRes.error) {
           console.error("Error fetching received thank you slips:", recRes.error);
           setError(`Failed to load received slips: ${recRes.error.message}`);
         } else if (recRes.data) {
-          const mappedReceived: ThankYouSlip[] = recRes.data.map((s: any) => ({
-            id: String(s.id),
-            referralId: String(s.referral_id || s.referralId || ''),
-            fromUserId: String(s.from_user_id || s.fromUserId || ''),
-            toUserId: String(s.to_user_id || s.toUserId || ''),
-            customerName: s.customer_name || s.customerName || '',
-            businessValue: Number(s.business_value || s.businessValue || 0),
-            notes: s.notes || '',
-            createdAt: s.created_at || s.createdAt || new Date().toISOString()
-          }));
-          setReceivedSlips(mappedReceived);
+          const mapRec = new Map<string, ThankYouSlip>();
+          recRes.data.forEach((s: any) => {
+            const item: ThankYouSlip = {
+              id: String(s.id),
+              referralId: String(s.referral_id || s.referralId || ''),
+              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
+              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
+              customerName: s.customer_name || s.customerName || '',
+              businessValue: Number(s.business_value || s.businessValue || 0),
+              notes: s.notes || s.thank_you_message || '',
+              createdAt: s.created_at || s.createdAt || new Date().toISOString()
+            };
+            mapRec.set(item.id, item);
+          });
+          setReceivedSlips(Array.from(mapRec.values()));
         }
 
-        if (isMasterAdmin || isChapterAdmin) {
+        if (isMasterAdmin) {
           const { data: allData, error: allError } = await supabase
             .from('thank_you_slips')
             .select('*')
@@ -165,11 +173,11 @@ export function ThankYouSlips() {
             const mappedAll: ThankYouSlip[] = allData.map((s: any) => ({
               id: String(s.id),
               referralId: String(s.referral_id || s.referralId || ''),
-              fromUserId: String(s.from_user_id || s.fromUserId || ''),
-              toUserId: String(s.to_user_id || s.toUserId || ''),
+              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
+              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
               customerName: s.customer_name || s.customerName || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
-              notes: s.notes || '',
+              notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
             }));
             setAllSlips(mappedAll);
@@ -194,7 +202,7 @@ export function ThankYouSlips() {
       .subscribe();
 
     let unsubscribeAll = () => {};
-    if (isMasterAdmin || isChapterAdmin) {
+    if (isMasterAdmin) {
       const constraints = [orderBy('createdAt', 'desc')];
 
       unsubscribeAll = databaseService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
@@ -504,7 +512,7 @@ export function ThankYouSlips() {
     document.body.removeChild(link);
   };
 
-  if (isMasterAdmin || isChapterAdmin) {
+  if (isMasterAdmin) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8 space-y-8">
         {/* Header Section */}
@@ -764,7 +772,7 @@ export function ThankYouSlips() {
       </header>
 
       {/* Filters for Admin */}
-      {(isMasterAdmin || isChapterAdmin) && (
+      {isMasterAdmin && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
