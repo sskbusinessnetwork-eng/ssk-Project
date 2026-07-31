@@ -87,10 +87,10 @@ export function Layout() {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/login', { replace: true });
+      navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
     } catch (error) {
       console.error('Logout failed:', error);
-      navigate('/login', { replace: true });
+      navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
     }
   };
 

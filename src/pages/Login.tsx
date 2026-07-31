@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { LogIn, Phone, ShieldCheck, Lock, AlertCircle, Eye, EyeOff, ChevronDown, KeyRound, CheckCircle2, ArrowLeft, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { getDashboardPath, getCleanFullName } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
@@ -15,9 +15,16 @@ import { BrandLogo } from '../components/BrandLogo';
 export function Login() {
   const { user, profile, loading: authLoading, login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccess(location.state.message);
+    }
+  }, [location.state]);
   const [showPassword, setShowPassword] = React.useState(false);
           const [supabaseConnected, setSupabaseConnected] = React.useState<boolean | null>(null);
 

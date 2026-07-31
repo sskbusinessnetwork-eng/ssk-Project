@@ -530,36 +530,6 @@ export function MasterAdminCompanionView({
         </motion.div>
       </div>
 
-      {/* 5. Upgrade Banner */}
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.6 }}
-        className="w-full bg-gradient-to-br from-[#1E123B] via-[#0E071A] to-[#111827] rounded-[20px] p-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-purple-500/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6"
-      >
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 flex-1 text-center md:text-left space-y-2">
-          <h2 className="text-[17px] font-bold text-white flex items-center justify-center md:justify-start gap-1.5">
-            Upgrade to Platinum <Crown size={16} className="text-[#FBBF24] animate-pulse" />
-          </h2>
-          <p className="text-[13px] text-[#9CA3AF] font-medium leading-relaxed max-w-md">
-            Unlock advanced enterprise analytics, global network matching, priority support and higher operations thresholds.
-          </p>
-          <div className="pt-2">
-            <motion.button 
-              whileHover={{ scale: 1.03, y: -2, boxShadow: "0 0 15px rgba(229,57,53,0.3)" }}
-              whileTap={{ scale: 0.97 }}
-              className="w-full md:w-auto bg-gradient-to-r from-red-600 to-[#E53935] hover:opacity-90 text-white px-5 py-2.5 rounded-[16px] font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(229,57,53,0.3)] transition-all"
-            >
-              Upgrade Now
-              <ChevronRight size={14} />
-            </motion.button>
-          </div>
-        </div>
-      </motion.div>
-
     </div>
   );
 }
