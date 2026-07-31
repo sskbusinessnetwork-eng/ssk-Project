@@ -591,11 +591,15 @@ async function startServer() {
       const slipData = req.body || {};
       const cleanDbPayload = {
         referral_id: slipData.referral_id || slipData.referralId || null,
-        from_user_id: slipData.from_user_id || slipData.fromUserId || slipData.sender_id || slipData.senderId || null,
-        to_user_id: slipData.to_user_id || slipData.toUserId || slipData.receiver_id || slipData.receiverId || null,
+        sender_id: slipData.sender_id || slipData.senderId || slipData.to_user_id || slipData.toUserId || null,
+        receiver_id: slipData.receiver_id || slipData.receiverId || slipData.from_user_id || slipData.fromUserId || null,
+        submitted_by: slipData.submitted_by || slipData.submittedBy || slipData.receiver_id || slipData.from_user_id || null,
+        from_user_id: slipData.from_user_id || slipData.fromUserId || slipData.receiver_id || null,
+        to_user_id: slipData.to_user_id || slipData.toUserId || slipData.sender_id || null,
         customer_name: slipData.customer_name || slipData.customerName || '',
         business_value: Number(slipData.business_value || slipData.businessValue || slipData.businessAmount || 0),
         notes: slipData.notes || slipData.thankYouMessage || slipData.businessDescription || '',
+        thank_you_message: slipData.thank_you_message || slipData.notes || slipData.thankYouMessage || '',
         created_at: slipData.created_at || slipData.createdAt || new Date().toISOString()
       };
 

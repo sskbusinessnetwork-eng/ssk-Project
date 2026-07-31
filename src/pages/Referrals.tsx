@@ -798,33 +798,46 @@ export function Referrals() {
     setErrorMessage(null);
 
     try {
-      // Fetch exact referral record from database to obtain original sender ID
-      let referrerId = selectedReferral.sender_id || selectedReferral.fromUserId || selectedReferral.from_user_id || selectedReferral.senderId;
+      const currentUserId = String(profile.uid || profile.id);
 
+      // Fetch exact referral record from database to obtain original sender & receiver IDs
       const { data: refRecord } = await supabase
         .from('referrals')
         .select('*')
         .eq('id', selectedReferral.id)
         .maybeSingle();
 
-      if (refRecord) {
-        referrerId = refRecord.sender_id || refRecord.from_user_id || refRecord.fromUserId || refRecord.senderId || refRecord.by_user_id || refRecord.user_id || referrerId;
+      const originalSenderId = refRecord?.sender_id || refRecord?.from_user_id || refRecord?.fromUserId || selectedReferral.sender_id || selectedReferral.fromUserId || (selectedReferral as any).from_user_id;
+      const originalReceiverId = refRecord?.receiver_id || refRecord?.to_user_id || refRecord?.toUserId || selectedReferral.receiver_id || selectedReferral.toUserId || (selectedReferral as any).to_user_id;
+
+      // Rule 1: Validate that ONLY the Referral Receiver (Member B) can submit
+      if (String(currentUserId) !== String(originalReceiverId)) {
+        throw new Error("Only the referral receiver can submit a Thank You Slip for this referral.");
       }
 
-      if (!referrerId) {
-        throw new Error("Could not determine original referral sender ID.");
+      // Rule 2: Prevent Duplicates - Check if a Thank You Slip already exists for this referral
+      const { data: existingSlips } = await supabase
+        .from('thank_you_slips')
+        .select('*')
+        .eq('referral_id', selectedReferral.id);
+
+      if (existingSlips && existingSlips.length > 0) {
+        throw new Error("Thank You Slip already submitted.");
       }
 
-      const currentUserId = String(profile.uid || profile.id);
-      const targetReferrerId = String(referrerId);
+      const targetReferrerId = String(originalSenderId);
 
       const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
+        sender_id: targetReferrerId,
+        receiver_id: currentUserId,
+        submitted_by: currentUserId,
         from_user_id: currentUserId,
         to_user_id: targetReferrerId,
         customer_name: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
         business_value: Number(thankYouData.businessValue),
         notes: thankYouData.notes || '',
+        thank_you_message: thankYouData.notes || '',
         created_at: new Date().toISOString()
       };
 
@@ -853,22 +866,15 @@ export function Referrals() {
         await databaseService.update('referrals', selectedReferral.id, { status: 'Completed' });
       } catch (dbErr) {}
 
-      // Send notifications to the referrer (Member A, the original referral sender)
+      // Send Notification to Referral Sender (Member A)
       if (targetReferrerId) {
         try {
-          await notificationService.sendNotification({
-            userId: targetReferrerId,
-            type: 'REFERRAL',
-            title: 'Referral Completed',
-            message: `Your referral for ${selectedReferral.contactName || selectedReferral.contact_name || 'your client'} has been completed.`,
-            link: '/referrals'
-          });
-
+          const receiverName = profile.name || (profile as any).displayName || 'a member';
           await notificationService.sendNotification({
             userId: targetReferrerId,
             type: 'THANKYOU',
             title: 'Thank You Slip Received',
-            message: `You received a Thank You Slip from ${profile.name || 'a member'} for ₹${Number(thankYouData.businessValue).toLocaleString('en-IN')}.`,
+            message: `You have received a Thank You Slip from ${receiverName}.`,
             link: '/thank-you-slips'
           });
         } catch (nErr) {
@@ -876,7 +882,7 @@ export function Referrals() {
         }
       }
 
-      setSuccessMessage("Referral updated successfully!");
+      setSuccessMessage("Thank You Slip submitted successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsThankYouModalOpen(false);
       setThankYouData({ businessValue: '', notes: '' });

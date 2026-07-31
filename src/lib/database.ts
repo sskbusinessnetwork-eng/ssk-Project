@@ -522,11 +522,15 @@ export async function addDoc(collectionRef: any, data: any) {
   if (collectionPath === 'thank_you_slips') {
     const cleanSlipPayload = {
       referral_id: cleanData.referral_id || cleanData.referralId || null,
-      from_user_id: cleanData.from_user_id || cleanData.fromUserId || cleanData.sender_id || cleanData.senderId || null,
-      to_user_id: cleanData.to_user_id || cleanData.toUserId || cleanData.receiver_id || cleanData.receiverId || null,
+      sender_id: cleanData.sender_id || cleanData.senderId || cleanData.to_user_id || cleanData.toUserId || null,
+      receiver_id: cleanData.receiver_id || cleanData.receiverId || cleanData.from_user_id || cleanData.fromUserId || null,
+      submitted_by: cleanData.submitted_by || cleanData.submittedBy || cleanData.receiver_id || cleanData.from_user_id || null,
+      from_user_id: cleanData.from_user_id || cleanData.fromUserId || cleanData.receiver_id || null,
+      to_user_id: cleanData.to_user_id || cleanData.toUserId || cleanData.sender_id || null,
       customer_name: cleanData.customer_name || cleanData.customerName || '',
       business_value: Number(cleanData.business_value || cleanData.businessValue || cleanData.businessAmount || 0),
       notes: cleanData.notes || cleanData.thankYouMessage || cleanData.businessDescription || '',
+      thank_you_message: cleanData.thank_you_message || cleanData.notes || cleanData.thankYouMessage || '',
       created_at: cleanData.created_at || cleanData.createdAt || new Date().toISOString()
     };
 

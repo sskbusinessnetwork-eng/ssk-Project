@@ -243,9 +243,24 @@ export function ThankYouSlips() {
       }
     });
 
-    // Fetch converted referrals where current user is the receiver (Member B) for the form
+    // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
     const fetchConvertedReferrals = async () => {
       if (userCandidateIds.length === 0) return;
+
+      const currentUid = String(profile?.id || profile?.uid);
+
+      // Fetch existing slips to filter out referrals that already have a slip
+      const { data: existingSlips } = await supabase
+        .from('thank_you_slips')
+        .select('referral_id, referralId');
+
+      const existingSlipReferralIds = new Set<string>();
+      if (existingSlips) {
+        existingSlips.forEach((s: any) => {
+          const refId = String(s.referral_id || s.referralId || '');
+          if (refId) existingSlipReferralIds.add(refId);
+        });
+      }
 
       const recOrClause = userCandidateIds.map(id => `receiver_id.eq.${id},to_user_id.eq.${id}`).join(',');
       const { data: rawRefs } = await supabase
@@ -254,9 +269,13 @@ export function ThankYouSlips() {
         .or(recOrClause);
 
       if (rawRefs && rawRefs.length > 0) {
-        const converted = rawRefs.filter((r: any) => 
-          r.status === 'Completed' || r.status === 'COMPLETED' || r.status === 'CONVERTED'
-        ).map((r: any) => ({
+        const converted = rawRefs.filter((r: any) => {
+          const isConverted = r.status === 'Completed' || r.status === 'COMPLETED' || r.status === 'CONVERTED';
+          const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || '');
+          const isReceiver = userCandidateIds.includes(receiverId) || receiverId === currentUid;
+          const hasSlip = existingSlipReferralIds.has(String(r.id));
+          return isConverted && isReceiver && !hasSlip;
+        }).map((r: any) => ({
           id: String(r.id),
           sender_id: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
           fromUserId: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
@@ -272,7 +291,10 @@ export function ThankYouSlips() {
         databaseService.list<Referral>('referrals', [
           where('toUserId', '==', currentUid)
         ]).then(list => {
-          setReferrals(list.filter(r => (r.status as string) === 'CONVERTED' || (r.status as string) === 'Completed' || r.status === 'COMPLETED'));
+          setReferrals(list.filter(r => 
+            ((r.status as string) === 'CONVERTED' || (r.status as string) === 'Completed' || r.status === 'COMPLETED') &&
+            !existingSlipReferralIds.has(String(r.id))
+          ));
         });
       }
     };
@@ -291,42 +313,56 @@ export function ThankYouSlips() {
     if (!profile) return;
 
     const selectedReferral = referrals.find(r => r.id === formData.referralId);
-    if (!selectedReferral) return;
+    if (!selectedReferral) {
+      setError("Please select an eligible referral.");
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
     try {
       const currentUserId = String(profile.uid || profile.id);
 
-      // Fetch exact referral record from database to obtain original sender ID
-      let originalSenderId = selectedReferral.sender_id || selectedReferral.fromUserId || (selectedReferral as any).from_user_id;
-
+      // Fetch exact referral record from live Supabase data to obtain original sender & receiver IDs
       const { data: refRow } = await supabase
         .from('referrals')
         .select('*')
         .eq('id', selectedReferral.id)
         .maybeSingle();
 
-      if (refRow) {
-        originalSenderId = refRow.sender_id || refRow.from_user_id || refRow.fromUserId || refRow.senderId || refRow.by_user_id || refRow.user_id || originalSenderId;
+      const originalSenderId = refRow?.sender_id || refRow?.from_user_id || refRow?.fromUserId || selectedReferral.sender_id || selectedReferral.fromUserId;
+      const originalReceiverId = refRow?.receiver_id || refRow?.to_user_id || refRow?.toUserId || selectedReferral.receiver_id || selectedReferral.toUserId;
+
+      // Rule 1: Validate that ONLY the Referral Receiver (Member B) can submit a Thank You Slip
+      if (String(currentUserId) !== String(originalReceiverId)) {
+        throw new Error("Only the referral receiver can submit a Thank You Slip for this referral.");
       }
 
-      if (!originalSenderId) {
-        throw new Error("Could not find the original sender of this referral.");
+      // Rule 2: Prevent Duplicates - Check if a Thank You Slip already exists for this referral
+      const { data: existingSlip } = await supabase
+        .from('thank_you_slips')
+        .select('*')
+        .eq('referral_id', selectedReferral.id)
+        .maybeSingle();
+
+      if (existingSlip) {
+        throw new Error("Thank You Slip already submitted.");
       }
 
       const targetSenderId = String(originalSenderId);
 
-      // Thank You Slip Relationship:
-      // Sender (from_user_id / fromUserId) = Member B (converting user, i.e. current logged in user)
-      // Receiver (to_user_id / toUserId) = Member A (original referral sender)
+      // Save complete record as required by schema & prompt
       const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
+        sender_id: targetSenderId,
+        receiver_id: currentUserId,
+        submitted_by: currentUserId,
         from_user_id: currentUserId,
         to_user_id: targetSenderId,
         customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
         business_value: Number(formData.businessValue),
         notes: formData.notes || '',
+        thank_you_message: formData.notes || '',
         created_at: new Date().toISOString()
       };
 
@@ -353,7 +389,7 @@ export function ThankYouSlips() {
         console.warn("databaseService.create slip notice:", dbErr);
       }
 
-      // 2. Direct Supabase insert attempt with clean payload
+      // 2. Direct Supabase insert attempt
       const { error: directInsertError } = await supabase.from('thank_you_slips').insert([cleanDbPayload]);
       if (directInsertError) {
         console.warn("Direct Supabase insert notice:", directInsertError);
@@ -368,17 +404,18 @@ export function ThankYouSlips() {
         await databaseService.update('referrals', formData.referralId, { status: 'Completed' });
       } catch (dbErr) {}
 
-      // Send notification to Member A
+      // Send Notification to Referral Sender (Member A)
       try {
+        const receiverName = profile.name || (profile as any).displayName || 'a member';
         await notificationService.sendNotification({
           userId: targetSenderId,
           type: 'THANKYOU',
           title: 'Thank You Slip Received',
-          message: `You received a Thank You Slip from ${profile.name || profile.displayName || 'a member'} for ₹${Number(formData.businessValue).toLocaleString('en-IN')}.`,
+          message: `You have received a Thank You Slip from ${receiverName}.`,
           link: '/thank-you-slips'
         });
       } catch (notifErr) {
-        console.warn('Notification send notice:', notifErr);
+        console.warn("Notification error:", notifErr);
       }
 
       const receiver = allUsers.find(u => String(u.uid) === targetSenderId || String(u.id) === targetSenderId) || null;
@@ -395,8 +432,8 @@ export function ThankYouSlips() {
         }
       }, 2000);
     } catch (err: any) {
-      console.error("Error creating thank you slip:", err);
-      setError(err.message || "Failed to submit thank you slip. Please try again.");
+      console.error("Error submitting thank you slip:", err);
+      setError(err?.message || "Failed to submit thank you slip.");
     } finally {
       setIsSubmitting(false);
     }
