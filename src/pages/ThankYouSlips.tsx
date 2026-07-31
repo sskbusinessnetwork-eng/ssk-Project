@@ -195,66 +195,6 @@ export function ThankYouSlips() {
       }
     };
 
-    fetchSupabaseSlips();
-
-    // Subscribe to Supabase Realtime changes for immediate updates
-    const realtimeChannel = supabase
-      .channel('public:thank_you_slips_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => {
-        fetchSupabaseSlips();
-      })
-      .subscribe();
-
-    let unsubscribeAll = () => {};
-    if (isMasterAdmin) {
-      const constraints = [orderBy('createdAt', 'desc')];
-
-      unsubscribeAll = databaseService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
-        setAllSlips(data);
-      });
-
-      // Fetch users to resolve names
-      databaseService.list<UserProfile>('users', []).then(users => {
-        setAllUsers(users);
-        const names: Record<string, string> = {};
-        users.forEach(u => {
-          const name = u.name || u.displayName || 'Member Not Found';
-          if (u.uid) names[String(u.uid)] = name;
-          if (u.id) names[String(u.id)] = name;
-        });
-        setMemberNames(prev => ({ ...prev, ...names }));
-      });
-
-      // Fetch categories
-      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
-        if (data) setAllCategories(data as unknown as Category[]);
-      });
-    }
-
-    // Fetch members to show names
-    databaseService.list<UserProfile>('users', []).then(users => {
-      const names: Record<string, string> = {};
-      users.forEach(u => {
-        const name = u.name || u.displayName || 'Member Not Found';
-        if (u.uid) names[String(u.uid)] = name;
-        if (u.id) names[String(u.id)] = name;
-      });
-      setMemberNames(prev => ({ ...prev, ...names }));
-    });
-
-    // Also fetch users from Supabase for complete name resolution
-    supabase.from('users').select('*').then(({ data: sbUsers }) => {
-      if (sbUsers) {
-        const sbNames: Record<string, string> = {};
-        sbUsers.forEach(u => {
-          const name = u.name || u.displayName || 'Member Not Found';
-          if (u.uid) sbNames[String(u.uid)] = name;
-          if (u.id) sbNames[String(u.id)] = name;
-        });
-        setMemberNames(prev => ({ ...prev, ...sbNames }));
-      }
-    });
-
     // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
     const fetchConvertedReferrals = async () => {
       if (userCandidateIds.length === 0) return;
@@ -315,7 +255,70 @@ export function ThankYouSlips() {
       }
     };
 
+    fetchSupabaseSlips();
     fetchConvertedReferrals();
+
+    // Subscribe to Supabase Realtime changes for immediate updates
+    const realtimeChannel = supabase
+      .channel('public:thank_you_slips_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => {
+        fetchSupabaseSlips();
+        fetchConvertedReferrals();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => {
+        fetchConvertedReferrals();
+      })
+      .subscribe();
+
+    let unsubscribeAll = () => {};
+    if (isMasterAdmin) {
+      const constraints = [orderBy('createdAt', 'desc')];
+
+      unsubscribeAll = databaseService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
+        setAllSlips(data);
+      });
+
+      // Fetch users to resolve names
+      databaseService.list<UserProfile>('users', []).then(users => {
+        setAllUsers(users);
+        const names: Record<string, string> = {};
+        users.forEach(u => {
+          const name = u.name || u.displayName || 'Member Not Found';
+          if (u.uid) names[String(u.uid)] = name;
+          if (u.id) names[String(u.id)] = name;
+        });
+        setMemberNames(prev => ({ ...prev, ...names }));
+      });
+
+      // Fetch categories
+      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
+        if (data) setAllCategories(data as unknown as Category[]);
+      });
+    }
+
+    // Fetch members to show names
+    databaseService.list<UserProfile>('users', []).then(users => {
+      const names: Record<string, string> = {};
+      users.forEach(u => {
+        const name = u.name || u.displayName || 'Member Not Found';
+        if (u.uid) names[String(u.uid)] = name;
+        if (u.id) names[String(u.id)] = name;
+      });
+      setMemberNames(prev => ({ ...prev, ...names }));
+    });
+
+    // Also fetch users from Supabase for complete name resolution
+    supabase.from('users').select('*').then(({ data: sbUsers }) => {
+      if (sbUsers) {
+        const sbNames: Record<string, string> = {};
+        sbUsers.forEach(u => {
+          const name = u.name || u.displayName || 'Member Not Found';
+          if (u.uid) sbNames[String(u.uid)] = name;
+          if (u.id) sbNames[String(u.id)] = name;
+        });
+        setMemberNames(prev => ({ ...prev, ...sbNames }));
+      }
+    });
 
     return () => {
       unsubscribeSent();
@@ -436,6 +439,9 @@ export function ThankYouSlips() {
 
       // REQUIREMENT 8: Display exact Supabase error if insert fails
       if (insertError) {
+        if (insertError.code === '23505' || insertError.message?.toLowerCase().includes('unique') || insertError.message?.toLowerCase().includes('duplicate')) {
+          throw new Error("This referral already has a Thank You Slip.");
+        }
         const errorParts = [
           insertError.message,
           insertError.code ? `(Code: ${insertError.code})` : '',

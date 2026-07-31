@@ -1,6 +1,6 @@
 -- =========================================================
--- SUPABASE RLS FIX FOR TABLE: thank_you_slips
--- Run this script in the Supabase SQL Editor if RLS blocks inserts
+-- SUPABASE RLS & UNIQUE CONSTRAINT FIX FOR TABLE: thank_you_slips
+-- Run this script in the Supabase SQL Editor
 -- =========================================================
 
 ALTER TABLE public.thank_you_slips ENABLE ROW LEVEL SECURITY;
@@ -21,3 +21,6 @@ ON public.thank_you_slips FOR UPDATE TO public USING (true) WITH CHECK (true);
 
 CREATE POLICY "Enable delete for thank_you_slips"
 ON public.thank_you_slips FOR DELETE TO public USING (true);
+
+-- Ensure UNIQUE constraint on referral_id so a referral can only have ONE Thank You Slip
+CREATE UNIQUE INDEX IF NOT EXISTS idx_thank_you_slips_referral_id ON public.thank_you_slips(referral_id);
