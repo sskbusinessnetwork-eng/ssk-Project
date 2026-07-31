@@ -161,16 +161,20 @@ const getUserFullAddress = (user: any): string => {
   return '';
 };
 
-async function getRecurringScheduleForUser(userId: string) {
-  if (!userId) return null;
+async function getRecurringScheduleForUser(userId: string, chapterId?: string) {
+  if (!userId && !chapterId) return null;
   let schedule: any = null;
   
   try {
-    const { data, error } = await supabase
-      .from('one_to_one_recurring_schedules')
-      .select('*')
-      .or(`sender_id.eq.${userId},organizer_id.eq.${userId},receiver_id.eq.${userId},member_id.eq.${userId}`)
-      .order('created_at', { ascending: false });
+    let query = supabase.from('one_to_one_recurring_schedules').select('*');
+    if (chapterId && userId) {
+      query = query.or(`chapter_id.eq.${chapterId},sender_id.eq.${userId},organizer_id.eq.${userId},receiver_id.eq.${userId},member_id.eq.${userId}`);
+    } else if (chapterId) {
+      query = query.eq('chapter_id', chapterId);
+    } else {
+      query = query.or(`sender_id.eq.${userId},organizer_id.eq.${userId},receiver_id.eq.${userId},member_id.eq.${userId}`);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (!error && data && data.length > 0) {
       schedule = data[0];
     }
@@ -182,6 +186,7 @@ async function getRecurringScheduleForUser(userId: string) {
     try {
       const list = await databaseService.list<any>('one_to_one_recurring_schedules');
       schedule = list.find(s => 
+        (chapterId && String(s.chapter_id) === String(chapterId)) ||
         String(s.sender_id) === String(userId) || 
         String(s.organizer_id) === String(userId) || 
         String(s.receiver_id) === String(userId) || 
@@ -480,16 +485,17 @@ export function OneToOneMeetings() {
     setIsDefaultSetupMode(true);
 
     const currentId = currentUserRecord?.id || profile?.id || profile?.uid;
-    console.log("[OneToOneMeetings] Opening Default Setup for user ID:", currentId);
+    const chapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
+    console.log("[OneToOneMeetings] Opening Default Setup for user ID:", currentId, "chapter ID:", chapterId);
 
-    const savedSchedule = await getRecurringScheduleForUser(String(currentId));
+    const savedSchedule = await getRecurringScheduleForUser(String(currentId), chapterId ? String(chapterId) : undefined);
 
     console.log("[OneToOneMeetings] Loaded recurring schedule:", savedSchedule);
 
-    if (savedSchedule) {
-      const isEnabled = savedSchedule.enabled === true || savedSchedule.recurring_enabled === true;
-      console.log("[OneToOneMeetings] recurring_enabled value:", isEnabled);
+    const isEnabled = savedSchedule && (savedSchedule.enabled === true || savedSchedule.recurring_enabled === true);
+    console.log("[OneToOneMeetings] recurring_enabled value:", isEnabled ? true : false);
 
+    if (savedSchedule && isEnabled) {
       setFormData({
         title: savedSchedule.title || '',
         participantId: savedSchedule.receiver_id || savedSchedule.member_id || savedSchedule.participantId || '',
@@ -500,12 +506,9 @@ export function OneToOneMeetings() {
       });
       setRecurringFrequency(savedSchedule.frequency || 'weekly');
       setRecurringDay(savedSchedule.day || 'Monday');
-      setIsRecurring(isEnabled);
+      setIsRecurring(true);
       setLocationType(savedSchedule.location_type || (savedSchedule.venue?.includes("Address") ? (savedSchedule.venue?.includes("Member") ? "Member Address" : "My Address") : "Online"));
     } else {
-      console.log("[OneToOneMeetings] Loaded recurring schedule: null");
-      console.log("[OneToOneMeetings] recurring_enabled value: false");
-
       setFormData({
         title: '',
         participantId: '',
@@ -544,6 +547,98 @@ export function OneToOneMeetings() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+
+    const currentId = currentUserRecord?.id || profile?.id || profile?.uid;
+    const chapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
+
+    // Requirement 1 & 4 handling for Default Setup mode
+    if (isDefaultSetupMode) {
+      if (!isRecurring) {
+        const activeSchedule = await getRecurringScheduleForUser(String(currentId), chapterId ? String(chapterId) : undefined);
+        const wasEnabled = activeSchedule && (activeSchedule.enabled === true || activeSchedule.recurring_enabled === true);
+
+        if (!wasEnabled) {
+          setError('Please enable Recurring Meetings to save the default meeting setup.');
+          return;
+        }
+
+        // Admin turning OFF existing Default Setup
+        setIsSubmitting(true);
+        setError(null);
+
+        console.log("[OneToOneMeetings] When recurring is disabled: Disabling Default Setup for user/chapter:", currentId);
+        const scheduleId = activeSchedule.id || `rec_${currentId}`;
+        const disablePayload = {
+          ...activeSchedule,
+          enabled: false,
+          recurring_enabled: false,
+          updated_at: new Date().toISOString()
+        };
+
+        console.log("[OneToOneMeetings] Loaded recurring schedule to save:", disablePayload);
+        console.log("[OneToOneMeetings] recurring_enabled value: false");
+
+        try {
+          await supabase.from('one_to_one_recurring_schedules').upsert([disablePayload]);
+        } catch (sErr) {}
+        try {
+          await databaseService.create('one_to_one_recurring_schedules', disablePayload, scheduleId);
+        } catch (sErr) {}
+
+        // Purge future pending recurring meetings
+        const sender_id = activeSchedule.sender_id || currentId;
+        const receiver_id = activeSchedule.receiver_id;
+
+        let purgeQuery = supabase.from('one_to_one_meetings').select('id').eq('status', 'UPCOMING');
+        if (receiver_id) {
+          purgeQuery = purgeQuery.or(`recurring_schedule_id.eq.${scheduleId},and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id})`);
+        } else {
+          purgeQuery = purgeQuery.eq('recurring_schedule_id', scheduleId);
+        }
+
+        const { data: upcomingToPurge } = await purgeQuery;
+        const purgeList = upcomingToPurge || [];
+        console.log("[OneToOneMeetings] Number of future meetings found to purge:", purgeList.length);
+
+        for (const mToPurge of purgeList) {
+          try {
+            await supabase.from('one_to_one_meetings').delete().eq('id', mToPurge.id);
+          } catch (e) {}
+          try {
+            await databaseService.delete('one_to_one_meetings', mToPurge.id);
+          } catch (e) {}
+        }
+
+        if (purgeList.length > 0) {
+          console.log("[OneToOneMeetings] When future meetings are removed: Purged", purgeList.length, "future meetings.");
+        }
+
+        // Clear Default Setup form state
+        setFormData({
+          title: '',
+          participantId: '',
+          date: new Date().toISOString().split('T')[0],
+          time: '10:00 AM',
+          venue: 'Online Meeting',
+          notes: ''
+        });
+        setRecurringFrequency('weekly');
+        setRecurringDay('Monday');
+        setIsRecurring(false);
+        setLocationType('Online');
+
+        setShowSuccess(true);
+        setTimeout(() => {
+          setIsModalOpen(false);
+          setShowSuccess(false);
+        }, 1200);
+
+        await fetchMeetingsAndUsers();
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     if (!formData.participantId) {
       setError('Please select a member.');
@@ -676,6 +771,7 @@ export function OneToOneMeetings() {
         organizer_id: sender_id,
         member_id: receiver_id,
         chapter_id,
+        title: meetingTitle,
         frequency: recurringFrequency,
         day: recurringDay,
         date: formData.date,
@@ -1517,15 +1613,23 @@ export function OneToOneMeetings() {
             setIsDropdownOpen(false);
           }
         }}
-        title="Schedule One-to-One Meeting"
+        title={isDefaultSetupMode ? "Default Meeting Setup" : "Schedule One-to-One Meeting"}
       >
         {showSuccess ? (
           <div className="py-8 text-center space-y-4">
             <div className="w-20 h-20 bg-emerald-500/15 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 size={48} />
             </div>
-            <h3 className="text-2xl font-bold text-white uppercase tracking-tight">Meeting Scheduled!</h3>
-            <p className="text-neutral-400 font-medium">Your meeting has been successfully created.</p>
+            <h3 className="text-2xl font-bold text-white uppercase tracking-tight">
+              {isDefaultSetupMode ? (isRecurring ? "Default Setup Saved!" : "Default Setup Disabled") : "Meeting Scheduled!"}
+            </h3>
+            <p className="text-neutral-400 font-medium">
+              {isDefaultSetupMode
+                ? (isRecurring
+                    ? "Your default recurring meeting setup has been updated."
+                    : "Recurring meetings have been turned off and future pending occurrences cleared.")
+                : "Your meeting has been successfully created."}
+            </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
