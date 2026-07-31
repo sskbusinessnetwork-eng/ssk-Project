@@ -161,19 +161,42 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   const targetChapterId = chapterId || adminId;
   if (!targetChapterId) return;
 
-  const allMeetings = await databaseService.list<Meeting>('meetings', [
-    where('chapter_id', '==', targetChapterId)
-  ]);
+  let allMeetings: Meeting[] = [];
+  try {
+    const list = await databaseService.list<Meeting>('meetings', []);
+    allMeetings = list.filter(m => {
+      const mChap = m.chapter_id || (m as any).chapterId;
+      const mAdmin = m.adminId || (m as any).admin_id;
+      return mChap === targetChapterId || mAdmin === targetChapterId || (adminId && (mChap === adminId || mAdmin === adminId));
+    });
+  } catch (e) {}
 
-  const now = new Date();
-  const isDone = (m: Meeting) => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
+  try {
+    const { data: supaMeetings } = await supabase.from('meetings').select('*').or(`chapter_id.eq.${targetChapterId},admin_id.eq.${targetChapterId}${adminId ? `,chapter_id.eq.${adminId},admin_id.eq.${adminId}` : ''}`);
+    if (supaMeetings && supaMeetings.length > 0) {
+      const map = new Map<string, any>();
+      allMeetings.forEach(m => map.set(m.id, m));
+      supaMeetings.forEach((sm: any) => {
+        map.set(sm.id, {
+          ...map.get(sm.id),
+          ...sm,
+          isCompleted: sm.is_completed ?? sm.isCompleted,
+          isRecurring: sm.is_recurring ?? sm.isRecurring,
+          adminId: sm.admin_id ?? sm.adminId,
+          chapter_id: sm.chapter_id ?? sm.chapterId
+        });
+      });
+      allMeetings = Array.from(map.values());
+    }
+  } catch (e) {}
 
-  // Requirement 4: If recurring is disabled, remove all future pending recurring meetings
+  const isDone = (m: any) => m.isCompleted === true || String(m.isCompleted) === 'true' || m.status === 'COMPLETED' || m.isCancelled === true || String(m.isCancelled) === 'true' || m.status === 'CANCELLED';
+
+  // Requirement 3: If recurring is disabled, remove all future non-completed recurring meetings
   if (!setup.enabled) {
     const toDelete = allMeetings.filter(m => 
       !isDone(m) && 
-      (m.isRecurring || (m as any).is_recurring) && 
-      getMeetingExactDateTime(m) >= startOfDay(now)
+      (m.isRecurring || (m as any).is_recurring)
     );
     for (const m of toDelete) {
       try {
@@ -192,17 +215,18 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   const occurrenceDate = occurrences[0];
   const occurrenceIdsToPreserve = new Set<string>();
 
-  const existingMeeting = allMeetings.find(m => !isDone(m) && (m.isRecurring || (m as any).is_recurring) && getMeetingExactDateTime(m) >= startOfDay(now));
+  const existingMeeting = allMeetings.find(m => !isDone(m) && (m.isRecurring || (m as any).is_recurring));
 
   if (existingMeeting) {
-    await databaseService.update('meetings', existingMeeting.id, {
+    const updatePayload = {
       date: occurrenceDate.toISOString(),
       time: setup.time,
       location: setup.location,
       isRecurring: true,
       chapter_id: targetChapterId,
       adminId: adminId || targetChapterId
-    });
+    };
+    await databaseService.update('meetings', existingMeeting.id, updatePayload);
     try {
       await supabase.from('meetings').update({
         date: occurrenceDate.toISOString(),
@@ -233,13 +257,25 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     if (newId) {
       occurrenceIdsToPreserve.add(newId);
     }
+    try {
+      await supabase.from('meetings').insert([{
+        id: newId,
+        admin_id: adminId || targetChapterId,
+        chapter_id: targetChapterId,
+        date: occurrenceDate.toISOString(),
+        time: setup.time,
+        location: setup.location,
+        status: 'UPCOMING',
+        is_recurring: true,
+        created_at: new Date().toISOString()
+      }]);
+    } catch (e) {}
   }
 
-  // Purge any excess future recurring meetings beyond the single upcoming meeting
+  // Purge any excess non-completed recurring meetings beyond the single upcoming meeting
   const obsoleteMeetings = allMeetings.filter(m => 
     !isDone(m) && 
     (m.isRecurring || (m as any).is_recurring) && 
-    getMeetingExactDateTime(m) >= startOfDay(now) && 
     !occurrenceIdsToPreserve.has(m.id)
   );
 
@@ -717,8 +753,7 @@ export function Meetings() {
       try {
         const venue = await fetchChapterMeetingVenue(chapterId);
 
-        // Find Chapter Admin user for this chapter
-        let adminUserId = isChapterAdmin ? profile?.uid : null;
+        let adminUserId = isChapterAdmin ? (profile?.uid || profile?.id) : null;
         if (!adminUserId && chapterId) {
           const admins = await databaseService.list<UserProfile>('users', [
             where('chapter_id', '==', chapterId),
@@ -728,16 +763,30 @@ export function Meetings() {
             adminUserId = admins[0].uid || admins[0].id;
           }
         }
-        if (!adminUserId) adminUserId = profile?.uid || chapterId || '';
+        if (!adminUserId) adminUserId = profile?.uid || profile?.id || chapterId || '';
 
-        let adminProfile = adminUserId ? await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', adminUserId) : null;
-        
-        let setupDataObj = adminProfile?.defaultMeetingSetup;
-        if (!setupDataObj && isChapterAdmin && profile?.defaultMeetingSetup) {
-          setupDataObj = profile.defaultMeetingSetup;
+        let setupDataObj: any = null;
+        if (adminUserId) {
+          let adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any, default_meeting_setup?: any }>('users', adminUserId);
+          setupDataObj = adminProfile?.defaultMeetingSetup || adminProfile?.default_meeting_setup;
         }
 
-        if (setupDataObj && setupDataObj.enabled) {
+        if (!setupDataObj && isChapterAdmin && profile) {
+          setupDataObj = profile.defaultMeetingSetup || (profile as any)?.default_meeting_setup;
+        }
+
+        if (!setupDataObj && adminUserId) {
+          try {
+            const { data: uData } = await supabase.from('users').select('default_meeting_setup, defaultMeetingSetup').or(`id.eq.${adminUserId},uid.eq.${adminUserId}`).maybeSingle();
+            if (uData) {
+              setupDataObj = uData.default_meeting_setup || uData.defaultMeetingSetup;
+            }
+          } catch (e) {}
+        }
+
+        const isEnabled = setupDataObj && (setupDataObj.enabled === true || setupDataObj.enabled === 'true');
+
+        if (isEnabled) {
           const setup = {
             adminId: adminUserId,
             frequency: setupDataObj.frequency || 'Weekly',
@@ -755,15 +804,22 @@ export function Meetings() {
             });
           }
         } else {
-          setDefaultSetupData({
+          const disabledSetup = {
             adminId: adminUserId,
-            frequency: 'Weekly',
+            frequency: 'Weekly' as const,
             day: 'Monday',
             date: 1,
             time: '',
-            location: venue || '',
+            location: '',
             enabled: false
-          });
+          };
+          setDefaultSetupData(disabledSetup);
+
+          if (chapterId || adminUserId) {
+            syncDefaultMeetings(adminUserId, chapterId || adminUserId || '', disabledSetup).catch(err => {
+              console.error("Background default meetings disable sync error:", err);
+            });
+          }
         }
       } catch (err) {
         console.error("Error loading default meeting setup:", err);
@@ -960,6 +1016,60 @@ export function Meetings() {
     }
   };
 
+  const handleOpenDefaultSetupModal = async () => {
+    setError(null);
+    setSuccess(null);
+    const targetAdminId = isMasterAdmin ? selectedAdminId : (profile?.uid || profile?.id);
+    const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+    
+    let setupDataObj: any = null;
+
+    if (targetAdminId) {
+      try {
+        const dbUser = await databaseService.get<any>('users', targetAdminId);
+        setupDataObj = dbUser?.defaultMeetingSetup || dbUser?.default_meeting_setup;
+      } catch (e) {}
+
+      if (!setupDataObj) {
+        try {
+          const { data: uData } = await supabase.from('users').select('default_meeting_setup, defaultMeetingSetup').or(`id.eq.${targetAdminId},uid.eq.${targetAdminId}`).maybeSingle();
+          if (uData) {
+            setupDataObj = uData.default_meeting_setup || uData.defaultMeetingSetup;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!setupDataObj && isChapterAdmin && profile) {
+      setupDataObj = profile.defaultMeetingSetup || (profile as any)?.default_meeting_setup;
+    }
+
+    const isEnabled = setupDataObj && (setupDataObj.enabled === true || setupDataObj.enabled === 'true');
+
+    if (isEnabled) {
+      setDefaultSetupData({
+        adminId: targetAdminId || '',
+        frequency: setupDataObj.frequency || 'Weekly',
+        day: setupDataObj.day || 'Monday',
+        date: setupDataObj.date || 1,
+        time: setupDataObj.time || '',
+        location: setupDataObj.location || '',
+        enabled: true
+      });
+    } else {
+      setDefaultSetupData({
+        adminId: targetAdminId || '',
+        frequency: 'Weekly',
+        day: 'Monday',
+        date: 1,
+        time: '',
+        location: '',
+        enabled: false
+      });
+    }
+    setIsDefaultSetupOpen(true);
+  };
+
   const handleUpdateDefaultSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isMasterAdmin) {
@@ -971,38 +1081,38 @@ export function Meetings() {
     setSuccess(null);
 
     try {
-      const adminId = isChapterAdmin ? profile?.uid : defaultSetupData.adminId;
+      const adminId = isChapterAdmin ? (profile?.uid || profile?.id) : defaultSetupData.adminId;
       const activeChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
       
       if (!adminId) {
         throw new Error('No chapter admin associated or selected.');
       }
 
-      const adminProfile = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', adminId);
-      const wasPreviouslyEnabled = Boolean(adminProfile?.defaultMeetingSetup?.enabled);
-
+      // Turn OFF Recurring
       if (!defaultSetupData.enabled) {
-        if (!wasPreviouslyEnabled) {
-          setError('Please enable Recurring Meetings to save the default meeting setup.');
-          setIsSubmitting(false);
-          return;
-        }
-
-        const defaultSetupDoc = {
-          frequency: defaultSetupData.frequency,
-          day: defaultSetupData.day,
-          date: defaultSetupData.date,
-          time: defaultSetupData.time,
-          location: defaultSetupData.location,
+        const disabledSetupDoc = {
+          frequency: 'Weekly' as const,
+          day: 'Monday',
+          date: 1,
+          time: '',
+          location: '',
           enabled: false
         };
 
         await databaseService.update('users', adminId, {
-          defaultMeetingSetup: defaultSetupDoc
+          defaultMeetingSetup: disabledSetupDoc,
+          default_meeting_setup: disabledSetupDoc
         });
 
+        try {
+          await supabase.from('users').update({
+            default_meeting_setup: disabledSetupDoc,
+            defaultMeetingSetup: disabledSetupDoc
+          }).or(`id.eq.${adminId},uid.eq.${adminId}`);
+        } catch (e) {}
+
         const targetChapterId = activeChapterId || adminId;
-        await syncDefaultMeetings(adminId, targetChapterId, defaultSetupDoc);
+        await syncDefaultMeetings(adminId, targetChapterId, disabledSetupDoc);
 
         setDefaultSetupData({
           adminId,
@@ -1014,24 +1124,25 @@ export function Meetings() {
           enabled: false
         });
 
-        await refreshProfile();
+        if (refreshProfile) await refreshProfile();
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
         setSuccess('Recurring meetings disabled and future meetings cleared.');
         setTimeout(() => {
           setIsDefaultSetupOpen(false);
           setSuccess(null);
-        }, 1500);
+        }, 1200);
         return;
       }
 
+      // Turn ON or Update Recurring
       if (!defaultSetupData.time || !defaultSetupData.location.trim()) {
-        setError('Please complete all required fields.');
+        setError('Please complete all required fields (time and location).');
         setIsSubmitting(false);
         return;
       }
 
-      const defaultSetupDoc = {
+      const enabledSetupDoc = {
         frequency: defaultSetupData.frequency,
         day: defaultSetupData.day,
         date: defaultSetupData.date,
@@ -1041,20 +1152,28 @@ export function Meetings() {
       };
 
       await databaseService.update('users', adminId, {
-        defaultMeetingSetup: defaultSetupDoc
+        defaultMeetingSetup: enabledSetupDoc,
+        default_meeting_setup: enabledSetupDoc
       });
 
-      const targetChapterId = activeChapterId || adminId;
-      await syncDefaultMeetings(adminId, targetChapterId, defaultSetupDoc);
+      try {
+        await supabase.from('users').update({
+          default_meeting_setup: enabledSetupDoc,
+          defaultMeetingSetup: enabledSetupDoc
+        }).or(`id.eq.${adminId},uid.eq.${adminId}`);
+      } catch (e) {}
 
-      await refreshProfile();
+      const targetChapterId = activeChapterId || adminId;
+      await syncDefaultMeetings(adminId, targetChapterId, enabledSetupDoc);
+
+      if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       setSuccess('Default setup saved successfully!');
       setTimeout(() => {
         setIsDefaultSetupOpen(false);
         setSuccess(null);
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       console.error('Error updating default meeting setup:', err);
       setError(err.message || 'Failed to update default setup.');
@@ -1542,29 +1661,8 @@ export function Meetings() {
         {isChapterAdmin && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
             <button
-              onClick={() => {
-                const targetAdminId = isMasterAdmin ? selectedAdminId : profile?.uid;
-                const adminProfile = allUsers.find(u => u.uid === targetAdminId);
-                
-                if (adminProfile?.defaultMeetingSetup) {
-                  setDefaultSetupData({
-                    ...adminProfile.defaultMeetingSetup,
-                    adminId: targetAdminId || ''
-                  });
-                } else {
-                  setDefaultSetupData({
-                    adminId: targetAdminId || '',
-                    frequency: 'Weekly',
-                    day: 'Monday',
-                    date: 1,
-                    time: '',
-                    location: '',
-                    enabled: false
-                  });
-                }
-                setIsDefaultSetupOpen(true);
-              }}
-              className="flex items-center justify-center gap-2 h-11 px-5 bg-[#151C2E] text-white border border-white/5 rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all active:scale-95 shadow-sm"
+              onClick={handleOpenDefaultSetupModal}
+              className="flex items-center justify-center gap-2 h-11 px-5 bg-[#151C2E] text-white border border-white/5 rounded-[12px] text-xs font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all active:scale-95 shadow-sm cursor-pointer"
             >
               <Settings size={14} />
               <span>Default Setup</span>
