@@ -161,6 +161,59 @@ const getUserFullAddress = (user: any): string => {
   return '';
 };
 
+async function getRecurringScheduleForUser(userId: string) {
+  if (!userId) return null;
+  let schedule: any = null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('one_to_one_recurring_schedules')
+      .select('*')
+      .or(`sender_id.eq.${userId},organizer_id.eq.${userId},receiver_id.eq.${userId},member_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
+    if (!error && data && data.length > 0) {
+      schedule = data[0];
+    }
+  } catch (e) {
+    console.warn("Supabase fetch recurring schedule notice:", e);
+  }
+
+  if (!schedule) {
+    try {
+      const list = await databaseService.list<any>('one_to_one_recurring_schedules');
+      schedule = list.find(s => 
+        String(s.sender_id) === String(userId) || 
+        String(s.organizer_id) === String(userId) || 
+        String(s.receiver_id) === String(userId) || 
+        String(s.member_id) === String(userId)
+      );
+    } catch (e) {
+      console.warn("databaseService fetch recurring schedule notice:", e);
+    }
+  }
+
+  return schedule;
+}
+
+async function getAllRecurringSchedules(): Promise<any[]> {
+  let list: any[] = [];
+  try {
+    const { data, error } = await supabase
+      .from('one_to_one_recurring_schedules')
+      .select('*');
+    if (!error && data) {
+      list = data;
+    }
+  } catch (e) {}
+
+  if (list.length === 0) {
+    try {
+      list = await databaseService.list<any>('one_to_one_recurring_schedules');
+    } catch (e) {}
+  }
+  return list;
+}
+
 export function OneToOneMeetings() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'MASTER_ADMIN';
@@ -169,6 +222,7 @@ export function OneToOneMeetings() {
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+  const [recurringSchedulesList, setRecurringSchedulesList] = useState<any[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -284,6 +338,10 @@ export function OneToOneMeetings() {
         .from('one_to_one_meetings')
         .select('*')
         .order('scheduled_date', { ascending: false });
+
+      // 4. Fetch Recurring Schedules
+      const scheds = await getAllRecurringSchedules();
+      setRecurringSchedulesList(scheds);
 
       if (meetingsData && !mErr) {
         const formattedMeetings = meetingsData.map((m: any) => {
@@ -422,37 +480,19 @@ export function OneToOneMeetings() {
     setIsDefaultSetupMode(true);
 
     const currentId = currentUserRecord?.id || profile?.id || profile?.uid;
-    let savedSchedule: any = null;
+    console.log("[OneToOneMeetings] Opening Default Setup for user ID:", currentId);
 
-    if (currentId) {
-      try {
-        const { data } = await supabase
-          .from('one_to_one_recurring_schedules')
-          .select('*')
-          .or(`sender_id.eq.${currentId},organizer_id.eq.${currentId}`)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (data && data.length > 0) {
-          savedSchedule = data[0];
-        }
-      } catch (e) {
-        console.warn("Supabase fetch recurring schedule error:", e);
-      }
+    const savedSchedule = await getRecurringScheduleForUser(String(currentId));
 
-      if (!savedSchedule) {
-        try {
-          const list = await databaseService.list<any>('one_to_one_recurring_schedules');
-          savedSchedule = list.find(s => String(s.sender_id || s.organizer_id) === String(currentId));
-        } catch (e) {
-          console.warn("databaseService fetch recurring schedule error:", e);
-        }
-      }
-    }
+    console.log("[OneToOneMeetings] Loaded recurring schedule:", savedSchedule);
 
     if (savedSchedule) {
+      const isEnabled = savedSchedule.enabled === true || savedSchedule.recurring_enabled === true;
+      console.log("[OneToOneMeetings] recurring_enabled value:", isEnabled);
+
       setFormData({
         title: savedSchedule.title || '',
-        participantId: savedSchedule.receiver_id || savedSchedule.member_id || '',
+        participantId: savedSchedule.receiver_id || savedSchedule.member_id || savedSchedule.participantId || '',
         date: savedSchedule.date || new Date().toISOString().split('T')[0],
         time: savedSchedule.time || '10:00 AM',
         venue: savedSchedule.venue || 'Online Meeting',
@@ -460,9 +500,12 @@ export function OneToOneMeetings() {
       });
       setRecurringFrequency(savedSchedule.frequency || 'weekly');
       setRecurringDay(savedSchedule.day || 'Monday');
-      setIsRecurring(savedSchedule.enabled !== false);
+      setIsRecurring(isEnabled);
       setLocationType(savedSchedule.location_type || (savedSchedule.venue?.includes("Address") ? (savedSchedule.venue?.includes("Member") ? "Member Address" : "My Address") : "Online"));
     } else {
+      console.log("[OneToOneMeetings] Loaded recurring schedule: null");
+      console.log("[OneToOneMeetings] recurring_enabled value: false");
+
       setFormData({
         title: '',
         participantId: '',
@@ -473,7 +516,7 @@ export function OneToOneMeetings() {
       });
       setRecurringFrequency('weekly');
       setRecurringDay('Monday');
-      setIsRecurring(true);
+      setIsRecurring(false);
       setLocationType('Online');
     }
 
@@ -623,6 +666,7 @@ export function OneToOneMeetings() {
       const meetingTitle = formData.title?.trim() || `1:1 Meeting - ${getUserFullName(senderRecord)} & ${getUserFullName(receiverRecord)}`;
 
       const scheduleId = `rec_${sender_id}_${receiver_id}`;
+      const isEnabled = isRecurring;
 
       // Save / update Recurring Schedule
       const schedulePayload = {
@@ -639,10 +683,14 @@ export function OneToOneMeetings() {
         venue: finalLocation,
         location_type: locationType,
         notes: formData.notes || '',
-        enabled: isRecurring,
+        enabled: isEnabled,
+        recurring_enabled: isEnabled,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
+
+      console.log("[OneToOneMeetings] Loaded recurring schedule to save:", schedulePayload);
+      console.log("[OneToOneMeetings] recurring_enabled value:", isEnabled);
 
       try {
         await supabase.from('one_to_one_recurring_schedules').upsert([schedulePayload]);
@@ -651,70 +699,100 @@ export function OneToOneMeetings() {
       }
       await databaseService.create('one_to_one_recurring_schedules', schedulePayload, scheduleId);
 
-      // Check if an UPCOMING meeting already exists for this pair
-      const { data: existingUpcoming } = await supabase
-        .from('one_to_one_meetings')
-        .select('*')
-        .or(`sender_id.eq.${sender_id},organizer_id.eq.${sender_id}`)
-        .or(`receiver_id.eq.${receiver_id},member_id.eq.${receiver_id}`)
-        .eq('status', 'UPCOMING')
-        .limit(1);
+      if (!isEnabled) {
+        console.log("[OneToOneMeetings] When recurring is disabled: Purging future meetings for schedule", scheduleId);
 
-      const activeUpcoming = existingUpcoming && existingUpcoming.length > 0 ? existingUpcoming[0] : null;
-
-      if (activeUpcoming) {
-        // Update existing upcoming meeting instead of duplicate creation
-        const updatePayload = {
-          title: meetingTitle,
-          meeting_location: finalLocation,
-          venue: finalLocation,
-          meeting_type: finalLocationType,
-          scheduled_date: formData.date,
-          date: formData.date,
-          scheduled_time: formData.time,
-          time: formData.time,
-          notes: formData.notes || '',
-          is_recurring: isRecurring,
-          recurring_schedule_id: scheduleId,
-          updated_at: new Date().toISOString()
-        };
-
-        await supabase.from('one_to_one_meetings').update(updatePayload).eq('id', activeUpcoming.id);
-        await databaseService.update('one_to_one_meetings', activeUpcoming.id, updatePayload);
-      } else {
-        // Create single new upcoming meeting
-        const dbPayload = {
-          title: meetingTitle,
-          sender_id: sender_id,
-          receiver_id: receiver_id,
-          organizer_id: sender_id,
-          member_id: receiver_id,
-          chapter_id: chapter_id,
-          meeting_location: finalLocation,
-          venue: finalLocation,
-          meeting_type: finalLocationType,
-          scheduled_date: formData.date,
-          date: formData.date,
-          scheduled_time: formData.time,
-          time: formData.time,
-          notes: formData.notes || '',
-          status: status,
-          is_recurring: isRecurring,
-          recurring_schedule_id: scheduleId,
-          created_at: new Date().toISOString()
-        };
-
-        const { error: dbErr } = await supabase
+        // Delete any future UPCOMING recurring meetings for this schedule
+        const { data: upcomingToPurge } = await supabase
           .from('one_to_one_meetings')
-          .insert([dbPayload]);
+          .select('id')
+          .or(`recurring_schedule_id.eq.${scheduleId},and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id})`)
+          .eq('status', 'UPCOMING')
+          .eq('is_recurring', true);
 
-        if (dbErr) {
-          console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
-          await databaseService.create('one_to_one_meetings', {
-            ...dbPayload,
-            creatorId: sender_id,
-            participantIds: [receiver_id]
-          });
+        const purgeList = upcomingToPurge || [];
+        console.log("[OneToOneMeetings] Number of future meetings found to purge:", purgeList.length);
+
+        for (const mToPurge of purgeList) {
+          try {
+            await supabase.from('one_to_one_meetings').delete().eq('id', mToPurge.id);
+          } catch (e) {}
+          try {
+            await databaseService.delete('one_to_one_meetings', mToPurge.id);
+          } catch (e) {}
+        }
+
+        if (purgeList.length > 0) {
+          console.log("[OneToOneMeetings] When future meetings are removed: Purged", purgeList.length, "future meetings.");
+        }
+      } else {
+        // Recurring is enabled
+        // Check if an UPCOMING meeting ALREADY exists for this pair/schedule
+        const { data: existingUpcoming } = await supabase
+          .from('one_to_one_meetings')
+          .select('*')
+          .or(`recurring_schedule_id.eq.${scheduleId},and(sender_id.eq.${sender_id},receiver_id.eq.${receiver_id})`)
+          .eq('status', 'UPCOMING')
+          .limit(1);
+
+        const activeUpcoming = existingUpcoming && existingUpcoming.length > 0 ? existingUpcoming[0] : null;
+
+        if (activeUpcoming) {
+          // Update existing upcoming meeting
+          const updatePayload = {
+            title: meetingTitle,
+            meeting_location: finalLocation,
+            venue: finalLocation,
+            meeting_type: finalLocationType,
+            scheduled_date: formData.date,
+            date: formData.date,
+            scheduled_time: formData.time,
+            time: formData.time,
+            notes: formData.notes || '',
+            is_recurring: true,
+            recurring_schedule_id: scheduleId,
+            updated_at: new Date().toISOString()
+          };
+
+          await supabase.from('one_to_one_meetings').update(updatePayload).eq('id', activeUpcoming.id);
+          await databaseService.update('one_to_one_meetings', activeUpcoming.id, updatePayload);
+          console.log("[OneToOneMeetings] Updated existing upcoming recurring meeting:", activeUpcoming.id);
+        } else {
+          // Create single new upcoming meeting
+          const dbPayload = {
+            title: meetingTitle,
+            sender_id: sender_id,
+            receiver_id: receiver_id,
+            organizer_id: sender_id,
+            member_id: receiver_id,
+            chapter_id: chapter_id,
+            meeting_location: finalLocation,
+            venue: finalLocation,
+            meeting_type: finalLocationType,
+            scheduled_date: formData.date,
+            date: formData.date,
+            scheduled_time: formData.time,
+            time: formData.time,
+            notes: formData.notes || '',
+            status: status,
+            is_recurring: true,
+            recurring_schedule_id: scheduleId,
+            created_at: new Date().toISOString()
+          };
+
+          const { error: dbErr } = await supabase
+            .from('one_to_one_meetings')
+            .insert([dbPayload]);
+
+          if (dbErr) {
+            console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
+            await databaseService.create('one_to_one_meetings', {
+              ...dbPayload,
+              creatorId: sender_id,
+              participantIds: [receiver_id]
+            });
+          }
+          console.log("[OneToOneMeetings] Next generated occurrence created:", dbPayload);
         }
       }
 
@@ -830,29 +908,18 @@ export function OneToOneMeetings() {
 
       // Check if recurring is enabled for this meeting
       const scheduleId = updatingMeeting.recurring_schedule_id || `rec_${senderId}_${receiverId}`;
-      let recurringSchedule: any = null;
+      let recurringSchedule: any = await getRecurringScheduleForUser(String(senderId));
 
-      if (scheduleId) {
-        try {
-          const { data } = await supabase
-            .from('one_to_one_recurring_schedules')
-            .select('*')
-            .eq('id', scheduleId)
-            .maybeSingle();
-          if (data) recurringSchedule = data;
-        } catch (e) {}
-
-        if (!recurringSchedule) {
-          try {
-            const list = await databaseService.list<any>('one_to_one_recurring_schedules');
-            recurringSchedule = list.find(s => s.id === scheduleId || (String(s.sender_id) === String(senderId) && String(s.receiver_id) === String(receiverId)));
-          } catch (e) {}
-        }
+      if (!recurringSchedule) {
+        recurringSchedule = await getRecurringScheduleForUser(String(receiverId));
       }
 
-      const isRecurringActive = updatingMeeting.is_recurring || (recurringSchedule && recurringSchedule.enabled !== false);
+      console.log("[OneToOneMeetings] Loaded recurring schedule:", recurringSchedule);
+      
+      const isScheduleEnabled = recurringSchedule && (recurringSchedule.enabled === true || recurringSchedule.recurring_enabled === true);
+      console.log("[OneToOneMeetings] recurring_enabled value:", isScheduleEnabled);
 
-      if (isRecurringActive && recurringSchedule && recurringSchedule.enabled !== false) {
+      if (isScheduleEnabled && recurringSchedule) {
         const freq = recurringSchedule.frequency || 'weekly';
         const day = recurringSchedule.day || 'Monday';
         const nextDateStr = calculateNextOccurrenceDate(updatingMeeting.date || new Date().toISOString().split('T')[0], freq, day);
@@ -861,8 +928,7 @@ export function OneToOneMeetings() {
         const { data: existingUpcoming } = await supabase
           .from('one_to_one_meetings')
           .select('*')
-          .or(`sender_id.eq.${senderId},organizer_id.eq.${senderId}`)
-          .or(`receiver_id.eq.${receiverId},member_id.eq.${receiverId}`)
+          .or(`recurring_schedule_id.eq.${recurringSchedule.id},and(sender_id.eq.${senderId},receiver_id.eq.${receiverId})`)
           .eq('status', 'UPCOMING')
           .limit(1);
 
@@ -904,7 +970,12 @@ export function OneToOneMeetings() {
               participantIds: [receiverId]
             });
           }
+          console.log("[OneToOneMeetings] Next generated occurrence created:", nextMeetingPayload);
+        } else {
+          console.log("[OneToOneMeetings] An upcoming meeting already exists, skipping duplicate creation.");
         }
+      } else {
+        console.log("[OneToOneMeetings] When recurring is disabled: Skipping creation of next occurrence.");
       }
 
       await fetchMeetingsAndUsers();
@@ -1144,9 +1215,33 @@ export function OneToOneMeetings() {
     return filtered;
   }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, historyType, members, profile]);
 
-  const upcomingMeetings = meetings
-    .filter(m => {
+  const upcomingMeetings = useMemo(() => {
+    const rawUpcoming = meetings.filter(m => {
       if (m.status === 'COMPLETED' || m.status === 'CANCELLED' || m.status === 'NOT_COMPLETED') return false;
+
+      if (m.is_recurring || m.recurring_schedule_id) {
+        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
+        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
+
+        const sched = recurringSchedulesList.find(s => 
+          s.id === m.recurring_schedule_id || 
+          (String(s.sender_id) === senderId && String(s.receiver_id) === receiverId) ||
+          (String(s.organizer_id) === senderId && String(s.member_id) === receiverId) ||
+          (String(s.sender_id) === receiverId && String(s.receiver_id) === senderId)
+        );
+
+        if (sched) {
+          const isEnabled = sched.enabled === true || sched.recurring_enabled === true;
+          if (!isEnabled) {
+            console.log("[OneToOneMeetings] When recurring is disabled: ignoring recurring meeting", m.id, "as schedule is disabled");
+            return false;
+          }
+        } else {
+          console.log("[OneToOneMeetings] When recurring is disabled: ignoring orphaned recurring meeting", m.id);
+          return false;
+        }
+      }
+
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
         if (profile?.uid) chapterMemberIds.push(profile.uid);
@@ -1160,8 +1255,12 @@ export function OneToOneMeetings() {
         return senderId === uid || receiverId === uid || m.participantIds?.map(String).includes(uid);
       }
       return true;
-    })
-    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+    });
+
+    console.log("[OneToOneMeetings] Number of future meetings found:", rawUpcoming.length);
+
+    return rawUpcoming.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+  }, [meetings, recurringSchedulesList, isChapterAdmin, members, profile, isAdmin]);
 
   const pastMeetings = meetings
     .filter(m => {
