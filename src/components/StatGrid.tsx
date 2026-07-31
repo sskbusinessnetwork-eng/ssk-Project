@@ -334,24 +334,6 @@ export default function StatGrid({
         icon: FileText,
         color: 'text-teal-400',
         bg: 'bg-teal-400/10 border-teal-400/20',
-      },
-      {
-        label: 'Testimonials Given',
-        value: formatValue('Testimonials Given', testimonialsGivenCount || testimonialsCount),
-        trend: 'Given',
-        trendLabel: 'By network',
-        icon: Star,
-        color: 'text-amber-400',
-        bg: 'bg-amber-400/10 border-amber-400/20',
-      },
-      {
-        label: 'Testimonials Received',
-        value: formatValue('Testimonials Received', testimonialsReceivedCount),
-        trend: 'Received',
-        trendLabel: 'By network',
-        icon: Star,
-        color: 'text-yellow-400',
-        bg: 'bg-yellow-400/10 border-yellow-400/20',
       }
     ];
   };

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Users, Shield, Calendar, Activity,
-  Clock, Target, ChevronRight, TrendingUp, CheckSquare, ChevronDown, ArrowRight, Crown
+  Clock, Target, ChevronRight, TrendingUp, CheckSquare, ChevronDown, ArrowRight, Crown, Tags, CreditCard, Settings
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { format as originalFormat, isValid } from 'date-fns';
@@ -143,20 +143,14 @@ export function MasterAdminCompanionView({
   const midLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 2 / 3) : '0';
   const lowLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 1 / 3) : '0';
 
-  const displayTasks = tasks.length > 0 ? tasks : [
-    { key: 't1', label: "Audit & Authorize Chapter Admin Credentials", isDone: true, link: "/admins", linkText: "Admins" },
-    { key: 't2', label: "Monitor Global Directory and Listings Database", isDone: true, link: "/members", linkText: "Members" },
-    { key: 't3', label: "Review Cross-Region Referral Metrics", isDone: false, link: "/reports", linkText: "Reports" },
-  ];
-  
-  const completedCount = displayTasks.filter(t => t.isDone).length;
-  const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 100;
-
   const operations = [
-    { icon: Users, label: 'Directory', desc: 'Onboard globally', path: '/members', color: 'text-red-500', bg: 'bg-red-500/10' },
-    { icon: Shield, label: 'Chapters', desc: 'Authorize admins', path: '/admins', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { icon: Calendar, label: 'Meeting', desc: 'Setup calendar', path: '/meetings', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { icon: Activity, label: 'Reports', desc: 'Performance info', path: '/reports', color: 'text-orange-400', bg: 'bg-orange-500/10' }
+    { icon: Crown, label: 'Manage Chapters', desc: 'Chapter setup & governance', path: '/manage-chapter', color: 'text-red-500', bg: 'bg-red-500/10' },
+    { icon: Users, label: 'Manage Members', desc: 'Global member directory', path: '/members', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { icon: Tags, label: 'Manage Categories', desc: 'Business classifications', path: '/categories', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+    { icon: CreditCard, label: 'Manage Subscriptions', desc: 'Plans & member renewals', path: '/subscriptions', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { icon: TrendingUp, label: 'Organization Analytics', desc: 'Network-wide statistics', path: '/admin/analytics', color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+    { icon: Activity, label: 'Reports', desc: 'Performance reports', path: '/reports', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { icon: Settings, label: 'System Settings', desc: 'System configuration', path: '/settings', color: 'text-cyan-400', bg: 'bg-cyan-500/10' }
   ];
 
   return (
@@ -218,9 +212,7 @@ export function MasterAdminCompanionView({
         </div>
       </motion.div>
 
-
-
-      {/* 3. Recent Activity */}
+      {/* 2. Recent Activity */}
       <motion.div 
         variants={{
           hidden: { opacity: 0, y: 20 },
@@ -231,42 +223,92 @@ export function MasterAdminCompanionView({
         className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[17px] font-bold text-white tracking-tight">Recent Activity</h3>
-          <span className="text-[11px] font-bold text-red-500 hover:text-red-400 uppercase tracking-wider cursor-pointer transition-all hover:tracking-widest">View All</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative w-full">
-          {finalRecentActivities.length > 0 ? (
-             finalRecentActivities.slice(0, 5).map((act, idx) => {
-              const IconComponent = act.icon || Target;
-              return (
-                <motion.div 
-                  key={idx} 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.08, duration: 0.4 }}
-                  whileHover={{ scale: 1.01, backgroundColor: "rgba(23, 32, 51, 0.8)", borderColor: "rgba(255,255,255,0.12)" }}
-                  className="flex flex-col justify-between gap-3 relative z-10 bg-[#0B1220]/40 border border-white/5 p-4 rounded-[18px] min-h-[120px] hover:bg-[#172033] transition-all cursor-pointer"
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className={`w-9 h-9 rounded-[12px] bg-red-500/10 text-red-500 border-red-500/20 flex items-center justify-center shrink-0 border border-white/5`}>
-                      <IconComponent size={16} />
-                    </div>
-                    <span className="text-[10px] font-semibold text-[#6B7280]">
-                      {act.time ? format(new Date(act.time), 'MMM dd') : 'Just now'}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="text-[12px] font-bold text-white truncate leading-tight">{act.title}</h4>
-                    <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2">{act.desc}</p>
-                  </div>
-                </motion.div>
-              );
-            })
-          ) : (
-            <div className="col-span-5 text-center py-8 text-neutral-400 text-[13px] font-semibold uppercase tracking-[0.2em]">
-              No recent activity
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-[12px] bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
+              <Activity size={16} />
             </div>
-          )}
+            <div>
+              <h3 className="text-[17px] font-bold text-white tracking-tight">Recent Activity</h3>
+              <p className="text-[11px] text-[#9CA3AF] font-medium">Organization-wide real-time event logs</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-emerald-500/20">
+            Live Database
+          </span>
+        </div>
+
+        <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0B1220]/60 custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[750px]">
+            <thead>
+              <tr className="border-b border-white/10 bg-[#0B1220]">
+                <th className="p-3.5 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Activity</th>
+                <th className="p-3.5 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
+                <th className="p-3.5 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
+                <th className="p-3.5 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date & Time</th>
+                <th className="p-3.5 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {finalRecentActivities.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                    No recent organization activity recorded
+                  </td>
+                </tr>
+              ) : (
+                finalRecentActivities.slice(0, 15).map((act, idx) => {
+                  const actName = act.activity || act.title || 'Activity Logged';
+                  const memName = act.memberName || act.fromUserName || 'N/A';
+                  const chapName = act.chapterName || 'Organization';
+                  const rawTime = act.dateTime || act.time;
+                  const formattedDateTime = rawTime ? format(new Date(rawTime), 'MMM dd, yyyy HH:mm') : 'Just now';
+                  const statusVal = (act.status || 'COMPLETED').toUpperCase();
+
+                  const getBadgeColor = (status: string) => {
+                    if (['APPROVED', 'ACTIVE', 'CLOSED', 'COMPLETED', 'RENEWED'].includes(status)) {
+                      return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                    }
+                    if (['SCHEDULED', 'PASSED', 'PROCESSED', 'UPDATED'].includes(status)) {
+                      return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                    }
+                    if (['PENDING', 'REQUESTED'].includes(status)) {
+                      return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                    }
+                    if (['INACTIVE', 'EXPIRED', 'SUSPENDED', 'CANCELLED'].includes(status)) {
+                      return 'bg-red-500/10 text-red-400 border-red-500/20';
+                    }
+                    return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+                  };
+
+                  return (
+                    <tr key={act.id || idx} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="p-3.5">
+                        <div className="text-[13px] font-bold text-white">{actName}</div>
+                        {act.desc && <div className="text-[11px] text-[#9CA3AF] font-medium max-w-sm truncate">{act.desc}</div>}
+                      </td>
+                      <td className="p-3.5 text-[13px] font-semibold text-white/90">
+                        {memName}
+                      </td>
+                      <td className="p-3.5 text-[13px] font-medium text-[#9CA3AF]">
+                        {chapName}
+                      </td>
+                      <td className="p-3.5 text-[12px] font-medium text-[#9CA3AF]">
+                        {formattedDateTime}
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <span className={cn(
+                          "inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
+                          getBadgeColor(statusVal)
+                        )}>
+                          {statusVal}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </motion.div>
 

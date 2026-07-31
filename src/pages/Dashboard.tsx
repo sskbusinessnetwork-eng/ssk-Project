@@ -836,66 +836,316 @@ export function Analytics() {
   const dynamicRecentActivities = useMemo(() => {
     const activities: any[] = [];
 
-    // 1. Slips (Revenue)
-    effectiveSlips.forEach(s => {
-      const fromName = s.fromUserName || s.from_user_name || 'Partner';
-      const toName = s.toUserName || s.to_user_name || 'Partner';
-      const val = Number(s.businessValue) || 0;
-      activities.push({
-        id: s.id,
-        title: 'Business Generated',
-        desc: `${fromName} generated ₹${val.toLocaleString('en-IN')} business for ${toName}`,
-        type: 'business',
-        time: new Date(s.createdAt || s.date).getTime(),
-        fromUserId: s.fromUserId,
-        toUserId: s.toUserId,
+    if (profile?.role === 'MASTER_ADMIN') {
+      // 1. Chapters
+      (allChapters || []).forEach(c => {
+        const cName = c.name || c.chapter_name || 'Organization';
+        const createdTime = new Date(c.created_at || c.createdAt || Date.now()).getTime();
+        if (!isNaN(createdTime)) {
+          activities.push({
+            id: 'chap-new-' + (c.id || cName),
+            activity: 'New Chapter Created',
+            title: 'New Chapter Created',
+            desc: `Chapter ${cName} established`,
+            type: 'chapter',
+            memberName: c.created_by_name || c.createdByName || 'Master Admin',
+            chapterName: cName,
+            dateTime: createdTime,
+            time: createdTime,
+            status: (c.status || 'ACTIVE').toUpperCase()
+          });
+        }
+        if (c.updated_at || c.updatedAt) {
+          const updTime = new Date(c.updated_at || c.updatedAt).getTime();
+          if (!isNaN(updTime) && updTime - createdTime > 60000) {
+            activities.push({
+              id: 'chap-upd-' + (c.id || cName),
+              activity: 'Chapter Updated',
+              title: 'Chapter Updated',
+              desc: `Details updated for ${cName}`,
+              type: 'chapter',
+              memberName: c.updated_by_name || 'Master Admin',
+              chapterName: cName,
+              dateTime: updTime,
+              time: updTime,
+              status: 'UPDATED'
+            });
+          }
+        }
       });
-    });
 
-    // 2. Referrals
-    effectiveReferrals.forEach(r => {
-      const fromName = r.fromUserName || 'Partner';
-      const toName = r.toUserName || 'Partner';
-      activities.push({
-        id: r.id,
-        title: 'Referral Passed',
-        desc: `${fromName} passed a referral to ${toName}`,
-        type: 'referral',
-        time: new Date(r.createdAt || r.date).getTime(),
-        fromUserId: r.fromUserId,
-        toUserId: r.toUserId,
-      });
-    });
+      // 2. Members
+      const relevantUsers = activeDateRange 
+        ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
+        : chapterUsers;
 
-    // 3. One-to-Ones
-    effectiveOneToOnes.forEach(m => {
-      const creatorName = m.creatorName || 'Partner';
-      const participantName = m.participantNames?.[0] || 'Partner';
-      activities.push({
-        id: m.id,
-        title: '1-to-1 Completed',
-        desc: `${creatorName} completed 1-to-1 with ${participantName}`,
-        type: 'onetoone',
-        time: new Date(m.createdAt || m.date).getTime(),
-        fromUserId: (m.organizer_id || m.creatorId),
-        toUserId: m.participantIds?.[0],
-      });
-    });
+      relevantUsers.forEach(u => {
+        const uName = u.name || u.full_name || 'Member';
+        const chName = u.chapterName || u.chapter_name || u.chapter || 'Unassigned';
+        const regTime = new Date(u.createdAt || u.created_at || Date.now()).getTime();
 
-    // 4. New Members
-    const relevantUsers = activeDateRange 
-      ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
-      : chapterUsers;
-    relevantUsers.forEach(u => {
-      activities.push({
-        id: u.uid,
-        title: 'New Partner Joined',
-        desc: `${u.name || 'A partner'} registered as ${u.category || 'Member'}`,
-        type: 'member',
-        time: new Date(u.createdAt).getTime(),
-        fromUserId: u.uid,
+        if (!isNaN(regTime)) {
+          activities.push({
+            id: 'mem-add-' + u.uid,
+            activity: 'Member Added',
+            title: 'Member Added',
+            desc: `${uName} joined as ${u.category || 'Member'}`,
+            type: 'member',
+            memberName: uName,
+            chapterName: chName,
+            dateTime: regTime,
+            time: regTime,
+            status: isMemberActive(u) ? 'ACTIVE' : 'INACTIVE',
+            fromUserId: u.uid
+          });
+        }
+
+        if (u.status === 'ACTIVE' || isMemberActive(u)) {
+          activities.push({
+            id: 'mem-act-' + u.uid,
+            activity: 'Member Activated',
+            title: 'Member Activated',
+            desc: `${uName} account activated`,
+            type: 'member',
+            memberName: uName,
+            chapterName: chName,
+            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            status: 'ACTIVE',
+            fromUserId: u.uid
+          });
+        } else if (u.status === 'INACTIVE' || u.status === 'SUSPENDED') {
+          activities.push({
+            id: 'mem-deact-' + u.uid,
+            activity: 'Member Deactivated',
+            title: 'Member Deactivated',
+            desc: `${uName} account deactivated`,
+            type: 'member',
+            memberName: uName,
+            chapterName: chName,
+            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            status: 'INACTIVE',
+            fromUserId: u.uid
+          });
+        }
+
+        if (u.position && u.position !== 'member') {
+          const formattedPos = u.position.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+          activities.push({
+            id: 'mem-pos-' + u.uid,
+            activity: 'Leadership Position Changed',
+            title: 'Leadership Position Changed',
+            desc: `${uName} assigned as ${formattedPos}`,
+            type: 'leadership',
+            memberName: uName,
+            chapterName: chName,
+            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+            status: formattedPos.toUpperCase(),
+            fromUserId: u.uid
+          });
+        }
       });
-    });
+
+      // 3. Subscriptions
+      (subscriptionRequests || []).forEach(s => {
+        const uName = s.userName || s.user_name || s.name || 'Member';
+        const chName = s.chapterName || s.chapter_name || 'Organization';
+        const sTime = new Date(s.updated_at || s.updatedAt || s.created_at || s.createdAt || Date.now()).getTime();
+
+        if (!isNaN(sTime)) {
+          const isRenewal = s.is_renewal || s.type === 'RENEWAL' || s.status === 'RENEWED';
+          activities.push({
+            id: 'sub-' + s.id,
+            activity: isRenewal ? 'Subscription Renewed' : 'Subscription Approved',
+            title: isRenewal ? 'Subscription Renewed' : 'Subscription Approved',
+            desc: `Subscription ${isRenewal ? 'renewed' : 'approved'} for ${uName}`,
+            type: 'subscription',
+            memberName: uName,
+            chapterName: chName,
+            dateTime: sTime,
+            time: sTime,
+            status: (s.status || 'APPROVED').toUpperCase()
+          });
+        }
+      });
+
+      // 4. Chapter Meetings
+      (meetings || []).forEach(m => {
+        const mTime = new Date(m.created_at || m.createdAt || m.date || Date.now()).getTime();
+        if (!isNaN(mTime)) {
+          activities.push({
+            id: 'mtg-' + m.id,
+            activity: 'Chapter Meeting Created',
+            title: 'Chapter Meeting Created',
+            desc: `Meeting "${m.title || 'Chapter Meeting'}" scheduled`,
+            type: 'meeting',
+            memberName: m.creatorName || m.created_by_name || 'Chapter Leader',
+            chapterName: m.chapterName || m.chapter_name || 'Chapter',
+            dateTime: mTime,
+            time: mTime,
+            status: m.isCompleted ? 'COMPLETED' : 'SCHEDULED'
+          });
+        }
+      });
+
+      // 5. One-to-One Meetings
+      effectiveOneToOnes.forEach(m => {
+        const creatorName = m.creatorName || 'Member';
+        const participantName = m.participantNames?.[0] || 'Member';
+        const mTime = new Date(m.createdAt || m.created_at || m.date || Date.now()).getTime();
+        if (!isNaN(mTime)) {
+          activities.push({
+            id: 'oto-' + m.id,
+            activity: 'One-to-One Meeting Created',
+            title: 'One-to-One Meeting Created',
+            desc: `1-to-1 session between ${creatorName} and ${participantName}`,
+            type: 'onetoone',
+            memberName: creatorName,
+            chapterName: m.chapterName || m.chapter_name || 'Chapter',
+            dateTime: mTime,
+            time: mTime,
+            status: 'COMPLETED',
+            fromUserId: m.organizer_id || m.creatorId,
+            toUserId: m.participantIds?.[0]
+          });
+        }
+      });
+
+      // 6. Referrals
+      effectiveReferrals.forEach(r => {
+        const fromName = r.fromUserName || 'Member';
+        const toName = r.toUserName || 'Partner';
+        const rTime = new Date(r.createdAt || r.created_at || r.date || Date.now()).getTime();
+        if (!isNaN(rTime)) {
+          activities.push({
+            id: 'ref-' + r.id,
+            activity: 'Referral Created',
+            title: 'Referral Created',
+            desc: `${fromName} passed referral to ${toName}`,
+            type: 'referral',
+            memberName: fromName,
+            chapterName: r.chapterName || r.chapter_name || 'Chapter',
+            dateTime: rTime,
+            time: rTime,
+            status: (r.status || 'PASSED').toUpperCase(),
+            fromUserId: r.fromUserId,
+            toUserId: r.toUserId
+          });
+        }
+      });
+
+      // 7. Thank You Slips / Business
+      effectiveSlips.forEach(s => {
+        const fromName = s.fromUserName || s.from_user_name || 'Member';
+        const toName = s.toUserName || s.to_user_name || 'Partner';
+        const val = Number(s.businessValue) || 0;
+        const sTime = new Date(s.createdAt || s.created_at || s.date || Date.now()).getTime();
+        if (!isNaN(sTime)) {
+          const isBizClosed = val > 0;
+          activities.push({
+            id: 'slip-' + s.id,
+            activity: isBizClosed ? 'Business Closed' : 'Thank You Slip Submitted',
+            title: isBizClosed ? 'Business Closed' : 'Thank You Slip Submitted',
+            desc: isBizClosed 
+              ? `${fromName} closed ₹${val.toLocaleString('en-IN')} business with ${toName}`
+              : `${fromName} submitted thank you slip to ${toName}`,
+            type: 'business',
+            memberName: fromName,
+            chapterName: s.chapterName || s.chapter_name || 'Chapter',
+            dateTime: sTime,
+            time: sTime,
+            status: 'CLOSED',
+            fromUserId: s.fromUserId,
+            toUserId: s.toUserId
+          });
+        }
+      });
+
+      // 8. Testimonials
+      (allTestimonials || []).forEach(t => {
+        const authorName = t.author_name || t.authorName || 'Member';
+        const recipientName = t.recipient_name || t.recipientName || 'Partner';
+        const tTime = new Date(t.created_at || t.createdAt || Date.now()).getTime();
+        if (!isNaN(tTime)) {
+          activities.push({
+            id: 'test-' + t.id,
+            activity: 'Testimonial Submitted',
+            title: 'Testimonial Submitted',
+            desc: `${authorName} submitted testimonial for ${recipientName}`,
+            type: 'testimonial',
+            memberName: authorName,
+            chapterName: t.chapterName || t.chapter_name || 'Chapter',
+            dateTime: tTime,
+            time: tTime,
+            status: (t.status || 'APPROVED').toUpperCase(),
+            fromUserId: t.authorMemberId || t.author_id
+          });
+        }
+      });
+    } else {
+      // 1. Slips (Revenue)
+      effectiveSlips.forEach(s => {
+        const fromName = s.fromUserName || s.from_user_name || 'Partner';
+        const toName = s.toUserName || s.to_user_name || 'Partner';
+        const val = Number(s.businessValue) || 0;
+        activities.push({
+          id: s.id,
+          title: 'Business Generated',
+          desc: `${fromName} generated ₹${val.toLocaleString('en-IN')} business for ${toName}`,
+          type: 'business',
+          time: new Date(s.createdAt || s.date).getTime(),
+          fromUserId: s.fromUserId,
+          toUserId: s.toUserId,
+        });
+      });
+
+      // 2. Referrals
+      effectiveReferrals.forEach(r => {
+        const fromName = r.fromUserName || 'Partner';
+        const toName = r.toUserName || 'Partner';
+        activities.push({
+          id: r.id,
+          title: 'Referral Passed',
+          desc: `${fromName} passed a referral to ${toName}`,
+          type: 'referral',
+          time: new Date(r.createdAt || r.date).getTime(),
+          fromUserId: r.fromUserId,
+          toUserId: r.toUserId,
+        });
+      });
+
+      // 3. One-to-Ones
+      effectiveOneToOnes.forEach(m => {
+        const creatorName = m.creatorName || 'Partner';
+        const participantName = m.participantNames?.[0] || 'Partner';
+        activities.push({
+          id: m.id,
+          title: '1-to-1 Completed',
+          desc: `${creatorName} completed 1-to-1 with ${participantName}`,
+          type: 'onetoone',
+          time: new Date(m.createdAt || m.date).getTime(),
+          fromUserId: (m.organizer_id || m.creatorId),
+          toUserId: m.participantIds?.[0],
+        });
+      });
+
+      // 4. New Members
+      const relevantUsers = activeDateRange 
+        ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
+        : chapterUsers;
+      relevantUsers.forEach(u => {
+        activities.push({
+          id: u.uid,
+          title: 'New Partner Joined',
+          desc: `${u.name || 'A partner'} registered as ${u.category || 'Member'}`,
+          type: 'member',
+          time: new Date(u.createdAt).getTime(),
+          fromUserId: u.uid,
+        });
+      });
+    }
 
     // Filter valid entries, sort by time desc
     const sorted = activities
@@ -903,7 +1153,7 @@ export function Analytics() {
       .sort((a, b) => b.time - a.time);
 
     return sorted;
-  }, [effectiveSlips, effectiveReferrals, effectiveOneToOnes, chapterUsers, activeDateRange]);
+  }, [effectiveSlips, effectiveReferrals, effectiveOneToOnes, chapterUsers, allChapters, meetings, allTestimonials, subscriptionRequests, activeDateRange, profile]);
 
   // Filtered recent activities based on role
   const filteredRecentActivities = useMemo(() => {
