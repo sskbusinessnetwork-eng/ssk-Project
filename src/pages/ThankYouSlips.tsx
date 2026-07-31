@@ -62,6 +62,10 @@ export function ThankYouSlips() {
   const [formData, setFormData] = useState({
     referralId: '',
     customerName: '',
+    contactPhone: '',
+    businessRequirement: '',
+    senderName: '',
+    referralDate: '',
     businessValue: '',
     notes: ''
   });
@@ -130,7 +134,7 @@ export function ThankYouSlips() {
               referralId: String(s.referral_id || s.referralId || ''),
               fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
               toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
-              customerName: s.customer_name || s.customerName || '',
+              customerName: s.customer_name || s.customerName || s.contact_name || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
@@ -151,7 +155,7 @@ export function ThankYouSlips() {
               referralId: String(s.referral_id || s.referralId || ''),
               fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
               toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
-              customerName: s.customer_name || s.customerName || '',
+              customerName: s.customer_name || s.customerName || s.contact_name || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
@@ -175,7 +179,7 @@ export function ThankYouSlips() {
               referralId: String(s.referral_id || s.referralId || ''),
               fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
               toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
-              customerName: s.customer_name || s.customerName || '',
+              customerName: s.customer_name || s.customerName || s.contact_name || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
@@ -278,7 +282,8 @@ export function ThankYouSlips() {
 
       if (rawRefs && rawRefs.length > 0) {
         const converted = rawRefs.filter((r: any) => {
-          const isConverted = r.status === 'Completed' || r.status === 'COMPLETED' || r.status === 'CONVERTED';
+          const sUpper = String(r.status || '').toUpperCase();
+          const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
           const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || '');
           const isReceiver = userCandidateIds.includes(receiverId) || receiverId === currentUid;
           const hasSlip = existingSlipReferralIds.has(String(r.id));
@@ -290,7 +295,9 @@ export function ThankYouSlips() {
           receiver_id: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
           toUserId: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
           contactName: r.contact_name || r.customer_name || 'Client',
+          contactPhone: r.contact_phone || r.phone || r.contact_number || r.mobile || 'N/A',
           requirement: r.business_requirement || r.requirement || '',
+          notes: r.notes || '',
           status: r.status,
           createdAt: r.created_at || r.createdAt
         } as Referral));
@@ -299,10 +306,11 @@ export function ThankYouSlips() {
         databaseService.list<Referral>('referrals', [
           where('toUserId', '==', currentUid)
         ]).then(list => {
-          setReferrals(list.filter(r => 
-            ((r.status as string) === 'CONVERTED' || (r.status as string) === 'Completed' || r.status === 'COMPLETED') &&
-            !existingSlipReferralIds.has(String(r.id))
-          ));
+          setReferrals(list.filter(r => {
+            const sUpper = String(r.status || '').toUpperCase();
+            const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
+            return isConverted && !existingSlipReferralIds.has(String(r.id));
+          }));
         });
       }
     };
@@ -313,16 +321,50 @@ export function ThankYouSlips() {
       unsubscribeSent();
       unsubscribeReceived();
       unsubscribeAll();
+      realtimeChannel.unsubscribe();
     };
   }, [profile, isMasterAdmin]);
+
+  const handleReferralSelect = (refId: string) => {
+    const selected = referrals.find(r => String(r.id) === String(refId));
+    if (selected) {
+      const senderId = selected.sender_id || selected.fromUserId || '';
+      const sName = memberNames[senderId] || (allUsers.find(u => String(u.id) === senderId || String(u.uid) === senderId)?.name) || (selected as any).senderName || 'Member';
+      const refDate = selected.createdAt ? format(new Date(selected.createdAt), 'dd MMM yyyy') : '';
+      setFormData(prev => ({
+        ...prev,
+        referralId: refId,
+        customerName: selected.contactName || (selected as any).contact_name || (selected as any).customer_name || '',
+        contactPhone: selected.contactPhone || (selected as any).contact_phone || (selected as any).phone || '',
+        businessRequirement: selected.requirement || (selected as any).business_requirement || (selected as any).requirement || '',
+        senderName: sName,
+        referralDate: refDate
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        referralId: '',
+        customerName: '',
+        contactPhone: '',
+        businessRequirement: '',
+        senderName: '',
+        referralDate: ''
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
 
-    const selectedReferral = referrals.find(r => r.id === formData.referralId);
+    const selectedReferral = referrals.find(r => String(r.id) === String(formData.referralId));
     if (!selectedReferral) {
       setError("Please select an eligible referral.");
+      return;
+    }
+
+    if (!formData.businessValue || Number(formData.businessValue) <= 0) {
+      setError("Please enter a valid business transaction value.");
       return;
     }
 
@@ -330,52 +372,83 @@ export function ThankYouSlips() {
     setError(null);
     try {
       const currentUserId = String(profile.uid || profile.id);
+      const userCandidateIds = Array.from(new Set([profile.id, profile.uid].filter(Boolean))).map(String);
 
-      // Fetch exact referral record from live Supabase data to obtain original sender & receiver IDs
-      const { data: refRow } = await supabase
+      // Fetch exact referral record from database to obtain original sender & receiver IDs
+      const { data: refRow, error: refError } = await supabase
         .from('referrals')
         .select('*')
         .eq('id', selectedReferral.id)
         .maybeSingle();
 
+      if (refError) {
+        console.warn("Notice fetching referral record:", refError);
+      }
+
       const originalSenderId = refRow?.sender_id || refRow?.from_user_id || refRow?.fromUserId || selectedReferral.sender_id || selectedReferral.fromUserId;
       const originalReceiverId = refRow?.receiver_id || refRow?.to_user_id || refRow?.toUserId || selectedReferral.receiver_id || selectedReferral.toUserId;
 
-      // Rule 1: Validate that ONLY the Referral Receiver (Member B) can submit a Thank You Slip
-      if (String(currentUserId) !== String(originalReceiverId)) {
+      // Rule 1: Validate that ONLY the Referral Receiver (Member B) can submit
+      if (userCandidateIds.length > 0 && !userCandidateIds.includes(String(originalReceiverId)) && String(currentUserId) !== String(originalReceiverId)) {
         throw new Error("Only the referral receiver can submit a Thank You Slip for this referral.");
       }
 
-      // Rule 2: Prevent Duplicates - Check if a Thank You Slip already exists for this referral
-      const { data: existingSlip } = await supabase
+      // Rule 5: DUPLICATE PREVENTION - Check if a Thank You Slip already exists for this referral
+      const { data: existingSlips, error: checkError } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .eq('referral_id', selectedReferral.id)
-        .maybeSingle();
+        .eq('referral_id', String(selectedReferral.id));
 
-      if (existingSlip) {
-        throw new Error("Thank You Slip already submitted.");
+      if (checkError) {
+        console.warn("Check existing slips notice:", checkError);
+      }
+
+      if (existingSlips && existingSlips.length > 0) {
+        throw new Error("This referral already has a Thank You Slip.");
       }
 
       const targetSenderId = String(originalSenderId);
 
-      // Save complete record as required by schema & prompt
+      // Clean payload for thank_you_slips table (REQUIREMENT 1)
       const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
         sender_id: targetSenderId,
         receiver_id: currentUserId,
         submitted_by: currentUserId,
+        contact_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
+        customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
+        contact_phone: formData.contactPhone || selectedReferral.contactPhone || refRow?.contact_phone || refRow?.phone || '',
+        business_requirement: formData.businessRequirement || selectedReferral.requirement || refRow?.business_requirement || refRow?.requirement || '',
+        thank_you_message: formData.notes || '',
+        notes: formData.notes || '',
+        business_value: Number(formData.businessValue),
         from_user_id: currentUserId,
         to_user_id: targetSenderId,
-        customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
-        business_value: Number(formData.businessValue),
-        notes: formData.notes || '',
-        thank_you_message: formData.notes || '',
         created_at: new Date().toISOString()
       };
 
+      // Perform direct Supabase insert
+      const { data: insertedData, error: insertError } = await supabase
+        .from('thank_you_slips')
+        .insert([cleanDbPayload])
+        .select()
+        .single();
+
+      // REQUIREMENT 8: Display exact Supabase error if insert fails
+      if (insertError) {
+        const errorParts = [
+          insertError.message,
+          insertError.code ? `(Code: ${insertError.code})` : '',
+          insertError.details ? `Details: ${insertError.details}` : '',
+          insertError.hint ? `Hint: ${insertError.hint}` : ''
+        ].filter(Boolean).join(' ');
+        throw new Error(errorParts || "Failed to save Thank You Slip to database.");
+      }
+
+      const newSlipId = insertedData?.id ? String(insertedData.id) : Math.random().toString(36).substring(2, 15);
+
       const slipObject: ThankYouSlip = {
-        id: Math.random().toString(36).substring(2, 15),
+        id: newSlipId,
         referralId: String(selectedReferral.id),
         fromUserId: currentUserId,
         toUserId: targetSenderId,
@@ -385,28 +458,19 @@ export function ThankYouSlips() {
         createdAt: cleanDbPayload.created_at
       };
 
-      // 1. Create in databaseService (handles Supabase insert, backend API, and local storage)
       try {
-        const createRes: any = await databaseService.create('thank_you_slips', cleanDbPayload);
-        if (createRes && typeof createRes === 'object' && createRes.id) {
-          slipObject.id = String(createRes.id);
-        } else if (typeof createRes === 'string') {
-          slipObject.id = createRes;
-        }
+        await databaseService.create('thank_you_slips', cleanDbPayload);
       } catch (dbErr) {
-        console.warn("databaseService.create slip notice:", dbErr);
+        console.warn("databaseService create slip notice:", dbErr);
       }
 
-      // 2. Direct Supabase insert attempt
-      const { error: directInsertError } = await supabase.from('thank_you_slips').insert([cleanDbPayload]);
-      if (directInsertError) {
-        console.warn("Direct Supabase insert notice:", directInsertError);
-      }
-
-      // 3. Immediately update local state so the new slip is displayed in the Sent tab
+      // REQUIREMENT 7: Real-time update local state
       setSlips(prev => [slipObject, ...prev.filter(s => s.id !== slipObject.id)]);
 
-      // Close / complete the referral status
+      // Remove referral from dropdown immediately
+      setReferrals(prev => prev.filter(r => String(r.id) !== String(selectedReferral.id)));
+
+      // Mark referral status as completed
       await supabase.from('referrals').update({ status: 'Completed', updated_at: new Date().toISOString() }).eq('id', selectedReferral.id);
       try {
         await databaseService.update('referrals', formData.referralId, { status: 'Completed' });
@@ -430,7 +494,16 @@ export function ThankYouSlips() {
       setTestimonialReceiver(receiver);
 
       setShowSuccess(true);
-      setFormData({ referralId: '', customerName: '', businessValue: '', notes: '' });
+      setFormData({
+        referralId: '',
+        customerName: '',
+        contactPhone: '',
+        businessRequirement: '',
+        senderName: '',
+        referralDate: '',
+        businessValue: '',
+        notes: ''
+      });
 
       setTimeout(() => {
         setIsModalOpen(false);
@@ -1117,28 +1190,82 @@ export function ThankYouSlips() {
               <select
                 required
                 value={formData.referralId}
-                onChange={(e) => setFormData({ ...formData, referralId: e.target.value })}
+                onChange={(e) => handleReferralSelect(e.target.value)}
                 className="w-full px-4 py-3 rounded-[12px] border border-white/5 bg-[#151C2E] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
               >
-                <option value="" className="bg-[#111827]">Choose a converted referral...</option>
-                {referrals.map((r) => (
-                  <option key={r.id} value={r.id} className="bg-[#111827]">{r.contactName} - {r.requirement}</option>
-                ))}
+                <option value="" className="bg-[#111827]">Choose an eligible converted referral...</option>
+                {referrals.map((r) => {
+                  const dateStr = r.createdAt ? format(new Date(r.createdAt), 'dd MMM yyyy') : '';
+                  return (
+                    <option key={r.id} value={r.id} className="bg-[#111827]">
+                      {r.contactName || 'Client'} - {r.requirement || 'Requirement'} {dateStr ? `(${dateStr})` : ''}
+                    </option>
+                  );
+                })}
               </select>
-              <p className="text-xs text-neutral-400">Only referrals marked as 'Converted' will appear here.</p>
+              <p className="text-xs text-neutral-400">Only referrals received by you that haven't received a Thank You Slip yet will appear here.</p>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Customer Name</label>
-              <input
-                required
-                type="text"
-                value={formData.customerName}
-                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                placeholder="Who was the customer?"
-                className="w-full px-4 py-3 rounded-[12px] border border-white/5 bg-[#151C2E] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
-              />
-            </div>
+            {formData.referralId && (
+              <div className="space-y-4 p-4 rounded-[12px] bg-[#151C2E]/70 border border-white/5">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Auto-filled Referral Details</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Customer Name</label>
+                    <input
+                      required
+                      type="text"
+                      value={formData.customerName}
+                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                      placeholder="Customer Name"
+                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Customer Mobile Number</label>
+                    <input
+                      type="text"
+                      value={formData.contactPhone}
+                      onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                      placeholder="Customer Mobile Number"
+                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Business Requirement</label>
+                    <input
+                      type="text"
+                      value={formData.businessRequirement}
+                      onChange={(e) => setFormData({ ...formData, businessRequirement: e.target.value })}
+                      placeholder="Business Requirement"
+                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Referral Sender Name</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={formData.senderName}
+                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827]/60 text-neutral-300 text-xs outline-none cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Referral Date</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={formData.referralDate}
+                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827]/60 text-neutral-300 text-xs outline-none cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Transaction Value (₹)</label>
