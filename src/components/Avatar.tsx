@@ -41,6 +41,8 @@ export function Avatar({ src, name, size = 'md', className, fallbackClassName }:
       <img
         src={avatarSrc}
         alt={cleanName}
+        loading="lazy"
+        decoding="async"
         onError={() => setImgError(true)}
         className={cn("rounded-full object-cover shrink-0", sizeClasses, className)}
         referrerPolicy="no-referrer"

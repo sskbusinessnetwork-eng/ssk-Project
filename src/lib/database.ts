@@ -159,6 +159,52 @@ function applyConstraints(queryBuilder: any, constraints: QueryConstraint[], mee
   return builder;
 }
 
+let cachedProfileSessionId: string | null = null;
+let cachedProfileData: { role?: string; chapter_id?: string } | null = null;
+let cachedProfileTimestamp = 0;
+
+async function getCachedUserProfileForQuery() {
+  const now = Date.now();
+  if (cachedProfileData && (now - cachedProfileTimestamp < 30000)) {
+    return cachedProfileData;
+  }
+  
+  try {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      const prof = parsed.profile || (parsed.role ? parsed : null);
+      if (prof && prof.role && (prof.chapter_id || prof.chapterId || prof.role === 'MASTER_ADMIN')) {
+        const cData = {
+          role: prof.role,
+          chapter_id: prof.chapter_id || prof.chapterId
+        };
+        cachedProfileData = cData;
+        cachedProfileTimestamp = now;
+        return cData;
+      }
+    }
+  } catch (e) {}
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    cachedProfileSessionId = null;
+    cachedProfileData = null;
+    return null;
+  }
+
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('role, chapter_id')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  cachedProfileSessionId = session.user.id;
+  cachedProfileData = userProfile || null;
+  cachedProfileTimestamp = Date.now();
+  return cachedProfileData;
+}
+
 export async function getDocs(queryRef: any) {
   const collectionPath = queryRef.path;
   let finalConstraints = [...(queryRef.constraints || [])];
@@ -167,25 +213,19 @@ export async function getDocs(queryRef: any) {
   let builder = supabase.from(collectionPath).select('*');
   builder = applyConstraints(builder, finalConstraints, meetingIdsFiltered);
   
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    let userQuery = supabase.from('users').select('role, chapter_id');
-    userQuery = userQuery.eq('id', session.user.id);
-    const { data: userProfile } = await userQuery.maybeSingle();
-      
-    if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
-      const userChapterId = userProfile.chapter_id;
-      const hasChapterFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'chapter_id' || c.field === 'chapterId'));
-      
-      if (!hasChapterFilter) {
-        if (collectionPath === 'users') {
-          const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
-          if (!hasSingleIdFilter) {
-            builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
-          }
-        } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
-          builder = builder.eq('chapter_id', userChapterId);
+  const userProfile = await getCachedUserProfileForQuery();
+  if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
+    const userChapterId = userProfile.chapter_id;
+    const hasChapterFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'chapter_id' || c.field === 'chapterId'));
+    
+    if (!hasChapterFilter) {
+      if (collectionPath === 'users') {
+        const hasSingleIdFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'id' || c.field === 'uid' || c.field === 'phone'));
+        if (!hasSingleIdFilter) {
+          builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
         }
+      } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
+        builder = builder.eq('chapter_id', userChapterId);
       }
     }
   }

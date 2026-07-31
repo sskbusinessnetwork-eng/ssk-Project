@@ -24,6 +24,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
   * {
     @apply border-border;
     -webkit-tap-highlight-color: transparent;
@@ -32,9 +36,26 @@
     @apply bg-background text-foreground antialiased text-[14px] leading-relaxed;
     font-feature-settings: "rlig" 1, "calt" 1;
     overscroll-behavior-y: contain;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply tracking-tight font-bold;
+  }
+  button, a, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+  button:active, a:active, [role="button"]:active {
+    opacity: 0.9;
+    transition: opacity 0.05s ease;
+  }
+  button:disabled {
+    pointer-events: none;
+    opacity: 0.6;
+  }
+  img {
+    content-visibility: auto;
   }
 }
 
