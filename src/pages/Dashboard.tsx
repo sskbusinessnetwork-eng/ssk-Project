@@ -535,28 +535,76 @@ export function Analytics() {
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || s.receiver_id || '');
+        const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || '');
         return subBy === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || s.receiver_id || '');
-      return userCandidateIds.includes(subBy);
+      const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || '');
+      return chapterUserIds.includes(subBy);
     });
-  }, [effectiveSlips, userCandidateIds, appliedMemberFilter, profile]);
+  }, [effectiveSlips, chapterUserIds, appliedMemberFilter, profile]);
 
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const sendBy = String(s.sender_id || s.toUserId || s.to_user_id || '');
+        const sendBy = String(s.receiver_id || s.toUserId || s.to_user_id || '');
         return sendBy === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const sendBy = String(s.sender_id || s.toUserId || s.to_user_id || '');
-      return userCandidateIds.includes(sendBy);
+      const sendBy = String(s.receiver_id || s.toUserId || s.to_user_id || '');
+      return chapterUserIds.includes(sendBy);
     });
-  }, [effectiveSlips, userCandidateIds, appliedMemberFilter, profile]);
+  }, [effectiveSlips, chapterUserIds, appliedMemberFilter, profile]);
+
+  const referralsSentList = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveReferrals.filter(r => String(r.fromUserId || r.sender_id || r.from_user_id || '') === String(appliedMemberFilter));
+    }
+    return effectiveReferrals.filter(r => {
+      const senderId = String(r.fromUserId || r.sender_id || r.from_user_id || '');
+      return chapterUserIds.includes(senderId);
+    });
+  }, [effectiveReferrals, chapterUserIds, profile, appliedMemberFilter]);
+
+  const referralsSentCount = useMemo(() => referralsSentList.length, [referralsSentList]);
+
+  const referralsReceivedList = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveReferrals.filter(r => String(r.toUserId || r.receiver_id || r.to_user_id || '') === String(appliedMemberFilter));
+    }
+    return effectiveReferrals.filter(r => {
+      const receiverId = String(r.toUserId || r.receiver_id || r.to_user_id || '');
+      return chapterUserIds.includes(receiverId);
+    });
+  }, [effectiveReferrals, chapterUserIds, profile, appliedMemberFilter]);
+
+  const referralsReceivedCount = useMemo(() => referralsReceivedList.length, [referralsReceivedList]);
+
+  const testimonialsGivenList = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveTestimonials.filter(t => String(t.authorMemberId || t.author_id || t.fromUserId || '') === String(appliedMemberFilter));
+    }
+    return effectiveTestimonials.filter(t => {
+      const authorId = String(t.authorMemberId || t.author_id || t.fromUserId || '');
+      return chapterUserIds.includes(authorId);
+    });
+  }, [effectiveTestimonials, chapterUserIds, profile, appliedMemberFilter]);
+
+  const testimonialsGivenCount = useMemo(() => testimonialsGivenList.length, [testimonialsGivenList]);
+
+  const testimonialsReceivedList = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveTestimonials.filter(t => String(t.recipientMemberId || t.recipient_id || t.toUserId || '') === String(appliedMemberFilter));
+    }
+    return effectiveTestimonials.filter(t => {
+      const recipientId = String(t.recipientMemberId || t.recipient_id || t.toUserId || '');
+      return chapterUserIds.includes(recipientId);
+    });
+  }, [effectiveTestimonials, chapterUserIds, profile, appliedMemberFilter]);
+
+  const testimonialsReceivedCount = useMemo(() => testimonialsReceivedList.length, [testimonialsReceivedList]);
 
   const businessSentTotal = useMemo(() => {
     return businessSentSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
@@ -623,13 +671,23 @@ export function Analytics() {
     return chapterOneToOnes.length;
   }, [effectiveOneToOnes, chapterUserIds, profile]);
 
-  const visitorsAttendedCount = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      return effectiveGuestInvitations.filter(g => g.status === 'Present' || g.attendance_status === 'Present').length;
+  const chapterGuestsList = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
+      return effectiveGuestInvitations;
     }
-    const chapterGuests = effectiveGuestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
-    return chapterGuests.filter(g => g.status === 'Present' || g.attendance_status === 'Present').length || 0;
-  }, [effectiveGuestInvitations, chapterUserIds, profile]);
+    const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+    return effectiveGuestInvitations.filter(g => {
+      const inviterId = String(g.createdBy || g.userId || g.member_id || '');
+      const gChap = String(g.chapter_id || g.chapterId || '').trim();
+      return chapterUserIds.includes(inviterId) || (myChapId && gChap === myChapId);
+    });
+  }, [effectiveGuestInvitations, chapterUserIds, profile, appliedChapterFilter]);
+
+  const guestsInvitedCount = useMemo(() => chapterGuestsList.length, [chapterGuestsList]);
+
+  const visitorsAttendedCount = useMemo(() => {
+    return chapterGuestsList.filter(g => g.status === 'Present' || g.attendance_status === 'Present' || g.status === 'Attended').length || 0;
+  }, [chapterGuestsList]);
 
   const thankYouSlipsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -2172,22 +2230,236 @@ export function Analytics() {
     );
   };
 
+  const renderReferralsSentDetails = () => {
+    const list = referralsSentList;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Sender</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Receiver</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Referrals Sent Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((ref) => {
+                const giver = chapterUsers.find(u => u.uid === ref.fromUserId) || allUsersList.find(u => u.uid === ref.fromUserId);
+                const receiver = chapterUsers.find(u => u.uid === ref.toUserId) || allUsersList.find(u => u.uid === ref.toUserId);
+                return (
+                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || ref.toUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || ref.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        ['COMPLETED', 'CONVERTED', 'CLOSED'].includes(String(ref.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        ['APPROVED', 'IN_PROGRESS'].includes(String(ref.status).toUpperCase()) ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {ref.status || 'PENDING'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderReferralsReceivedDetails = () => {
+    const list = referralsReceivedList;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Sender</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Receiver</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Referrals Received Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((ref) => {
+                const giver = chapterUsers.find(u => u.uid === ref.fromUserId) || allUsersList.find(u => u.uid === ref.fromUserId);
+                const receiver = chapterUsers.find(u => u.uid === ref.toUserId) || allUsersList.find(u => u.uid === ref.toUserId);
+                return (
+                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || ref.toUserName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || ref.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
+                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        ['COMPLETED', 'CONVERTED', 'CLOSED'].includes(String(ref.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        ['APPROVED', 'IN_PROGRESS'].includes(String(ref.status).toUpperCase()) ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {ref.status || 'PENDING'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderTestimonialsGivenDetails = () => {
+    const list = testimonialsGivenList;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author (Given By)</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Testimonials Given Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((t) => {
+                const author = allUsersList.find(u => u.uid === t.authorMemberId || u.id === t.authorMemberId);
+                const recipient = allUsersList.find(u => u.uid === t.recipientMemberId || u.id === t.recipientMemberId);
+                return (
+                  <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{author?.name || t.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || t.recipientName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
+                      {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || t.content || 'N/A'}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {t.status || 'APPROVED'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderTestimonialsReceivedDetails = () => {
+    const list = testimonialsReceivedList;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient (Received By)</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Testimonials Received Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((t) => {
+                const author = allUsersList.find(u => u.uid === t.authorMemberId || u.id === t.authorMemberId);
+                const recipient = allUsersList.find(u => u.uid === t.recipientMemberId || u.id === t.recipientMemberId);
+                return (
+                  <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{author?.name || t.name || 'N/A'}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || t.recipientName || 'N/A'}</td>
+                    <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
+                      {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || t.content || 'N/A'}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
+                        ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {t.status || 'APPROVED'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
-    const norm = analyticsModalCategory.toLowerCase();
-    if (norm.includes('chapter')) return renderChaptersDetails();
+    const norm = analyticsModalCategory.toLowerCase().trim();
     if (norm === 'total members') return renderTotalMembersDetails();
     if (norm === 'active members') return renderActiveMembersDetails();
     if (norm === 'inactive members') return renderInactiveMembersDetails();
+    if (norm === 'referrals sent') return renderReferralsSentDetails();
+    if (norm === 'referrals received') return renderReferralsReceivedDetails();
     if (norm === 'business sent') return renderBusinessSentDetails();
     if (norm === 'business received') return renderBusinessReceivedDetails();
+    if (norm === 'thank you slips sent') return renderBusinessSentDetails();
+    if (norm === 'thank you slips received') return renderBusinessReceivedDetails();
+    if (norm === 'testimonials given') return renderTestimonialsGivenDetails();
+    if (norm === 'testimonials received') return renderTestimonialsReceivedDetails();
+    if (norm === 'guests invited' || norm.includes('guest') || norm.includes('visitor')) return renderGuestInvitesDetails();
+    if (norm === 'one-to-one meetings' || norm.includes('one-to-one')) return renderOneToOnesDetails();
+    if (norm === 'chapter meetings' || norm === 'meetings' || norm === 'upcoming meetings') return renderMeetingsDetails();
     if (norm.includes('business')) return renderBusinessDetails();
     if (norm.includes('referral')) return renderReferralsDetails();
-    if (norm.includes('one-to-one')) return renderOneToOnesDetails();
-    if (norm === 'meetings' || norm === 'upcoming meetings') return renderMeetingsDetails();
     if (norm.includes('attendance') || norm.includes('weekly meeting attendance')) return renderAttendanceDetails();
     if (norm.includes('testimonial')) return renderTestimonialsDetails();
-    if (norm.includes('guest') || norm.includes('visitor')) return renderGuestInvitesDetails();
+    if (norm.includes('chapter')) return renderChaptersDetails();
     return <div className="p-4 text-center font-bold text-neutral-400 uppercase tracking-widest text-xs">No detail view implemented for this category.</div>;
   };
 
@@ -2505,14 +2777,21 @@ export function Analytics() {
             businessReceivedTotal={businessReceivedTotal}
             businessReceivedCount={businessReceivedCount}
             referralsPassedCount={referralsPassedCount}
+            referralsSentCount={referralsSentCount}
+            referralsReceivedCount={referralsReceivedCount}
             thankYouSlipsCount={thankYouSlipsCount}
+            thankYouSlipsSentCount={businessSentCount}
+            thankYouSlipsReceivedCount={businessReceivedCount}
             upcomingSyncsCount={upcomingSyncsCount}
             oneToOneMeetingsCount={oneToOneMeetingsCount}
             visitorsAttendedCount={visitorsAttendedCount}
+            guestsInvitedCount={guestsInvitedCount}
             weeklyMeetingAttendance={weeklyMeetingAttendance}
             growthScore={dynamicGrowthScore}
             newMembersThisMonthCount={newMembersThisMonthCount}
             testimonialsCount={chapterTestimonialsCount}
+            testimonialsGivenCount={testimonialsGivenCount}
+            testimonialsReceivedCount={testimonialsReceivedCount}
             meetingsCount={chapterMeetingsCount}
             onCardClick={(label) => {
               setAnalyticsModalCategory(label);
