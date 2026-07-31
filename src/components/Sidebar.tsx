@@ -91,9 +91,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   return (
     <div className={cn(
-      "h-[100vh] bg-[#11131A] flex flex-col fixed left-0 top-0 border-r border-[#1F2937] transition-transform duration-300 ease-in-out",
+      "h-[100vh] h-[100dvh] max-h-[100dvh] bg-[#11131A] flex flex-col fixed left-0 top-0 border-r border-[#1F2937] transition-transform duration-300 ease-in-out",
       // Mobile/Tablet off-canvas drawer styling (<1024px)
-      "w-[280px] md:w-[320px] z-[9999]",
+      "w-[280px] sm:w-[320px] z-[9999]",
       isOpen ? "translate-x-0" : "-translate-x-full",
       // Desktop persistent styling (>=1024px)
       "lg:translate-x-0 lg:z-30",
@@ -247,26 +247,28 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
       </div>
 
       {/* Bottom Actions (Sticky) */}
-      <div className="shrink-0 p-3 flex flex-col gap-1.5 border-t border-[#1F2937]/50 bg-[#11131A] z-20">
+      <div className="shrink-0 p-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 lg:pb-3 flex flex-col gap-1.5 border-t border-[#1F2937]/50 bg-[#11131A] z-30 relative">
         {canAccessSettings && (
           <Link 
             to="/settings" 
             onClick={() => onClose?.()}
-            className="flex items-center gap-3 px-3 h-[42px] rounded-[14px] text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white transition-all font-medium"
+            className="flex items-center gap-3 px-3 h-[42px] rounded-[14px] text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white transition-all font-medium touch-manipulation"
           >
             <Settings size={20} className="shrink-0" />
-            {!isCollapsed && <span className="text-[14px] font-semibold">Settings</span>}
+            <span className={cn("text-[14px] font-semibold", isCollapsed && "lg:hidden")}>Settings</span>
           </Link>
         )}
         <button 
-          onClick={() => {
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
             onClose?.();
             handleLogout();
           }} 
-          className="flex items-center gap-3 px-3 h-[42px] w-full rounded-[14px] text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all font-medium text-left cursor-pointer"
+          className="flex items-center gap-3 px-3 h-[44px] w-full rounded-[14px] text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all font-medium text-left cursor-pointer shrink-0 touch-manipulation z-30"
         >
-          <LogOut size={20} className="shrink-0" />
-          {!isCollapsed && <span className="text-[14px] font-semibold">Logout</span>}
+          <LogOut size={20} className="shrink-0 text-red-400" />
+          <span className={cn("text-[14px] font-semibold text-red-400", isCollapsed && "lg:hidden")}>Logout</span>
         </button>
       </div>
     </div>
