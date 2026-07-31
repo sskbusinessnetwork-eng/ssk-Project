@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
 import { subscriptionService } from '../services/subscriptionService';
 import { UserProfile, Category, GuestInvitation } from '../types';
@@ -62,6 +62,7 @@ const formatDateForStorage = (dateStr: string) => {
 
 export function Members() {
   const { profile } = useAuth();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as 'directory' | 'positions' | 'invites';
   const [activeTab, setActiveTab] = useState<'directory' | 'positions' | 'invites'>(tabParam || 'directory');
@@ -172,6 +173,7 @@ export function Members() {
     name: '',
     phone: '',
     whatsapp: '',
+    category: '',
     password: '',
     subscriptionStart: new Date().toISOString().split('T')[0],
     subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
@@ -191,18 +193,20 @@ export function Members() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
+  useEffect(() => {
+    if (location.pathname === '/add-member') {
+      handleOpenAddModal();
+    }
+  }, [location.pathname]);
+
   const handleOpenAddModal = () => {
     setError(null);
     setNewMemberData({
       name: '',
       phone: '',
-      businessName: '',
+      whatsapp: '',
       category: '',
       password: '',
-      state: '',
-      city: '',
-      area: '',
-      address: '',
       subscriptionStart: new Date().toISOString().split('T')[0],
       subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
     });
@@ -217,6 +221,7 @@ export function Members() {
     if (!newMemberData.name.trim()) newErrors.name = 'Full Name is required.';
     if (!newMemberData.whatsapp.trim()) newErrors.whatsapp = 'WhatsApp Number is required.';
     if (!newMemberData.phone.trim()) newErrors.phone = 'Mobile Number is required.';
+    if (!newMemberData.category.trim()) newErrors.category = 'Business Category is required.';
     if (!newMemberData.password.trim()) newErrors.password = 'Default Password is required.';
     if (!newMemberData.subscriptionStart) newErrors.subscriptionStart = 'Subscription Start Date is required.';
     if (!newMemberData.subscriptionEnd) newErrors.subscriptionEnd = 'Subscription End Date is required.';
@@ -261,7 +266,7 @@ export function Members() {
       // Fetch the logged-in Chapter Admin's profile from the database to guarantee it is secure and authentic
       const { data: adminProfile, error: profileErr } = await supabase
         .from('users')
-        .select('chapter_id, chapter_name, role, name, position')
+        .select('id, chapter_id, chapter_name, role, name, position')
         .eq('id', adminId)
         .single();
 
@@ -270,50 +275,65 @@ export function Members() {
       }
 
       // Enforce security role check
-      const isAdminOrChapterAdmin = adminProfile.role === 'CHAPTER_ADMIN' || (adminProfile.role === 'MEMBER' && adminProfile.position === 'chapter_admin');
+      const isAdminOrChapterAdmin = adminProfile.role === 'CHAPTER_ADMIN' || (adminProfile.role === 'MEMBER' && adminProfile.position === 'chapter_admin') || profile?.role === 'CHAPTER_ADMIN';
       if (!isAdminOrChapterAdmin) {
         throw new Error('Unauthorized. Only Chapter Admins are allowed to create regular members.');
       }
 
-      const finalChapterId = adminProfile.chapter_id;
-      const finalChapterName = adminProfile.chapter_name;
+      const finalChapterId = adminProfile.chapter_id || profile?.chapter_id;
+      const finalChapterName = adminProfile.chapter_name || profile?.chapter_name || profile?.chapterName;
 
       if (!finalChapterId) {
         throw new Error('Your Chapter Admin profile does not have an assigned Chapter ID. Please contact support.');
       }
 
       const normalizedPhone = normalizePhoneNumber(newMemberData.phone);
+      const normalizedWhatsapp = normalizePhoneNumber(newMemberData.whatsapp);
       
-      // 1. DUPLICATE PHONE CHECK
-      const { data: existingUser, error: checkError } = await supabase
+      // 1. DUPLICATE MOBILE NUMBER CHECK
+      const { data: existingUserByPhone, error: checkPhoneError } = await supabase
         .from('users')
         .select('id')
         .eq('phone', normalizedPhone)
         .limit(1);
 
-      if (checkError) {
-        throw checkError;
-      }
-      if (existingUser && existingUser.length > 0) {
-        setError("This phone number is already registered. Please use a different phone number.");
+      if (checkPhoneError) throw checkPhoneError;
+      if (existingUserByPhone && existingUserByPhone.length > 0) {
+        setError("This mobile number is already registered. Please use a different mobile number.");
         setIsSubmitting(false);
         return;
       }
 
+      // 2. DUPLICATE WHATSAPP NUMBER CHECK
+      if (normalizedWhatsapp) {
+        const { data: existingUserByWhatsapp, error: checkWhatsappError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('whatsappNumber', normalizedWhatsapp)
+          .limit(1);
+
+        if (checkWhatsappError) throw checkWhatsappError;
+        if (existingUserByWhatsapp && existingUserByWhatsapp.length > 0) {
+          setError("This WhatsApp number is already registered. Please use a different WhatsApp number.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // Fetch the actual current Chapter Admin for this chapter to ensure association is correct
       let actualChapterAdminId = adminId;
-      let actualChapterAdminName = adminProfile.name || 'Chapter Admin';
+      let actualChapterAdminName = adminProfile.name || profile?.name || 'Chapter Admin';
       const { data: chapterAdminUser } = await supabase
         .from('users')
         .select('id, name')
         .eq('chapter_id', finalChapterId)
         .eq('role', 'CHAPTER_ADMIN')
         .limit(1)
-        .single();
+        .maybeSingle();
       
       if (chapterAdminUser) {
         actualChapterAdminId = chapterAdminUser.id;
-        actualChapterAdminName = chapterAdminUser.name || 'Chapter Admin';
+        actualChapterAdminName = chapterAdminUser.name || actualChapterAdminName;
       }
 
       // 3. MEMBER DATA STRUCTURE
@@ -322,6 +342,8 @@ export function Members() {
         role: "MEMBER",
         position: "member",
         phone: normalizedPhone,
+        whatsappNumber: normalizedWhatsapp,
+        category: newMemberData.category,
         status: "ACTIVE",
         membershipStatus: "ACTIVE",
         account_status: "ACTIVE",
@@ -339,10 +361,9 @@ export function Members() {
         chapterName: finalChapterName,
         createdByName: actualChapterAdminName,
         createdByRole: "CHAPTER_ADMIN",
-        whatsappNumber: normalizePhoneNumber(newMemberData.whatsapp),
-        admin_id: actualChapterAdminId,
-        adminId: actualChapterAdminId,
-        created_by: actualChapterAdminId,
+        admin_id: adminId,
+        adminId: adminId,
+        created_by: adminId,
         createdAt: new Date().toISOString(),
         subscriptionStart: formatDateForStorage(newMemberData.subscriptionStart),
         subscriptionStartDate: formatDateForStorage(newMemberData.subscriptionStart),
@@ -362,12 +383,12 @@ export function Members() {
         member_name: newMemberData.name,
         chapter_id: finalChapterId,
         chapter_name: finalChapterName,
-        position_name: newMemberData.position || 'Member',
+        position_name: 'member',
         subscription_start: formatDateForStorage(newMemberData.subscriptionStart),
         subscription_end: formatDateForStorage(newMemberData.subscriptionEnd),
         membership_status: 'Active',
         account_status: 'Active',
-        created_by: actualChapterAdminId
+        created_by: adminId
       });
       
       // Create notifications
@@ -387,11 +408,19 @@ export function Members() {
         password: newMemberData.password
       });
       setIsAddModalOpen(false);
+
+      // Refresh Chapter Member list, Analytics, Directory
       window.dispatchEvent(new Event('dashboard-refresh'));
+      window.dispatchEvent(new Event('members-refresh'));
+
+      setSuccessMessage('Member created successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+
       setNewMemberData({
         name: '',
         phone: '',
         whatsapp: '',
+        category: '',
         password: '',
         subscriptionStart: new Date().toISOString().split('T')[0],
         subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]

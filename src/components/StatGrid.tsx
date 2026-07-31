@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, Target, TrendingUp, Share2, Briefcase, Handshake, UserCheck, Star, Activity, Plus } from 'lucide-react';
+import { Users, Calendar, Target, TrendingUp, Share2, Briefcase, Handshake, UserCheck, Star, Activity, Plus, ArrowDownLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface StatGridProps {
@@ -10,6 +10,10 @@ interface StatGridProps {
   activePartnersCount?: number;
   inactiveMembersCount?: number;
   businessGeneratedTotal?: number;
+  businessSentTotal?: number;
+  businessSentCount?: number;
+  businessReceivedTotal?: number;
+  businessReceivedCount?: number;
   referralsPassedCount?: number;
   thankYouSlipsCount?: number;
   upcomingSyncsCount?: number;
@@ -31,6 +35,10 @@ export default function StatGrid({
   activePartnersCount = 0,
   inactiveMembersCount = 0,
   businessGeneratedTotal = 0,
+  businessSentTotal,
+  businessSentCount,
+  businessReceivedTotal,
+  businessReceivedCount,
   referralsPassedCount = 0,
   thankYouSlipsCount = 0,
   upcomingSyncsCount = 0,
@@ -44,11 +52,11 @@ export default function StatGrid({
   onCardClick,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
-    if (label === 'Business Generated') {
-      const num = Number(val);
+    if (label === 'Business Generated' || label === 'Business Sent' || label === 'Business Received') {
+      const num = Number(val || 0);
       if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr+`;
       if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L+`;
-      return `₹${num.toLocaleString()}`;
+      return `₹${num.toLocaleString('en-IN')}`;
     }
     if (label === 'Weekly Meeting Attendance' || label === 'Growth Score' || label === 'Attendance') {
       return `${val}%`;
@@ -68,13 +76,22 @@ export default function StatGrid({
         bg: 'bg-red-500/10 border-red-500/20',
       },
       {
-        label: 'Business Generated',
-        value: formatValue('Business Generated', businessGeneratedTotal),
-        trend: 'Lifetime',
-        trendLabel: 'Total',
+        label: 'Business Sent',
+        value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal),
+        trend: `${businessSentCount ?? 0} Slips`,
+        trendLabel: 'Completed',
         icon: Briefcase,
         color: 'text-purple-500', 
         bg: 'bg-purple-500/10 border-purple-500/20',
+      },
+      {
+        label: 'Business Received',
+        value: formatValue('Business Received', businessReceivedTotal ?? 0),
+        trend: `${businessReceivedCount ?? 0} Slips`,
+        trendLabel: 'Completed',
+        icon: ArrowDownLeft,
+        color: 'text-emerald-400',
+        bg: 'bg-emerald-400/10 border-emerald-400/20',
       },
       {
         label: 'Referrals Passed',
@@ -154,13 +171,22 @@ export default function StatGrid({
 
       list.push(
         {
-          label: 'Business Generated',
-          value: formatValue('Business Generated', businessGeneratedTotal),
-          trend: 'Lifetime',
-          trendLabel: 'Total',
+          label: 'Business Sent',
+          value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal),
+          trend: `${businessSentCount ?? 0} Slips`,
+          trendLabel: 'Completed',
           icon: Briefcase,
           color: 'text-purple-500', 
           bg: 'bg-purple-500/10 border-purple-500/20',
+        },
+        {
+          label: 'Business Received',
+          value: formatValue('Business Received', businessReceivedTotal ?? 0),
+          trend: `${businessReceivedCount ?? 0} Slips`,
+          trendLabel: 'Completed',
+          icon: ArrowDownLeft,
+          color: 'text-emerald-400',
+          bg: 'bg-emerald-400/10 border-emerald-400/20',
         },
         {
           label: 'Meetings',
@@ -242,8 +268,9 @@ export default function StatGrid({
         color: 'text-red-400', 
         bg: 'bg-red-400/10 border-red-400/20',
       },
-      commonStats[1], // Business Generated
-      commonStats[2], // Referrals Passed
+      commonStats[1], // Business Sent
+      commonStats[2], // Business Received
+      commonStats[3], // Referrals Passed
       {
         label: 'Meetings',
         value: formatValue('Meetings', meetingsCount),
@@ -299,7 +326,7 @@ export default function StatGrid({
   const stats = getStatsForRole();
   const normRole = (role || '').toUpperCase();
   const normPos = (position || '').toLowerCase();
-  const isClickable = normRole === 'CHAPTER_ADMIN' || normPos === 'chapter_admin' || normRole === 'MASTER_ADMIN';
+  const isClickable = true;
 
   return (
     <motion.div 

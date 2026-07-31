@@ -528,6 +528,59 @@ export function Analytics() {
     return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
   }, [effectiveSlips, chapterSlips, profile]);
 
+  const userCandidateIds = useMemo(() => {
+    return [profile?.id, profile?.uid].filter(Boolean).map(String);
+  }, [profile]);
+
+  const businessSentSlips = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveSlips.filter(s => {
+        const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || s.receiver_id || '');
+        return subBy === String(appliedMemberFilter);
+      });
+    }
+    return effectiveSlips.filter(s => {
+      const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || s.receiver_id || '');
+      return userCandidateIds.includes(subBy);
+    });
+  }, [effectiveSlips, userCandidateIds, appliedMemberFilter, profile]);
+
+  const businessReceivedSlips = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveSlips.filter(s => {
+        const sendBy = String(s.sender_id || s.toUserId || s.to_user_id || '');
+        return sendBy === String(appliedMemberFilter);
+      });
+    }
+    return effectiveSlips.filter(s => {
+      const sendBy = String(s.sender_id || s.toUserId || s.to_user_id || '');
+      return userCandidateIds.includes(sendBy);
+    });
+  }, [effectiveSlips, userCandidateIds, appliedMemberFilter, profile]);
+
+  const businessSentTotal = useMemo(() => {
+    return businessSentSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
+  }, [businessSentSlips]);
+
+  const businessSentCount = useMemo(() => {
+    return businessSentSlips.length;
+  }, [businessSentSlips]);
+
+  const businessReceivedTotal = useMemo(() => {
+    return businessReceivedSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
+  }, [businessReceivedSlips]);
+
+  const businessReceivedCount = useMemo(() => {
+    return businessReceivedSlips.length;
+  }, [businessReceivedSlips]);
+
+  const getMemberName = (userId: string) => {
+    if (!userId) return 'N/A';
+    const found = allUsersList.find(u => u.uid === userId || u.id === userId || String(u.id) === String(userId) || String(u.uid) === String(userId)) ||
+                  chapterUsers.find(u => u.uid === userId || u.id === userId || String(u.id) === String(userId) || String(u.uid) === String(userId));
+    return found?.name || found?.full_name || 'N/A';
+  };
+
   const referralsPassedCount = useMemo(() => {
     const isCompleted = (r: any) => ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
     if (profile?.role === 'MASTER_ADMIN') {
@@ -2013,6 +2066,112 @@ export function Analytics() {
     );
   };
 
+  const renderBusinessSentDetails = () => {
+    const list = businessSentSlips;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Referral Receiver</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Transaction Value</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Thank You Slip Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Business Sent Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((slip) => {
+                const receiverId = String(slip.receiver_id || slip.submitted_by || slip.fromUserId || '');
+                const receiverName = getMemberName(receiverId);
+                const custName = slip.customerName || slip.customer_name || slip.contact_name || 'N/A';
+                const val = Number(slip.businessValue || slip.transactionValue || 0);
+                const dateStr = slip.createdAt ? new Date(slip.createdAt).toLocaleDateString('en-GB') : 'N/A';
+                const statusStr = slip.status || 'Completed';
+
+                return (
+                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{custName}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiverName}</td>
+                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
+                      ₹{val.toLocaleString('en-IN')}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{dateStr}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        {statusStr}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderBusinessReceivedDetails = () => {
+    const list = businessReceivedSlips;
+    return (
+      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
+        <table className="w-full text-left border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-white/10 bg-[#1E293B]">
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Referral Receiver</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Transaction Value</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Thank You Slip Date</th>
+              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
+                  No Business Received Recorded
+                </td>
+              </tr>
+            ) : (
+              list.map((slip) => {
+                const receiverId = String(slip.receiver_id || slip.submitted_by || slip.fromUserId || '');
+                const receiverName = getMemberName(receiverId);
+                const custName = slip.customerName || slip.customer_name || slip.contact_name || 'N/A';
+                const val = Number(slip.businessValue || slip.transactionValue || 0);
+                const dateStr = slip.createdAt ? new Date(slip.createdAt).toLocaleDateString('en-GB') : 'N/A';
+                const statusStr = slip.status || 'Completed';
+
+                return (
+                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
+                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{custName}</td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiverName}</td>
+                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
+                      ₹{val.toLocaleString('en-IN')}
+                    </td>
+                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{dateStr}</td>
+                    <td className="p-4 text-sm text-right whitespace-nowrap">
+                      <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        {statusStr}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
     const norm = analyticsModalCategory.toLowerCase();
@@ -2020,6 +2179,8 @@ export function Analytics() {
     if (norm === 'total members') return renderTotalMembersDetails();
     if (norm === 'active members') return renderActiveMembersDetails();
     if (norm === 'inactive members') return renderInactiveMembersDetails();
+    if (norm === 'business sent') return renderBusinessSentDetails();
+    if (norm === 'business received') return renderBusinessReceivedDetails();
     if (norm.includes('business')) return renderBusinessDetails();
     if (norm.includes('referral')) return renderReferralsDetails();
     if (norm.includes('one-to-one')) return renderOneToOnesDetails();
@@ -2339,6 +2500,10 @@ export function Analytics() {
             activePartnersCount={activePartnersCount}
             inactiveMembersCount={inactiveMembersCount}
             businessGeneratedTotal={businessGeneratedTotal}
+            businessSentTotal={businessSentTotal}
+            businessSentCount={businessSentCount}
+            businessReceivedTotal={businessReceivedTotal}
+            businessReceivedCount={businessReceivedCount}
             referralsPassedCount={referralsPassedCount}
             thankYouSlipsCount={thankYouSlipsCount}
             upcomingSyncsCount={upcomingSyncsCount}
