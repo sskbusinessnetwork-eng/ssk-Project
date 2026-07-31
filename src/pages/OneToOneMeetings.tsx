@@ -15,19 +15,82 @@ import {
   X,
   AlertTriangle,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
-import { isAfter, parseISO, format as originalFormat, isValid } from 'date-fns';
+import { isAfter, parseISO, format as originalFormat, isValid, addDays, addWeeks, addMonths } from 'date-fns';
 import { where, orderBy, collection, getDocs, query, or } from '../lib/database';
 import { db } from '../lib/database';
 import { cn } from '../lib/utils';
-import { formatTime12h, parseTo12hParts } from '../utils/timeUtils';
+import { formatTime12h, parseTo12hParts, parseTimeTo24h } from '../utils/timeUtils';
 import { getCleanFullName } from '../utils/authUtils';
+
+const WEEKDAYS: Record<string, number> = {
+  'Sunday': 0,
+  'Monday': 1,
+  'Tuesday': 2,
+  'Wednesday': 3,
+  'Thursday': 4,
+  'Friday': 5,
+  'Saturday': 6
+};
+
+function calculateNextOccurrenceDate(
+  currentDateStr: string,
+  frequency: 'daily' | 'weekly' | 'monthly',
+  targetDay?: string
+): string {
+  try {
+    const d = currentDateStr ? parseISO(currentDateStr) : new Date();
+    if (!isValid(d)) return new Date().toISOString().split('T')[0];
+
+    let nextDate: Date;
+    const freqLower = (frequency || 'weekly').toLowerCase();
+
+    if (freqLower === 'daily') {
+      nextDate = addDays(d, 1);
+    } else if (freqLower === 'monthly') {
+      nextDate = addMonths(d, 1);
+    } else {
+      // weekly
+      nextDate = addWeeks(d, 1);
+      if (targetDay && WEEKDAYS[targetDay] !== undefined) {
+        const targetDayNum = WEEKDAYS[targetDay];
+        while (nextDate.getDay() !== targetDayNum) {
+          nextDate = addDays(nextDate, 1);
+        }
+      }
+    }
+    return originalFormat(nextDate, 'yyyy-MM-dd');
+  } catch (e) {
+    console.warn("Error calculating next occurrence date:", e);
+    return new Date().toISOString().split('T')[0];
+  }
+}
+
+function getMeetingExactDateTime(meeting: any): Date {
+  if (!meeting || !meeting.date) return new Date();
+  const dateStr = typeof meeting.date === 'string' ? meeting.date.split('T')[0] : '';
+  let year = 2000, month = 0, day = 1;
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-').map(Number);
+    year = parts[0] || 2000;
+    month = (parts[1] || 1) - 1;
+    day = parts[2] || 1;
+  } else {
+    const d = new Date(meeting.date);
+    year = d.getFullYear();
+    month = d.getMonth();
+    day = d.getDate();
+  }
+  const { hours, minutes } = parseTimeTo24h(meeting.time || '10:00 AM');
+  return new Date(year, month, day, hours, minutes, 0, 0);
+}
 
 const format = (date: any, formatStr: string, options?: any) => {
   if (!date) return 'N/A';
@@ -131,6 +194,12 @@ export function OneToOneMeetings() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Recurring Meeting State
+  const [isDefaultSetupMode, setIsDefaultSetupMode] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [recurringDay, setRecurringDay] = useState('Monday');
 
   // Attendance & Reschedule Modal State
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
@@ -237,6 +306,8 @@ export function OneToOneMeetings() {
             notes: m.notes || '',
             status: m.status || 'UPCOMING',
             attendance: m.attendance || {},
+            is_recurring: m.is_recurring || false,
+            recurring_schedule_id: m.recurring_schedule_id || null,
             createdAt: m.created_at || m.createdAt
           } as OneToOneMeeting;
         });
@@ -345,6 +416,87 @@ export function OneToOneMeetings() {
   }, [allUsersList, formData.participantId]);
 
   const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
+
+  const handleOpenDefaultSetup = async () => {
+    setError(null);
+    setIsDefaultSetupMode(true);
+
+    const currentId = currentUserRecord?.id || profile?.id || profile?.uid;
+    let savedSchedule: any = null;
+
+    if (currentId) {
+      try {
+        const { data } = await supabase
+          .from('one_to_one_recurring_schedules')
+          .select('*')
+          .or(`sender_id.eq.${currentId},organizer_id.eq.${currentId}`)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          savedSchedule = data[0];
+        }
+      } catch (e) {
+        console.warn("Supabase fetch recurring schedule error:", e);
+      }
+
+      if (!savedSchedule) {
+        try {
+          const list = await databaseService.list<any>('one_to_one_recurring_schedules');
+          savedSchedule = list.find(s => String(s.sender_id || s.organizer_id) === String(currentId));
+        } catch (e) {
+          console.warn("databaseService fetch recurring schedule error:", e);
+        }
+      }
+    }
+
+    if (savedSchedule) {
+      setFormData({
+        title: savedSchedule.title || '',
+        participantId: savedSchedule.receiver_id || savedSchedule.member_id || '',
+        date: savedSchedule.date || new Date().toISOString().split('T')[0],
+        time: savedSchedule.time || '10:00 AM',
+        venue: savedSchedule.venue || 'Online Meeting',
+        notes: savedSchedule.notes || ''
+      });
+      setRecurringFrequency(savedSchedule.frequency || 'weekly');
+      setRecurringDay(savedSchedule.day || 'Monday');
+      setIsRecurring(savedSchedule.enabled !== false);
+      setLocationType(savedSchedule.location_type || (savedSchedule.venue?.includes("Address") ? (savedSchedule.venue?.includes("Member") ? "Member Address" : "My Address") : "Online"));
+    } else {
+      setFormData({
+        title: '',
+        participantId: '',
+        date: new Date().toISOString().split('T')[0],
+        time: '10:00 AM',
+        venue: 'Online Meeting',
+        notes: ''
+      });
+      setRecurringFrequency('weekly');
+      setRecurringDay('Monday');
+      setIsRecurring(true);
+      setLocationType('Online');
+    }
+
+    setIsModalOpen(true);
+  };
+
+  const handleOpenScheduleModal = () => {
+    setError(null);
+    setIsDefaultSetupMode(false);
+    setFormData({
+      title: '',
+      participantId: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '10:00 AM',
+      venue: 'Online Meeting',
+      notes: ''
+    });
+    setRecurringFrequency('weekly');
+    setRecurringDay('Monday');
+    setIsRecurring(false);
+    setLocationType('Online');
+    setIsModalOpen(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -470,36 +622,100 @@ export function OneToOneMeetings() {
 
       const meetingTitle = formData.title?.trim() || `1:1 Meeting - ${getUserFullName(senderRecord)} & ${getUserFullName(receiverRecord)}`;
 
-      const dbPayload = {
-        title: meetingTitle,
-        sender_id: sender_id,
-        receiver_id: receiver_id,
+      const scheduleId = `rec_${sender_id}_${receiver_id}`;
+
+      // Save / update Recurring Schedule
+      const schedulePayload = {
+        id: scheduleId,
+        sender_id,
+        receiver_id,
         organizer_id: sender_id,
         member_id: receiver_id,
-        chapter_id: chapter_id,
-        meeting_location: finalLocation,
-        venue: finalLocation,
-        meeting_type: finalLocationType,
-        scheduled_date: formData.date,
+        chapter_id,
+        frequency: recurringFrequency,
+        day: recurringDay,
         date: formData.date,
-        scheduled_time: formData.time,
         time: formData.time,
+        venue: finalLocation,
+        location_type: locationType,
         notes: formData.notes || '',
-        status: status,
-        created_at: new Date().toISOString()
+        enabled: isRecurring,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      const { error: dbErr } = await supabase
-        .from('one_to_one_meetings')
-        .insert([dbPayload]);
+      try {
+        await supabase.from('one_to_one_recurring_schedules').upsert([schedulePayload]);
+      } catch (sErr) {
+        console.warn("Supabase recurring schedule upsert notice:", sErr);
+      }
+      await databaseService.create('one_to_one_recurring_schedules', schedulePayload, scheduleId);
 
-      if (dbErr) {
-        console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
-        await databaseService.create('one_to_one_meetings', {
-          ...dbPayload,
-          creatorId: sender_id,
-          participantIds: [receiver_id]
-        });
+      // Check if an UPCOMING meeting already exists for this pair
+      const { data: existingUpcoming } = await supabase
+        .from('one_to_one_meetings')
+        .select('*')
+        .or(`sender_id.eq.${sender_id},organizer_id.eq.${sender_id}`)
+        .or(`receiver_id.eq.${receiver_id},member_id.eq.${receiver_id}`)
+        .eq('status', 'UPCOMING')
+        .limit(1);
+
+      const activeUpcoming = existingUpcoming && existingUpcoming.length > 0 ? existingUpcoming[0] : null;
+
+      if (activeUpcoming) {
+        // Update existing upcoming meeting instead of duplicate creation
+        const updatePayload = {
+          title: meetingTitle,
+          meeting_location: finalLocation,
+          venue: finalLocation,
+          meeting_type: finalLocationType,
+          scheduled_date: formData.date,
+          date: formData.date,
+          scheduled_time: formData.time,
+          time: formData.time,
+          notes: formData.notes || '',
+          is_recurring: isRecurring,
+          recurring_schedule_id: scheduleId,
+          updated_at: new Date().toISOString()
+        };
+
+        await supabase.from('one_to_one_meetings').update(updatePayload).eq('id', activeUpcoming.id);
+        await databaseService.update('one_to_one_meetings', activeUpcoming.id, updatePayload);
+      } else {
+        // Create single new upcoming meeting
+        const dbPayload = {
+          title: meetingTitle,
+          sender_id: sender_id,
+          receiver_id: receiver_id,
+          organizer_id: sender_id,
+          member_id: receiver_id,
+          chapter_id: chapter_id,
+          meeting_location: finalLocation,
+          venue: finalLocation,
+          meeting_type: finalLocationType,
+          scheduled_date: formData.date,
+          date: formData.date,
+          scheduled_time: formData.time,
+          time: formData.time,
+          notes: formData.notes || '',
+          status: status,
+          is_recurring: isRecurring,
+          recurring_schedule_id: scheduleId,
+          created_at: new Date().toISOString()
+        };
+
+        const { error: dbErr } = await supabase
+          .from('one_to_one_meetings')
+          .insert([dbPayload]);
+
+        if (dbErr) {
+          console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
+          await databaseService.create('one_to_one_meetings', {
+            ...dbPayload,
+            creatorId: sender_id,
+            participantIds: [receiver_id]
+          });
+        }
       }
 
       try {
@@ -610,6 +826,85 @@ export function OneToOneMeetings() {
       if (dbErr) {
         console.warn("Direct update error, trying databaseService fallback:", dbErr);
         await databaseService.update('one_to_one_meetings', updatingMeeting.id, payload);
+      }
+
+      // Check if recurring is enabled for this meeting
+      const scheduleId = updatingMeeting.recurring_schedule_id || `rec_${senderId}_${receiverId}`;
+      let recurringSchedule: any = null;
+
+      if (scheduleId) {
+        try {
+          const { data } = await supabase
+            .from('one_to_one_recurring_schedules')
+            .select('*')
+            .eq('id', scheduleId)
+            .maybeSingle();
+          if (data) recurringSchedule = data;
+        } catch (e) {}
+
+        if (!recurringSchedule) {
+          try {
+            const list = await databaseService.list<any>('one_to_one_recurring_schedules');
+            recurringSchedule = list.find(s => s.id === scheduleId || (String(s.sender_id) === String(senderId) && String(s.receiver_id) === String(receiverId)));
+          } catch (e) {}
+        }
+      }
+
+      const isRecurringActive = updatingMeeting.is_recurring || (recurringSchedule && recurringSchedule.enabled !== false);
+
+      if (isRecurringActive && recurringSchedule && recurringSchedule.enabled !== false) {
+        const freq = recurringSchedule.frequency || 'weekly';
+        const day = recurringSchedule.day || 'Monday';
+        const nextDateStr = calculateNextOccurrenceDate(updatingMeeting.date || new Date().toISOString().split('T')[0], freq, day);
+
+        // Check if an UPCOMING meeting ALREADY exists for this schedule to avoid duplicates
+        const { data: existingUpcoming } = await supabase
+          .from('one_to_one_meetings')
+          .select('*')
+          .or(`sender_id.eq.${senderId},organizer_id.eq.${senderId}`)
+          .or(`receiver_id.eq.${receiverId},member_id.eq.${receiverId}`)
+          .eq('status', 'UPCOMING')
+          .limit(1);
+
+        if (!existingUpcoming || existingUpcoming.length === 0) {
+          const senderRecord = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
+          const receiverRecord = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
+
+          const meetingTitle = updatingMeeting.title || `1:1 Meeting - ${getUserFullName(senderRecord)} & ${getUserFullName(receiverRecord)}`;
+
+          const nextMeetingPayload = {
+            title: meetingTitle,
+            sender_id: senderId,
+            receiver_id: receiverId,
+            organizer_id: senderId,
+            member_id: receiverId,
+            chapter_id: updatingMeeting.chapter_id,
+            meeting_location: updatingMeeting.venue || 'Online Meeting',
+            venue: updatingMeeting.venue || 'Online Meeting',
+            meeting_type: updatingMeeting.type || 'Online Meeting',
+            scheduled_date: nextDateStr,
+            date: nextDateStr,
+            scheduled_time: recurringSchedule.time || updatingMeeting.time || '10:00 AM',
+            time: recurringSchedule.time || updatingMeeting.time || '10:00 AM',
+            notes: recurringSchedule.notes || updatingMeeting.notes || '',
+            status: 'UPCOMING',
+            is_recurring: true,
+            recurring_schedule_id: recurringSchedule.id,
+            created_at: new Date().toISOString()
+          };
+
+          const { error: nextErr } = await supabase
+            .from('one_to_one_meetings')
+            .insert([nextMeetingPayload]);
+
+          if (nextErr) {
+            await databaseService.create('one_to_one_meetings', {
+              ...nextMeetingPayload,
+              creatorId: senderId,
+              participantIds: [receiverId]
+            });
+          }
+        }
       }
 
       await fetchMeetingsAndUsers();
@@ -851,12 +1146,12 @@ export function OneToOneMeetings() {
 
   const upcomingMeetings = meetings
     .filter(m => {
-      if (m.status === 'COMPLETED' || m.status === 'CANCELLED') return false;
+      if (m.status === 'COMPLETED' || m.status === 'CANCELLED' || m.status === 'NOT_COMPLETED') return false;
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
         if (profile?.uid) chapterMemberIds.push(profile.uid);
         if (profile?.id) chapterMemberIds.push(profile.id);
-        return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds.some(id => chapterMemberIds.includes(id));
+        return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds?.some(id => chapterMemberIds.includes(id));
       }
       if (!isAdmin && !isChapterAdmin) {
         const uid = String(profile?.uid || profile?.id || '');
@@ -866,24 +1161,26 @@ export function OneToOneMeetings() {
       }
       return true;
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 
-  const pastMeetings = meetings.filter(m => {
-    if (m.status !== 'COMPLETED' && m.status !== 'CANCELLED' && m.status !== 'NOT_COMPLETED') return false;
-    if (isChapterAdmin) {
-      const chapterMemberIds = members.map(mem => mem.uid);
-      if (profile?.uid) chapterMemberIds.push(profile.uid);
-      if (profile?.id) chapterMemberIds.push(profile.id);
-      return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds.some(id => chapterMemberIds.includes(id));
-    }
-    if (!isAdmin && !isChapterAdmin) {
-      const uid = String(profile?.uid || profile?.id || '');
-      const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
-      const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
-      return senderId === uid || receiverId === uid || m.participantIds?.map(String).includes(uid);
-    }
-    return true;
-  });
+  const pastMeetings = meetings
+    .filter(m => {
+      if (m.status !== 'COMPLETED' && m.status !== 'CANCELLED' && m.status !== 'NOT_COMPLETED') return false;
+      if (isChapterAdmin) {
+        const chapterMemberIds = members.map(mem => mem.uid);
+        if (profile?.uid) chapterMemberIds.push(profile.uid);
+        if (profile?.id) chapterMemberIds.push(profile.id);
+        return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds?.some(id => chapterMemberIds.includes(id));
+      }
+      if (!isAdmin && !isChapterAdmin) {
+        const uid = String(profile?.uid || profile?.id || '');
+        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
+        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
+        return senderId === uid || receiverId === uid || m.participantIds?.map(String).includes(uid);
+      }
+      return true;
+    })
+    .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
 
 
   return (
@@ -903,13 +1200,22 @@ export function OneToOneMeetings() {
           </div>
         </div>
         {!isAdmin && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-6 h-11 bg-primary text-white rounded-[12px] font-bold uppercase tracking-wider transition-all active:scale-95 text-xs shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90"
-          >
-            <Plus size={16} />
-            <span>Schedule 1:1 Meeting</span>
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={handleOpenDefaultSetup}
+              className="flex items-center justify-center gap-2 px-5 h-11 bg-[#151C2E] text-white border border-white/5 rounded-[12px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all active:scale-95 text-xs shadow-sm cursor-pointer"
+            >
+              <Settings size={16} />
+              <span>Default Setup</span>
+            </button>
+            <button
+              onClick={handleOpenScheduleModal}
+              className="flex items-center justify-center gap-2 px-6 h-11 bg-primary text-white rounded-[12px] font-bold uppercase tracking-wider transition-all active:scale-95 text-xs shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90 cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Schedule 1:1 Meeting</span>
+            </button>
+          </div>
         )}
       </header>
 
@@ -992,7 +1298,7 @@ export function OneToOneMeetings() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {upcomingMeetings.length > 0 ? (
-              upcomingMeetings.map((meeting) => (
+              upcomingMeetings.slice(0, 1).map((meeting) => (
                 <MeetingCard 
                   key={meeting.id} 
                   meeting={meeting} 
@@ -1403,12 +1709,63 @@ export function OneToOneMeetings() {
               />
             </div>
 
+            {/* Recurring Meeting Configuration */}
+            <div className="p-4 bg-[#111827] rounded-[16px] border border-white/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar size={16} className="text-primary" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Enable Recurring Meetings</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+
+              {isRecurring && (
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Frequency</label>
+                    <select
+                      value={recurringFrequency}
+                      onChange={(e) => setRecurringFrequency(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                      className="w-full px-3 py-2.5 rounded-[12px] border border-white/5 bg-[#151C2E] text-white font-bold text-xs outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="daily" className="bg-[#111827] text-white">Daily</option>
+                      <option value="weekly" className="bg-[#111827] text-white">Weekly</option>
+                      <option value="monthly" className="bg-[#111827] text-white">Monthly</option>
+                    </select>
+                  </div>
+
+                  {recurringFrequency !== 'daily' && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Select Day</label>
+                      <select
+                        value={recurringDay}
+                        onChange={(e) => setRecurringDay(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-[12px] border border-white/5 bg-[#151C2E] text-white font-bold text-xs outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => (
+                          <option key={d} value={d} className="bg-[#111827] text-white">{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting}
               className="w-full py-5 bg-primary text-white rounded-[16px] font-bold uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-primary/30 transition-all active:scale-95 disabled:opacity-50 text-xs"
             >
-              {isSubmitting ? 'Scheduling...' : 'Schedule Meeting'}
+              {isSubmitting ? (isDefaultSetupMode ? 'Saving Default Setup...' : 'Scheduling...') : (isDefaultSetupMode ? 'Save Default Setup' : 'Schedule Meeting')}
             </button>
           </form>
         )}
