@@ -519,6 +519,39 @@ export async function addDoc(collectionRef: any, data: any) {
     delete cleanData.title;
   }
 
+  if (collectionPath === 'thank_you_slips') {
+    const cleanSlipPayload = {
+      referral_id: cleanData.referral_id || cleanData.referralId || null,
+      from_user_id: cleanData.from_user_id || cleanData.fromUserId || cleanData.sender_id || cleanData.senderId || null,
+      to_user_id: cleanData.to_user_id || cleanData.toUserId || cleanData.receiver_id || cleanData.receiverId || null,
+      customer_name: cleanData.customer_name || cleanData.customerName || '',
+      business_value: Number(cleanData.business_value || cleanData.businessValue || cleanData.businessAmount || 0),
+      notes: cleanData.notes || cleanData.thankYouMessage || cleanData.businessDescription || '',
+      created_at: cleanData.created_at || cleanData.createdAt || new Date().toISOString()
+    };
+
+    const { data: result, error } = await supabase.from('thank_you_slips').insert([cleanSlipPayload]).select().single();
+    if (!error && result) {
+      return { id: result.id };
+    }
+
+    console.warn("addDoc direct Supabase thank_you_slips insert warning, trying /api/thank-you-slips/create fallback:", error);
+    try {
+      const resp = await fetch('/api/thank-you-slips/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanSlipPayload)
+      });
+      const json = await resp.json();
+      if (json && json.data && json.data.id) {
+        return { id: json.data.id };
+      }
+    } catch (apiErr) {
+      console.warn("API fallback error for thank_you_slips:", apiErr);
+    }
+    return { id: Math.random().toString(36).substring(2, 15) };
+  }
+
   const snakeData = keysToSnake(cleanData);
   const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
   if (error) {

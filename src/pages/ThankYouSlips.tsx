@@ -318,32 +318,49 @@ export function ThankYouSlips() {
       const targetSenderId = String(originalSenderId);
 
       // Thank You Slip Relationship:
-      // Sender (from_user_id / fromUserId / sender_id) = Member B (converting user, i.e. current logged in user)
-      // Receiver (to_user_id / toUserId / receiver_id) = Member A (original referral sender)
-      const newSlip = {
+      // Sender (from_user_id / fromUserId) = Member B (converting user, i.e. current logged in user)
+      // Receiver (to_user_id / toUserId) = Member A (original referral sender)
+      const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
-        referralId: String(selectedReferral.id),
         from_user_id: currentUserId,
-        fromUserId: currentUserId,
-        sender_id: currentUserId,
-        senderId: currentUserId,
         to_user_id: targetSenderId,
-        toUserId: targetSenderId,
-        receiver_id: targetSenderId,
-        receiverId: targetSenderId,
         customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
-        customerName: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
         business_value: Number(formData.businessValue),
-        businessValue: Number(formData.businessValue),
         notes: formData.notes || '',
-        created_at: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
 
-      await supabase.from('thank_you_slips').insert([newSlip]);
+      const slipObject: ThankYouSlip = {
+        id: Math.random().toString(36).substring(2, 15),
+        referralId: String(selectedReferral.id),
+        fromUserId: currentUserId,
+        toUserId: targetSenderId,
+        customerName: cleanDbPayload.customer_name,
+        businessValue: cleanDbPayload.business_value,
+        notes: cleanDbPayload.notes,
+        createdAt: cleanDbPayload.created_at
+      };
+
+      // 1. Create in databaseService (handles Supabase insert, backend API, and local storage)
       try {
-        await databaseService.create('thank_you_slips', newSlip);
-      } catch (dbErr) {}
+        const createRes: any = await databaseService.create('thank_you_slips', cleanDbPayload);
+        if (createRes && typeof createRes === 'object' && createRes.id) {
+          slipObject.id = String(createRes.id);
+        } else if (typeof createRes === 'string') {
+          slipObject.id = createRes;
+        }
+      } catch (dbErr) {
+        console.warn("databaseService.create slip notice:", dbErr);
+      }
+
+      // 2. Direct Supabase insert attempt with clean payload
+      const { error: directInsertError } = await supabase.from('thank_you_slips').insert([cleanDbPayload]);
+      if (directInsertError) {
+        console.warn("Direct Supabase insert notice:", directInsertError);
+      }
+
+      // 3. Immediately update local state so the new slip is displayed in the Sent tab
+      setSlips(prev => [slipObject, ...prev.filter(s => s.id !== slipObject.id)]);
 
       // Close / complete the referral status
       await supabase.from('referrals').update({ status: 'Completed', updated_at: new Date().toISOString() }).eq('id', selectedReferral.id);

@@ -818,31 +818,25 @@ export function Referrals() {
       const currentUserId = String(profile.uid || profile.id);
       const targetReferrerId = String(referrerId);
 
-      const newSlip = {
+      const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
-        referralId: String(selectedReferral.id),
         from_user_id: currentUserId,
-        fromUserId: currentUserId,
-        sender_id: currentUserId,
-        senderId: currentUserId,
         to_user_id: targetReferrerId,
-        toUserId: targetReferrerId,
-        receiver_id: targetReferrerId,
-        receiverId: targetReferrerId,
         customer_name: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
-        customerName: selectedReferral.contactName || refRecord?.contact_name || refRecord?.customer_name || '',
         business_value: Number(thankYouData.businessValue),
-        businessValue: Number(thankYouData.businessValue),
         notes: thankYouData.notes || '',
-        created_at: new Date().toISOString(),
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
 
-      await supabase.from('thank_you_slips').insert([newSlip]);
       try {
-        await databaseService.create('thank_you_slips', newSlip);
+        await databaseService.create('thank_you_slips', cleanDbPayload);
       } catch (dbErr) {
         console.warn("databaseService create slip notice:", dbErr);
+      }
+
+      const { error: directSlipErr } = await supabase.from('thank_you_slips').insert([cleanDbPayload]);
+      if (directSlipErr) {
+        console.warn("Direct Supabase slip insert notice in Referrals:", directSlipErr);
       }
 
       const { error: updateErr } = await supabase
