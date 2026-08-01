@@ -23,14 +23,13 @@ export function Categories() {
       const { data, error } = await supabase
         .from('categories')
         .select('*')
-        .order('category_name', { ascending: true });
+        .order('name', { ascending: true });
         
       if (error) throw error;
       
-      // Map 'category_name' to 'name' and dates for the UI
       const formatted = (data || []).map(c => ({
         ...c,
-        name: c.category_name || c.name, // fallback
+        name: c.name,
         createdAt: c.created_at || c.createdAt,
         updatedAt: c.updated_at || c.updatedAt,
       }));

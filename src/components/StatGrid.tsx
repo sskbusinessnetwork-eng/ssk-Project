@@ -179,121 +179,80 @@ export default function StatGrid({
     // MASTER_ADMIN gets global admin stats
     return [
       {
-        label: 'Total Chapters',
-        value: formatValue('Total Chapters', totalChaptersCount),
-        trend: 'Total',
-        trendLabel: 'Chapters',
+        label: 'NETWORK',
+        isMerged: true,
         icon: Users,
         color: 'text-violet-400',
-        bg: 'bg-violet-400/10 border-violet-400/20',
+        bg: 'bg-violet-950/80 border-violet-500/30 text-violet-400 shadow-[0_0_12px_rgba(139,92,246,0.2)]',
+        rows: [
+          { label: 'Chapters', value: formatValue('Total Chapters', totalChaptersCount) },
+          { label: 'Members', value: formatValue('Total Members', totalMembersCount) },
+        ]
       },
       {
-        label: 'Total Members',
-        value: formatValue('Total Members', totalMembersCount),
-        trend: 'Total',
-        trendLabel: 'In network',
-        icon: Users,
-        color: 'text-indigo-400',
-        bg: 'bg-indigo-400/10 border-indigo-400/20',
-      },
-      {
-        label: 'Active Members',
-        value: formatValue('Active Members', activePartnersCount),
-        trend: 'Active',
-        trendLabel: 'In network',
+        label: 'MEMBERSHIP',
+        isMerged: true,
         icon: UserCheck,
         color: 'text-emerald-500',
-        bg: 'bg-emerald-500/10 border-emerald-500/20',
+        bg: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)]',
+        rows: [
+          { label: 'Active', value: formatValue('Active Members', activePartnersCount) },
+          { label: 'Inactive', value: formatValue('Inactive Members', inactiveMembersCount) },
+        ]
       },
       {
-        label: 'Inactive Members',
-        value: formatValue('Inactive Members', inactiveMembersCount),
-        trend: 'Inactive',
-        trendLabel: 'Needs attention',
-        icon: Users,
-        color: 'text-red-400',
-        bg: 'bg-red-400/10 border-red-400/20',
-      },
-      {
-        label: 'Business Sent',
-        value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal),
-        trend: `${businessSentCount ?? 0} Slips`,
-        trendLabel: 'Completed',
+        label: 'BUSINESS',
+        isMerged: true,
         icon: Briefcase,
-        color: 'text-purple-500',
-        bg: 'bg-purple-500/10 border-purple-500/20',
-      },
-      {
-        label: 'Business Received',
-        value: formatValue('Business Received', businessReceivedTotal ?? 0),
-        trend: `${businessReceivedCount ?? 0} Slips`,
-        trendLabel: 'Completed',
-        icon: ArrowDownLeft,
         color: 'text-emerald-400',
-        bg: 'bg-emerald-400/10 border-emerald-400/20',
+        bg: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]',
+        rows: [
+          { label: 'Sent', value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal) },
+          { label: 'Received', value: formatValue('Business Received', businessReceivedTotal ?? 0) },
+        ]
       },
       {
-        label: 'Referrals Sent',
-        value: formatValue('Referrals Sent', referralsSentCount || referralsPassedCount),
-        trend: 'Total',
-        trendLabel: 'Sent',
+        label: 'REFERRALS',
+        isMerged: true,
         icon: Share2,
         color: 'text-purple-400',
-        bg: 'bg-purple-400/10 border-purple-400/20',
+        bg: 'bg-purple-950/80 border-purple-500/30 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.2)]',
+        rows: [
+          { label: 'Sent', value: formatValue('Referrals Sent', referralsSentCount || referralsPassedCount) },
+          { label: 'Received', value: formatValue('Referrals Received', referralsReceivedCount) },
+        ]
       },
       {
-        label: 'Referrals Received',
-        value: formatValue('Referrals Received', referralsReceivedCount),
-        trend: 'Total',
-        trendLabel: 'Received',
-        icon: Share2,
-        color: 'text-emerald-400',
-        bg: 'bg-emerald-400/10 border-emerald-400/20',
-      },
-      {
-        label: 'One-to-One Meetings',
-        value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
-        trend: 'Total',
-        trendLabel: 'Completed',
-        icon: Handshake,
-        color: 'text-blue-500',
-        bg: 'bg-blue-500/10 border-blue-500/20',
-      },
-      {
-        label: 'Chapter Meetings',
-        value: formatValue('Chapter Meetings', chapterMeetingsCount || meetingsCount),
-        trend: 'Total',
-        trendLabel: 'Meetings',
-        icon: Calendar,
-        color: 'text-orange-400',
-        bg: 'bg-orange-400/10 border-orange-400/20',
-      },
-      {
-        label: 'Guests Invited',
-        value: formatValue('Guests Invited', guestsInvitedCount || visitorsAttendedCount),
-        trend: 'Total',
-        trendLabel: 'Invited',
-        icon: UserCheck,
-        color: 'text-pink-500',
-        bg: 'bg-pink-500/10 border-pink-500/20',
-      },
-      {
-        label: 'Thank You Slips Sent',
-        value: formatValue('Thank You Slips Sent', thankYouSlipsSentCount || businessSentCount || thankYouSlipsCount),
-        trend: 'Sent',
-        trendLabel: 'Slips',
+        label: 'THANK YOU SLIPS',
+        isMerged: true,
         icon: FileText,
         color: 'text-cyan-400',
-        bg: 'bg-cyan-400/10 border-cyan-400/20',
+        bg: 'bg-cyan-950/80 border-cyan-500/30 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]',
+        rows: [
+          { label: 'Sent', value: formatValue('Thank You Slips Sent', thankYouSlipsSentCount || businessSentCount || thankYouSlipsCount) },
+          { label: 'Received', value: formatValue('Thank You Slips Received', thankYouSlipsReceivedCount || businessReceivedCount) },
+        ]
       },
       {
-        label: 'Thank You Slips Received',
-        value: formatValue('Thank You Slips Received', thankYouSlipsReceivedCount || businessReceivedCount),
-        trend: 'Received',
-        trendLabel: 'Slips',
-        icon: FileText,
-        color: 'text-teal-400',
-        bg: 'bg-teal-400/10 border-teal-400/20',
+        label: 'MEETINGS',
+        isMerged: true,
+        icon: Calendar,
+        color: 'text-orange-400',
+        bg: 'bg-orange-950/80 border-orange-500/30 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]',
+        rows: [
+          { label: '1-to-1s', value: formatValue('One-to-One Meetings', oneToOneMeetingsCount) },
+          { label: 'Chapter', value: formatValue('Chapter Meetings', chapterMeetingsCount || meetingsCount) },
+        ]
+      },
+      {
+        label: 'GUESTS',
+        isMerged: true,
+        icon: UserCheck,
+        color: 'text-pink-500',
+        bg: 'bg-pink-950/80 border-pink-500/30 text-pink-500 shadow-[0_0_12px_rgba(236,72,153,0.2)]',
+        rows: [
+          { label: 'Invited', value: formatValue('Guests Invited', guestsInvitedCount || visitorsAttendedCount) }
+        ]
       }
     ];
   };
