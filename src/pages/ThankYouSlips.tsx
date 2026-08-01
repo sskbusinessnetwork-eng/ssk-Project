@@ -39,6 +39,7 @@ export function ThankYouSlips() {
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'sent' | 'received' | 'chapter'>('sent');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSlipForDetails, setSelectedSlipForDetails] = useState<ThankYouSlip | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showTestimonialPrompt, setShowTestimonialPrompt] = useState(false);
@@ -48,6 +49,35 @@ export function ThankYouSlips() {
   const [loading, setLoading] = useState(true);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+  const getUserName = (userId?: string | null): string => {
+    if (!userId || userId === 'null' || userId === 'undefined') return 'Unknown Member';
+    const target = String(userId).trim();
+    if (!target) return 'Unknown Member';
+
+    // 1. Check memberNames map
+    if (
+      memberNames[target] &&
+      memberNames[target] !== 'Member Not Found' &&
+      memberNames[target] !== 'Unknown Member' &&
+      memberNames[target] !== 'Member' &&
+      memberNames[target] !== 'N/A'
+    ) {
+      return memberNames[target];
+    }
+
+    // 2. Check allUsers list by id or uid
+    const found = allUsers.find(
+      u => String(u.id || '').trim() === target || String(u.uid || '').trim() === target
+    );
+
+    if (found) {
+      const name = found.name || (found as any).full_name || found.displayName;
+      if (name && name.trim()) return name.trim();
+    }
+
+    return 'Unknown Member';
+  };
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -310,9 +340,18 @@ export function ThankYouSlips() {
     // Also fetch users from Supabase for complete name resolution
     supabase.from('users').select('*').then(({ data: sbUsers }) => {
       if (sbUsers) {
+        setAllUsers(prev => {
+          const combined = [...prev];
+          sbUsers.forEach((u: any) => {
+            if (!combined.some(existing => String(existing.id) === String(u.id) || String(existing.uid) === String(u.id) || (u.uid && String(existing.uid) === String(u.uid)))) {
+              combined.push(u as unknown as UserProfile);
+            }
+          });
+          return combined;
+        });
         const sbNames: Record<string, string> = {};
-        sbUsers.forEach(u => {
-          const name = u.name || u.displayName || 'Member Not Found';
+        sbUsers.forEach((u: any) => {
+          const name = u.name || u.full_name || u.displayName || 'Unknown Member';
           if (u.uid) sbNames[String(u.uid)] = name;
           if (u.id) sbNames[String(u.id)] = name;
         });
@@ -526,8 +565,10 @@ export function ThankYouSlips() {
     }
   };
 
-  const totalBusinessSent = slips.reduce((acc, slip) => acc + slip.businessValue, 0);
-  const totalBusinessReceived = receivedSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
+  // Business Generated (Sent): Business generated for other members (slips received by logged-in user where logged-in user is toUserId / sender)
+  const totalBusinessSent = receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+  // Business Received: Business received by logged-in user (slips submitted by logged-in user where logged-in user is fromUserId / receiver)
+  const totalBusinessReceived = slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
   
   const filteredSlips = allSlips.filter(slip => {
     if (isChapterAdmin) {
@@ -591,8 +632,7 @@ export function ThankYouSlips() {
     document.body.removeChild(link);
   };
 
-  if (isMasterAdmin) {
-    return (
+  return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8 space-y-8">
         {/* Header Section */}
         <header className="relative p-6 md:p-8 bg-[#111827] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
@@ -669,315 +709,83 @@ export function ThankYouSlips() {
         </motion.div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="group relative bg-[#0F172A] border border-white/5 p-6 rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-emerald-500/20 transition-colors duration-500" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-white/10 rounded-[16px] flex items-center justify-center text-emerald-400 mb-6 shadow-inner">
-                <TrendingUp size={24} />
-              </div>
-              <p className="text-[10px] font-bold text-neutral-300 uppercase tracking-[0.2em] mb-2">Total Generated</p>
-              <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-2">
-                <span className="text-emerald-500">₹</span>
-                {totalBusinessGenerated.toLocaleString()}
-              </h2>
-              <p className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest mt-4">Network-wide business passed</p>
-            </div>
-          </div>
-
-          <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-primary/10 transition-colors duration-500" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-primary/10 rounded-[16px] flex items-center justify-center text-primary mb-6 shadow-inner">
-                <Award size={24} />
-              </div>
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-2">Total Received</p>
-              <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-2">
-                <span className="text-primary">₹</span>
-                {totalBusinessReceivedFiltered.toLocaleString()}
-              </h2>
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-4">Network-wide business received</p>
-            </div>
-          </div>
-
-          <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[2.5rem] shadow-2xl overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-secondary/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-secondary/10 transition-colors duration-500" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-secondary/10 rounded-[16px] flex items-center justify-center text-secondary mb-6 shadow-inner">
-                <TrendingUp size={24} />
-              </div>
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-2">Network Volume</p>
-              <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-2">
-                <span className="text-secondary">₹</span>
-                {totalNetworkBusiness.toLocaleString()}
-              </h2>
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-4">Total transaction volume</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Table View */}
-        <div className="bg-[#111827] rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-                <tr className="bg-[#151C2E] border-b border-white/5">
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Slip ID</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Generated By</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Received From</th>
-                  {isMasterAdmin && <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Chapter</th>}
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Date</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Amount</th>
-                  <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center bg-[#111827]">
-                      <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-3" />
-                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Loading Data...</p>
-                    </td>
-                  </tr>
-                ) : filteredSlips.length > 0 ? (
-                  filteredSlips.map((slip) => {
-                    const fromUser = allUsers.find(u => u.uid === slip.fromUserId);
-                    const toUser = allUsers.find(u => u.uid === slip.toUserId);
-                    const chapterAdmin = allUsers.find(u => u.uid === (toUser?.adminId || fromUser?.adminId));
-
-                    return (
-                      <tr key={slip.id} className="hover:bg-[#1C2538] transition-colors group">
-                        <td className="px-6 py-4">
-                          <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase">
-                            #{slip.id.slice(-6)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white">{memberNames[slip.fromUserId] || 'Unknown'}</span>
-                            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-tight">{fromUser?.category || 'Member'}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-bold text-white">{memberNames[slip.toUserId] || 'Unknown'}</span>
-                            <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-tight">{toUser?.category || 'Member'}</span>
-                          </div>
-                        </td>
-                        {isMasterAdmin && (
-                          <td className="px-6 py-4">
-                            <span className="text-[10px] font-bold text-primary uppercase tracking-tight">
-                              {chapterAdmin?.businessName || 'Independent'}
-                            </span>
-                          </td>
-                        )}
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-neutral-300">
-                            {format(new Date(slip.createdAt), 'dd MMM yyyy')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-emerald-400">
-                            ₹{slip.businessValue.toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-[10px] font-medium text-neutral-400 line-clamp-1 max-w-[200px]" title={slip.notes}>
-                            {slip.notes || '-'}
-                          </p>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-20 text-center bg-[#111827]">
-                      <Award size={40} className="mx-auto text-neutral-600 mb-3" />
-                      <h3 className="text-sm font-bold text-white">No slips found</h3>
-                      <p className="text-xs text-neutral-400 mt-1">The thank you slip history is currently empty.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8 space-y-8">
-      {/* Header Section */}
-      <header className="relative p-6 md:p-8 bg-[#111827] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -mr-32 -mt-32 blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-secondary/10 rounded-full -ml-24 -mb-24 blur-2xl" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-[16px] flex items-center justify-center text-white shadow-inner">
-              <Award size={32} strokeWidth={1.5} />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
-                My Thank You Slips
-              </h1>
-              <p className="text-[10px] text-neutral-300 font-bold uppercase tracking-[0.15em] mt-0.5">
-                Value generated and received in your network
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <button
-              onClick={downloadReport}
-              className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-white/20 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)]"
-            >
-              <Download size={18} />
-              <span>Export Report</span>
-            </button>
-            {!isMasterAdmin && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-primary text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-primary/25 overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                <Plus size={18} />
-                <span>Submit Slip</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Filters for Admin */}
-      {isMasterAdmin && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-[#111827] p-6 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-secondary rounded-full" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-[0.2em] font-display">Filter Reports</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">Start Date</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full px-5 py-3 rounded-[16px] bg-[#151C2E] border border-white/5 text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                style={{ colorScheme: 'dark' }}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">End Date</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full px-5 py-3 rounded-[16px] bg-[#151C2E] border border-white/5 text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                style={{ colorScheme: 'dark' }}
-              />
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={() => setFilters({ startDate: '', endDate: '', category: '', fromUserId: '', toUserId: '' })}
-                className="px-6 py-3 text-xs font-bold text-red-400 uppercase tracking-widest hover:bg-red-500/10 rounded-[12px] transition-all"
-              >
-                Reset Filters
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {!isMasterAdmin ? (
           <>
-            <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-emerald-500/20 transition-colors duration-500" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 bg-white/10 rounded-[12px] flex items-center justify-center text-emerald-400 mb-5 shadow-sm">
-                  <TrendingUp size={24} />
-                </div>
-                <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Business Generated (Sent)</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span className="text-emerald-500">₹</span>
-                  {totalBusinessSent.toLocaleString()}
-                </h2>
-                <div className="flex items-center gap-2 mt-4">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <p className="text-[11px] font-medium text-neutral-400">{slips.length} slips submitted</p>
-                </div>
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                <TrendingUp size={15} strokeWidth={2.5} />
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Business Generated</span>
+              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+                ₹{totalBusinessSent.toLocaleString()}
+              </div>
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                  {slips.length} slips submitted
+                </span>
               </div>
             </div>
 
-            <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm hover:shadow-[0_1px_3px_rgba(2,2,2,0.02)] transition-all overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-primary/10 transition-colors duration-500" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 bg-primary/10 rounded-[12px] flex items-center justify-center text-primary mb-5 shadow-sm">
-                  <Award size={24} />
-                </div>
-                <p className="text-[11px] font-semibold text-neutral-400 tracking-wider mb-1 uppercase">Business Received</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span className="text-primary">₹</span>
-                  {totalBusinessReceived.toLocaleString()}
-                </h2>
-                <div className="flex items-center gap-2 mt-4">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                  <p className="text-[11px] font-medium text-neutral-400">{receivedSlips.length} slips received</p>
-                </div>
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+                <Award size={15} strokeWidth={2.5} />
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Business Received</span>
+              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+                ₹{totalBusinessReceived.toLocaleString()}
+              </div>
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                  {receivedSlips.length} slips received
+                </span>
               </div>
             </div>
           </>
         ) : (
           <>
-            <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-emerald-500/20 transition-colors duration-500" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 bg-white/10 rounded-[12px] flex items-center justify-center text-emerald-400 mb-5 shadow-sm">
-                  <TrendingUp size={24} />
-                </div>
-                <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Total Generated</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span className="text-emerald-500">₹</span>
-                  {totalBusinessGenerated.toLocaleString()}
-                </h2>
-                <p className="text-[11px] font-medium text-neutral-400 mt-4">Network-wide business passed</p>
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                <TrendingUp size={15} strokeWidth={2.5} />
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Total Generated</span>
+              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+                ₹{totalBusinessGenerated.toLocaleString()}
+              </div>
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                  Network-wide passed
+                </span>
               </div>
             </div>
 
-            <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm hover:shadow-[0_1px_3px_rgba(2,2,2,0.02)] transition-all overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-primary/10 transition-colors duration-500" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 bg-primary/10 rounded-[12px] flex items-center justify-center text-primary mb-5 shadow-sm">
-                  <Award size={24} />
-                </div>
-                <p className="text-[11px] font-semibold text-neutral-400 tracking-wider mb-1 uppercase">Total Received</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span className="text-primary">₹</span>
-                  {totalBusinessReceivedFiltered.toLocaleString()}
-                </h2>
-                <p className="text-[11px] font-medium text-neutral-400 mt-4">Network-wide business received</p>
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+                <Award size={15} strokeWidth={2.5} />
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Total Received</span>
+              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+                ₹{totalBusinessReceivedFiltered.toLocaleString()}
+              </div>
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                  Network-wide received
+                </span>
               </div>
             </div>
 
-            <div className="group relative bg-[#111827] border border-white/5 p-6 rounded-[16px] shadow-sm hover:shadow-[0_1px_3px_rgba(2,2,2,0.02)] transition-all overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full -mr-16 -mt-16 blur-xl group-hover:bg-amber-500/10 transition-colors duration-500" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 bg-[#151C2E] rounded-[12px] flex items-center justify-center text-amber-500 mb-5 shadow-sm">
-                  <TrendingUp size={24} />
-                </div>
-                <p className="text-[11px] font-semibold text-neutral-400 tracking-wider mb-1 uppercase">Network Volume</p>
-                <h2 className="text-3xl font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span className="text-amber-500">₹</span>
-                  {totalNetworkBusiness.toLocaleString()}
-                </h2>
-                <p className="text-[11px] font-medium text-neutral-400 mt-4">Total transaction volume</p>
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1 col-span-2 sm:col-span-1 lg:col-span-1">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-amber-500/30 bg-amber-950/80 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
+                <TrendingUp size={15} strokeWidth={2.5} />
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Network Volume</span>
+              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+                ₹{totalNetworkBusiness.toLocaleString()}
+              </div>
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+                  Total transaction volume
+                </span>
               </div>
             </div>
           </>
@@ -1090,21 +898,23 @@ export function ThankYouSlips() {
                       {activeTab === 'sent' ? (
                         <Link 
                           to={`/profile?id=${slip.toUserId}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
                         >
-                          {memberNames[slip.toUserId] || 'Member'}
+                          {getUserName(slip.toUserId)}
                         </Link>
                       ) : activeTab === 'received' ? (
                         <Link 
                           to={`/profile?id=${slip.fromUserId}`}
+                          onClick={(e) => e.stopPropagation()}
                           className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
                         >
-                          {memberNames[slip.fromUserId] || 'Member'}
+                          {getUserName(slip.fromUserId)}
                         </Link>
                       ) : (
                         <div className="text-xs font-medium text-white">
-                          <div>From: {memberNames[slip.fromUserId] || '...'}</div>
-                          <div>To: {memberNames[slip.toUserId] || '...'}</div>
+                          <div>From: {getUserName(slip.fromUserId)}</div>
+                          <div>To: {getUserName(slip.toUserId)}</div>
                         </div>
                       )}
                     </div>
@@ -1136,13 +946,22 @@ export function ThankYouSlips() {
                     </div>
                   </div>
 
-                  {/* Notes / Footer */}
-                  {slip.notes && (
-                    <div className="pt-3 border-t border-white/5">
-                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Notes</p>
-                      <p className="text-xs text-neutral-300 italic line-clamp-2 leading-relaxed">"{slip.notes}"</p>
-                    </div>
-                  )}
+                  {/* Notes & View Details Footer */}
+                  <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                    {slip.notes ? (
+                      <p className="text-xs text-neutral-300 italic line-clamp-1 leading-relaxed max-w-[70%]">"{slip.notes}"</p>
+                    ) : <div />}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSlipForDetails(slip);
+                      }}
+                      className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
+                    >
+                      View Details <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </motion.div>
               );
             })}
@@ -1373,6 +1192,76 @@ export function ThankYouSlips() {
           receiver={testimonialReceiver}
         />
       )}
+
+      {/* Thank You Slip Details Modal */}
+      <Modal
+        isOpen={selectedSlipForDetails !== null}
+        onClose={() => setSelectedSlipForDetails(null)}
+        title="Thank You Slip Details"
+      >
+        {selectedSlipForDetails && (() => {
+          const giverName = getUserName(selectedSlipForDetails.fromUserId);
+          const recipientName = getUserName(selectedSlipForDetails.toUserId);
+          const formattedDate = selectedSlipForDetails.createdAt
+            ? format(new Date(selectedSlipForDetails.createdAt), 'dd MMM yyyy')
+            : 'Unknown Date';
+          const formattedAmount = `₹${Number(selectedSlipForDetails.businessValue || 0).toLocaleString('en-IN')}`;
+
+          return (
+            <div className="space-y-4 p-1">
+              <div className="p-5 bg-[#151C2E] rounded-[20px] border border-white/10 space-y-3.5 shadow-xl">
+                {/* Member */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Member:</span>
+                  <span className="text-sm font-bold text-white">{giverName}</span>
+                </div>
+
+                {/* Date */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Date:</span>
+                  <span className="text-sm font-semibold text-white">{formattedDate}</span>
+                </div>
+
+                {/* Amount */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Amount:</span>
+                  <span className="text-base font-extrabold text-emerald-400">{formattedAmount}</span>
+                </div>
+
+                {/* Giver */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Giver:</span>
+                  <span className="text-sm font-bold text-white">{giverName}</span>
+                </div>
+
+                {/* Recipient */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Recipient:</span>
+                  <span className="text-sm font-bold text-white">{recipientName}</span>
+                </div>
+
+                {/* Notes */}
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Notes:</span>
+                  <p className="text-xs text-neutral-200 leading-relaxed italic bg-black/20 p-3 rounded-xl border border-white/5">
+                    {selectedSlipForDetails.notes || 'Thank you'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSlipForDetails(null)}
+                  className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }
