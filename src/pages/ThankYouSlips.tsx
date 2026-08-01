@@ -1200,12 +1200,18 @@ export function ThankYouSlips() {
         title="Thank You Slip Details"
       >
         {selectedSlipForDetails && (() => {
-          const giverName = getUserName(selectedSlipForDetails.fromUserId);
-          const recipientName = getUserName(selectedSlipForDetails.toUserId);
+          const senderId = selectedSlipForDetails.fromUserId || (selectedSlipForDetails as any).from_user_id || (selectedSlipForDetails as any).submitted_by;
+          const receiverId = selectedSlipForDetails.toUserId || (selectedSlipForDetails as any).to_user_id;
+
+          const senderName = getUserName(senderId);
+          const receiverName = getUserName(receiverId);
+
           const formattedDate = selectedSlipForDetails.createdAt
             ? format(new Date(selectedSlipForDetails.createdAt), 'dd MMM yyyy')
             : 'Unknown Date';
           const formattedAmount = `₹${Number(selectedSlipForDetails.businessValue || 0).toLocaleString('en-IN')}`;
+
+          const showToField = isMasterAdmin || isChapterAdmin;
 
           return (
             <div className="space-y-4 p-1">
@@ -1213,7 +1219,7 @@ export function ThankYouSlips() {
                 {/* Member */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Member:</span>
-                  <span className="text-sm font-bold text-white">{giverName}</span>
+                  <span className="text-sm font-bold text-white">{senderName}</span>
                 </div>
 
                 {/* Date */}
@@ -1228,17 +1234,19 @@ export function ThankYouSlips() {
                   <span className="text-base font-extrabold text-emerald-400">{formattedAmount}</span>
                 </div>
 
-                {/* Giver */}
+                {/* From */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Giver:</span>
-                  <span className="text-sm font-bold text-white">{giverName}</span>
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">From:</span>
+                  <span className="text-sm font-bold text-white">{senderName}</span>
                 </div>
 
-                {/* Recipient */}
-                <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Recipient:</span>
-                  <span className="text-sm font-bold text-white">{recipientName}</span>
-                </div>
+                {/* To (Only for Master Admin and Chapter Admin) */}
+                {showToField && (
+                  <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                    <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">To:</span>
+                    <span className="text-sm font-bold text-white">{receiverName}</span>
+                  </div>
+                )}
 
                 {/* Notes */}
                 <div className="flex flex-col gap-1.5 pt-1">
