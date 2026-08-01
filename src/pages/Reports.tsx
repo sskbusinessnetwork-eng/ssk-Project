@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths, format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
+import { Modal } from '../components/Modal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -57,14 +58,27 @@ export function Reports() {
   // Filters state
   const [selectedChapterId, setSelectedChapterId] = useState<string>('ALL');
   const [selectedMemberId, setSelectedMemberId] = useState<string>('ALL');
-  const [startDate, setStartDate] = useState<string>(() => {
-    // Default to start of 6 months ago
-    const d = subMonths(new Date(), 6);
-    return format(d, 'yyyy-MM-01');
-  });
-  const [endDate, setEndDate] = useState<string>(() => {
-    return format(new Date(), 'yyyy-MM-dd');
-  });
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [hasInitializedDate, setHasInitializedDate] = useState(false);
+
+  useEffect(() => {
+    if (profile && !hasInitializedDate) {
+      if (profile.role === 'MASTER_ADMIN') {
+        const d = subMonths(new Date(), 6);
+        setStartDate(format(d, 'yyyy-MM-01'));
+        setEndDate(format(new Date(), 'yyyy-MM-dd'));
+      } else {
+        setStartDate('');
+        setEndDate('');
+      }
+      setHasInitializedDate(true);
+    }
+  }, [profile, hasInitializedDate]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   
@@ -149,6 +163,20 @@ export function Reports() {
       unsubSlips();
     };
   }, [profile]);
+
+  const handleApplyFilter = () => {
+    setStartDate(filterStartDate);
+    setEndDate(filterEndDate);
+    setIsFilterModalOpen(false);
+  };
+
+  const handleClearFilter = () => {
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setStartDate('');
+    setEndDate('');
+    setIsFilterModalOpen(false);
+  };
 
   // Handle Preset Date Filter
   const handlePresetFilter = (preset: 'this-month' | 'last-month' | 'last-3' | 'last-6' | 'lifetime') => {
@@ -785,6 +813,23 @@ export function Reports() {
 
         {/* Action Controls (Export) */}
         <div className="flex items-center gap-3 relative shrink-0">
+          {profile?.role === 'CHAPTER_ADMIN' && (
+            <button
+              onClick={() => setIsFilterModalOpen(true)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs font-bold px-5 h-[44px] rounded-[14px] shadow-sm border transition-all cursor-pointer",
+                (startDate || endDate) 
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+                  : "bg-[#111827]/80 text-[#9CA3AF] border-white/10 hover:text-white"
+              )}
+            >
+              <Filter size={14} />
+              {(startDate || endDate) ? 'Filtered' : 'Filter'}
+              {(startDate || endDate) && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
+              )}
+            </button>
+          )}
           <button 
             onClick={() => setShowExportMenu(prev => !prev)}
             className="bg-[#E53935] hover:bg-[#D32F2F] text-white px-5 h-[44px] rounded-[14px] font-bold text-xs flex items-center gap-2 shadow-[0_4px_20px_rgba(229,57,53,0.3)] transition-all cursor-pointer"
@@ -833,6 +878,7 @@ export function Reports() {
       </motion.div>
 
       {/* FILTERS & DURATION PANEL */}
+      {profile?.role === 'MASTER_ADMIN' && (
       <motion.div 
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -956,6 +1002,7 @@ export function Reports() {
           </div>
         </div>
       </motion.div>
+      )}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center p-20 bg-[#111827] rounded-[20px] border border-white/5 space-y-4">
@@ -1436,7 +1483,62 @@ export function Reports() {
           )}
         </>
       )}
-      
+
+      {/* Filter Modal for Chapter Admin */}
+      <Modal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        title="Filter Chapter Analytics"
+      >
+        <div className="space-y-6">
+          <p className="text-sm text-neutral-400">
+            Select a date range to filter the entire Chapter Report, including Growth Score and Analytics.
+          </p>
+
+          <div className="bg-[#0B1220] rounded-xl p-5 border border-white/5 shadow-inner">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={handleClearFilter}
+              className="flex-1 bg-[#111827] hover:bg-neutral-800 text-white font-bold py-3 rounded-xl transition-all text-sm border border-white/10"
+            >
+              Reset
+            </button>
+            <button
+              onClick={handleApplyFilter}
+              className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-lg shadow-red-900/20"
+            >
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }

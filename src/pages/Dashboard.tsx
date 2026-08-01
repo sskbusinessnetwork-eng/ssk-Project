@@ -153,7 +153,7 @@ export function Analytics() {
   const normPosForAdmin = String(profile?.position || '').toLowerCase();
   const isStrictChapterAdmin = (profile?.role === 'CHAPTER_ADMIN' && !['president', 'vice_president', 'treasurer'].includes(normPosForAdmin)) || normPosForAdmin === 'chapter_admin';
   const isChapterAdminUser = isStrictChapterAdmin;
-  const usePersonalStats = !isChapterAdminUser && profile?.role !== 'MASTER_ADMIN';
+  const usePersonalStats = profile?.role !== 'MASTER_ADMIN';
 
   // Global Date Range, Chapter & Member Filter State
   const [filterStartDate, setFilterStartDate] = useState<string>('');
@@ -232,18 +232,27 @@ export function Analytics() {
   };
 
   const handleClearFilter = () => {
-    setFilterStartDate(new Date().toISOString().split('T')[0]);
-    setFilterEndDate(new Date().toISOString().split('T')[0]);
+    if (profile?.role === 'MASTER_ADMIN') {
+      setFilterStartDate(new Date().toISOString().split('T')[0]);
+      setFilterEndDate(new Date().toISOString().split('T')[0]);
+    } else {
+      setFilterStartDate('');
+      setFilterEndDate('');
+    }
     setSelectedChapterFilter('ALL');
     setSelectedMemberFilter('ALL');
     setAppliedChapterFilter('ALL');
     setAppliedMemberFilter('ALL');
     setDateError(null);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    setActiveDateRange({ start: today, end: end });
+    if (profile?.role === 'MASTER_ADMIN') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      setActiveDateRange({ start: today, end: end });
+    } else {
+      setActiveDateRange(null);
+    }
     setIsFilterModalOpen(false);
   };
 
@@ -2766,7 +2775,7 @@ export function Analytics() {
              </svg>
              <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
                <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">Chapter Growth</span>
+               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{usePersonalStats ? 'Personal Growth' : 'Chapter Growth'}</span>
                <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
                  {growthStatus}
                </div>

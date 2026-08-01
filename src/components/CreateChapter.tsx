@@ -323,9 +323,10 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
           } else {
             // Find user by phone or create new ID
             const { data: existingUsers } = await supabase.from('users').select('id').eq('phone', phone).limit(1);
-            targetUid = existingUsers && existingUsers.length > 0 ? existingUsers[0].id : generateId();
+            const isNewUser = !existingUsers || existingUsers.length === 0;
+            targetUid = !isNewUser ? existingUsers[0].id : generateId();
 
-            const userUpsertPayload = {
+            const userUpsertPayload: any = {
               id: targetUid,
               uid: targetUid,
               name: leader.fullName.trim(),
@@ -350,6 +351,13 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
               account_status: 'ACTIVE',
               updated_at: new Date().toISOString()
             };
+
+            if (isNewUser) {
+              userUpsertPayload.password = bcrypt.hashSync('Welcome@123', 10);
+              userUpsertPayload.must_change_password = true;
+              userUpsertPayload.created_by_role = 'MASTER_ADMIN';
+              userUpsertPayload.created_at = new Date().toISOString();
+            }
 
             const { error: upsertErr } = await supabase.from('users').upsert(userUpsertPayload, { onConflict: 'id' });
             if (upsertErr) {
@@ -457,7 +465,7 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
           const leader = leaders[pos];
           const phone = normalizePhoneNumber(leader.mobile);
           const uid = leaderUIDs[pos];
-          const defaultPassword = 'Welcometosskbusiness';
+          const defaultPassword = 'Welcome@123';
           createdUsers.push(uid);
 
           const startDateISO = formatDateForStorage(leader.subscriptionStart);

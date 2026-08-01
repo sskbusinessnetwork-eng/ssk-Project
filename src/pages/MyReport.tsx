@@ -24,15 +24,9 @@ export function MyReport() {
 
   // Filter state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [filterStartDate, setFilterStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [filterEndDate, setFilterEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    return { start: today, end: end };
-  });
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);
 
 
 
@@ -80,13 +74,9 @@ export function MyReport() {
   };
 
   const handleClearFilter = () => {
-    setFilterStartDate(new Date().toISOString().split('T')[0]);
-    setFilterEndDate(new Date().toISOString().split('T')[0]);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    setActiveDateRange({ start: today, end: end });
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setActiveDateRange(null);
     setIsFilterModalOpen(false);
   };
 
