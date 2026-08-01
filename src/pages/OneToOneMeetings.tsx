@@ -114,31 +114,26 @@ const formatUserRoleOrPosition = (user: any): string => {
 
 const getUserFullAddress = (user: any): string => {
   if (!user) return '';
-  const busName = user.business_name || user.businessName || '';
-  const addr = user.address || user.business_address || user.street || '';
-  const area = user.area || '';
-  const city = user.city || '';
-  const state = user.state || '';
-  const pincode = user.pincode || user.pin_code || user.zip || '';
+  const addr = (user.address || user.street || user.business_address || '').trim();
+  const area = (user.area || '').trim();
+  const city = (user.city || user.business_city || '').trim();
+  const state = (user.state || user.business_state || '').trim();
+  const pincode = (user.pincode || user.pin_code || user.zip || user.postal_code || '').trim();
 
-  const addressParts = [addr, area, city, state].map(s => (s ? String(s).trim() : '')).filter(Boolean);
+  const addressParts = [addr, area, city, state]
+    .map(s => (s ? String(s).trim() : ''))
+    .filter(Boolean);
+
   let fullAddress = addressParts.join(', ');
   if (pincode) {
     if (fullAddress) {
       fullAddress += ` - ${pincode}`;
     } else {
-      fullAddress = String(pincode);
+      fullAddress = pincode;
     }
   }
 
-  if (busName && fullAddress) {
-    return `${busName}, ${fullAddress}`;
-  } else if (fullAddress) {
-    return fullAddress;
-  } else if (busName) {
-    return busName;
-  }
-  return '';
+  return fullAddress.trim();
 };
 
 export function OneToOneMeetings() {
@@ -516,10 +511,20 @@ export function OneToOneMeetings() {
 
       if (locationType === 'My Address') {
         finalLocationType = "My Address";
-        finalLocation = senderFullAddress || "My Address";
+        if (!senderFullAddress) {
+          setError("Address not available. Please update your profile.");
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = senderFullAddress;
       } else if (locationType === 'Member Address') {
         finalLocationType = "Member's Address";
-        finalLocation = receiverFullAddress || "Member's Address";
+        if (!receiverFullAddress) {
+          setError("Address not available. Please update your profile.");
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = receiverFullAddress;
       } else {
         finalLocationType = "Online Meeting";
         finalLocation = "Online Meeting";
@@ -785,9 +790,19 @@ export function OneToOneMeetings() {
 
       let finalLocation = 'Online Meeting';
       if (rescheduleLocationOption === 'My Address') {
-        finalLocation = senderFullAddress || 'My Address';
+        if (!senderFullAddress) {
+          setError("Address not available. Please update your profile.");
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = senderFullAddress;
       } else if (rescheduleLocationOption === 'Selected Member Address') {
-        finalLocation = receiverFullAddress || "Selected Member Address";
+        if (!receiverFullAddress) {
+          setError("Address not available. Please update your profile.");
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = receiverFullAddress;
       } else {
         finalLocation = 'Online Meeting';
       }
@@ -1384,21 +1399,25 @@ export function OneToOneMeetings() {
                   1. Online Meeting
                 </option>
                 <option value="My Address" className="bg-[#111827] text-white">
-                  2. My Address {myAddress ? `(${myAddress})` : '(Full Address)'}
+                  2. My Address {myAddress ? `(${myAddress})` : '(Address not available)'}
                 </option>
                 <option value="Member Address" className="bg-[#111827] text-white">
-                  3. Member's Address {memberAddress ? `(${memberAddress})` : '(Full Address)'}
+                  3. Member's Address {memberAddress ? `(${memberAddress})` : selectedMember ? '(Address not available)' : '(Select member first)'}
                 </option>
               </select>
 
               <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 text-xs text-neutral-300">
                 <span className="font-bold text-primary mr-1">Selected Address:</span>
                 {locationType === 'Online' && 'Online Meeting'}
-                {locationType === 'My Address' && (myAddress || 'Address not specified in profile')}
+                {locationType === 'My Address' && (
+                  myAddress ? myAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
+                )}
                 {locationType === 'Member Address' && (
-                  selectedMember 
-                    ? (memberAddress || 'Address not specified in member profile')
-                    : 'Please select a member first'
+                  selectedMember ? (
+                    memberAddress ? memberAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
+                  ) : (
+                    <span className="text-neutral-400 italic">Please select a member first</span>
+                  )
                 )}
               </div>
             </div>
