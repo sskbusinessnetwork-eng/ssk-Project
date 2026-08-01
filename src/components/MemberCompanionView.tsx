@@ -389,13 +389,7 @@ export function MemberCompanionView({
                 className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px]"
               >
                 {/* Left Column: Title only */}
-                <div className="flex flex-col flex-1 min-w-0 pr-2 cursor-pointer"
-                     title={task.isDone ? "Mark incomplete" : "Mark complete"}
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       handleToggleTask(task.key);
-                     }}
-                >
+                <div className="flex flex-col flex-1 min-w-0 pr-2">
                     <h4 className={cn(
                       "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words flex items-center gap-1.5 flex-wrap",
                       task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
