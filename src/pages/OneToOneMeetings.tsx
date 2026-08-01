@@ -1400,7 +1400,7 @@ export function OneToOneMeetings() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
                 <input
@@ -1429,7 +1429,7 @@ export function OneToOneMeetings() {
                       <select
                         value={selectedHour}
                         onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
+                        className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                       >
                         <option value="" disabled className="bg-[#111827] text-white">HH</option>
                         {hoursList.map(h => (
@@ -1439,7 +1439,7 @@ export function OneToOneMeetings() {
                       <select
                         value={selectedMinute}
                         onChange={(e) => handleTimeUpdate(selectedHour || '10', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
+                        className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                       >
                         <option value="" disabled className="bg-[#111827] text-white">MM</option>
                         {minutesList.map(m => (
@@ -1449,7 +1449,7 @@ export function OneToOneMeetings() {
                       <select
                         value={ampmPart}
                         onChange={(e) => handleTimeUpdate(selectedHour || '10', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
-                        className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm"
+                        className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                       >
                         <option value="" disabled className="bg-[#111827] text-white">--</option>
                         <option value="AM" className="bg-[#111827] text-white">AM</option>
@@ -1662,20 +1662,21 @@ export function OneToOneMeetings() {
             </div>
           )}
 
-          {/* Meeting Date */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={(e) => setRescheduleDate(e.target.value)}
-              className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium bg-[#151C2E] text-white"
-              style={{ colorScheme: 'dark' }}
-            />
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Meeting Date */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Date</label>
+              <input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium bg-[#151C2E] text-white"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
 
-          {/* Meeting Time */}
-          <div className="space-y-2">
+            {/* Meeting Time */}
+            <div className="space-y-2">
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Time</label>
             {(() => {
               const { time: timePart, ampm: ampmPart } = parseTo12hParts(rescheduleTime);
@@ -1692,7 +1693,7 @@ export function OneToOneMeetings() {
                   <select
                     value={selectedHour}
                     onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
-                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                    className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                   >
                     <option value="" disabled className="bg-[#111827] text-white">HH</option>
                     {hoursList.map(h => (
@@ -1702,7 +1703,7 @@ export function OneToOneMeetings() {
                   <select
                     value={selectedMinute}
                     onChange={(e) => handleTimeUpdate(selectedHour || '10', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
-                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                    className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                   >
                     <option value="" disabled className="bg-[#111827] text-white">MM</option>
                     {minutesList.map(m => (
@@ -1712,7 +1713,7 @@ export function OneToOneMeetings() {
                   <select
                     value={ampmPart}
                     onChange={(e) => handleTimeUpdate(selectedHour || '10', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
-                    className="w-full px-3 py-3 rounded-[12px] border border-white/5 outline-none focus:ring-2 focus:ring-primary font-bold bg-[#151C2E] text-white text-sm cursor-pointer"
+                    className="w-full px-2 sm:px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white cursor-pointer"
                   >
                     <option value="" disabled className="bg-[#111827] text-white">--</option>
                     <option value="AM" className="bg-[#111827] text-white">AM</option>
@@ -1723,6 +1724,7 @@ export function OneToOneMeetings() {
             })()}
           </div>
 
+          </div>
           {/* Meeting Location */}
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
@@ -1738,7 +1740,7 @@ export function OneToOneMeetings() {
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-3 pt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">
             <button
               type="button"
               onClick={handleSaveReschedule}
