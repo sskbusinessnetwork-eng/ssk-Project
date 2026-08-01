@@ -1656,7 +1656,7 @@ export function Analytics() {
   };
   
   
-  const renderAnalyticsDetails = () => {
+    const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
 
     if (analyticsLoading) {
@@ -1713,11 +1713,12 @@ export function Analytics() {
         </div>
       );
     }
+
     const norm = analyticsModalCategory.toLowerCase().trim();
     let records = [];
 
     // Helper to format role
-    const formatRole = (role, position) => {
+    const formatRole = (role: string, position: string) => {
       if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
       if (role === 'PRESIDENT') return 'President';
       if (role === 'VICE_PRESIDENT') return 'Vice President';
@@ -1763,18 +1764,23 @@ export function Analytics() {
         ]
       }));
     } else if (norm.includes('business') || norm.includes('thank you')) {
+      let list = effectiveSlips;
+      const uid = String(profile?.id || profile?.uid);
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allSlips : chapterSlips;
-      
+
+      if (!isGlobal) {
+        list = list.filter(s => String(s.fromUserId) === uid || String(s.toUserId) === uid || String(s.chapter_id) === profile?.chapter_id);
+      }
+
       if (norm.includes('sent')) {
-        list = list.filter(s => s.fromUserId === (profile?.uid || profile?.id));
+        list = list.filter(s => String(s.fromUserId) === uid);
       } else if (norm.includes('received')) {
-        list = list.filter(s => s.toUserId === (profile?.uid || profile?.id));
+        list = list.filter(s => String(s.toUserId) === uid);
       }
 
       records = list.map(slip => {
-        const giver = chapterUsers.find(u => u.uid === slip.fromUserId);
-        const recipient = chapterUsers.find(u => u.uid === slip.toUserId);
+        const giver = allUsersList.find(u => u.uid === slip.fromUserId) || chapterUsers.find(u => u.uid === slip.fromUserId);
+        const recipient = allUsersList.find(u => u.uid === slip.toUserId) || chapterUsers.find(u => u.uid === slip.toUserId);
         return {
           id: slip.id,
           title: slip.customerName || 'N/A',
@@ -1791,18 +1797,23 @@ export function Analytics() {
         };
       });
     } else if (norm.includes('referral')) {
+      let list = effectiveReferrals;
+      const uid = String(profile?.id || profile?.uid);
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allReferrals : chapterReferrals;
-      
+
+      if (!isGlobal) {
+        list = list.filter(s => String(s.fromUserId) === uid || String(s.toUserId) === uid || String(s.chapter_id) === profile?.chapter_id);
+      }
+
       if (norm.includes('sent')) {
-        list = list.filter(s => s.fromUserId === (profile?.uid || profile?.id));
+        list = list.filter(s => String(s.fromUserId) === uid);
       } else if (norm.includes('received')) {
-        list = list.filter(s => s.toUserId === (profile?.uid || profile?.id));
+        list = list.filter(s => String(s.toUserId) === uid);
       }
 
       records = list.map(ref => {
-        const giver = chapterUsers.find(u => u.uid === ref.fromUserId);
-        const recipient = chapterUsers.find(u => u.uid === ref.toUserId);
+        const giver = allUsersList.find(u => u.uid === ref.fromUserId) || chapterUsers.find(u => u.uid === ref.fromUserId);
+        const recipient = allUsersList.find(u => u.uid === ref.toUserId) || chapterUsers.find(u => u.uid === ref.toUserId);
         const st = (ref.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'closed' || st === 'completed') bColor = 'emerald';
@@ -1823,13 +1834,28 @@ export function Analytics() {
           ]
         };
       });
-    } else if (norm.includes('one-to-one')) {
+    } else if (norm.includes('one-to-one') || norm.includes('one to one')) {
+      let list = effectiveOneToOnes;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allOneToOnes : chapterOneToOnes;
+
+      if (!isGlobal) {
+         list = list.filter(m => {
+            const orgId = String(m.organizer_id || m.creatorId || '');
+            const pIds = (m.participantIds || []).map((id: string) => String(id));
+            if (usePersonalStats) {
+                const uid = String(profile?.id || profile?.uid);
+                return orgId === uid || pIds.includes(uid);
+            }
+            return String(m.chapter_id) === String(profile?.chapter_id);
+         });
+      }
       
       records = list.map(m => {
-        const sender = chapterUsers.find(u => String(u.uid) === String(m.sender_id || m.organizer_id));
-        const receiver = chapterUsers.find(u => String(u.uid) === String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0])));
+        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
+        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
+        const sender = allUsersList.find(u => String(u.uid) === senderId) || chapterUsers.find(u => String(u.uid) === senderId);
+        const receiver = allUsersList.find(u => String(u.uid) === receiverId) || chapterUsers.find(u => String(u.uid) === receiverId);
+        
         const st = (m.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'completed') bColor = 'emerald';
@@ -1837,8 +1863,8 @@ export function Analytics() {
 
         return {
           id: m.id,
-          title: `${sender?.name || 'N/A'} & ${receiver?.name || 'N/A'}`,
-          subtitle: m.venue || m.meetingLocation || 'Online',
+          title: `${sender?.name || 'Unknown'} & ${receiver?.name || 'Unknown'}`,
+          subtitle: m.venue || m.meetingLocation || m.locationType || 'Online',
           icon: <Handshake size={18} className="text-primary" />,
           badgeText: m.status || 'Scheduled',
           badgeColor: bColor,
@@ -1849,11 +1875,20 @@ export function Analytics() {
         };
       });
     } else if (norm.includes('guest') || norm.includes('visitor')) {
+      let list = effectiveGuestInvitations;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allGuestInvites : chapterGuestInvites;
+
+      if (!isGlobal) {
+        list = list.filter(g => {
+            if (usePersonalStats) {
+               return String(g.inviterId) === String(profile?.id || profile?.uid);
+            }
+            return String(g.chapter_id) === String(profile?.chapter_id);
+        });
+      }
       
       records = list.map(g => {
-        const inviter = chapterUsers.find(u => String(u.uid) === String(g.inviterId));
+        const inviter = allUsersList.find(u => String(u.uid) === String(g.inviterId)) || chapterUsers.find(u => String(u.uid) === String(g.inviterId));
         const st = (g.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'attended') bColor = 'emerald';
@@ -1873,9 +1908,13 @@ export function Analytics() {
         };
       });
     } else if (norm.includes('testimonial')) {
+      let list = effectiveTestimonials;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allTestimonials : chapterTestimonials;
-      
+
+      if (!isGlobal) {
+         list = list.filter(t => String(t.chapter_id) === String(profile?.chapter_id));
+      }
+
       if (norm.includes('given')) {
         list = list.filter(s => s.giverId === (profile?.uid || profile?.id));
       } else if (norm.includes('received')) {
@@ -1883,9 +1922,9 @@ export function Analytics() {
       }
 
       records = list.map(t => {
-        const giver = chapterUsers.find(u => String(u.uid) === String(t.giverId));
-        const receiver = chapterUsers.find(u => String(u.uid) === String(t.receiverId));
-        let extraData = {};
+        const giver = allUsersList.find(u => String(u.uid) === String(t.giverId)) || chapterUsers.find(u => String(u.uid) === String(t.giverId));
+        const receiver = allUsersList.find(u => String(u.uid) === String(t.receiverId)) || chapterUsers.find(u => String(u.uid) === String(t.receiverId));
+        let extraData: any = {};
         let text = t.testimonial || '';
         if (text.includes('|||')) {
           const parts = text.split('|||');
@@ -1908,8 +1947,12 @@ export function Analytics() {
         };
       });
     } else if (norm.includes('attendance') || norm.includes('meeting') || norm === 'meetings') {
+      let list = effectiveMeetings;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
-      let list = isGlobal ? allMeetings : chapterMeetings;
+      
+      if (!isGlobal) {
+         list = list.filter(m => String(m.chapter_id) === String(profile?.chapter_id));
+      }
       
       records = list.map(m => {
         return {
@@ -1950,7 +1993,7 @@ export function Analytics() {
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {records.map((r, idx) => (
+        {records.map((r: any, idx) => (
           <div key={r.id || idx} className="p-5 bg-gradient-to-b from-[#151C2E] to-[#111827] rounded-[20px] border border-white/5 shadow-xl hover:shadow-2xl hover:border-primary/20 transition-all flex flex-col gap-4 group">
             <div className="flex justify-between items-start gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -1983,7 +2026,7 @@ export function Analytics() {
                     <span className="text-neutral-300 font-medium">{r.date}</span>
                   </div>
                 )}
-                {r.details && r.details.map((d, i) => (
+                {r.details && r.details.map((d: any, i: number) => (
                   <div key={i} className="flex justify-between items-start gap-4 text-xs">
                     <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px] mt-0.5 shrink-0">{d.label}</span>
                     <span className="text-neutral-300 font-medium text-right break-words line-clamp-2" title={d.value}>{d.value || 'N/A'}</span>
@@ -1996,8 +2039,7 @@ export function Analytics() {
       </div>
     );
   };
-
-  const getGreeting = () => {
+const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'GOOD MORNING, 👋';
     if (hour < 18) return 'GOOD AFTERNOON, 👋';
