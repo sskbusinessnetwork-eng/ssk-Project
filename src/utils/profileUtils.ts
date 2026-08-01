@@ -6,6 +6,7 @@ export const REQUIRED_PROFILE_FIELDS = [
   { key: 'phone', label: 'Mobile Number' },
   { key: 'email', label: 'Email Address' },
   { key: 'businessName', label: 'Business Name' },
+  { key: 'professionDesignation', label: 'Profession / Designation' },
   { key: 'category', label: 'Business Category' },
   { key: 'bio', label: 'Business Description' },
   { key: 'address', label: 'Address' },
@@ -39,6 +40,9 @@ export function calculateProfileCompletion(profile: any): {
         break;
       case 'businessName':
         val = profile.businessName || profile.business_name;
+        break;
+      case 'professionDesignation':
+        val = profile.professionDesignation || profile.profession_designation || profile.designation;
         break;
       case 'category':
         val = profile.category || profile.business_category;
