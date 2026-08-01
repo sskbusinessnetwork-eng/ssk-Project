@@ -4,6 +4,7 @@ import { X, CheckCircle2, Phone, User, Briefcase, Calendar, Building2, MapPin } 
 import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
+import { CategorySelect } from './CategorySelect';
 
 interface RegistrationModalProps {
   isOpen: boolean;
@@ -141,23 +142,14 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
                     <label className="text-xs font-bold text-[#9CA3AF] uppercase tracking-widest flex items-center gap-2">
                       <Briefcase size={14} /> Business Category
                     </label>
-                    <select
-                      required
+                    <CategorySelect
                       value={formData.businessCategory}
-                      onChange={(e) => setFormData({ ...formData, businessCategory: e.target.value })}
-                      className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                    >
-                      {categories.length > 0 ? (
-                        <>
-                          <option value="">Select Category</option>
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.name}>{cat.name}</option>
-                          ))}
-                        </>
-                      ) : (
-                        <option value="">No Business Categories Available</option>
-                      )}
-                    </select>
+                      onChange={(val) => setFormData({ ...formData, businessCategory: val })}
+                      categories={categories}
+                      placeholder="Select Category"
+                      lightTheme
+                      required
+                    />
                   </div>
                 </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { CategorySelect } from '../components/CategorySelect';
 import { 
   Users, 
   Search, 
@@ -772,15 +773,16 @@ export function Members() {
                     ))}
                   </select>
                 )}
-                <select value={filters.category}
-                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-semibold text-neutral-200 uppercase tracking-wider focus:border-primary outline-none transition-all appearance-none cursor-pointer min-w-[150px] focus:ring-4 focus:ring-primary/15"
-                  >
-                    <option value="" className="bg-[#151C2E] text-white">All Categories</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
-                    ))}
-                  </select>
+                <div className="min-w-[170px]">
+                  <CategorySelect
+                    value={filters.category}
+                    onChange={(val) => setFilters({ ...filters, category: val })}
+                    categories={categories}
+                    allowAllOption
+                    defaultOptionLabel="All Categories"
+                    className="h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-xs font-semibold text-neutral-200 uppercase tracking-wider focus:border-primary outline-none transition-all cursor-pointer w-full flex items-center justify-between"
+                  />
+                </div>
                   
                   <input
                     type="text"

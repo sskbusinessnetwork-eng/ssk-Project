@@ -152,6 +152,7 @@ export function getWorkspaceChecklistTasks(
     guestInvitations?: any[];
     allSlips?: any[];
     testimonials?: any[];
+    allUsers?: any[];
   } = {},
   activeDateRange?: { start: Date; end: Date }
 ): WorkspaceTask[] {
@@ -164,7 +165,8 @@ export function getWorkspaceChecklistTasks(
     meetings = [],
     guestInvitations = [],
     allSlips = [],
-    testimonials = []
+    testimonials = [],
+    allUsers = []
   } = activities;
 
   const today = new Date();
@@ -323,28 +325,63 @@ export function getWorkspaceChecklistTasks(
       bgColor: 'bg-purple-500/10'
     });
 
-    const completedReceivedReferrals = allReferrals.filter(r => {
-      const receiver = r.toUserId || r.receiver_id || r.receiverMemberId;
-      const statusNorm = String(r.status || '').toUpperCase();
-      return String(receiver) === String(userId) && (statusNorm === 'COMPLETED' || statusNorm === 'CONVERTED') && isDateInRange(r.updated_at || r.updatedAt || r.created_at || r.createdAt || r.date);
+    // 7. Referral Conversion & Thank You Slip Workflow
+    const receivedReferrals = allReferrals.filter(r => {
+      const receiver = r.toUserId || r.receiver_id || r.to_user_id || r.receiverMemberId;
+      return String(receiver || '') === String(userId) && isDateInRange(r.updated_at || r.updatedAt || r.created_at || r.createdAt || r.date);
     });
 
-    completedReceivedReferrals.forEach(ref => {
+    receivedReferrals.forEach(ref => {
+      const statusNorm = String(ref.status || '').toUpperCase();
+      const isConverted = statusNorm === 'CONVERTED' || statusNorm === 'COMPLETED';
+
+      // Find referring member (sender) name
+      const senderId = ref.fromUserId || ref.sender_id || ref.from_user_id || ref.authorMemberId || ref.submitted_by;
+      const referringMember = (allUsers || []).find((u: any) =>
+        String(u.id || '').trim() === String(senderId || '').trim() ||
+        String(u.uid || '').trim() === String(senderId || '').trim()
+      );
+      const senderName = referringMember?.name || (referringMember as any)?.full_name || referringMember?.displayName || ref.fromUserName || ref.from_user_name || 'Unknown Member';
+
+      // Check if Thank You Slip exists for this referral
       const hasSlip = allSlips.some(s => {
-        const refMatch = String(s.referralId || s.referral_id) === String(ref.id);
-        const userMatch = String(s.fromUserId || s.sender_id || s.submitted_by) === String(userId);
+        const refMatch = String(s.referralId || s.referral_id || '') === String(ref.id || '');
+        const userMatch = String(s.fromUserId || s.sender_id || s.submitted_by || s.from_user_id || '') === String(userId || '');
         return refMatch || (userMatch && refMatch);
       });
-      rawTasks.push({
-        key: `task_thank_you_slip_${ref.id}_${dateStr}`,
-        label: 'Send Thank You Slip',
-        desc: `Send a Thank You Slip for referral (${ref.contactName || ref.customer_name || 'Completed Referral'}).`,
-        autoDone: hasSlip,
-        link: `/thank-you-slips?referralId=${ref.id}`,
-        linkText: hasSlip ? 'VIEW' : 'SEND SLIP',
-        iconColor: 'text-teal-400',
-        bgColor: 'bg-teal-500/10'
-      });
+
+      const contactOrCustomerName = ref.contactName || ref.contact_name || ref.customerName || ref.customer_name || 'Referral';
+
+      if (!isConverted) {
+        // Step 1 & Step 2: "Update Referral" task (Pending until referral status is updated to Converted)
+        rawTasks.push({
+          key: `task_update_referral_${ref.id}_${dateStr}`,
+          label: 'Update Referral',
+          desc: `Update referral status for ${contactOrCustomerName} received from ${senderName}.`,
+          autoDone: false,
+          link: '/referrals',
+          linkText: 'UPDATE',
+          iconColor: 'text-amber-400',
+          bgColor: 'bg-amber-500/10'
+        });
+      } else {
+        // Step 3 & Step 4: Referral is Converted! Replace "Update Referral" with "Send Thank You Slip to <Referring Member Name>"
+        rawTasks.push({
+          key: `task_thank_you_slip_${ref.id}_${dateStr}`,
+          label: `Send Thank You Slip to ${senderName}`,
+          desc: `Send a Thank You Slip to ${senderName} for converted referral (${contactOrCustomerName}).`,
+          autoDone: hasSlip,
+          link: `/thank-you-slips?referralId=${ref.id}`,
+          linkText: hasSlip ? 'VIEW' : 'SEND SLIP',
+          iconColor: 'text-teal-400',
+          bgColor: 'bg-teal-500/10'
+        });
+      }
+    });
+
+    const completedReceivedReferrals = receivedReferrals.filter(r => {
+      const statusNorm = String(r.status || '').toUpperCase();
+      return statusNorm === 'CONVERTED' || statusNorm === 'COMPLETED';
     });
 
 
@@ -441,6 +478,7 @@ export function calculateMemberGrowthScoreData(input: {
   guestInvitations?: any[];
   allSlips?: any[];
   testimonials?: any[];
+  allUsers?: any[];
   activeDateRange?: any;
   todayTasks?: any[];
 }): GrowthScoreDetailedResult {
@@ -451,7 +489,8 @@ export function calculateMemberGrowthScoreData(input: {
     meetings = [],
     guestInvitations = [],
     allSlips = [],
-    testimonials = []
+    testimonials = [],
+    allUsers = []
   } = input;
 
   if (!profile) {
@@ -483,7 +522,8 @@ export function calculateMemberGrowthScoreData(input: {
     meetings,
     guestInvitations,
     allSlips,
-    testimonials
+    testimonials,
+    allUsers
   });
 
   const totalTasksCount = tasks.length;

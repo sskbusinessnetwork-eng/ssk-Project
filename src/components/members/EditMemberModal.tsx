@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { UserCircle, Save, Smartphone, Briefcase, Tag, Globe, MapPin, Lock, HelpCircle } from 'lucide-react';
 import { Modal } from '../Modal';
 import { Category, UserProfile } from '../../types';
+import { CategorySelect } from '../CategorySelect';
 
 interface EditMemberModalProps {
   isOpen: boolean;
@@ -94,26 +95,14 @@ export function EditMemberModal({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Industry Category</label>
-            <div className="relative">
-              <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-              <select
-                required
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white appearance-none cursor-pointer"
-              >
-                {categories.length > 0 ? (
-                  <>
-                    <option value="" className="bg-[#151C2E] text-white">Select Category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">{cat.name}</option>
-                    ))}
-                  </>
-                ) : (
-                  <option value="" className="bg-[#151C2E] text-white">No Business Categories Available</option>
-                )}
-              </select>
-            </div>
+            <CategorySelect
+              value={formData.category || ''}
+              onChange={(val) => setFormData({ ...formData, category: val })}
+              categories={categories}
+              placeholder="Select Category"
+              icon={<Tag className="text-neutral-400 shrink-0" size={16} />}
+              required
+            />
           </div>
           <div className="space-y-2">
             <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">New Password (Optional)</label>

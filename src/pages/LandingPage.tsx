@@ -1,11 +1,12 @@
 import { Avatar } from '../components/Avatar';
 import React, { useState, useEffect } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
+import { CategorySelect } from '../components/CategorySelect';
 import { 
   ArrowRight, Users, ShieldCheck, TrendingUp, Target, Globe, CheckCircle2, 
   Handshake, Hammer, Clock, Sprout, HardHat, Palette, Headset, Telescope, 
   Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Map, Calendar, X,
-  AlertCircle
+  AlertCircle, CalendarX, Loader2
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -61,6 +62,7 @@ export function LandingPage() {
   });
   const [chaptersList, setChaptersList] = useState<{ chapterId: string; chapterName: string; adminId: string; adminName: string }[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [isFetchingMeeting, setIsFetchingMeeting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
@@ -137,6 +139,7 @@ export function LandingPage() {
     if (!formData.adminId) {
       setSelectedMeeting(null);
       setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      setIsFetchingMeeting(false);
       return;
     }
 
@@ -144,10 +147,12 @@ export function LandingPage() {
     if (!selectedChapter) {
       setSelectedMeeting(null);
       setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      setIsFetchingMeeting(false);
       return;
     }
 
     const fetchMeeting = async () => {
+      setIsFetchingMeeting(true);
       try {
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: meetingsData } = await supabase
@@ -175,6 +180,8 @@ export function LandingPage() {
         console.error('Error fetching meeting:', error);
         setSelectedMeeting(null);
         setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      } finally {
+        setIsFetchingMeeting(false);
       }
     };
 
@@ -892,18 +899,15 @@ export function LandingPage() {
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Business Category</label>
-                    <select required value={formData.businessCategory} onChange={e => setFormData({...formData, businessCategory: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040]">
-                      {categories.length > 0 ? (
-                        <>
-                          <option value="">Select</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.name}>{cat.name}</option>
-                          ))}
-                        </>
-                      ) : (
-                        <option value="">No Business Categories Available.</option>
-                      )}
-                    </select>
+                    <CategorySelect
+                      value={formData.businessCategory}
+                      onChange={(val) => setFormData({ ...formData, businessCategory: val })}
+                      categories={categories}
+                      placeholder="Select Category"
+                      lightTheme
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] flex items-center justify-between cursor-pointer"
+                      required
+                    />
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">City</label>
@@ -918,24 +922,66 @@ export function LandingPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Date</label>
-                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                      {formData.meetingDate ? format(new Date(formData.meetingDate), 'dd MMM yyyy') : 'Nil'}
-                    </div>
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Time</label>
-                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                      {formData.meetingTime || 'Nil'}
-                    </div>
-                  </div>
-                  <div className="space-y-2 md:space-y-3 md:col-span-2">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Venue</label>
-                    <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                      {formData.meetingVenue || 'Nil'}
-                    </div>
-                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {formData.adminId && isFetchingMeeting && (
+                      <motion.div
+                        key="loading-meeting"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="col-span-1 md:col-span-2 p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center gap-3 text-[#6B7280] text-xs md:text-sm font-medium"
+                      >
+                        <Loader2 size={18} className="animate-spin text-[#F97316]" />
+                        <span>Fetching upcoming meeting details...</span>
+                      </motion.div>
+                    )}
+
+                    {formData.adminId && !isFetchingMeeting && selectedMeeting && (
+                      <motion.div
+                        key="meeting-fields"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3 }}
+                        className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"
+                      >
+                        <div className="space-y-2 md:space-y-3">
+                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Date</label>
+                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                            {formData.meetingDate ? format(new Date(formData.meetingDate), 'dd MMM yyyy') : 'Nil'}
+                          </div>
+                        </div>
+                        <div className="space-y-2 md:space-y-3">
+                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Time</label>
+                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                            {formData.meetingTime || 'Nil'}
+                          </div>
+                        </div>
+                        <div className="space-y-2 md:space-y-3 md:col-span-2">
+                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Venue</label>
+                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                            {formData.meetingVenue || 'Nil'}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {formData.adminId && !isFetchingMeeting && !selectedMeeting && (
+                      <motion.div
+                        key="no-meeting-alert"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3 }}
+                        className="col-span-1 md:col-span-2 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 rounded-[12px] md:rounded-[16px] text-xs md:text-sm font-semibold flex items-center gap-2.5"
+                      >
+                        <CalendarX size={20} className="shrink-0 text-amber-600" />
+                        <span>No upcoming meeting is scheduled for this chapter.</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <motion.button 
                   whileHover={{ scale: 1.02 }}

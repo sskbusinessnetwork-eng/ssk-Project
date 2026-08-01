@@ -1330,9 +1330,10 @@ export function Analytics() {
       meetings,
       guestInvitations,
       allSlips: effectiveSlips,
-      testimonials: allTestimonials
+      testimonials: allTestimonials,
+      allUsers: allUsersList.length > 0 ? allUsersList : chapterUsers
     });
-  }, [profile, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials]);
+  }, [profile, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, allUsersList, chapterUsers]);
 
   const masterAdminTasks = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
@@ -1525,9 +1526,10 @@ export function Analytics() {
       meetings,
       guestInvitations,
       allSlips: effectiveSlips,
-      testimonials: allTestimonials
+      testimonials: allTestimonials,
+      allUsers: allUsersList.length > 0 ? allUsersList : chapterUsers
     });
-  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials]);
+  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, allUsersList, chapterUsers]);
 
   // Auto-sync growth score to database when calculated score changes
   useEffect(() => {

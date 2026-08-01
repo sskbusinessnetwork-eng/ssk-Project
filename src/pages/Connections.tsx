@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { CategorySelect } from '../components/CategorySelect';
 import { 
   Users, 
   Search, 
@@ -665,22 +666,14 @@ export function Connections() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Category</label>
-              <select
+              <CategorySelect
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white appearance-none cursor-pointer"
-              >
-                {categories.length > 0 ? (
-                  <>
-                    <option value="" className="text-neutral-400">All Categories</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
-                    ))}
-                  </>
-                ) : (
-                  <option value="" className="text-neutral-400">No Business Categories Available</option>
-                )}
-              </select>
+                onChange={(val) => setSelectedCategory(val)}
+                categories={categories}
+                allowAllOption
+                defaultOptionLabel="All Categories"
+                className="w-full h-10 px-3 bg-[#0F172A] border border-white/5 rounded-lg focus:border-primary outline-none transition-all text-xs font-medium text-white flex items-center justify-between cursor-pointer"
+              />
             </div>
 
             <div className="space-y-1">

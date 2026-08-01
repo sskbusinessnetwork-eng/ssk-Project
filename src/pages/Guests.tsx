@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { CategorySelect } from '../components/CategorySelect';
 import { 
   Plus, 
   UserPlus, 
@@ -199,8 +200,60 @@ export function Guests() {
       // Refresh list
       fetchInitialData();
       
+      // Fetch dynamic Chapter Name
+      let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
+
+      if (!resolvedChapterName) {
+        const targetChapterId = userChapterId || selectedMeeting.chapter_id;
+        if (targetChapterId) {
+          const { data: chap } = await supabase
+            .from('chapters')
+            .select('chapter_name')
+            .eq('id', targetChapterId)
+            .maybeSingle();
+          if (chap?.chapter_name) {
+            resolvedChapterName = chap.chapter_name;
+          }
+        }
+      }
+
+      if (!resolvedChapterName && userId) {
+        const { data: chap } = await supabase
+          .from('chapters')
+          .select('chapter_name')
+          .or(`chapter_admin_id.eq.${userId},president_id.eq.${userId},vice_president_id.eq.${userId},treasurer_id.eq.${userId}`)
+          .maybeSingle();
+        if (chap?.chapter_name) {
+          resolvedChapterName = chap.chapter_name;
+        }
+      }
+
+      if (!resolvedChapterName) {
+        resolvedChapterName = 'SSK Business Network';
+      }
+
+      const invitedByName = profile.name || profile.full_name || (profile as any).fullName || 'Member';
+      const venue = selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall';
+      const locationLink = selectedMeeting.location_link || selectedMeeting.locationLink || selectedMeeting.location_url || (selectedMeeting.location && selectedMeeting.location.startsWith('http') ? selectedMeeting.location : '') || selectedMeeting.location || 'N/A';
+
       // WhatsApp sharing logic
-      const message = `Hello *${formData.guestName}*,\n\nYou are warmly invited to attend the SSK Business Network Chapter Meeting.\n\n📅 Date: ${selectedMeeting.date}\n🕙 Time: ${selectedMeeting.time || '10:00 AM'}\n📍 Venue: ${selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall'}\n\nWe would be delighted to have you join us to connect with local business professionals, build relationships, and explore new business opportunities.\n\nLooking forward to seeing you.\n\nRegards,\n${profile.name || profile.full_name || 'Member'}\nSSK Business Network`;
+      const message = `Hello *${formData.guestName}*,
+
+You are warmly invited to attend the *SSK Business Network – ${resolvedChapterName}* Chapter Meeting.
+
+📅 Date: ${selectedMeeting.date}
+🕙 Time: ${selectedMeeting.time || '10:00 AM'}
+📍 Venue: ${venue}
+📍 Location: ${locationLink}
+
+We would be delighted to have you join us to connect with local business professionals, build relationships, and explore new business opportunities.
+
+Looking forward to seeing you.
+
+Regards,
+${invitedByName}
+${resolvedChapterName} Chapter
+SSK Business Network`;
       
       const waUrl = `https://wa.me/${normalizePhoneNumber(formData.guestWhatsapp)}?text=${encodeURIComponent(message)}`;
       window.open(waUrl, '_blank');
@@ -411,23 +464,13 @@ export function Guests() {
             
             <div className="space-y-2">
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Business Category <span className="text-red-400">*</span></label>
-              <select
-                required
+              <CategorySelect
                 value={formData.guestBusiness}
-                onChange={(e) => setFormData({ ...formData, guestBusiness: e.target.value })}
-                className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
-              >
-                {categories.length > 0 ? (
-                  <>
-                    <option value="" className="bg-[#111827] text-white">Select Category</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.name} className="bg-[#111827] text-white">{cat.name}</option>
-                    ))}
-                  </>
-                ) : (
-                  <option value="" className="bg-[#111827] text-white">No Business Categories Available</option>
-                )}
-              </select>
+                onChange={(val) => setFormData({ ...formData, guestBusiness: val })}
+                categories={categories}
+                placeholder="Select Category"
+                required
+              />
             </div>
             
             <div className="space-y-2">

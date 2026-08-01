@@ -18,32 +18,23 @@ export function MemberSuccessPopup({ isOpen, onClose, memberData }: MemberSucces
 
   if (!isOpen || !memberData) return null;
 
+  const tempPassword = memberData.password || 'Welcome@123';
+
   const message = `Hello *${memberData.name}*,
 
-Welcome to *Business Network*! 🎉
+Welcome to *SSK Business Network*! 🎉
 
 Your account has been created successfully.
 
-Your login details are:
+*Login Details:*
+📱 Mobile: ${memberData.phone}
+🔑 Temporary Password: *${tempPassword}*
 
-👤 User ID: ${memberData.userId}
-📱 Mobile Number: ${memberData.phone}
-🔑 Temporary Password: ${memberData.password}
+⚠️ Please change your password after your first login for security.
 
-Please log in using these credentials.
+If you need any assistance, please contact your Chapter Admin.
 
-⚠️ For security reasons, you must change your password immediately after your first login.
-
-Steps:
-1. Log in to your account.
-2. Enter your temporary password.
-3. Create a new secure password.
-4. Save the new password.
-5. Your account will then be fully activated.
-
-If you experience any issues, please contact your Chapter Admin.
-
-Welcome aboard, and we wish you great success with Business Network! 🚀`;
+Welcome aboard, and we wish you great success! 🚀`;
 
   const handleSendWelcomeMessage = () => {
     const encodedMessage = encodeURIComponent(message);
@@ -65,7 +56,7 @@ Welcome aboard, and we wish you great success with Business Network! 🚀`;
 
   const handleCopyCredentials = async () => {
     try {
-      await navigator.clipboard.writeText(`User ID: ${memberData.userId}\nPhone: ${memberData.phone}\nTemporary Password: ${memberData.password}`);
+      await navigator.clipboard.writeText(`Mobile: ${memberData.phone}\nTemporary Password: ${tempPassword}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

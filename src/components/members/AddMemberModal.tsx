@@ -2,6 +2,7 @@ import React from 'react';
 import { UserPlus, Lock, Smartphone, Briefcase, Tag, Globe, MapPin, Calendar, HelpCircle } from 'lucide-react';
 import { Modal } from '../Modal';
 import { Category } from '../../types';
+import { CategorySelect } from '../CategorySelect';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -115,22 +116,14 @@ export function AddMemberModal({
 
         <div className="space-y-2">
           <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Business Category *</label>
-          <div className="relative">
-            <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-            <select
-              name="category"
-              value={formData.category || ''}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white appearance-none cursor-pointer"
-            >
-              <option value="" className="bg-[#151C2E] text-white">Select Business Category</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name} className="bg-[#151C2E] text-white">
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <CategorySelect
+            value={formData.category || ''}
+            onChange={(val) => setFormData({ ...formData, category: val })}
+            categories={categories}
+            placeholder="Select Business Category"
+            icon={<Tag className="text-neutral-400 shrink-0" size={16} />}
+            required
+          />
           {errors.category && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.category}</p>}
         </div>
 
