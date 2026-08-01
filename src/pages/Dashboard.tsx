@@ -1656,7 +1656,7 @@ export function Analytics() {
   };
   
   
-    const renderAnalyticsDetails = () => {
+      const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
 
     if (analyticsLoading) {
