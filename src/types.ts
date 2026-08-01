@@ -70,6 +70,7 @@ export interface Meeting {
   isCompleted?: boolean;
   isRecurring?: boolean;
   isCancelled?: boolean;
+  createdAt?: string;
   status?: string;
 }
 

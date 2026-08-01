@@ -251,6 +251,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       memberNotes: {},
       notes: '',
       isCompleted: false,
+      createdAt: new Date().toISOString(),
       status: 'UPCOMING',
       isRecurring: true
     };
@@ -983,6 +984,7 @@ export function Meetings() {
         location: scheduleData.location,
         attendance: {},
         isCompleted: false,
+      createdAt: new Date().toISOString(),
         status: 'UPCOMING'
       };
 
@@ -1389,6 +1391,7 @@ export function Meetings() {
       await databaseService.update('meetings', selectedMeeting.id, {
         isCancelled: true,
         isCompleted: false,
+      createdAt: new Date().toISOString(),
         status: 'CANCELLED',
         updatedAt: new Date().toISOString()
       });

@@ -191,8 +191,17 @@ export function getWorkspaceChecklistTasks(
     const isDateInRange = (dateInput: any) => {
       if (!dateInput) return false;
       try {
-        const d = new Date(dateInput);
+        let d = new Date(dateInput);
+        if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+          const [year, month, day] = dateInput.split('-').map(Number);
+          d = new Date(year, month - 1, day);
+        }
         if (isNaN(d.getTime())) return false;
+        
+        const dLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        const currentLocal = new Date(current.getTime() - current.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        if (dLocal === currentLocal) return true;
+
         return d.getTime() >= dStart.getTime() && d.getTime() <= dEnd.getTime();
       } catch {
         return false;
@@ -221,7 +230,7 @@ export function getWorkspaceChecklistTasks(
 
     const hasGuestAuto = guestInvitations.some(g => {
       const creator = g.createdBy || g.member_id || g.invited_by || g.user_id;
-      return creator === userId && g.status !== 'Cancelled' && g.status !== 'Invalid' && isDateInRange(g.created_at || g.createdAt || g.date);
+      return creator === userId && g.status !== 'Cancelled' && g.status !== 'Invalid' && (isDateInRange(g.created_at || g.createdAt || g.date) || (!isNaN(new Date(g.created_at || g.createdAt || g.date).getTime()) && Math.abs(new Date().getTime() - new Date(g.created_at || g.createdAt || g.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
     rawTasks.push({
       key: `task_invite_guest_${dateStr}`,
@@ -236,7 +245,7 @@ export function getWorkspaceChecklistTasks(
 
     const hasPassRefAuto = allReferrals.some(r => {
       const sender = r.fromUserId || r.sender_id || r.authorMemberId;
-      return sender === userId && isDateInRange(r.created_at || r.createdAt || r.date);
+      return sender === userId && (isDateInRange(r.created_at || r.createdAt || r.date) || (!isNaN(new Date(r.created_at || r.createdAt || r.date).getTime()) && Math.abs(new Date().getTime() - new Date(r.created_at || r.createdAt || r.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
     rawTasks.push({
       key: `task_pass_referral_${dateStr}`,
@@ -276,7 +285,7 @@ export function getWorkspaceChecklistTasks(
       if (!isParticipant) return false;
       const userAtt = (m.attendance || {})[userId];
       const isCompleted = m.status === 'COMPLETED' || userAtt === 'PRESENT' || userAtt === 'Present' || Boolean(m.completed_at);
-      return isCompleted && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
+      return isCompleted && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
     rawTasks.push({
       key: `task_one_to_one_${dateStr}`,
@@ -294,7 +303,13 @@ export function getWorkspaceChecklistTasks(
       const matchChapter = String(m.chapter_id || m.chapterId) === String(profile.chapter_id || profile.chapterId);
       const att = (m.attendance || {})[userId];
       const isPresent = att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE';
-      return (matchChapter || Boolean(m.id)) && isPresent && isDateInRange(m.meeting_date || m.date || m.created_at || m.createdAt);
+      
+      // We check if they attended ANY meeting recently to keep it in sync with the Analytics Card (within 30 days)
+      const d = new Date(m.meeting_date || m.date || m.created_at || m.createdAt);
+      const isRecent = !isNaN(d.getTime()) && Math.abs(new Date().getTime() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
+      
+      // If it matches today, or is recent, we mark it done.
+      return (matchChapter || Boolean(m.id)) && isPresent && (isDateInRange(m.meeting_date || m.date || m.created_at || m.createdAt) || isRecent);
     });
     rawTasks.push({
       key: `task_chapter_meeting_${dateStr}`,
@@ -362,7 +377,7 @@ export function getWorkspaceChecklistTasks(
       );
       if (!isParticipant) return false;
       const statusNorm = String(m.status || '').toUpperCase();
-      return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
+      return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
 
     completedOneToOnes.forEach(m => {
@@ -528,9 +543,9 @@ export function calculateMemberGrowthScoreData(input: {
 
   meetings.forEach(m => {
     const att = (m.attendance || {})[userId];
-    const isCreator = m.created_by === userId || m.createdBy === userId;
-    if (att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE' || isCreator) {
-      addDateIfValid(m.meeting_date || m.date || m.created_at);
+    // The user explicitly requires that Chapter Admins must mark themselves Present. No auto-credit for creators.
+    if (att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE') {
+      addDateIfValid(m.meeting_date || m.date || m.created_at || m.createdAt);
     }
   });
 
