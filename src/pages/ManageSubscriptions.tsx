@@ -390,8 +390,8 @@ export function ManageSubscriptions() {
       </div>
 
       {/* Table */}
-      <div className="bg-[#1A1D24] rounded-2xl border border-white/5 overflow-hidden overflow-x-auto">
-        <table className="w-full text-left">
+      <div className="bg-[#1A1D24] rounded-2xl border border-white/5 overflow-hidden overflow-x-auto custom-scrollbar">
+        <table className="w-full text-left min-w-[800px]">
           <thead className="bg-[#242830]">
             <tr>
               <th className="px-4 py-3 text-xs font-semibold text-neutral-400 uppercase tracking-wider">Member Name</th>

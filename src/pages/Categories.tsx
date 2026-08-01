@@ -213,8 +213,8 @@ export function Categories() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr className="border-b border-[#E5E7EB] bg-[#F9FAFB]/50 text-[#374151] text-xs font-semibold uppercase tracking-wider">
                 <th className="p-4 pl-6">Category Name</th>

@@ -1182,8 +1182,8 @@ export function Reports() {
 
               {/* Roster Table */}
               <div className="bg-[#111827] border border-white/5 rounded-[20px] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[1000px]">
                     <thead>
                       <tr className="bg-[#0B1220]/60 border-b border-white/5">
                         <th className="p-4 text-[10px] font-black text-[#9CA3AF] uppercase tracking-wider cursor-pointer" onClick={() => handleSort('name')}>

@@ -291,7 +291,7 @@ export function OnboardMember() {
 
       {/* Table */}
       <div className="bg-white rounded-[24px] shadow-sm border border-neutral-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200">

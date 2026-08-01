@@ -2327,8 +2327,8 @@ export function Meetings() {
             </div>
           </div>
 
-          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
               <thead>
                 <tr className="bg-[#151C2E] border-b border-white/5">
                   <th className="px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member Name</th>

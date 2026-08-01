@@ -333,8 +333,8 @@ export function Settings() {
                   No members qualify for the current filter settings or Top Performance is turned OFF.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#111827]">
-                  <table className="w-full text-left text-xs text-neutral-300">
+                <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#111827] custom-scrollbar">
+                  <table className="w-full text-left text-xs text-neutral-300 min-w-[600px]">
                     <thead className="bg-[#1E293B] text-neutral-400 uppercase text-[10px] font-bold border-b border-white/10">
                       <tr>
                         <th className="py-3 px-4">Rank</th>

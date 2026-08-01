@@ -718,8 +718,8 @@ export function ThankYouSlips() {
 
         {/* Table View */}
         <div className="bg-[#111827] rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#151C2E] border-b border-white/5">
                   <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Slip ID</th>

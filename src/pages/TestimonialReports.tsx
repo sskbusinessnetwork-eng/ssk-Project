@@ -55,8 +55,8 @@ export function TestimonialReports() {
         <h2 className="text-xl font-bold text-neutral-900 mb-2">Testimonials Report</h2>
         <p className="text-sm text-neutral-500 mb-6">Read-only view of all testimonials across chapters.</p>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200">
                 <th className="p-4 text-xs font-semibold text-neutral-600 uppercase tracking-wider">Testimonial ID</th>

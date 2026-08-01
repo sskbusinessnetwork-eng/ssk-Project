@@ -1259,8 +1259,8 @@ export function Referrals() {
           /* Master Admin Table View */
           filteredMasterReferrals.length > 0 ? (
             <div className="bg-[#111827] rounded-[20px] border border-white/5 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
                   <thead>
                     <tr className="border-b border-white/10 bg-[#05070D]/50 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
                       <th className="p-4">Date & ID</th>

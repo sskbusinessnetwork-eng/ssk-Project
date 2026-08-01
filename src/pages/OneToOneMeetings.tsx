@@ -1770,8 +1770,8 @@ export function OneToOneMeetings() {
         maxWidth="max-w-6xl"
       >
         <div className="bg-[#111827] rounded-[16px] overflow-hidden border border-white/5">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-[#151C2E] border-b border-white/5">
                   <th className="px-6 py-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Scheduled By</th>

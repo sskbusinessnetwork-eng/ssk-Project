@@ -256,8 +256,8 @@ export function Guests() {
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
           </div>
         ) : invitations.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#151C2E]">
                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Guest</th>
