@@ -1,6 +1,25 @@
 import { UserRole } from '../types';
 import { supabase } from '../lib/supabaseClient';
 
+export const getDisplayPosition = (pos?: string, r?: string): string => {
+  const role = (r || 'MEMBER').toUpperCase();
+  const position = (pos || 'MEMBER').toUpperCase();
+
+  if (role === 'MASTER_ADMIN') return 'Master Admin';
+  if (role === 'CHAPTER_ADMIN' || position === 'CHAPTER_ADMIN' || position === 'CHAPTER ADMIN') return 'Chapter Admin';
+
+  if (position === 'PRESIDENT') return 'President';
+  if (position === 'VICE_PRESIDENT' || position === 'VICE PRESIDENT') return 'Vice President';
+  if (position === 'SECRETARY') return 'Secretary';
+  if (position === 'TREASURER') return 'Treasurer';
+
+  if (pos && pos.trim().length > 0 && position !== 'MEMBER' && position !== 'NONE') {
+    return pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  }
+
+  return 'Member';
+};
+
 export const validateUserChapterId = (profile: any): { isValid: boolean; errorMessage?: string } => {
   if (!profile) {
     return { isValid: false, errorMessage: 'User is not authenticated.' };

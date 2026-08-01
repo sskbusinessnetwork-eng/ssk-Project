@@ -76,7 +76,7 @@ export default function App() {
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/categories" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Categories /></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageSubscriptions /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Reports /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER']}><Reports /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Settings /></ProtectedRoute>} />
               <Route path="/profile" element={<Profile />} />
             </Route>

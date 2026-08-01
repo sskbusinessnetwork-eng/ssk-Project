@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { 
   Share2, Handshake, UserPlus, Users, Clock, Calendar, 
   Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown,
-  Loader2, CheckCircle2
+  Loader2, CheckCircle2, Filter
 } from 'lucide-react';
 import { Meeting, UserProfile } from '../types';
 import { cn } from '../lib/utils';
@@ -35,6 +35,7 @@ interface MemberCompanionViewProps {
   businessGrowthScore: number;
   daysAnalysedText?: string;
   scoreText?: string;
+  onOpenFilterModal?: () => void;
   currentMonthMetrics: any;
   hasLoggedOneToOne: boolean;
   hasSentThankYouSlip: boolean;
@@ -61,6 +62,7 @@ export function MemberCompanionView({
   businessGrowthScore,
   daysAnalysedText,
   scoreText,
+  onOpenFilterModal,
   isHighlightActive,
   chapterName,
   todayTasks = [],
@@ -77,6 +79,7 @@ export function MemberCompanionView({
   const { refreshProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [showAllTasks, setShowAllTasks] = useState(false);
 
   const formatRevenueLabel = (val: number) => {
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -84,19 +87,64 @@ export function MemberCompanionView({
     return `₹${Math.round(val)}`;
   };
 
-  const { revenuePoints, referralsPoints, areaPoints, maxRevenue, maxReferrals, latestRevenue } = React.useMemo(() => {
+  const { revenuePoints, referralsPoints, areaPoints, maxRevenue, maxReferrals, latestRevenue, userBusinessStats } = React.useMemo(() => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
     
-    // Filter to current month slips
-    const monthlySlips = allSlips.filter(s => {
+    const userId = profile?.uid || profile?.id || '';
+
+    // Filter to only the user's data
+    const userSlips = allSlips.filter(s => s.fromUserId === userId || s.toUserId === userId);
+    const userRefs = allReferrals.filter(r => r.fromUserId === userId || r.toUserId === userId);
+
+    // Business Analytics Calculations
+    let businessSent = 0;
+    let businessReceived = 0;
+    let thisMonthBusiness = 0;
+    let todayBusiness = 0;
+
+    const todayStr = now.toDateString();
+
+    userSlips.forEach(s => {
+      const val = Number(s.businessValue || s.transactionValue) || 0;
+      const d = new Date(s.createdAt || s.date);
+      
+      if (s.fromUserId === userId) businessSent += val;
+      if (s.toUserId === userId) businessReceived += val;
+      
+      const isThisMonth = d.getFullYear() === year && d.getMonth() === month;
+      if (isThisMonth) {
+        if (s.fromUserId === userId || s.toUserId === userId) {
+           thisMonthBusiness += val;
+        }
+      }
+
+      if (d.toDateString() === todayStr) {
+        if (s.fromUserId === userId || s.toUserId === userId) {
+           todayBusiness += val;
+        }
+      }
+    });
+
+    const totalBusiness = businessSent + businessReceived;
+
+    const userBusinessStats = {
+      businessSent,
+      businessReceived,
+      totalBusiness,
+      thisMonthBusiness,
+      todayBusiness
+    };
+
+    // Filter to current month slips for the chart (ONLY user's)
+    const monthlySlips = userSlips.filter(s => {
       const d = new Date(s.createdAt || s.date);
       return d.getFullYear() === year && d.getMonth() === month;
     });
 
-    // Filter to current month referrals
-    const monthlyRefs = allReferrals.filter(r => {
+    // Filter to current month referrals for the chart (ONLY user's)
+    const monthlyRefs = userRefs.filter(r => {
       const d = new Date(r.createdAt || r.date);
       return d.getFullYear() === year && d.getMonth() === month;
     });
@@ -147,9 +195,10 @@ export function MemberCompanionView({
       areaPoints: areaPath,
       maxRevenue: maxRev,
       maxReferrals: maxRef,
-      latestRevenue: revenueVals[revenueVals.length - 1] || 0
+      latestRevenue: revenueVals[revenueVals.length - 1] || 0,
+      userBusinessStats
     };
-  }, [allSlips, allReferrals]);
+  }, [allSlips, allReferrals, profile]);
 
   const topLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue) : '0';
   const midLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 2 / 3) : '0';
@@ -306,10 +355,17 @@ export function MemberCompanionView({
           </span>
         </div>
 
-        {daysAnalysedText && scoreText && (
+        {scoreText && (
           <div className="mb-4 px-3.5 py-2 bg-[#0B1220]/80 border border-white/10 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 text-neutral-300 font-medium shadow-sm">
             <span><strong className="text-emerald-400 font-bold">Growth Score:</strong> <span className="text-white font-extrabold">{businessGrowthScore}%</span></span>
-            <span><strong className="text-purple-400 font-bold">Days Analysed:</strong> <span className="text-white font-extrabold">{daysAnalysedText}</span></span>
+            <button
+              type="button"
+              onClick={onOpenFilterModal}
+              className="inline-flex items-center gap-1.5 text-purple-400 hover:text-purple-300 font-bold transition-colors cursor-pointer px-2 py-0.5 rounded-md hover:bg-purple-500/10"
+            >
+              <Filter size={13} className="text-purple-400" />
+              <span>Filter</span>
+            </button>
             <span><strong className="text-blue-400 font-bold">Score:</strong> <span className="text-white font-extrabold">{scoreText}</span></span>
           </div>
         )}
@@ -322,7 +378,8 @@ export function MemberCompanionView({
               <p className="text-[#9CA3AF] text-[11px] mt-1 leading-snug">No scheduled workspace tasks or meetings for today.</p>
             </div>
           ) : (
-            displayTasks.map((task, index) => (
+            <>
+            {(showAllTasks ? displayTasks : displayTasks.slice(0, 6)).map((task: any, index: number) => (
               <motion.div 
                 key={task.key} 
                 initial={{ opacity: 0, y: 15 }}
@@ -331,35 +388,23 @@ export function MemberCompanionView({
                 whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
                 className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px]"
               >
-                {/* Left Column: Icon Indicator & Title */}
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  {/* Non-interactive check/clock indicator */}
-                  <div className="shrink-0">
-                    {task.isDone ? (
-                      <div className={cn("w-5 h-5 rounded-full flex items-center justify-center border shadow-[0_0_8px_rgba(52,211,153,0.15)]", task.isFailed ? "bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.15)]" : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30")}>
-                        <CheckSquare size={12} />
-                      </div>
-                    ) : (
-                      <div className="w-5 h-5 rounded-full bg-neutral-500/10 text-neutral-500 flex items-center justify-center border border-neutral-500/20">
-                        <Clock size={12} />
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Title & Desc */}
-                  <div className="flex flex-col flex-1 min-w-0 pr-2">
+                {/* Left Column: Title only */}
+                <div className="flex flex-col flex-1 min-w-0 pr-2 cursor-pointer"
+                     title={task.isDone ? "Mark incomplete" : "Mark complete"}
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       handleToggleTask(task.key);
+                     }}
+                >
                     <h4 className={cn(
-                      "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words",
+                      "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words flex items-center gap-1.5 flex-wrap",
                       task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
                     )}>
                       {task.label}
                     </h4>
-                    {task.desc && (
-                      <p className={cn("text-[10px] sm:text-[11px] leading-snug mt-0.5 opacity-75 line-clamp-2", task.isDone ? "text-gray-500" : "text-[#9CA3AF]")}>
-                        {task.desc}
-                      </p>
-                    )}
-                  </div>
+                    {task.isDone && task.pointsVal ? (
+                       <span className="text-[11px] font-extrabold text-amber-400 tracking-tight block mt-0.5">+{task.pointsVal} Points Earned</span>
+                    ) : null}
                 </div>
 
                 {/* Right Column: CTA Button */}
@@ -376,10 +421,15 @@ export function MemberCompanionView({
                   </Link>
                 </motion.div>
               </motion.div>
-            ))
+            ))}
+            {displayTasks.length > 6 && (
+               <button onClick={() => setShowAllTasks(!showAllTasks)} className="w-full mt-2 py-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-bold text-xs uppercase tracking-wider border border-purple-500/20 transition-colors">
+                  {showAllTasks ? "Show Less" : "View All"}
+               </button>
+            )}
+            </>
           )}
         </div>
-
         <div className="mt-5 pt-4 border-t border-white/5">
           <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest mb-2">
             <span className="text-[#9CA3AF]">Progress Indicator</span>
@@ -461,7 +511,7 @@ export function MemberCompanionView({
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-[17px] font-bold text-white tracking-tight">
-            {chapterName ? `${chapterName} Business Overview` : 'Business Overview'}
+            Business Overview
           </h3>
           <button className="flex items-center gap-1.5 bg-[#0B1220] border border-white/10 px-3 py-1 rounded-full text-[11px] font-bold text-white shadow-sm hover:bg-[#1F2937] transition-colors">
             This Month <ChevronDown size={12} />
@@ -574,29 +624,39 @@ export function MemberCompanionView({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-center md:text-left">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-4 border-t border-white/5 text-center md:text-left">
           <div>
-            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Revenue</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">
-              {memberRevenue >= 100000 ? `₹${(memberRevenue / 100000).toFixed(2)}L` : `₹${memberRevenue.toLocaleString('en-IN')}`}
+            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Business Sent</span>
+            <div className="text-[15px] font-extrabold text-white leading-tight">
+              {userBusinessStats.businessSent >= 100000 ? `₹${(userBusinessStats.businessSent / 100000).toFixed(2)}L` : `₹${Math.round(userBusinessStats.businessSent).toLocaleString('en-IN')}`}
             </div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
           </div>
           <div>
-            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Referrals</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">{memberReferrals}</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
+            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Business Received</span>
+            <div className="text-[15px] font-extrabold text-white leading-tight">
+              {userBusinessStats.businessReceived >= 100000 ? `₹${(userBusinessStats.businessReceived / 100000).toFixed(2)}L` : `₹${Math.round(userBusinessStats.businessReceived).toLocaleString('en-IN')}`}
+            </div>
           </div>
           <div>
-            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Deals</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">{memberDeals} Clsd</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
+            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Total Business</span>
+            <div className="text-[15px] font-extrabold text-white leading-tight">
+              {userBusinessStats.totalBusiness >= 100000 ? `₹${(userBusinessStats.totalBusiness / 100000).toFixed(2)}L` : `₹${Math.round(userBusinessStats.totalBusiness).toLocaleString('en-IN')}`}
+            </div>
           </div>
           <div>
-            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Attend</span>
-            <div className="text-[16px] font-extrabold text-white leading-tight">{memberAttendance}%</div>
-            <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
+            <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">This Month</span>
+            <div className="text-[15px] font-extrabold text-white leading-tight">
+              {userBusinessStats.thisMonthBusiness >= 100000 ? `₹${(userBusinessStats.thisMonthBusiness / 100000).toFixed(2)}L` : `₹${Math.round(userBusinessStats.thisMonthBusiness).toLocaleString('en-IN')}`}
+            </div>
           </div>
+          {userBusinessStats.todayBusiness > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Today's Business</span>
+              <div className="text-[15px] font-extrabold text-white leading-tight">
+                {userBusinessStats.todayBusiness >= 100000 ? `₹${(userBusinessStats.todayBusiness / 100000).toFixed(2)}L` : `₹${Math.round(userBusinessStats.todayBusiness).toLocaleString('en-IN')}`}
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
 

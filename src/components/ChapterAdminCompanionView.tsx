@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Calendar, CheckCircle2, UserPlus, Users, Share2, Handshake,
-  Clock, Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown
+  Clock, Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown, Filter
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { format as originalFormat, isValid } from 'date-fns';
@@ -22,6 +22,7 @@ interface ChapterAdminCompanionViewProps {
   membersAnalysed?: number;
   daysAnalysedText?: string;
   scoreText?: string;
+  onOpenFilterModal?: () => void;
   chapterMemberCount: number;
   chapterReferrals: number;
   chapterBusiness: number;
@@ -38,6 +39,7 @@ export function ChapterAdminCompanionView({
   membersAnalysed,
   daysAnalysedText,
   scoreText,
+  onOpenFilterModal,
   chapterMemberCount,
   chapterReferrals,
   chapterBusiness,
@@ -240,35 +242,15 @@ export function ChapterAdminCompanionView({
               whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
               className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] py-4"
             >
-              {/* Left Column: Icon Indicator & Title */}
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Non-interactive check/clock indicator */}
-                <div className="shrink-0">
-                  {task.isDone ? (
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]">
-                      <CheckSquare size={12} />
-                    </div>
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-neutral-500/10 text-neutral-500 flex items-center justify-center border border-neutral-500/20">
-                      <Clock size={12} />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Title */}
-                <div className="flex flex-col flex-1 min-w-0 pr-2">
+              {/* Left Column: Title only */}
+              <div className="flex flex-col flex-1 min-w-0 pr-2">
                   <h4 className={cn(
                     "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words",
                     task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
                   )}>
                     {task.label}
                   </h4>
-                  {task.desc && (
-                    <p className={cn("text-[10px] sm:text-[11px] leading-snug mt-0.5 opacity-75 hidden sm:line-clamp-1", task.isDone ? "text-gray-500" : "text-[#9CA3AF]")}>
-                      {task.desc}
-                    </p>
-                  )}
-                </div>
+
               </div>
 
               {/* Right Column: CTA Button */}
@@ -513,11 +495,14 @@ export function ChapterAdminCompanionView({
           <div>
             <span className="text-[10px] font-bold text-[#9CA3AF] block mb-0.5">Chapter Growth</span>
             <div className="text-[16px] font-extrabold text-white leading-tight">{chapterHealthScore}%</div>
-            {daysAnalysedText && scoreText ? (
-              <span className="text-[8px] font-bold text-emerald-400 block mt-0.5">{membersAnalysed ? `${membersAnalysed} Mebs • ` : ''}{daysAnalysedText}</span>
-            ) : (
-              <span className="text-[9px] font-bold text-emerald-400 flex items-center justify-center md:justify-start gap-0.5 mt-0.5"><TrendingUp size={8}/> Dynamic</span>
-            )}
+            <button
+              type="button"
+              onClick={onOpenFilterModal}
+              className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer mt-0.5"
+            >
+              <Filter size={8} className="text-emerald-400" />
+              <span>Filter</span>
+            </button>
           </div>
         </div>
       </motion.div>

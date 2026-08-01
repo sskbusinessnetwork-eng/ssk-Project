@@ -10,9 +10,11 @@ interface WriteTestimonialModalProps {
   onClose: () => void;
   author: UserProfile | null;
   receiver: UserProfile;
+  referralId?: string;
+  oneToOneId?: string;
 }
 
-export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: WriteTestimonialModalProps) {
+export function WriteTestimonialModal({ isOpen, onClose, author, receiver, referralId, oneToOneId }: WriteTestimonialModalProps) {
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState('');
   const [testimonial, setTestimonial] = useState('');
@@ -35,6 +37,10 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver }: Wri
         receiverMemberId: receiverUid,
         authorMemberId: authorUid,
         chapterId: chapterId,
+        referralId: referralId || null,
+        referral_id: referralId || null,
+        oneToOneId: oneToOneId || null,
+        one_to_one_id: oneToOneId || null,
         rating,
         title: title ? title.trim() : '',
         testimonial: testimonial.trim(),

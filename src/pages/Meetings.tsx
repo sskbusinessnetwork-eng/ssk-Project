@@ -24,6 +24,7 @@ import {
   Building
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
 import {  where, orderBy, limit  } from '../lib/database';
@@ -388,22 +389,8 @@ export function Meetings() {
   };
 
   const getMemberPositionLabel = (member: any): string => {
-    if (!member) return 'Associate Member';
-    const pos = member.position || member.chapter_position || member.designation || member.role;
-    if (pos) {
-      const raw = String(pos).trim().toLowerCase();
-      if (raw === 'chapter_admin' || raw === 'chapter admin' || member.role === 'CHAPTER_ADMIN') {
-        return 'Chapter Admin';
-      }
-      if (raw === 'president') return 'President';
-      if (raw === 'vice_president' || raw === 'vice president' || raw === 'vice-president') return 'Vice President';
-      if (raw === 'treasurer') return 'Treasurer';
-      if (raw === 'secretary') return 'Secretary';
-      if (raw === 'member' || raw === 'associate_member' || raw === 'associate member') return 'Associate Member';
-      return raw.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    }
-    if (member.role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-    return 'Associate Member';
+    if (!member) return 'Member';
+    return getDisplayPosition(member.position || member.chapter_position || member.designation || member.role, member.role);
   };
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -1268,19 +1255,19 @@ export function Meetings() {
                     .single();
                     
                   if (inviterData) {
-                    const currentScore = inviterData.growth_score || 0;
                     const checklist = inviterData.workspace_checklist || {};
+                    const updatedChecklist = {
+                      ...checklist,
+                      task_invite_guest: true,
+                      'Invite a New Guest': true
+                    };
                     
                     await supabase
                       .from('users')
                       .update({
-                        growth_score: currentScore + 10,
-                        workspace_checklist: {
-                          ...checklist,
-                          'Invite a New Guest': true
-                        }
+                        workspace_checklist: updatedChecklist
                       })
-                      .eq('uid', inviterId);
+                      .or(`id.eq.${inviterId},uid.eq.${inviterId}`);
                   }
                 } catch (scoreErr) {
                   console.error("Failed to update growth score for guest:", scoreErr);

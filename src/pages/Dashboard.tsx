@@ -5,10 +5,10 @@ import {
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
   CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X} from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
-import { getCleanFullName } from '../utils/authUtils';
+import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
 import { cn } from '../lib/utils';
 import {  where  } from '../lib/database';
 import { databaseService } from '../services/databaseService';
@@ -20,7 +20,7 @@ import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { calculateProfileCompletion } from '../utils/profileUtils';
-import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 
@@ -49,6 +49,7 @@ const isToday = (dateStr: string) => {
 };
 
 export function Analytics() {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const [score, setScore] = useState(0);
   const [userName, setUserName] = useState<string>('');
@@ -148,6 +149,11 @@ export function Analytics() {
   const [resolvedChapterName, setResolvedChapterName] = useState<string>('');
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
   const [analyticsModalCategory, setAnalyticsModalCategory] = useState<string | null>(null);
+  
+  const normPosForAdmin = String(profile?.position || '').toLowerCase();
+  const isStrictChapterAdmin = (profile?.role === 'CHAPTER_ADMIN' && !['president', 'vice_president', 'treasurer'].includes(normPosForAdmin)) || normPosForAdmin === 'chapter_admin';
+  const isChapterAdminUser = isStrictChapterAdmin;
+  const usePersonalStats = !isChapterAdminUser && profile?.role !== 'MASTER_ADMIN';
 
   // Global Date Range, Chapter & Member Filter State
   const [filterStartDate, setFilterStartDate] = useState<string>('');
@@ -157,6 +163,28 @@ export function Analytics() {
   const [appliedChapterFilter, setAppliedChapterFilter] = useState<string>('ALL');
   const [appliedMemberFilter, setAppliedMemberFilter] = useState<string>('ALL');
   const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [hasInitializedDate, setHasInitializedDate] = useState(false);
+
+  useEffect(() => {
+    if (profile && !hasInitializedDate) {
+      if (profile.role === 'MASTER_ADMIN') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
+        setActiveDateRange({ start: today, end: end });
+        setFilterStartDate(today.toISOString().split('T')[0]);
+        setFilterEndDate(today.toISOString().split('T')[0]);
+      } else {
+        setActiveDateRange(null);
+        setFilterStartDate('');
+        setFilterEndDate('');
+      }
+      setHasInitializedDate(true);
+    }
+  }, [profile, hasInitializedDate]);
+
+
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [isFilterLoading, setIsFilterLoading] = useState(false);
@@ -204,14 +232,18 @@ export function Analytics() {
   };
 
   const handleClearFilter = () => {
-    setFilterStartDate('');
-    setFilterEndDate('');
+    setFilterStartDate(new Date().toISOString().split('T')[0]);
+    setFilterEndDate(new Date().toISOString().split('T')[0]);
     setSelectedChapterFilter('ALL');
     setSelectedMemberFilter('ALL');
     setAppliedChapterFilter('ALL');
     setAppliedMemberFilter('ALL');
     setDateError(null);
-    setActiveDateRange(null);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    setActiveDateRange({ start: today, end: end });
     setIsFilterModalOpen(false);
   };
 
@@ -219,7 +251,6 @@ export function Analytics() {
   useEffect(() => {
     const fetchChapterName = async () => {
       if (!profile) return;
-      const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
       if (isChapterAdminUser && profile.chapterName) {
         setResolvedChapterName(profile.chapterName);
       } else if (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN') {
@@ -246,11 +277,12 @@ export function Analytics() {
 
   const chapterHeading = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') return 'Organization Analytics';
+    if (usePersonalStats) return 'My Analytics';
     if (!resolvedChapterName) return 'Chapter Analytics';
     return resolvedChapterName.toLowerCase().includes('chapter') 
       ? `${resolvedChapterName} Analytics`
       : `${resolvedChapterName} Chapter Analytics`;
-  }, [resolvedChapterName, profile]);
+  }, [resolvedChapterName, profile, usePersonalStats]);
 
 
   useEffect(() => {
@@ -382,17 +414,6 @@ export function Analytics() {
     return members.filter(u => !isMemberActive(u)).map(u => {
       const reasons = getMemberInactiveReasons(u);
 
-      const getDisplayPosition = (p?: string, r?: string) => {
-        const rUpper = (r || 'MEMBER').toUpperCase();
-        if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
-        if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
-        if (rUpper === 'PRESIDENT') return 'President';
-        if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
-        if (rUpper === 'TREASURER') return 'Treasurer';
-        if (p && p.trim() && p.toLowerCase() !== 'none') return p;
-        return 'Not Assigned';
-      };
-
       const mustChangePwd = u.must_change_password === true || u.mustChangePassword === true || u.password_changed === false || u.passwordChanged === false;
 
       return {
@@ -509,17 +530,21 @@ export function Analytics() {
     return list;
   }, [allTestimonials, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
 
+    const userCandidateIds = useMemo(() => {
+    return [profile?.id, profile?.uid].filter(Boolean).map(String);
+  }, [profile]);
+
   const chapterSlips = useMemo(() => {
     return effectiveSlips.filter(slip => 
-      chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId)
+      usePersonalStats ? (userCandidateIds.includes(slip.fromUserId) || userCandidateIds.includes(slip.toUserId)) : (chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId))
     );
-  }, [effectiveSlips, chapterUserIds]);
+  }, [effectiveSlips, chapterUserIds, userCandidateIds, usePersonalStats]);
 
   const chapterReferralsList = useMemo(() => {
     return effectiveReferrals.filter(ref => 
-      chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId)
+      usePersonalStats ? (userCandidateIds.includes(ref.fromUserId) || userCandidateIds.includes(ref.toUserId)) : (chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId))
     );
-  }, [effectiveReferrals, chapterUserIds]);
+  }, [effectiveReferrals, chapterUserIds, userCandidateIds, usePersonalStats]);
 
   const businessGeneratedTotal = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -528,9 +553,7 @@ export function Analytics() {
     return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
   }, [effectiveSlips, chapterSlips, profile]);
 
-  const userCandidateIds = useMemo(() => {
-    return [profile?.id, profile?.uid].filter(Boolean).map(String);
-  }, [profile]);
+
 
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
@@ -541,9 +564,9 @@ export function Analytics() {
     }
     return effectiveSlips.filter(s => {
       const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || '');
-      return chapterUserIds.includes(subBy);
+      return usePersonalStats ? userCandidateIds.includes(subBy) : chapterUserIds.includes(subBy);
     });
-  }, [effectiveSlips, chapterUserIds, appliedMemberFilter, profile]);
+  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
@@ -554,9 +577,9 @@ export function Analytics() {
     }
     return effectiveSlips.filter(s => {
       const sendBy = String(s.receiver_id || s.toUserId || s.to_user_id || '');
-      return chapterUserIds.includes(sendBy);
+      return usePersonalStats ? userCandidateIds.includes(sendBy) : chapterUserIds.includes(sendBy);
     });
-  }, [effectiveSlips, chapterUserIds, appliedMemberFilter, profile]);
+  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 
   const referralsSentList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
@@ -564,9 +587,9 @@ export function Analytics() {
     }
     return effectiveReferrals.filter(r => {
       const senderId = String(r.fromUserId || r.sender_id || r.from_user_id || '');
-      return chapterUserIds.includes(senderId);
+      return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
     });
-  }, [effectiveReferrals, chapterUserIds, profile, appliedMemberFilter]);
+  }, [effectiveReferrals, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
 
   const referralsSentCount = useMemo(() => referralsSentList.length, [referralsSentList]);
 
@@ -576,9 +599,9 @@ export function Analytics() {
     }
     return effectiveReferrals.filter(r => {
       const receiverId = String(r.toUserId || r.receiver_id || r.to_user_id || '');
-      return chapterUserIds.includes(receiverId);
+      return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
     });
-  }, [effectiveReferrals, chapterUserIds, profile, appliedMemberFilter]);
+  }, [effectiveReferrals, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
 
   const referralsReceivedCount = useMemo(() => referralsReceivedList.length, [referralsReceivedList]);
 
@@ -588,9 +611,9 @@ export function Analytics() {
     }
     return effectiveTestimonials.filter(t => {
       const authorId = String(t.authorMemberId || t.author_id || t.fromUserId || '');
-      return chapterUserIds.includes(authorId);
+      return usePersonalStats ? userCandidateIds.includes(authorId) : chapterUserIds.includes(authorId);
     });
-  }, [effectiveTestimonials, chapterUserIds, profile, appliedMemberFilter]);
+  }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
 
   const testimonialsGivenCount = useMemo(() => testimonialsGivenList.length, [testimonialsGivenList]);
 
@@ -600,9 +623,9 @@ export function Analytics() {
     }
     return effectiveTestimonials.filter(t => {
       const recipientId = String(t.recipientMemberId || t.recipient_id || t.toUserId || '');
-      return chapterUserIds.includes(recipientId);
+      return usePersonalStats ? userCandidateIds.includes(recipientId) : chapterUserIds.includes(recipientId);
     });
-  }, [effectiveTestimonials, chapterUserIds, profile, appliedMemberFilter]);
+  }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
 
   const testimonialsReceivedCount = useMemo(() => testimonialsReceivedList.length, [testimonialsReceivedList]);
 
@@ -640,7 +663,7 @@ export function Analytics() {
   const upcomingSyncsCount = useMemo(() => {
     const chapterMeetings = profile?.role === 'MASTER_ADMIN'
       ? effectiveMeetings
-      : effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id);
+      : effectiveMeetings.filter(m => usePersonalStats ? (m.attendance && (m.attendance[profile?.id] || m.attendance[profile?.uid])) : m.chapter_id === profile?.chapter_id);
     const now = new Date();
     const upcomingMeetingsCount = chapterMeetings.filter(m => {
       const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
@@ -665,11 +688,12 @@ export function Analytics() {
       return effectiveOneToOnes.length;
     }
     const chapterOneToOnes = effectiveOneToOnes.filter(m => 
-      chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
-      (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
+      usePersonalStats 
+        ? (userCandidateIds.includes(m.organizer_id) || userCandidateIds.includes(m.creatorId) || (m.participantIds || []).some((id: string) => userCandidateIds.includes(id)))
+        : (chapterUserIds.includes(m.organizer_id) || chapterUserIds.includes(m.creatorId) || (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid))))
     );
     return chapterOneToOnes.length;
-  }, [effectiveOneToOnes, chapterUserIds, profile]);
+  }, [effectiveOneToOnes, chapterUserIds, userCandidateIds, profile, usePersonalStats]);
 
   const chapterGuestsList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
@@ -677,13 +701,70 @@ export function Analytics() {
     }
     const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
     return effectiveGuestInvitations.filter(g => {
-      const inviterId = String(g.createdBy || g.userId || g.member_id || '');
-      const gChap = String(g.chapter_id || g.chapterId || '').trim();
-      return chapterUserIds.includes(inviterId) || (myChapId && gChap === myChapId);
+      const gChapId = String(g.chapter_id || g.chapterId || '').trim();
+      const inviter = String(g.inviterId || g.inviter_id || '');
+      if (usePersonalStats) return userCandidateIds.includes(inviter);
+      return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
     });
-  }, [effectiveGuestInvitations, chapterUserIds, profile, appliedChapterFilter]);
+  }, [effectiveGuestInvitations, chapterUserIds, userCandidateIds, profile, appliedChapterFilter, usePersonalStats]);
 
   const guestsInvitedCount = useMemo(() => chapterGuestsList.length, [chapterGuestsList]);
+
+  const userGuestsJoined = useMemo(() => {
+    if (!profile) return 0;
+    return effectiveGuestInvitations.filter(g => {
+      const inviter = String(g.inviterId || g.inviter_id || g.user_id || '');
+      if (!userCandidateIds.includes(inviter)) return false;
+      const st = String(g.status || g.attendance_status || '').toLowerCase();
+      return st === 'present' || st === 'attended' || st === 'joined' || st === 'converted' || g.is_converted === true || g.isConverted === true;
+    }).length;
+  }, [effectiveGuestInvitations, userCandidateIds, profile]);
+
+  const userMeetingsScheduled = useMemo(() => {
+    if (!profile) return 0;
+    const userChapId = String(profile.chapter_id || profile.chapterId || '').trim();
+    const now = new Date();
+    return effectiveMeetings.filter(m => {
+      const mChapId = String(m.chapter_id || m.chapterId || '').trim();
+      if (userChapId && mChapId !== userChapId) return false;
+      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' || m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      if (isDone) return false;
+      return getMeetingExactDateTime(m) > now;
+    }).length;
+  }, [effectiveMeetings, profile]);
+
+  const userMeetingsAttended = useMemo(() => {
+    if (!profile) return 0;
+    return effectiveMeetings.filter(m => {
+      if (!m.attendance) return false;
+      return userCandidateIds.some(uid => {
+        const status = m.attendance[uid];
+        return status && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(status));
+      });
+    }).length;
+  }, [effectiveMeetings, userCandidateIds, profile]);
+
+  const userOneToOnesScheduled = useMemo(() => {
+    if (!profile) return 0;
+    return effectiveOneToOnes.filter(m => {
+      const isUser = userCandidateIds.includes(String(m.organizer_id || m.creatorId || '')) ||
+                     (m.participantIds && m.participantIds.some((pid: string) => userCandidateIds.includes(String(pid))));
+      if (!isUser) return false;
+      const status = String(m.status || '').toUpperCase();
+      return status === 'UPCOMING' || status === 'SCHEDULED' || status === 'RESCHEDULED' || status === 'PENDING' || status === 'APPROVED' || !status;
+    }).length;
+  }, [effectiveOneToOnes, userCandidateIds, profile]);
+
+  const userOneToOnesCompleted = useMemo(() => {
+    if (!profile) return 0;
+    return effectiveOneToOnes.filter(m => {
+      const isUser = userCandidateIds.includes(String(m.organizer_id || m.creatorId || '')) ||
+                     (m.participantIds && m.participantIds.some((pid: string) => userCandidateIds.includes(String(pid))));
+      if (!isUser) return false;
+      const status = String(m.status || '').toUpperCase();
+      return status === 'COMPLETED' || m.isCompleted === true || (m.isCompleted as any) === 'true';
+    }).length;
+  }, [effectiveOneToOnes, userCandidateIds, profile]);
 
   const visitorsAttendedCount = useMemo(() => {
     return chapterGuestsList.filter(g => g.status === 'Present' || g.attendance_status === 'Present' || g.status === 'Attended').length || 0;
@@ -763,6 +844,20 @@ export function Analytics() {
     
     let totalPresent = 0;
     let totalRecords = 0;
+    
+    if (usePersonalStats && profile) {
+       const uid = String(profile.id || profile.uid);
+       completedMeetings.forEach(m => {
+          totalRecords++;
+          if (m.attendance && m.attendance[uid]) {
+             if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(m.attendance[uid]))) {
+                totalPresent++;
+             }
+          }
+       });
+       return totalRecords === 0 ? 0 : Math.round((totalPresent / totalRecords) * 100);
+    }
+
     completedMeetings.forEach(m => {
       if (m.attendance) {
         Object.values(m.attendance).forEach(status => {
@@ -774,7 +869,7 @@ export function Analytics() {
       }
     });
     return totalRecords === 0 ? 0 : Math.round((totalPresent / totalRecords) * 100);
-  }, [effectiveMeetings, profile]);
+  }, [effectiveMeetings, profile, usePersonalStats]);
 
   const dynamicNetworkHealthScore = useMemo(() => {
     const total = totalMembersCount;
@@ -808,8 +903,12 @@ export function Analytics() {
     if (profile?.role === 'MASTER_ADMIN') {
       return effectiveMeetings.length;
     }
+    if (usePersonalStats) {
+       const uid = String(profile?.id || profile?.uid);
+       return effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id && m.attendance && m.attendance[uid] && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(m.attendance[uid]))).length;
+    }
     return effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id).length;
-  }, [effectiveMeetings, profile]);
+  }, [effectiveMeetings, profile, usePersonalStats]);
 
   const topPerformingChapters = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
@@ -1161,7 +1260,6 @@ export function Analytics() {
     if (profile.role === 'MASTER_ADMIN') {
       return dynamicRecentActivities;
     }
-    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
     if (isChapterAdminUser) {
       return dynamicRecentActivities.filter(a => 
         chapterUserIds.includes(a.fromUserId) || 
@@ -1215,257 +1313,15 @@ export function Analytics() {
     const role = (profile.role || '').toUpperCase();
     if (role === 'MASTER_ADMIN') return [];
 
-    const tasks: any[] = [];
-    const todayStr = new Date().toISOString().split('T')[0];
-    const isToday = (dateString: any) => {
-      if (!dateString) return false;
-      try {
-        return new Date(dateString).toISOString().split('T')[0] === todayStr;
-      } catch (e) {
-        return false;
-      }
-    };
-
-    const userGivenRefs = allReferrals.filter(r => (r.fromUserId === profile.uid || r.sender_id === profile.uid || r.authorMemberId === profile.uid));
-    const userReceivedRefs = allReferrals.filter(r => (r.toUserId === profile.uid || r.receiver_id === profile.uid || r.receiverMemberId === profile.uid));
-    const userGuests = guestInvitations.filter(g => (g.createdBy === profile.uid || g.member_id === profile.uid || g.invited_by === profile.uid));
-    const userOneToOnes = oneToOnes.filter(m => {
-      const orgId = m.organizer_id || m.creatorId || m.sender_id;
-      const recId = m.member_id || m.receiver_id;
-      const pIds = m.participantIds || [];
-      return (orgId === profile.uid || recId === profile.uid || pIds.includes(profile.uid));
+    return getWorkspaceChecklistTasks(profile, {
+      allReferrals,
+      oneToOnes,
+      meetings,
+      guestInvitations,
+      allSlips: effectiveSlips,
+      testimonials: allTestimonials
     });
-    const userChapterMeetings = meetings.filter(m => String(m.chapter_id || m.chapterId) === String(profile.chapter_id));
-
-    // Helper: is past time
-    const isPastTime = (timeStr: string) => {
-      try {
-        const meetingTime = timeStr || '10:00 AM';
-        const [timePart, ampm] = meetingTime.split(' ');
-        let [hours, minutes] = timePart.split(':').map(Number);
-        if (ampm === 'PM' && hours !== 12) hours += 12;
-        if (ampm === 'AM' && hours === 12) hours = 0;
-        const meetingDateObj = new Date();
-        meetingDateObj.setHours(hours, minutes || 0, 0, 0);
-        return new Date() >= meetingDateObj;
-      } catch(e) {
-        return true;
-      }
-    };
-
-    // 1. Invite a New Guest (20 pts)
-    const hasInvitedToday = userGuests.some(g => isToday(g.createdAt || g.created_at || g.date));
-    tasks.push({
-      key: 'task_invite_visitor',
-      label: 'Invite a New Guest',
-      desc: 'Invite a visitor to earn 20 points.',
-      isHidden: hasInvitedToday,
-      isDone: hasInvitedToday,
-      link: '/guests',
-      linkText: 'INVITE',
-      iconColor: 'text-pink-400',
-      bgColor: 'bg-pink-500/10',
-      icon: UserPlus,
-      pointsVal: hasInvitedToday ? 20 : 0
-    });
-
-    // 2. Pass Referral (20 pts)
-    const hasPassedToday = userGivenRefs.some(r => isToday(r.createdAt || r.created_at || r.date));
-    tasks.push({
-      key: 'task_pass_referral',
-      label: 'Pass Referral',
-      desc: 'Pass a referral to earn 20 points.',
-      isHidden: hasPassedToday,
-      isDone: hasPassedToday,
-      link: '/refer',
-      linkText: 'PASS REFERRAL',
-      iconColor: 'text-emerald-400',
-      bgColor: 'bg-emerald-500/10',
-      icon: Share2,
-      pointsVal: hasPassedToday ? 20 : 0
-    });
-
-    // 3. Complete Profile (10 pts)
-    const isProfileComplete = Boolean(
-      profile.profile_photo && profile.name && profile.phone && profile.email && 
-      (profile.business_name || profile.businessName) && (profile.category || profile.business_category) && 
-      (profile.chapter_id || profile.chapterId) && profile.position && profile.address && profile.bio
-    );
-    tasks.push({
-      key: 'task_complete_profile',
-      label: 'Complete Your Profile',
-      desc: 'Complete your profile to earn 10 points.',
-      isHidden: isProfileComplete,
-      isDone: isProfileComplete,
-      link: '/profile',
-      linkText: 'COMPLETE',
-      iconColor: 'text-amber-400',
-      bgColor: 'bg-amber-500/10',
-      icon: UserPlus,
-      pointsVal: isProfileComplete ? 10 : 0
-    });
-
-    // 4. One-to-One Meeting (20 pts)
-    const today121 = userOneToOnes.filter(m => isToday(m.date));
-    const has121Today = today121.length > 0;
-    
-    if (!has121Today) {
-      tasks.push({
-        key: 'task_one_to_one',
-        label: 'One-to-One Meeting',
-        desc: 'Schedule a 1-to-1 meeting.',
-        isHidden: false,
-        isDone: false,
-        link: '/one-to-one',
-        linkText: 'SCHEDULE',
-        iconColor: 'text-blue-400',
-        bgColor: 'bg-blue-500/10',
-        icon: Handshake,
-        pointsVal: 0
-      });
-    } else {
-      const m121 = today121[0];
-      const pastTime = isPastTime(m121.time || m121.meeting_time);
-      const isCompleted = m121.status === 'COMPLETED';
-      const isNotCompleted = m121.status === 'NOT_COMPLETED';
-      const userAtt = (m121.attendance || {})[profile.uid];
-      const isPresent = userAtt === 'PRESENT' || (isCompleted && !userAtt); // Default to present if marked completed and no specific status
-      const isAbsent = userAtt === 'ABSENT' || isNotCompleted;
-      
-      if (!pastTime) {
-        tasks.push({
-          key: 'task_one_to_one',
-          label: 'One-to-One Meeting',
-          isHidden: true,
-          isDone: false,
-          pointsVal: 0
-        });
-      } else {
-        if (!isCompleted && !isNotCompleted && !userAtt) {
-          tasks.push({
-            key: 'task_one_to_one',
-            label: 'Update Meeting Attendance',
-            desc: 'Mark attendance for your 1-to-1 meeting.',
-            isHidden: false,
-            isDone: false,
-            link: `/one-to-one?update=${m121.id}`,
-            linkText: 'UPDATE ATTENDANCE',
-            iconColor: 'text-blue-400',
-            bgColor: 'bg-blue-500/10',
-            icon: Handshake,
-            pointsVal: 0
-          });
-        } else {
-          tasks.push({
-            key: 'task_one_to_one',
-            label: 'One-to-One Meeting',
-            desc: isPresent ? 'Attendance updated.' : 'Marked as absent.',
-            isHidden: false,
-            isDone: true,
-            isFailed: isAbsent,
-            link: '/one-to-one',
-            linkText: 'VIEW',
-            iconColor: 'text-blue-400',
-            bgColor: 'bg-blue-500/10',
-            icon: Handshake,
-            pointsVal: isPresent ? 20 : 0
-          });
-        }
-      }
-    }
-
-    // 5. Referral Received (10 pts)
-    const pendingReferrals = userReceivedRefs.filter(r => r.status === 'Pending' || r.status === 'New');
-    const updatedToday = userReceivedRefs.some(r => isToday(r.updated_at) && r.updated_at !== r.created_at);
-    
-    if (pendingReferrals.length > 0) {
-      tasks.push({
-        key: 'task_update_referral',
-        label: 'Referral Received',
-        desc: `You have ${pendingReferrals.length} pending referral(s) to update.`,
-        isHidden: false,
-        isDone: false,
-        link: `/refer?tab=received&update=${pendingReferrals[0].id}`,
-        linkText: 'UPDATE REFERRAL',
-        iconColor: 'text-orange-400',
-        bgColor: 'bg-orange-500/10',
-        icon: Share2,
-        pointsVal: 0
-      });
-    } else {
-      tasks.push({
-        key: 'task_update_referral',
-        label: 'Referral Received',
-        desc: 'You updated a referral today.',
-        isHidden: !updatedToday,
-        isDone: true,
-        iconColor: 'text-orange-400',
-        bgColor: 'bg-orange-500/10',
-        icon: Share2,
-        pointsVal: updatedToday ? 10 : 0
-      });
-    }
-
-    // 6. Attend Chapter Meeting (20 pts)
-    const todayChapter = userChapterMeetings.filter(m => isToday(m.date));
-    const hasChapterToday = todayChapter.length > 0;
-    
-    if (hasChapterToday) {
-      const mChap = todayChapter[0];
-      const pastChapTime = isPastTime(mChap.time || mChap.meeting_time);
-      const isChapCompleted = mChap.isCompleted === true || (mChap.isCompleted as any) === 'true' || mChap.status === 'COMPLETED';
-      const chapAtt = (mChap.attendance || {})[profile.uid];
-      const isChapPresent = chapAtt === 'Present' || chapAtt === 'PRESENT' || chapAtt === 'Yes' || chapAtt === 'YES' || chapAtt === 'Substitute' || chapAtt === 'SUBSTITUTE';
-      const isChapAbsent = chapAtt === 'Absent' || chapAtt === 'ABSENT' || chapAtt === 'No' || chapAtt === 'NO';
-      
-      if (!pastChapTime) {
-        tasks.push({
-          key: 'task_chapter_meeting',
-          label: 'Attend Chapter Meeting',
-          desc: 'Upcoming Meeting',
-          isHidden: false,
-          isDone: false,
-          link: '/meetings',
-          linkText: 'VIEW',
-          iconColor: 'text-purple-400',
-          bgColor: 'bg-purple-500/10',
-          icon: Calendar,
-          pointsVal: 0
-        });
-      } else if (!isChapCompleted && !isChapPresent && !isChapAbsent) {
-        tasks.push({
-          key: 'task_chapter_meeting',
-          label: 'Attend Chapter Meeting',
-          desc: 'Waiting for Attendance',
-          isHidden: false,
-          isDone: false,
-          link: '/meetings',
-          linkText: 'VIEW',
-          iconColor: 'text-purple-400',
-          bgColor: 'bg-purple-500/10',
-          icon: Calendar,
-          pointsVal: 0
-        });
-      } else {
-        tasks.push({
-          key: 'task_chapter_meeting',
-          label: 'Attend Chapter Meeting',
-          desc: isChapPresent ? 'Attendance marked Present.' : 'Attendance marked Absent.',
-          isHidden: false,
-          isDone: true,
-          isFailed: isChapAbsent,
-          link: '/meetings',
-          linkText: 'VIEW',
-          iconColor: 'text-purple-400',
-          bgColor: 'bg-purple-500/10',
-          icon: Calendar,
-          pointsVal: isChapPresent ? 20 : 0
-        });
-      }
-    }
-
-    return tasks;
-  }, [profile, meetings, oneToOnes, allReferrals, allSlips, guestInvitations]);
+  }, [profile, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials]);
 
   const masterAdminTasks = useMemo(() => {
     if (profile?.role !== 'MASTER_ADMIN') return [];
@@ -1657,9 +1513,32 @@ export function Analytics() {
       oneToOnes,
       meetings,
       guestInvitations,
-      todayTasks
+      allSlips: effectiveSlips,
+      testimonials: allTestimonials
     });
-  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
+  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials]);
+
+  // Auto-sync growth score to database when calculated score changes
+  useEffect(() => {
+    if (profile && memberGrowthScoreData) {
+      const calculatedScore = memberGrowthScoreData.score;
+      if (
+        profile.growth_score !== calculatedScore ||
+        profile.daily_score !== memberGrowthScoreData.daily_score ||
+        profile.analysed_days !== memberGrowthScoreData.analysed_days
+      ) {
+        syncGrowthScoreToDatabase(profile.id || profile.uid, memberGrowthScoreData, profile.workspace_checklist);
+      }
+    }
+  }, [profile?.id, profile?.uid, memberGrowthScoreData?.score, memberGrowthScoreData?.daily_score, memberGrowthScoreData?.analysed_days]);
+
+  const handleToggleTask = React.useCallback(async (taskKey: string) => {
+    if (!profile) return;
+    const task = todayTasks.find(t => t.key === taskKey);
+    if (task && task.link) {
+      navigate(task.link);
+    }
+  }, [profile, todayTasks, navigate]);
 
   const chapterGrowthScoreData = useMemo(() => {
     const userChapId = profile?.chapter_id || profile?.chapterId || profile?.adminId;
@@ -1685,10 +1564,10 @@ export function Analytics() {
     return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
   }, [profile]);
 
-  const growthScoreData = chapterGrowthScoreData;
-  const dynamicGrowthScore = chapterGrowthScoreData.score;
-  const growthStatus = chapterGrowthScoreData.status;
-  const growthStatusColor = chapterGrowthScoreData.statusColor;
+  const growthScoreData = profile?.role === 'MASTER_ADMIN' ? chapterGrowthScoreData : (usePersonalStats ? memberGrowthScoreData : chapterGrowthScoreData);
+  const dynamicGrowthScore = growthScoreData.score;
+  const growthStatus = growthScoreData.status;
+  const growthStatusColor = growthScoreData.statusColor;
 
   // Calculate Weekly and Monthly Growth Trends from live Supabase data
   const { weeklyGrowth, monthlyGrowth } = useMemo(() => {
@@ -2815,7 +2694,7 @@ export function Analytics() {
                     >
                       <Activity size={16} />
                     </motion.div>
-                    My Report
+                    My Chapter Report
                   </motion.button>
                 </Link>
               </div>
@@ -2823,11 +2702,22 @@ export function Analytics() {
 
             {/* Growth Score Analytics Metadata Badge */}
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#0B1220]/80 border border-white/10 rounded-xl px-3.5 py-1.5 shadow-md w-fit">
-              <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.membersAnalysed}</span></span>
+              {!usePersonalStats && (
+                <>
+                  <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{growthScoreData.membersAnalysed}</span></span>
+                  <span className="text-neutral-500">•</span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer"
+              >
+                <Filter size={12} className="text-emerald-400" />
+                <span>Filter</span>
+              </button>
               <span className="text-neutral-500">•</span>
-              <span className="text-emerald-400 font-bold">Days Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.daysAnalysedText}</span></span>
-              <span className="text-neutral-500">•</span>
-              <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{chapterGrowthScoreData.scoreText}</span></span>
+              <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{growthScoreData.scoreText}</span></span>
             </div>
           </div>
 
@@ -2974,7 +2864,9 @@ export function Analytics() {
               <p className="text-[11px] sm:text-xs text-[#9CA3AF] font-bold uppercase tracking-wider">
                 {profile?.role === 'MASTER_ADMIN' 
                   ? 'Real-time analytics across all chapters.' 
-                  : 'Real-time analytics and business performance for your chapter.'}
+                  : usePersonalStats
+                    ? 'Your Real-Time Analytics & Business Performance.'
+                    : 'Real-time analytics and business performance for your chapter.'}
               </p>
             </div>
 
@@ -3043,6 +2935,11 @@ export function Analytics() {
             testimonialsGivenCount={testimonialsGivenCount}
             testimonialsReceivedCount={testimonialsReceivedCount}
             meetingsCount={chapterMeetingsCount}
+            meetingsScheduledCount={userMeetingsScheduled}
+            meetingsAttendedCount={userMeetingsAttended}
+            oneToOneScheduledCount={userOneToOnesScheduled}
+            oneToOneCompletedCount={userOneToOnesCompleted}
+            guestsJoinedCount={userGuestsJoined}
             onCardClick={(label) => {
               setAnalyticsModalCategory(label);
             }}
@@ -3064,13 +2961,14 @@ export function Analytics() {
             followUpReferral: hasFollowedUpReferral, 
             inviteGuest: hasInvitedGuest 
           }}
-          handleToggleTask={() => {}}
+          handleToggleTask={handleToggleTask}
           nextMeeting={null}
           countdown={{ days: 0, hours: 0, minutes: 0 }}
           finalRecentActivities={filteredRecentActivities}
           businessGrowthScore={memberGrowthScoreData.score}
           daysAnalysedText={memberGrowthScoreData.daysAnalysedText}
           scoreText={memberGrowthScoreData.scoreText}
+          onOpenFilterModal={() => setIsFilterModalOpen(true)}
           currentMonthMetrics={{}}
           hasLoggedOneToOne={hasScheduledOneToOne}
           hasSentThankYouSlip={false}
@@ -3091,6 +2989,7 @@ export function Analytics() {
           membersAnalysed={chapterGrowthScoreData.membersAnalysed}
           daysAnalysedText={chapterGrowthScoreData.daysAnalysedText}
           scoreText={chapterGrowthScoreData.scoreText}
+          onOpenFilterModal={() => setIsFilterModalOpen(true)}
           chapterMemberCount={totalMembersCount}
           chapterReferrals={referralsPassedCount}
           chapterBusiness={businessGeneratedTotal}
@@ -3104,9 +3003,9 @@ export function Analytics() {
           tasks={masterAdminTasks}
           profile={profile}
           networkHealthScore={chapterGrowthScoreData.score}
-          membersAnalysed={chapterGrowthScoreData.membersAnalysed}
-          daysAnalysedText={chapterGrowthScoreData.daysAnalysedText}
-          scoreText={chapterGrowthScoreData.scoreText}
+          membersAnalysed={growthScoreData.membersAnalysed}
+          daysAnalysedText={growthScoreData.daysAnalysedText}
+          scoreText={growthScoreData.scoreText}
           globalMemberCount={totalMembersCount}
           globalChapterCount={totalChaptersCount}
           globalBusinessGenerated={businessGeneratedTotal}
@@ -3125,12 +3024,12 @@ export function Analytics() {
       <Modal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        title="Organization Analytics Filter"
+        title="Filter Analytics"
         maxWidth="max-w-md"
       >
         <div className="flex flex-col gap-5 p-1">
           <p className="text-xs font-semibold text-[#9CA3AF]">
-            Filter organization analytics by date range, chapter, and member.
+            Filter analytics and workspace data by selecting a date range.
           </p>
 
           {dateError && (
@@ -3231,7 +3130,7 @@ export function Analytics() {
               className="px-4 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-[#9CA3AF] hover:text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
             >
               <RotateCcw size={14} />
-              Clear / Reset
+              Reset
             </button>
 
             <button
@@ -3248,7 +3147,7 @@ export function Analytics() {
               ) : (
                 <>
                   <Filter size={14} />
-                  Apply Filter
+                  Apply
                 </>
               )}
             </button>

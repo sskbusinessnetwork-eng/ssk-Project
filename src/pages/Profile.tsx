@@ -24,6 +24,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { Category, UserProfile, Referral, UserRole } from '../types';
@@ -72,15 +73,6 @@ export function Profile() {
 
   const isAdmin = currentUserProfile?.role === 'MASTER_ADMIN' || currentUserProfile?.role === 'CHAPTER_ADMIN' || (currentUserProfile?.role === 'MEMBER' && currentUserProfile?.position === 'chapter_admin');
 
-  const getDisplayPosition = (pos?: string, r?: string) => {
-    const role = (r || 'MEMBER').toUpperCase();
-    if (role === 'MASTER_ADMIN') return 'Master Admin';
-    if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-    if (role === 'PRESIDENT') return 'President';
-    if (role === 'VICE_PRESIDENT') return 'Vice President';
-    if (role === 'TREASURER') return 'Treasurer';
-    return 'Member';
-  };
 
   // Form state
   const [formData, setFormData] = useState({

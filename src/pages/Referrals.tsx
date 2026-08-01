@@ -39,19 +39,11 @@ const getUserFullName = (user: any): string => {
   return getCleanFullName(rawName);
 };
 
+import { getDisplayPosition } from '../utils/authUtils';
+
 const formatUserRoleOrPosition = (user: any): string => {
   if (!user) return 'Member';
-  const role = user.role;
-  if (role) {
-    const rUpper = String(role).toUpperCase().trim();
-    if (rUpper === 'PRESIDENT') return 'President';
-    if (rUpper === 'VICE_PRESIDENT') return 'Vice President';
-    if (rUpper === 'TREASURER') return 'Treasurer';
-    if (rUpper === 'CHAPTER_ADMIN') return 'Chapter Admin';
-    if (rUpper === 'MASTER_ADMIN') return 'Master Admin';
-    if (rUpper === 'MEMBER') return 'Member';
-  }
-  return 'Member';
+  return getDisplayPosition(user.position || user.chapter_position || user.chapterPosition, user.role);
 };
 
 export function Referrals() {

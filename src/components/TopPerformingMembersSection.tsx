@@ -58,7 +58,7 @@ export function TopPerformingMembersSection() {
   };
 
   return (
-    <section className="py-20 md:py-28 bg-[#0B1220] text-white relative overflow-hidden border-y border-white/10">
+    <section className="py-16 md:py-24 bg-[#0B1220] text-white relative overflow-hidden border-y border-white/10">
       {/* Background ambient lighting */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -71,7 +71,7 @@ export function TopPerformingMembersSection() {
           transition={{ duration: 0.6 }}
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold text-xs md:text-sm uppercase tracking-widest mb-4 shadow-inner"
         >
-          <Trophy size={16} /> Leaderboard Showcase
+          <Trophy className="w-4 h-4 md:w-5 md:h-5" /> Leaderboard Showcase
         </motion.div>
 
         <motion.h2
@@ -79,7 +79,7 @@ export function TopPerformingMembersSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-2xl md:text-4xl lg:text-5xl font-black text-white tracking-tight uppercase"
+          className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight uppercase px-4"
         >
           Top Performing Members
         </motion.h2>
@@ -89,7 +89,7 @@ export function TopPerformingMembersSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-neutral-400 text-sm md:text-base font-medium max-w-xl mx-auto mt-3"
+          className="text-neutral-400 text-xs sm:text-sm md:text-base font-medium max-w-xl mx-auto mt-3 px-4"
         >
           Recognizing exemplary commitment, active chapter contributions, and business collaboration.
         </motion.p>
@@ -184,9 +184,9 @@ const TopMemberCard: React.FC<{
         <div
           className={`px-3 py-1 rounded-full border text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${rankBadgeStyle}`}
         >
-          {isRank1 && <Crown size={14} className="animate-pulse" />}
-          {isRank2 && <Award size={14} />}
-          {isRank3 && <Star size={14} />}
+          {isRank1 && <Crown className="w-3.5 h-3.5 animate-pulse" />}
+          {isRank2 && <Award className="w-3.5 h-3.5" />}
+          {isRank3 && <Star className="w-3.5 h-3.5" />}
           <span>{getRankText(member.rank)}</span>
         </div>
 

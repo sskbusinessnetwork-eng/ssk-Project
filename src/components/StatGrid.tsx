@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, Target, TrendingUp, Share2, Briefcase, Handshake, UserCheck, Star, Activity, Plus, ArrowDownLeft, FileText } from 'lucide-react';
+import { Users, UserCheck, UserPlus, Share2, Briefcase, ArrowDownLeft, Handshake, Calendar, FileText, Star, TrendingUp, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface StatGridProps {
@@ -32,6 +32,11 @@ interface StatGridProps {
   testimonialsGivenCount?: number;
   testimonialsReceivedCount?: number;
   meetingsCount?: number;
+  meetingsScheduledCount?: number;
+  meetingsAttendedCount?: number;
+  oneToOneScheduledCount?: number;
+  oneToOneCompletedCount?: number;
+  guestsJoinedCount?: number;
   onCardClick?: (label: string) => void;
 }
 
@@ -43,9 +48,9 @@ export default function StatGrid({
   activePartnersCount = 0,
   inactiveMembersCount = 0,
   businessGeneratedTotal = 0,
-  businessSentTotal,
+  businessSentTotal = 0,
   businessSentCount = 0,
-  businessReceivedTotal,
+  businessReceivedTotal = 0,
   businessReceivedCount = 0,
   referralsPassedCount = 0,
   referralsSentCount = 0,
@@ -65,11 +70,17 @@ export default function StatGrid({
   testimonialsGivenCount = 0,
   testimonialsReceivedCount = 0,
   meetingsCount = 0,
+  meetingsScheduledCount = 0,
+  meetingsAttendedCount = 0,
+  oneToOneScheduledCount = 0,
+  oneToOneCompletedCount = 0,
+  guestsJoinedCount = 0,
   onCardClick,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
     if (label.includes('Business')) {
       const num = Number(val || 0);
+      if (num === 0) return '₹0';
       if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr+`;
       if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L+`;
       return `₹${num.toLocaleString('en-IN')}`;
@@ -86,136 +97,239 @@ export default function StatGrid({
     const isChapterRole = normRole === 'MEMBER' || normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin', 'member'].includes(normPos);
 
     if (isChapterRole && normRole !== 'MASTER_ADMIN') {
+      const isChapterAdmin = (normRole === 'CHAPTER_ADMIN' && !['president', 'vice_president', 'treasurer'].includes(normPos)) || normPos === 'chapter_admin';
+      
+      if (isChapterAdmin) {
+        const baseStats = [
+          {
+            label: 'Total Members',
+            value: formatValue('Total Members', totalMembersCount),
+            trend: 'Total',
+            trendLabel: 'In chapter',
+            icon: Users,
+            color: 'text-indigo-400',
+            bg: 'bg-indigo-400/10 border-indigo-400/20',
+          },
+          {
+            label: 'Active Members',
+            value: formatValue('Active Members', activePartnersCount),
+            trend: 'Active',
+            trendLabel: 'In chapter',
+            icon: UserCheck,
+            color: 'text-emerald-500',
+            bg: 'bg-emerald-500/10 border-emerald-500/20',
+          },
+          {
+            label: 'Inactive Members',
+            value: formatValue('Inactive Members', inactiveMembersCount),
+            trend: 'Inactive',
+            trendLabel: 'In chapter',
+            icon: Users,
+            color: 'text-red-400',
+            bg: 'bg-red-400/10 border-red-400/20',
+          },
+          {
+            label: 'Referrals Sent',
+            value: formatValue('Referrals Sent', referralsSentCount || referralsPassedCount),
+            trend: 'Sent',
+            trendLabel: 'By chapter',
+            icon: Share2,
+            color: 'text-purple-400',
+            bg: 'bg-purple-400/10 border-purple-400/20',
+          },
+          {
+            label: 'Referrals Received',
+            value: formatValue('Referrals Received', referralsReceivedCount),
+            trend: 'Received',
+            trendLabel: 'By chapter',
+            icon: Share2,
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-400/10 border-emerald-400/20',
+          },
+          {
+            label: 'Business Sent',
+            value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal),
+            trend: `${businessSentCount ?? 0} Slips`,
+            trendLabel: 'Given',
+            icon: Briefcase,
+            color: 'text-purple-500',
+            bg: 'bg-purple-500/10 border-purple-500/20',
+          },
+          {
+            label: 'Business Received',
+            value: formatValue('Business Received', businessReceivedTotal ?? 0),
+            trend: `${businessReceivedCount ?? 0} Slips`,
+            trendLabel: 'Earned',
+            icon: ArrowDownLeft,
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-400/10 border-emerald-400/20',
+          },
+          {
+            label: 'One-to-One Meetings',
+            value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
+            trend: 'Total',
+            trendLabel: 'Completed',
+            icon: Handshake,
+            color: 'text-blue-500',
+            bg: 'bg-blue-500/10 border-blue-500/20',
+          },
+          {
+            label: 'Meetings Attended',
+            value: formatValue('Meetings Attended', chapterMeetingsCount || meetingsCount),
+            trend: 'Total',
+            trendLabel: 'Attended',
+            icon: Calendar,
+            color: 'text-orange-400',
+            bg: 'bg-orange-400/10 border-orange-400/20',
+          },
+          {
+            label: 'Meetings Scheduled',
+            value: formatValue('Meetings Scheduled', upcomingSyncsCount),
+            trend: 'Total',
+            trendLabel: 'Scheduled',
+            icon: Calendar,
+            color: 'text-orange-400',
+            bg: 'bg-orange-400/10 border-orange-400/20',
+          },
+          {
+            label: 'Guests Invited',
+            value: formatValue('Guests Invited', guestsInvitedCount || visitorsAttendedCount),
+            trend: 'Total',
+            trendLabel: 'Invited',
+            icon: UserCheck,
+            color: 'text-pink-500',
+            bg: 'bg-pink-500/10 border-pink-500/20',
+          },
+          {
+            label: 'Thank You Slips Sent',
+            value: formatValue('Thank You Slips Sent', thankYouSlipsSentCount || businessSentCount || thankYouSlipsCount),
+            trend: 'Sent',
+            trendLabel: 'Slips',
+            icon: FileText,
+            color: 'text-cyan-400',
+            bg: 'bg-cyan-400/10 border-cyan-400/20',
+          },
+          {
+            label: 'Thank You Slips Received',
+            value: formatValue('Thank You Slips Received', thankYouSlipsReceivedCount || businessReceivedCount),
+            trend: 'Received',
+            trendLabel: 'Slips',
+            icon: FileText,
+            color: 'text-teal-400',
+            bg: 'bg-teal-400/10 border-teal-400/20',
+          },
+          {
+            label: 'Testimonials Given',
+            value: formatValue('Testimonials Given', testimonialsGivenCount || testimonialsCount),
+            trend: 'Given',
+            trendLabel: 'By chapter',
+            icon: Star,
+            color: 'text-amber-400',
+            bg: 'bg-amber-400/10 border-amber-400/20',
+          },
+          {
+            label: 'Testimonials Received',
+            value: formatValue('Testimonials Received', testimonialsReceivedCount),
+            trend: 'Received',
+            trendLabel: 'By chapter',
+            icon: Star,
+            color: 'text-yellow-400',
+            bg: 'bg-yellow-400/10 border-yellow-400/20',
+          },
+          {
+            label: 'Attendance',
+            value: formatValue('Attendance', weeklyMeetingAttendance),
+            trend: 'Avg',
+            trendLabel: 'Chapter',
+            icon: TrendingUp,
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-400/10 border-emerald-400/20',
+          }
+        ];
+        return baseStats;
+      }
+
+      // Member / Position dashboards -> Merged Cards for "My Analytics"
       return [
         {
-          label: 'Total Members',
-          value: formatValue('Total Members', totalMembersCount),
-          trend: 'Total',
-          trendLabel: 'In chapter',
-          icon: Users,
-          color: 'text-indigo-400',
-          bg: 'bg-indigo-400/10 border-indigo-400/20',
-        },
-        {
-          label: 'Active Members',
-          value: formatValue('Active Members', activePartnersCount),
-          trend: 'Active',
-          trendLabel: 'In chapter',
-          icon: UserCheck,
-          color: 'text-emerald-500',
-          bg: 'bg-emerald-500/10 border-emerald-500/20',
-        },
-        {
-          label: 'Inactive Members',
-          value: formatValue('Inactive Members', inactiveMembersCount),
-          trend: 'Inactive',
-          trendLabel: 'In chapter',
-          icon: Users,
-          color: 'text-red-400',
-          bg: 'bg-red-400/10 border-red-400/20',
-        },
-        {
-          label: 'Referrals Sent',
-          value: formatValue('Referrals Sent', referralsSentCount || referralsPassedCount),
-          trend: 'Sent',
-          trendLabel: 'By chapter',
+          label: 'REFERRALS',
+          isMerged: true,
           icon: Share2,
           color: 'text-purple-400',
-          bg: 'bg-purple-400/10 border-purple-400/20',
+          bg: 'bg-purple-950/80 border-purple-500/30 text-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.2)]',
+          rows: [
+            { label: 'Sent', value: String(referralsSentCount ?? 0) },
+            { label: 'Received', value: String(referralsReceivedCount ?? 0) },
+          ]
         },
         {
-          label: 'Referrals Received',
-          value: formatValue('Referrals Received', referralsReceivedCount),
-          trend: 'Received',
-          trendLabel: 'By chapter',
-          icon: Share2,
-          color: 'text-emerald-400',
-          bg: 'bg-emerald-400/10 border-emerald-400/20',
-        },
-        {
-          label: 'Business Sent',
-          value: formatValue('Business Sent', businessSentTotal ?? businessGeneratedTotal),
-          trend: `${businessSentCount ?? 0} Slips`,
-          trendLabel: 'Given',
+          label: 'BUSINESS',
+          isMerged: true,
           icon: Briefcase,
-          color: 'text-purple-500',
-          bg: 'bg-purple-500/10 border-purple-500/20',
-        },
-        {
-          label: 'Business Received',
-          value: formatValue('Business Received', businessReceivedTotal ?? 0),
-          trend: `${businessReceivedCount ?? 0} Slips`,
-          trendLabel: 'Earned',
-          icon: ArrowDownLeft,
           color: 'text-emerald-400',
-          bg: 'bg-emerald-400/10 border-emerald-400/20',
+          bg: 'bg-emerald-950/80 border-emerald-500/30 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]',
+          rows: [
+            { label: 'Sent', value: formatValue('Business', businessSentTotal) },
+            { label: 'Received', value: formatValue('Business', businessReceivedTotal) },
+          ]
         },
         {
-          label: 'One-to-One Meetings',
-          value: formatValue('One-to-One Meetings', oneToOneMeetingsCount),
-          trend: 'Total',
-          trendLabel: 'Completed',
-          icon: Handshake,
-          color: 'text-blue-500',
-          bg: 'bg-blue-500/10 border-blue-500/20',
-        },
-        {
-          label: 'Chapter Meetings',
-          value: formatValue('Chapter Meetings', chapterMeetingsCount || meetingsCount),
-          trend: 'Total',
-          trendLabel: 'Meetings',
-          icon: Calendar,
-          color: 'text-orange-400',
-          bg: 'bg-orange-400/10 border-orange-400/20',
-        },
-        {
-          label: 'Guests Invited',
-          value: formatValue('Guests Invited', guestsInvitedCount || visitorsAttendedCount),
-          trend: 'Total',
-          trendLabel: 'Invited',
-          icon: UserCheck,
-          color: 'text-pink-500',
-          bg: 'bg-pink-500/10 border-pink-500/20',
-        },
-        {
-          label: 'Thank You Slips Sent',
-          value: formatValue('Thank You Slips Sent', thankYouSlipsSentCount || businessSentCount || thankYouSlipsCount),
-          trend: 'Sent',
-          trendLabel: 'Slips',
+          label: 'THANK YOU SLIPS',
+          isMerged: true,
           icon: FileText,
           color: 'text-cyan-400',
-          bg: 'bg-cyan-400/10 border-cyan-400/20',
+          bg: 'bg-cyan-950/80 border-cyan-500/30 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]',
+          rows: [
+            { label: 'Sent', value: String(thankYouSlipsSentCount ?? businessSentCount ?? 0) },
+            { label: 'Received', value: String(thankYouSlipsReceivedCount ?? businessReceivedCount ?? 0) },
+          ]
         },
         {
-          label: 'Thank You Slips Received',
-          value: formatValue('Thank You Slips Received', thankYouSlipsReceivedCount || businessReceivedCount),
-          trend: 'Received',
-          trendLabel: 'Slips',
-          icon: FileText,
-          color: 'text-teal-400',
-          bg: 'bg-teal-400/10 border-teal-400/20',
+          label: 'MEETINGS',
+          isMerged: true,
+          icon: Calendar,
+          color: 'text-orange-400',
+          bg: 'bg-orange-950/80 border-orange-500/30 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]',
+          rows: [
+            { label: 'Scheduled', value: String(meetingsScheduledCount ?? upcomingSyncsCount ?? 0) },
+            { label: 'Attended', value: String(meetingsAttendedCount ?? chapterMeetingsCount ?? 0) },
+          ]
         },
         {
-          label: 'Testimonials Given',
-          value: formatValue('Testimonials Given', testimonialsGivenCount || testimonialsCount),
-          trend: 'Given',
-          trendLabel: 'By chapter',
+          label: 'ONE-TO-ONE MEETINGS',
+          isMerged: true,
+          icon: Handshake,
+          color: 'text-blue-400',
+          bg: 'bg-blue-950/80 border-blue-500/30 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]',
+          rows: [
+            { label: 'Scheduled', value: String(oneToOneScheduledCount ?? 0) },
+            { label: 'Completed', value: String(oneToOneCompletedCount ?? oneToOneMeetingsCount ?? 0) },
+          ]
+        },
+        {
+          label: 'GUESTS',
+          isMerged: true,
+          icon: UserPlus,
+          color: 'text-pink-400',
+          bg: 'bg-pink-950/80 border-pink-500/30 text-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.2)]',
+          rows: [
+            { label: 'Invited', value: String(guestsInvitedCount ?? 0) },
+            { label: 'Joined', value: String(guestsJoinedCount ?? visitorsAttendedCount ?? 0) },
+          ]
+        },
+        /* {
+          label: 'TESTIMONIALS',
+          isMerged: true,
           icon: Star,
           color: 'text-amber-400',
-          bg: 'bg-amber-400/10 border-amber-400/20',
-        },
-        {
-          label: 'Testimonials Received',
-          value: formatValue('Testimonials Received', testimonialsReceivedCount),
-          trend: 'Received',
-          trendLabel: 'By chapter',
-          icon: Star,
-          color: 'text-yellow-400',
-          bg: 'bg-yellow-400/10 border-yellow-400/20',
-        },
+          bg: 'bg-amber-950/80 border-amber-500/30 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]',
+          rows: [
+            { label: 'Sent', value: String(testimonialsGivenCount ?? testimonialsCount ?? 0) },
+            { label: 'Received', value: String(testimonialsReceivedCount ?? 0) },
+          ]
+        } */
       ];
     }
-
     // MASTER_ADMIN gets global admin stats
     return [
       {
@@ -342,10 +456,9 @@ export default function StatGrid({
   const normRole = (role || '').toUpperCase();
   const normPos = (position || '').toLowerCase();
 
-  // ONLY Chapter Admin or Master Admin cards are clickable
-  const isChapterAdmin = normRole === 'CHAPTER_ADMIN' || normPos === 'chapter_admin';
+  const isChapterAdmin = (normRole === 'CHAPTER_ADMIN' && !['president', 'vice_president', 'treasurer'].includes(normPos)) || normPos === 'chapter_admin';
   const isMasterAdmin = normRole === 'MASTER_ADMIN';
-  const isClickable = isChapterAdmin || isMasterAdmin;
+  const isClickable = isChapterAdmin || isMasterAdmin || Boolean(onCardClick);
 
   return (
     <motion.div 
@@ -360,10 +473,74 @@ export default function StatGrid({
           }
         }
       }}
-      className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5"
+      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-[10px] sm:gap-3.5 w-full"
     >
-      {stats.map((stat, idx) => {
+      {stats.map((stat: any, idx: number) => {
         const Icon = stat.icon;
+        
+        if (stat.isMerged) {
+          return (
+            <motion.div 
+              key={idx}
+              onClick={() => {
+                if (isClickable) {
+                  onCardClick?.(stat.label);
+                }
+              }}
+              variants={{
+                hidden: { opacity: 0, y: 12 },
+                show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
+              }}
+              whileHover={isClickable ? { 
+                 y: -3, 
+                 scale: 1.015, 
+                 boxShadow: "0 12px 24px rgba(0,0,0,0.5), 0 0 15px rgba(255,255,255,0.05)",
+                 borderColor: "rgba(255, 255, 255, 0.25)"
+              } : undefined}
+              whileTap={isClickable ? { scale: 0.98 } : undefined}
+              transition={{ type: "spring", stiffness: 220, damping: 20 }}
+              className={`bg-[#080d1a]/95 backdrop-blur-xl rounded-[16px] px-3.5 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-between transition-all duration-300 group col-span-1 w-full gap-2.5 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
+            >
+              {/* Top Row: Icon + Title */}
+              <div className="flex items-center gap-3 w-full">
+                <div className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 border ${stat.bg}`}>
+                  <Icon size={18} className="shrink-0" strokeWidth={2.2} />
+                </div>
+                <span className="text-[13px] sm:text-[14px] font-extrabold text-white uppercase tracking-wider truncate leading-tight">
+                  {stat.label}
+                </span>
+              </div>
+
+              {/* Bottom Row: Metrics with vertical divider */}
+              <div className="flex items-center w-full pt-0.5">
+                {stat.rows[0] && (
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-1">
+                    <span className="text-[12px] font-medium text-gray-400 shrink-0">
+                      {stat.rows[0].label.replace(':', '')}:
+                    </span>
+                    <span className={`text-[15px] sm:text-[16px] font-bold tracking-tight truncate ${stat.color}`}>
+                      {stat.rows[0].value}
+                    </span>
+                  </div>
+                )}
+
+                <div className="w-[1px] h-4 bg-white/15 shrink-0 mx-2.5 sm:mx-3" />
+
+                {stat.rows[1] && (
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-1">
+                    <span className="text-[12px] font-medium text-gray-400 shrink-0">
+                      {stat.rows[1].label.replace(':', '')}:
+                    </span>
+                    <span className={`text-[15px] sm:text-[16px] font-bold tracking-tight truncate ${stat.color}`}>
+                      {stat.rows[1].value}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        }
+
         const isScheduled = stat.trend === 'Scheduled';
         
         return (
@@ -376,40 +553,37 @@ export default function StatGrid({
             }}
             variants={{
               hidden: { opacity: 0, y: 15 },
-              show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }
+              show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
             }}
             whileHover={isClickable ? { 
-               y: -6, 
+               y: -4, 
                scale: 1.02, 
-               boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-               borderColor: "rgba(255, 255, 255, 0.15)"
+               boxShadow: "0 12px 28px rgba(0,0,0,0.6)",
+               borderColor: "rgba(255, 255, 255, 0.25)"
             } : undefined}
-            transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className={`bg-[#111827] rounded-[20px] p-3 sm:p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col justify-center items-center text-center h-[140px] sm:h-[160px] transition-all duration-300 group col-span-1 w-full gap-1.5 sm:gap-2 ${isClickable ? 'cursor-pointer hover:border-white/20' : 'cursor-default'}`}
+            whileTap={isClickable ? { scale: 0.97 } : undefined}
+            transition={{ type: "spring", stiffness: 220, damping: 20 }}
+            className={`bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[82px] sm:h-[135px] transition-all duration-300 group col-span-1 w-full gap-1 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
           >
-            <motion.div 
-              animate={{ y: [0, -3, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: idx * 0.2 }}
-              className={`w-7 h-7 sm:w-10 sm:h-10 rounded-[10px] sm:rounded-[14px] flex items-center justify-center shrink-0 border ${stat.bg} ${stat.color} shadow-[0_0_15px_rgba(0,0,0,0.2)]`}
-            >
-              <Icon size={14} className="sm:size-[18px]" strokeWidth={2.5} />
-            </motion.div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${stat.bg}`}>
+              <Icon size={15} strokeWidth={2.5} />
+            </div>
             
-            <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full">
+            <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full">
               {stat.label}
             </span>
 
-            <div className="text-[16px] sm:text-[24px] font-black text-white leading-none tracking-tight truncate w-full">
+            <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full">
               {stat.value}
             </div>
 
             <div className="flex flex-col items-center justify-center gap-0.5 w-full">
-              <span className={`text-[10px] sm:text-[12px] font-black flex items-center gap-0.5 justify-center ${isScheduled ? 'text-orange-400' : 'text-emerald-400'} truncate w-full`}>
-                {!isScheduled && <TrendingUp size={10} className="sm:size-[11px]" strokeWidth={3} />}
+              <span className={`text-[10px] sm:text-[11px] font-black flex items-center gap-0.5 justify-center ${isScheduled ? 'text-orange-400' : 'text-emerald-400'} truncate w-full`}>
+                {!isScheduled && <TrendingUp size={10} strokeWidth={3} />}
                 {stat.trend}
               </span>
 
-              <span className="text-[8px] sm:text-[9.5px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                 {stat.trendLabel}
               </span>
             </div>

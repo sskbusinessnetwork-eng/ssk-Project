@@ -17,11 +17,33 @@ export function Categories() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Subscribe to virtualized Categories list
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('category_name', { ascending: true });
+        
+      if (error) throw error;
+      
+      // Map 'category_name' to 'name' and dates for the UI
+      const formatted = (data || []).map(c => ({
+        ...c,
+        name: c.category_name || c.name, // fallback
+        createdAt: c.created_at || c.createdAt,
+        updatedAt: c.updated_at || c.updatedAt,
+      }));
+      setCategories(formatted);
+    } catch (err) {
+      console.error("Failed to fetch categories:", err);
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = databaseService.subscribe<Category>('categories', [], setCategories);
-    return () => unsubscribe();
+    fetchCategories();
   }, []);
+
 
   // Subscribe to Users table to count category members reactively
   useEffect(() => {
@@ -126,14 +148,21 @@ export function Categories() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete the category "${cat.name}"?`)) return;
+    if (!window.confirm('Are you sure you want to delete this category?')) return;
 
     try {
-      await databaseService.delete('categories', cat.id);
-      setSuccess('Category deleted successfully!');
+      const { error: deleteError } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', cat.id);
+
+      if (deleteError) throw deleteError;
+
+      setSuccess('Category deleted successfully.');
+      await fetchCategories();
       setTimeout(() => setSuccess(null), 1500);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete category');
+      alert(err.message || 'Failed to delete category.');
     }
   };
 

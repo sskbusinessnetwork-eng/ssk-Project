@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
+import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
-import { calculateMemberGrowthScore, calculateMemberGrowthScoreData } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData } from '../utils/growthScore';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
@@ -303,6 +304,20 @@ export function Reports() {
   }, [referrals, meetings, oneToOnes, guestInvitations, testimonials, thankYouSlips, selectedChapterId, selectedMemberId, users, parsedStart, parsedEnd]);
 
   // Aggregate stats cards
+  
+  const chapterGrowthScoreData = useMemo(() => {
+    return calculateChapterGrowthScoreData({
+      chapterMembers: currentChapterMemberIds.map(id => users.find(u => u.uid === id || u.id === id)).filter(Boolean),
+      activeDateRange: startDate && endDate ? { startDate, endDate } : null,
+      allReferrals: referrals,
+      oneToOnes: oneToOnes,
+      meetings: meetings,
+      guestInvitations: guestInvitations,
+      currentProfile: profile,
+      todayTasks: []
+    });
+  }, [currentChapterMemberIds, users, startDate, endDate, referrals, oneToOnes, meetings, guestInvitations, profile]);
+
   const statsSummary = useMemo(() => {
     // Total Revenue
     const totalRevenue = reportsData.slips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0);
@@ -393,12 +408,7 @@ export function Reports() {
       }).score;
 
       // Human-readable position label
-      let displayPosition = 'Member';
-      const role = (member.role || 'MEMBER').toUpperCase();
-      if (role === 'PRESIDENT') displayPosition = 'President';
-      else if (role === 'VICE_PRESIDENT') displayPosition = 'Vice President';
-      else if (role === 'TREASURER') displayPosition = 'Treasurer';
-      else if (role === 'CHAPTER_ADMIN') displayPosition = 'Chapter Admin';
+      const displayPosition = getDisplayPosition(member.position, member.role);
 
       return {
         uid: member.uid,
@@ -731,25 +741,46 @@ export function Reports() {
         <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#3B82F6]/2 blur-[130px] rounded-full" />
       </div>
 
-      {/* HEADER SECTION */}
+            {/* HEADER SECTION */}
       <motion.div 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-white/5 pb-5"
       >
-        <div>
-          <span className="text-[11px] font-extrabold text-[#9CA3AF] uppercase tracking-[3px]">
-            Enterprise Analytics Suite
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-            <Activity className="text-[#E53935] h-7 w-7" />
-            Chapter Reports
-          </h1>
-          <p className="text-xs text-[#9CA3AF] mt-1 font-bold uppercase tracking-wider">
-            {profile?.role === 'MASTER_ADMIN' 
-              ? `Super Admin dashboard monitoring: ${currentChapterName}` 
-              : `Roster performance audits and metrics overview for ${currentChapterName}`}
-          </p>
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
+          <div>
+            <span className="text-[11px] font-extrabold text-[#9CA3AF] uppercase tracking-[3px]">
+              Enterprise Analytics Suite
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+              <Activity className="text-[#E53935] h-7 w-7" />
+              {(() => {
+                if (!currentChapterName || currentChapterName === 'All Chapters') return 'ALL CHAPTERS REPORT';
+                const upper = currentChapterName.trim().toUpperCase();
+                if (upper.endsWith('CHAPTER')) return `${upper} REPORT`;
+                return `${upper} CHAPTER REPORT`;
+              })()}
+            </h1>
+            <p className="text-xs text-[#9CA3AF] mt-1 font-bold uppercase tracking-wider">
+              {profile?.role === 'MASTER_ADMIN' 
+                ? `Super Admin dashboard monitoring: ${currentChapterName}` 
+                : `Roster performance audits and metrics overview for ${currentChapterName}`}
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-4 bg-[#111827]/80 border border-white/10 px-5 py-3 rounded-2xl">
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-[#9CA3AF] font-bold uppercase">Growth Score</span>
+              <span className="text-2xl font-black text-white leading-none">{chapterGrowthScoreData.score}%</span>
+            </div>
+            <div className="w-px h-8 bg-white/10"></div>
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-[#9CA3AF] font-bold uppercase">Status</span>
+              <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full border mt-1", chapterGrowthScoreData.statusColor)}>
+                {chapterGrowthScoreData.status}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Action Controls (Export) */}

@@ -23,7 +23,7 @@ import { useAuth } from '../hooks/useAuth';
 import {  collection, query, where, getDocs  } from '../lib/database';
 import { db } from '../lib/database';
 import { supabase } from '../lib/supabaseClient';
-import { getCleanFullName } from '../utils/authUtils';
+import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
 import { UserProfile, Category, Referral } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -48,42 +48,26 @@ export function Connections() {
     const pos = String(member.position || (member as any).position_name || '').trim();
     const role = String(member.role || '').trim().toUpperCase();
 
-    let label = 'Associate Member';
+    const label = getDisplayPosition(pos, role);
     let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
 
-    const pLower = pos.toLowerCase();
-
-    if (pLower === 'president' || role === 'PRESIDENT') {
-      label = 'President';
+    if (label === 'President') {
       classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-    } else if (pLower === 'vice_president' || pLower === 'vice president' || pLower === 'vice-president' || role === 'VICE_PRESIDENT') {
-      label = 'Vice President';
+    } else if (label === 'Vice President') {
       classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-    } else if (pLower === 'treasurer' || role === 'TREASURER') {
-      label = 'Treasurer';
+    } else if (label === 'Treasurer') {
       classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
-    } else if (pLower === 'secretary' || role === 'SECRETARY') {
-      label = 'Secretary';
+    } else if (label === 'Secretary') {
       classes = 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-    } else if (pLower === 'chapter_admin' || pLower === 'chapter admin' || role === 'CHAPTER_ADMIN') {
-      label = 'Chapter Admin';
+    } else if (label === 'Chapter Admin') {
       classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-    } else if (pLower === 'master_admin' || pLower === 'master admin' || role === 'MASTER_ADMIN') {
-      label = 'Master Admin';
+    } else if (label === 'Master Admin') {
       classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-    } else if (pos && pLower !== 'member' && pLower !== 'associate_member' && pLower !== 'associate member') {
-      label = pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    } else if (label !== 'Member') {
       classes = 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
-    } else {
-      label = 'Associate Member';
-      classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
     }
 
     return { label, classes };
-  };
-
-  const getDisplayPosition = (pos?: string, role?: string) => {
-    return getPositionTitleAndStyle({ position: pos, role } as UserProfile).label;
   };
 
   const getPositionBadge = (member: UserProfile) => {

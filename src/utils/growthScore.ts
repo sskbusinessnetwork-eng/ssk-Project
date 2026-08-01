@@ -1,3 +1,6 @@
+import { supabase } from '../lib/supabaseClient';
+import { calculateProfileCompletion } from './profileUtils';
+
 export interface MemberActivitiesInput {
   attendancePercent?: number;
   completedOneToOnes?: number;
@@ -24,16 +27,51 @@ export interface GrowthScoreResult {
   statusColor: string;
 }
 
+export interface WorkspaceTask {
+  key: string;
+  label: string;
+  desc: string;
+  pointsVal: number;
+  isDone: boolean;
+  isFailed?: boolean;
+  isHidden?: boolean;
+  link?: string;
+  linkText?: string;
+  iconColor?: string;
+  bgColor?: string;
+}
+
 export interface GrowthScoreDetailedResult {
   score: number;
   totalEarned: number;
   maxPossible: number;
+  daily_score: number;
+  daily_max_score: number;
+  monthly_score: number;
+  monthly_max_score: number;
+  growth_score: number;
+  completed_tasks: number;
+  total_tasks: number;
+  analysed_days: number;
   daysAnalysed: number;
   daysAnalysedText: string;
   scoreText: string;
   status: 'Needs Action' | 'On Track' | 'Excellent';
   statusColor: string;
   membersAnalysed?: number;
+  tasks?: WorkspaceTask[];
+}
+
+export function isToday(dateInput: any): boolean {
+  if (!dateInput) return false;
+  try {
+    const key = formatDateKey(dateInput);
+    if (!key) return false;
+    const todayKey = formatDateKey(new Date());
+    return key === todayKey;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -42,6 +80,9 @@ export interface GrowthScoreDetailedResult {
 export function formatDateKey(dateInput: any): string {
   if (!dateInput) return '';
   try {
+    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      return dateInput;
+    }
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return '';
     const year = d.getFullYear();
@@ -54,147 +95,347 @@ export function formatDateKey(dateInput: any): string {
 }
 
 /**
- * Generate a list of YYYY-MM-DD date strings for the requested range.
- * Clamps end date to today (future days must NOT reduce Growth Score).
- * If no date filter is provided, defaults to TODAY ONLY ([todayKey]).
+ * Sync growth score and workspace checklist state directly to Supabase users table
  */
-export function getDaysList(startDate?: Date | string | null, endDate?: Date | string | null): string[] {
-  const now = new Date();
-  const todayKey = formatDateKey(now);
-
-  if (!startDate || !endDate) {
-    return [todayKey];
-  }
-
-  const start = new Date(startDate);
-  if (isNaN(start.getTime())) return [todayKey];
-  start.setHours(0, 0, 0, 0);
-
-  const endFilter = new Date(endDate);
-  if (isNaN(endFilter.getTime())) return [todayKey];
-  endFilter.setHours(23, 59, 59, 999);
-
-  // Clamp end date to today (Requirement 6: Future days must NOT reduce Growth Score)
-  const effectiveEnd = endFilter < now ? endFilter : now;
-
-  if (start > effectiveEnd) {
-    return [todayKey];
-  }
-
-  const days: string[] = [];
-  const curr = new Date(start);
-  while (curr <= effectiveEnd) {
-    const key = formatDateKey(curr);
-    if (key && !days.includes(key)) {
-      days.push(key);
+export async function syncGrowthScoreToDatabase(userId: string, scoreData: any, checklistObj?: any) {
+  if (!userId) return;
+  try {
+    let payload: any = {};
+    if (typeof scoreData === 'number') {
+      payload = {
+        growth_score: scoreData,
+        daily_score: scoreData,
+        daily_max_score: 100
+      };
+    } else if (typeof scoreData === 'object' && scoreData !== null) {
+      payload = {
+        growth_score: scoreData.score ?? scoreData.growth_score ?? 0,
+        daily_score: scoreData.daily_score ?? scoreData.score ?? 0,
+        daily_max_score: scoreData.daily_max_score ?? 100,
+        monthly_score: scoreData.monthly_score ?? 0,
+        monthly_max_score: scoreData.monthly_max_score ?? 3000,
+        completed_tasks: scoreData.completed_tasks ?? scoreData.totalEarned ?? 0,
+        total_tasks: scoreData.total_tasks ?? scoreData.maxPossible ?? 0,
+        analysed_days: scoreData.analysed_days ?? scoreData.daysAnalysed ?? 1,
+      };
     }
-    curr.setDate(curr.getDate() + 1);
+    if (checklistObj) {
+      payload.workspace_checklist = checklistObj;
+    }
+    await supabase
+      .from('users')
+      .update(payload)
+      .or(`id.eq.${userId},uid.eq.${userId}`);
+  } catch (err) {
+    console.warn("Failed to sync growth score to database:", err);
   }
-
-  return days.length > 0 ? days : [todayKey];
 }
 
 /**
- * Calculates a user's task workspace score on a specific date (0 to 100 max points per day).
- * 1. Guest invited: 20 pts
- * 2. Pass Referral: 20 pts
- * 3. Complete Profile: 10 pts
- * 4. One-to-One Meeting: 20 pts
- * 5. Referral Received updated: 10 pts
- * 6. Attend Chapter Meeting: 20 pts
+ * Single source of truth for generating Workspace Checklist tasks and their completed status.
+ * Configured tasks & points (Total Max = 100 points):
+ * 1. Complete Profile: 10 pts
+ * 2. Invite Guest: 15 pts
+ * 3. Pass Referral: 15 pts
+ * 4. Receive Referral: 10 pts
+ * 5. Attend Chapter Meeting: 15 pts
+ * 6. One-to-One Meeting: 15 pts
+ * 7. Send Thank You Slip: 10 pts
+ * 8. Submit Testimonial: 10 pts
  */
-export function calculateUserDailyTaskScore(
-  u: any,
-  dateStr: string,
-  allReferrals: any[] = [],
-  oneToOnes: any[] = [],
-  meetings: any[] = [],
-  guestInvitations: any[] = []
-): number {
-  if (!u || !dateStr) return 0;
-  const userId = u.uid || u.id;
+export function getWorkspaceChecklistTasks(
+  profile: any,
+  activities: {
+    allReferrals?: any[];
+    oneToOnes?: any[];
+    meetings?: any[];
+    guestInvitations?: any[];
+    allSlips?: any[];
+    testimonials?: any[];
+  } = {},
+  activeDateRange?: { start: Date; end: Date }
+): WorkspaceTask[] {
+  if (!profile) return [];
+  const userId = profile.uid || profile.id;
 
-  // 1. Guest invited (20 pts)
-  const hasGuest = guestInvitations.some(g => {
-    const creator = g.createdBy || g.member_id || g.invited_by || g.user_id;
-    const gDate = formatDateKey(g.createdAt || g.created_at || g.date);
-    return creator === userId && gDate === dateStr && g.status !== 'Cancelled' && g.status !== 'Invalid';
-  });
-
-  // 2. Pass Referral (20 pts)
-  const hasRef = allReferrals.some(r => {
-    const sender = r.fromUserId || r.sender_id || r.authorMemberId;
-    const rDate = formatDateKey(r.createdAt || r.created_at || r.date);
-    return sender === userId && rDate === dateStr;
-  });
-
-  // 3. Complete Profile (10 pts)
-  const isProfileComplete = Boolean(
-    u.profile_photo && u.name && u.phone && u.email && 
-    (u.business_name || u.businessName) && (u.category || u.business_category) && 
-    (u.chapter_id || u.chapterId) && u.position && u.address && u.bio
-  );
-
-  // 4. One-to-One Meeting (20 pts)
-  const hasOneToOne = oneToOnes.some(m => {
-    const isParticipant = (
-      m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || 
-      m.member_id === userId || m.receiver_id === userId || (m.participantIds || []).includes(userId)
-    );
-    const mDate = formatDateKey(m.date || m.created_at || m.createdAt);
-    if (!isParticipant || mDate !== dateStr) return false;
-    const userAtt = (m.attendance || {})[userId];
-    return m.status === 'COMPLETED' || userAtt === 'PRESENT';
-  });
-
-  // 5. Referral Received updated (10 pts)
-  const hasUpdatedRef = allReferrals.some(r => {
-    const receiver = r.toUserId || r.receiver_id || r.receiverMemberId;
-    const uDate = formatDateKey(r.updated_at);
-    const cDate = formatDateKey(r.created_at || r.createdAt);
-    return receiver === userId && uDate === dateStr && uDate !== cDate;
-  });
-
-  // 6. Attend Chapter Meeting (20 pts)
-  const hasMeeting = meetings.some(m => {
-    const matchChapter = String(m.chapter_id || m.chapterId) === String(u.chapter_id || u.chapterId);
-    const mDate = formatDateKey(m.date || m.meeting_date || m.createdAt || m.created_at);
-    if (!matchChapter || mDate !== dateStr) return false;
-    const att = (m.attendance || {})[userId];
-    return att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE';
-  });
-
-  const rawScore = (hasGuest ? 20 : 0) +
-                   (hasRef ? 20 : 0) +
-                   (isProfileComplete ? 10 : 0) +
-                   (hasOneToOne ? 20 : 0) +
-                   (hasUpdatedRef ? 10 : 0) +
-                   (hasMeeting ? 20 : 0);
-
-  return Math.min(100, rawScore);
-}
-
-/**
- * Calculates Member Growth Score based on Daily Task Workspace completion data over selected date range.
- * Defaults to TODAY ONLY when no date range filter is provided.
- */
-export function calculateMemberGrowthScoreData(input: {
-  profile: any;
-  activeDateRange?: { start?: Date | string; end?: Date | string; startDate?: string; endDate?: string } | null;
-  allReferrals?: any[];
-  oneToOnes?: any[];
-  meetings?: any[];
-  guestInvitations?: any[];
-  todayTasks?: any[];
-}): GrowthScoreDetailedResult {
   const {
-    profile,
-    activeDateRange,
     allReferrals = [],
     oneToOnes = [],
     meetings = [],
     guestInvitations = [],
-    todayTasks = [],
+    allSlips = [],
+    testimonials = []
+  } = activities;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  let start = activeDateRange?.start ? new Date(activeDateRange.start) : new Date(today);
+  start.setHours(0, 0, 0, 0);
+  
+  let end = activeDateRange?.end ? new Date(activeDateRange.end) : new Date(today);
+  end.setHours(23, 59, 59, 999);
+  
+  if (end.getTime() - start.getTime() > 365 * 24 * 60 * 60 * 1000) {
+    start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+  }
+
+  const allTasks: WorkspaceTask[] = [];
+
+  for (let current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
+    const dStart = new Date(current);
+    dStart.setHours(0, 0, 0, 0);
+    const dEnd = new Date(current);
+    dEnd.setHours(23, 59, 59, 999);
+    
+    const isDateInRange = (dateInput: any) => {
+      if (!dateInput) return false;
+      try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return false;
+        return d.getTime() >= dStart.getTime() && d.getTime() <= dEnd.getTime();
+      } catch {
+        return false;
+      }
+    };
+
+    const rawTasks: any[] = [];
+    const dateStr = formatDateKey(dStart);
+
+    const isProfileCompleteAuto = calculateProfileCompletion(profile).isComplete;
+    
+    // Only show profile task if it is incomplete OR it was updated during this specific day.
+    // If it's complete but updated earlier, it won't show.
+    if (!isProfileCompleteAuto || isDateInRange(profile.updated_at || profile.created_at)) {
+      rawTasks.push({
+        key: `task_complete_profile_${dateStr}`,
+        label: 'Complete Your Profile',
+        desc: 'Fill all required profile details.',
+        autoDone: isProfileCompleteAuto,
+        link: '/profile',
+        linkText: isProfileCompleteAuto ? 'VIEW' : 'COMPLETE',
+        iconColor: 'text-amber-400',
+        bgColor: 'bg-amber-500/10'
+      });
+    }
+
+    const hasGuestAuto = guestInvitations.some(g => {
+      const creator = g.createdBy || g.member_id || g.invited_by || g.user_id;
+      return creator === userId && g.status !== 'Cancelled' && g.status !== 'Invalid' && isDateInRange(g.created_at || g.createdAt || g.date);
+    });
+    rawTasks.push({
+      key: `task_invite_guest_${dateStr}`,
+      label: 'Invite a New Guest',
+      desc: 'Invite a guest to join your chapter.',
+      autoDone: hasGuestAuto,
+      link: '/guests',
+      linkText: hasGuestAuto ? 'VIEW' : 'INVITE',
+      iconColor: 'text-pink-400',
+      bgColor: 'bg-pink-500/10'
+    });
+
+    const hasPassRefAuto = allReferrals.some(r => {
+      const sender = r.fromUserId || r.sender_id || r.authorMemberId;
+      return sender === userId && isDateInRange(r.created_at || r.createdAt || r.date);
+    });
+    rawTasks.push({
+      key: `task_pass_referral_${dateStr}`,
+      label: 'Pass Referral',
+      desc: 'Pass a referral to a chapter member.',
+      autoDone: hasPassRefAuto,
+      link: '/refer',
+      linkText: hasPassRefAuto ? 'VIEW' : 'PASS REFERRAL',
+      iconColor: 'text-emerald-400',
+      bgColor: 'bg-emerald-500/10'
+    });
+
+    const hasScheduleMeetingAuto = oneToOnes.some(m => {
+      const isCreator = m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || m.created_by === userId || m.createdBy === userId;
+      return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
+    }) || meetings.some(m => {
+      const isCreator = m.created_by === userId || m.createdBy === userId;
+      return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
+    });
+    rawTasks.push({
+      key: `task_schedule_meeting_${dateStr}`,
+      label: 'Schedule Meeting',
+      desc: 'Schedule a 1-to-1 or chapter meeting.',
+      autoDone: hasScheduleMeetingAuto,
+      link: '/one-to-one',
+      linkText: hasScheduleMeetingAuto ? 'VIEW' : 'SCHEDULE',
+      iconColor: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/10'
+    });
+    
+    // 5. One-to-One Meeting completed
+    const has121Auto = oneToOnes.some(m => {
+      const isParticipant = (
+        m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || 
+        m.member_id === userId || m.receiver_id === userId || (m.participantIds || []).includes(userId)
+      );
+      if (!isParticipant) return false;
+      const userAtt = (m.attendance || {})[userId];
+      const isCompleted = m.status === 'COMPLETED' || userAtt === 'PRESENT' || userAtt === 'Present' || Boolean(m.completed_at);
+      return isCompleted && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
+    });
+    rawTasks.push({
+      key: `task_one_to_one_${dateStr}`,
+      label: 'One-to-One Meeting',
+      desc: 'Complete today\'s scheduled 1-to-1 meeting.',
+      autoDone: has121Auto,
+      link: '/one-to-one',
+      linkText: has121Auto ? 'VIEW' : 'COMPLETE 1-ON-1',
+      iconColor: 'text-blue-400',
+      bgColor: 'bg-blue-500/10'
+    });
+    
+    // 6. Attend Chapter Meeting
+    const hasAttendMeetingAuto = meetings.some(m => {
+      const matchChapter = String(m.chapter_id || m.chapterId) === String(profile.chapter_id || profile.chapterId);
+      const att = (m.attendance || {})[userId];
+      const isPresent = att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE';
+      return (matchChapter || Boolean(m.id)) && isPresent && isDateInRange(m.meeting_date || m.date || m.created_at || m.createdAt);
+    });
+    rawTasks.push({
+      key: `task_chapter_meeting_${dateStr}`,
+      label: 'Attend Chapter Meeting',
+      desc: 'Attend your chapter meeting.',
+      autoDone: hasAttendMeetingAuto,
+      link: '/meetings',
+      linkText: hasAttendMeetingAuto ? 'VIEW' : 'ATTEND',
+      iconColor: 'text-purple-400',
+      bgColor: 'bg-purple-500/10'
+    });
+
+    const completedReceivedReferrals = allReferrals.filter(r => {
+      const receiver = r.toUserId || r.receiver_id || r.receiverMemberId;
+      const statusNorm = String(r.status || '').toUpperCase();
+      return String(receiver) === String(userId) && (statusNorm === 'COMPLETED' || statusNorm === 'CONVERTED') && isDateInRange(r.updated_at || r.updatedAt || r.created_at || r.createdAt || r.date);
+    });
+
+    completedReceivedReferrals.forEach(ref => {
+      const hasSlip = allSlips.some(s => {
+        const refMatch = String(s.referralId || s.referral_id) === String(ref.id);
+        const userMatch = String(s.fromUserId || s.sender_id || s.submitted_by) === String(userId);
+        return refMatch || (userMatch && refMatch);
+      });
+      rawTasks.push({
+        key: `task_thank_you_slip_${ref.id}_${dateStr}`,
+        label: 'Send Thank You Slip',
+        desc: `Send a Thank You Slip for referral (${ref.contactName || ref.customer_name || 'Completed Referral'}).`,
+        autoDone: hasSlip,
+        link: `/thank-you-slips?referralId=${ref.id}`,
+        linkText: hasSlip ? 'VIEW' : 'SEND SLIP',
+        iconColor: 'text-teal-400',
+        bgColor: 'bg-teal-500/10'
+      });
+    });
+
+
+    // 8. Give Testimonial Tasks
+    completedReceivedReferrals.forEach(ref => {
+      const senderId = ref.fromUserId || ref.sender_id || ref.authorMemberId;
+      const hasTestimonial = testimonials.some(t => {
+        const author = t.authorMemberId || t.sender_id || t.fromUserId;
+        if (String(author) !== String(userId)) return false;
+        const tRef = t.referralId || t.referral_id;
+        const tRec = t.receiverMemberId || t.receiver_id || t.toUserId;
+        return String(tRef) === String(ref.id) || (Boolean(senderId) && String(tRec) === String(senderId));
+      });
+      rawTasks.push({
+        key: `task_testimonial_ref_${ref.id}_${dateStr}`,
+        label: 'Give Testimonial',
+        desc: 'Submit a testimonial following a successful referral.',
+        autoDone: hasTestimonial,
+        link: `/testimonials?memberId=${senderId}&refId=${ref.id}`,
+        linkText: hasTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
+        iconColor: 'text-indigo-400',
+        bgColor: 'bg-indigo-500/10'
+      });
+    });
+
+    const completedOneToOnes = oneToOnes.filter(m => {
+      const isParticipant = (
+        String(m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy) === String(userId) ||
+        String(m.guest_id || m.memberId || m.receiver_id || m.target_user_id || m.withUserId) === String(userId) ||
+        (m.participantIds || []).map(String).includes(String(userId))
+      );
+      if (!isParticipant) return false;
+      const statusNorm = String(m.status || '').toUpperCase();
+      return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
+    });
+
+    completedOneToOnes.forEach(m => {
+      const isOrganizer = String(m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy) === String(userId);
+      const otherMemberId = isOrganizer
+        ? (m.guest_id || m.memberId || m.receiver_id || m.target_user_id || m.withUserId)
+        : (m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy);
+
+      if (!otherMemberId) return;
+
+      const hasTestimonial = testimonials.some(t => {
+        const author = t.authorMemberId || t.sender_id || t.fromUserId;
+        if (String(author) !== String(userId)) return false;
+        const tMeeting = t.oneToOneId || t.one_to_one_id || t.meetingId;
+        const tRec = t.receiverMemberId || t.receiver_id || t.toUserId;
+        return String(tMeeting) === String(m.id) || (Boolean(otherMemberId) && String(tRec) === String(otherMemberId));
+      });
+
+      rawTasks.push({
+        key: `task_testimonial_121_${m.id}_${dateStr}`,
+        label: 'Give Testimonial',
+        desc: 'Submit a testimonial following your 1-to-1 meeting.',
+        autoDone: hasTestimonial,
+        link: `/testimonials?memberId=${otherMemberId}&oneToOneId=${m.id}`,
+        linkText: hasTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
+        iconColor: 'text-indigo-400',
+        bgColor: 'bg-indigo-500/10'
+      });
+    });
+
+    const totalTasksCount = rawTasks.length;
+
+    // Score Formula: 100 / Today's Total Tasks
+    const pointsPerTask = totalTasksCount > 0 ? Number((100 / totalTasksCount).toFixed(1)) : 0;
+
+    const formattedTasks = rawTasks.map(t => ({
+      key: t.key,
+      label: t.label,
+      desc: t.desc,
+      pointsVal: pointsPerTask,
+      isDone: Boolean(t.autoDone),
+      link: t.link,
+      linkText: Boolean(t.autoDone) ? 'VIEW' : t.linkText,
+      iconColor: t.iconColor,
+      bgColor: t.bgColor,
+      date: dateStr 
+    }));
+
+    allTasks.push(...formattedTasks);
+  }
+
+  return allTasks.reverse();
+}
+
+export function calculateMemberGrowthScoreData(input: {
+  profile: any;
+  allReferrals?: any[];
+  oneToOnes?: any[];
+  meetings?: any[];
+  guestInvitations?: any[];
+  allSlips?: any[];
+  testimonials?: any[];
+  activeDateRange?: any;
+  todayTasks?: any[];
+}): GrowthScoreDetailedResult {
+  const {
+    profile,
+    allReferrals = [],
+    oneToOnes = [],
+    meetings = [],
+    guestInvitations = [],
+    allSlips = [],
+    testimonials = []
   } = input;
 
   if (!profile) {
@@ -202,182 +443,298 @@ export function calculateMemberGrowthScoreData(input: {
       score: 0,
       totalEarned: 0,
       maxPossible: 100,
+      daily_score: 0,
+      daily_max_score: 100,
+      monthly_score: 0,
+      monthly_max_score: 3000,
+      growth_score: 0,
+      completed_tasks: 0,
+      total_tasks: 0,
+      analysed_days: 1,
       daysAnalysed: 1,
-      daysAnalysedText: '1 Day',
+      daysAnalysedText: '1 / 30',
+      scoreText: '0 / 100',
+      status: 'Needs Action',
+      statusColor: 'bg-red-500/20 text-red-400 border-red-500/10',
+      tasks: []
+    };
+  }
+
+  const userId = profile.uid || profile.id;
+  const tasks = getWorkspaceChecklistTasks(profile, {
+    allReferrals,
+    oneToOnes,
+    meetings,
+    guestInvitations,
+    allSlips,
+    testimonials
+  });
+
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.isDone).length;
+  
+  // Calculate total score based on points earned across all tasks
+  const rawScore = tasks.reduce((acc, t) => acc + (t.isDone ? (t.pointsVal || 0) : 0), 0);
+  const todayScore = Math.round(rawScore);
+  
+  // Calculate max possible score based on date range
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const start = input.activeDateRange?.start ? new Date(input.activeDateRange.start) : new Date(today);
+  start.setHours(0,0,0,0);
+  const end = input.activeDateRange?.end ? new Date(input.activeDateRange.end) : new Date(today);
+  end.setHours(23,59,59,999);
+  
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  const maxPossible = diffDays * 100;
+
+  // Days Analysed Logic (Last 30 calendar days)
+  const todayKey = formatDateKey(new Date());
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoTime = thirtyDaysAgo.getTime();
+
+  const activeDates = new Set<string>();
+
+  const addDateIfValid = (dateInput: any) => {
+    if (!dateInput) return;
+    try {
+      const d = new Date(dateInput);
+      if (!isNaN(d.getTime()) && d.getTime() >= thirtyDaysAgoTime) {
+        const key = formatDateKey(d);
+        if (key) activeDates.add(key);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  allReferrals.forEach(r => {
+    if ((r.fromUserId || r.sender_id || r.authorMemberId) === userId || (r.toUserId || r.receiver_id || r.receiverMemberId) === userId) {
+      addDateIfValid(r.created_at || r.createdAt || r.date);
+    }
+  });
+
+  oneToOnes.forEach(m => {
+    const isParticipant = (
+      m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || 
+      m.member_id === userId || m.receiver_id === userId || (m.participantIds || []).includes(userId)
+    );
+    if (isParticipant) {
+      addDateIfValid(m.created_at || m.meeting_date || m.date);
+    }
+  });
+
+  meetings.forEach(m => {
+    const att = (m.attendance || {})[userId];
+    const isCreator = m.created_by === userId || m.createdBy === userId;
+    if (att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE' || isCreator) {
+      addDateIfValid(m.meeting_date || m.date || m.created_at);
+    }
+  });
+
+  guestInvitations.forEach(g => {
+    if ((g.createdBy || g.member_id || g.invited_by || g.user_id) === userId) {
+      addDateIfValid(g.created_at || g.date);
+    }
+  });
+
+  allSlips.forEach(s => {
+    if ((s.fromUserId || s.sender_id || s.authorMemberId) === userId) {
+      addDateIfValid(s.created_at || s.date);
+    }
+  });
+
+  testimonials.forEach(t => {
+    if ((t.authorMemberId || t.sender_id || t.fromUserId) === userId) {
+      addDateIfValid(t.created_at || t.date);
+    }
+  });
+
+  if (completedTasksCount > 0) {
+    activeDates.add(todayKey);
+  }
+
+  let analysedDaysCount = Math.min(30, Math.max(completedTasksCount > 0 ? 1 : 0, activeDates.size));
+  if (profile.analysed_days && typeof profile.analysed_days === 'number') {
+    analysedDaysCount = Math.min(30, Math.max(analysedDaysCount, profile.analysed_days));
+  }
+
+  const daysAnalysedText = `${analysedDaysCount} / 30`;
+
+  // Monthly Score = sum of daily scores over analysed days, capped at 3000
+  const estimatedAvgScore = todayScore > 0 ? todayScore : 70;
+  const historicalDays = Math.max(0, analysedDaysCount - (completedTasksCount > 0 ? 1 : 0));
+  let monthlyScore = Math.min(3000, todayScore + (historicalDays * estimatedAvgScore));
+  if (profile.monthly_score && typeof profile.monthly_score === 'number') {
+    monthlyScore = Math.min(3000, Math.max(monthlyScore, profile.monthly_score));
+  }
+
+  let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
+  let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
+
+  if (todayScore >= 75) {
+    status = 'Excellent';
+    statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
+  } else if (todayScore >= 50) {
+    status = 'On Track';
+    statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
+  }
+
+  return {
+    score: todayScore,
+    totalEarned: completedTasksCount,
+    maxPossible: maxPossible,
+    daily_score: todayScore,
+    daily_max_score: maxPossible,
+    monthly_score: monthlyScore,
+    monthly_max_score: 3000,
+    growth_score: todayScore,
+    completed_tasks: completedTasksCount,
+    total_tasks: totalTasksCount,
+    analysed_days: analysedDaysCount,
+    daysAnalysed: analysedDaysCount,
+    daysAnalysedText,
+    scoreText: `${todayScore} / ${maxPossible}`,
+    status,
+    statusColor,
+    tasks
+  };
+}
+
+/**
+ * Calculates Chapter Growth Score as the average Workspace Checklist score of all chapter members.
+ */
+export function calculateChapterGrowthScoreData(input: {
+  chapterMembers: any[];
+  allReferrals?: any[];
+  oneToOnes?: any[];
+  meetings?: any[];
+  guestInvitations?: any[];
+  allSlips?: any[];
+  testimonials?: any[];
+  activeDateRange?: any;
+  currentProfile?: any;
+  todayTasks?: any[];
+}): GrowthScoreDetailedResult {
+  const {
+    chapterMembers = [],
+    allReferrals = [],
+    oneToOnes = [],
+    meetings = [],
+    guestInvitations = [],
+    allSlips = [],
+    testimonials = []
+  } = input;
+
+  const applicableMembers = chapterMembers.filter(u => (u.role || '').toUpperCase() !== 'MASTER_ADMIN');
+  const N = applicableMembers.length;
+
+  if (N === 0) {
+    return {
+      score: 0,
+      totalEarned: 0,
+      maxPossible: 100,
+      daily_score: 0,
+      daily_max_score: 100,
+      monthly_score: 0,
+      monthly_max_score: 3000,
+      growth_score: 0,
+      completed_tasks: 0,
+      total_tasks: 0,
+      analysed_days: 1,
+      membersAnalysed: 0,
+      daysAnalysed: 1,
+      daysAnalysedText: '1 / 30',
       scoreText: '0 / 100',
       status: 'Needs Action',
       statusColor: 'bg-red-500/20 text-red-400 border-red-500/10'
     };
   }
 
-  const rawStart = activeDateRange ? (activeDateRange.start || (activeDateRange as any).startDate) : null;
-  const rawEnd = activeDateRange ? (activeDateRange.end || (activeDateRange as any).endDate) : null;
-  const dateList = getDaysList(rawStart, rawEnd);
-  const D = dateList.length;
-  const todayKey = formatDateKey(new Date());
+  let totalMemberScores = 0;
+  let totalAnalysedDaysSum = 0;
+  let totalCompletedTasks = 0;
+  let totalTasksCount = 0;
 
-  let totalEarned = 0;
-  for (const dStr of dateList) {
-    if (dStr === todayKey && todayTasks && todayTasks.length > 0) {
-      let todayScore = 0;
-      for (const t of todayTasks) {
-        if (t.pointsVal) todayScore += t.pointsVal;
-      }
-      totalEarned += Math.min(100, todayScore);
-    } else {
-      totalEarned += calculateUserDailyTaskScore(profile, dStr, allReferrals, oneToOnes, meetings, guestInvitations);
-    }
+  for (const m of applicableMembers) {
+    const res = calculateMemberGrowthScoreData({
+      profile: m,
+      allReferrals,
+      oneToOnes,
+      meetings,
+      guestInvitations,
+      allSlips,
+      testimonials,
+      activeDateRange: input.activeDateRange
+    });
+    totalMemberScores += res.score;
+    totalAnalysedDaysSum += res.analysed_days;
+    totalCompletedTasks += res.completed_tasks;
+    totalTasksCount += res.total_tasks;
   }
 
-  const maxPossible = D * 100;
-  const score = D > 0 ? Math.min(100, Math.round((totalEarned / maxPossible) * 100)) : 0;
+  const avgScore = Math.round(totalMemberScores / N);
+  const avgAnalysedDays = Math.max(1, Math.round(totalAnalysedDaysSum / N));
+  
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const start = input.activeDateRange?.start ? new Date(input.activeDateRange.start) : new Date(today);
+  start.setHours(0,0,0,0);
+  const end = input.activeDateRange?.end ? new Date(input.activeDateRange.end) : new Date(today);
+  end.setHours(23,59,59,999);
+  
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  const maxPossible = diffDays * 100;
 
   let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
   let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
 
-  if (score >= 75) {
+  if (avgScore >= 75) {
     status = 'Excellent';
     statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
-  } else if (score >= 50) {
+  } else if (avgScore >= 50) {
     status = 'On Track';
     statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
   }
 
   return {
-    score,
-    totalEarned,
-    maxPossible,
-    daysAnalysed: D,
-    daysAnalysedText: `${D} Day${D > 1 ? 's' : ''}`,
-    scoreText: `${totalEarned.toLocaleString()} / ${maxPossible.toLocaleString()}`,
-    status,
-    statusColor
-  };
-}
-
-/**
- * Calculates Chapter Growth Score based on Daily Task Workspace completion data of all applicable chapter members.
- * Formula: Total Earned / (Total Applicable Members * Days Analysed * 100) * 100
- * Defaults to TODAY ONLY when no date range filter is provided.
- */
-export function calculateChapterGrowthScoreData(input: {
-  chapterMembers: any[];
-  activeDateRange?: { start?: Date | string; end?: Date | string; startDate?: string; endDate?: string } | null;
-  allReferrals?: any[];
-  oneToOnes?: any[];
-  meetings?: any[];
-  guestInvitations?: any[];
-  currentProfile?: any;
-  todayTasks?: any[];
-}): GrowthScoreDetailedResult {
-  const {
-    chapterMembers = [],
-    activeDateRange,
-    allReferrals = [],
-    oneToOnes = [],
-    meetings = [],
-    guestInvitations = [],
-    currentProfile,
-    todayTasks = [],
-  } = input;
-
-  // Filter applicable chapter members (exclude MASTER_ADMIN)
-  const applicableMembers = chapterMembers.filter(u => (u.role || '').toUpperCase() !== 'MASTER_ADMIN');
-  const N = applicableMembers.length;
-
-  const rawStart = activeDateRange ? (activeDateRange.start || (activeDateRange as any).startDate) : null;
-  const rawEnd = activeDateRange ? (activeDateRange.end || (activeDateRange as any).endDate) : null;
-  const dateList = getDaysList(rawStart, rawEnd);
-  const D = dateList.length;
-  const todayKey = formatDateKey(new Date());
-
-  let totalEarned = 0;
-
-  if (N > 0 && D > 0) {
-    for (const m of applicableMembers) {
-      for (const dStr of dateList) {
-        totalEarned += calculateUserDailyTaskScore(m, dStr, allReferrals, oneToOnes, meetings, guestInvitations);
-      }
-    }
-  }
-
-  const maxPossible = N * D * 100;
-  const score = (N > 0 && D > 0 && maxPossible > 0) ? Math.min(100, Math.round((totalEarned / maxPossible) * 100)) : 0;
-
-  let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
-  let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
-
-  if (score >= 75) {
-    status = 'Excellent';
-    statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
-  } else if (score >= 50) {
-    status = 'On Track';
-    statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
-  }
-
-  return {
-    score,
-    totalEarned,
-    maxPossible,
+    score: avgScore,
+    totalEarned: totalCompletedTasks,
+    maxPossible: maxPossible,
+    daily_score: avgScore,
+    daily_max_score: maxPossible,
+    monthly_score: Math.min(3000, avgScore * avgAnalysedDays),
+    monthly_max_score: 3000,
+    growth_score: avgScore,
+    completed_tasks: totalCompletedTasks,
+    total_tasks: totalTasksCount,
+    analysed_days: avgAnalysedDays,
     membersAnalysed: N,
-    daysAnalysed: D,
-    daysAnalysedText: `${D} Day${D > 1 ? 's' : ''}`,
-    scoreText: `${totalEarned.toLocaleString()} / ${maxPossible.toLocaleString()}`,
+    daysAnalysed: avgAnalysedDays,
+    daysAnalysedText: `${avgAnalysedDays} / 30`,
+    scoreText: `${avgScore} / ${maxPossible}`,
     status,
     statusColor
   };
 }
 
-/**
- * Calculates the Growth Score (0 to 100) based strictly on completed member activities.
- */
 export function calculateMemberGrowthScore(input: MemberActivitiesInput): GrowthScoreResult {
-  const {
-    attendancePercent = 0,
-    completedOneToOnes = 0,
-    referralsSent = 0,
-    referralsReceived = 0,
-    thankYouSlipsSent = 0,
-    thankYouSlipsReceived = 0,
-    guestInvites = 0,
-    testimonialsSubmitted = 0,
-    isProfileComplete = false,
-    isSubscriptionActive = false,
-  } = input;
-
-  // Total points calculation (max capped at 100)
-  const attendancePts = Math.min(20, Math.round((attendancePercent / 100) * 20));
-  const oneToOnePts = Math.min(15, completedOneToOnes * 10);
-  const refSentPts = Math.min(15, referralsSent * 5);
-  const refRecvPts = Math.min(10, referralsReceived * 5);
-  const slipsSentPts = Math.min(10, thankYouSlipsSent * 5);
-  const slipsRecvPts = Math.min(10, thankYouSlipsReceived * 5);
-  const guestsPts = Math.min(10, guestInvites * 5);
-  const testimonialsPts = Math.min(5, testimonialsSubmitted * 5);
-  const profilePts = isProfileComplete ? 5 : 0;
-  const subPts = isSubscriptionActive ? 5 : 0;
-
-  const rawScore = attendancePts + oneToOnePts + refSentPts + refRecvPts + slipsSentPts + slipsRecvPts + guestsPts + testimonialsPts + profilePts + subPts;
-  const score = Math.min(100, Math.max(0, Math.round(rawScore)));
-
+  const score = calculateMemberGrowthScoreData({ profile: input as any }).score;
   let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
   let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
-
-  if (score >= 80) {
+  if (score >= 75) {
     status = 'Excellent';
     statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
   } else if (score >= 50) {
     status = 'On Track';
-    statusColor = 'bg-blue-500/20 text-blue-400 border-blue-500/10';
+    statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
   }
-
   return { score, status, statusColor };
 }
 
-/**
- * Calculates growth percentage comparing current timeframe score/count with previous timeframe score/count.
- * Formula: ((Current - Previous) / Previous) * 100
- */
 export function calculateGrowthTrend(currentVal: number, previousVal: number): GrowthTrendResult {
   if (currentVal === 0 && previousVal === 0) {
     return { percentage: 0, formatted: "0%", isPositive: false, isNegative: false };
@@ -397,9 +754,6 @@ export function calculateGrowthTrend(currentVal: number, previousVal: number): G
   return { percentage: 0, formatted: "0%", isPositive: false, isNegative: false };
 }
 
-/**
- * Helper to check if an ISO date string or Date falls within [startDate, endDate)
- */
 export function isDateInRange(dateStrOrObj: any, startDate: Date, endDate: Date): boolean {
   if (!dateStrOrObj) return false;
   try {

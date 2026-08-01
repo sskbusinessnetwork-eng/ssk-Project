@@ -17,14 +17,7 @@ const format = (date: any, formatStr: string, options?: any) => {
   return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
 };
 
-const formatPosition = (pos?: string, role?: string) => {
-  if (!pos || pos === 'member') {
-    if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-    if (role === 'MASTER_ADMIN') return 'Master Admin';
-    return 'Member';
-  }
-  return pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-};
+import { getDisplayPosition as formatPosition } from "../utils/authUtils";
 
 export function Testimonials() {
   const { profile } = useAuth();

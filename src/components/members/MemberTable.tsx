@@ -47,14 +47,7 @@ interface MemberTableProps {
   onResetPassword: (member: UserProfile) => void;
 }
 
-const getDisplayPosition = (pos?: string, r?: string) => {
-  if (pos && pos.toLowerCase() !== 'member') {
-    return pos.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
-  }
-  if (r === 'MASTER_ADMIN') return 'Master Admin';
-  if (r === 'CHAPTER_ADMIN') return 'Chapter Admin';
-  return '';
-};
+import { getDisplayPosition } from '../../utils/authUtils';
 
 export function MemberTable({
   currentUserId,
