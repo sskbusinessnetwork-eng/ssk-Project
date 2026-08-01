@@ -114,15 +114,34 @@ const formatUserRoleOrPosition = (user: any): string => {
 
 const getUserFullAddress = (user: any): string => {
   if (!user) return '';
-  const addr = (user.address || user.street || user.business_address || '').trim();
-  const area = (user.area || '').trim();
-  const city = (user.city || user.business_city || '').trim();
-  const state = (user.state || user.business_state || '').trim();
-  const pincode = (user.pincode || user.pin_code || user.zip || user.postal_code || '').trim();
 
-  const addressParts = [addr, area, city, state]
-    .map(s => (s ? String(s).trim() : ''))
-    .filter(Boolean);
+  let extra: any = {};
+  const rawPhoto = user.profile_photo || user.photo_url || user.photoURL || user.profilePhoto || '';
+  if (typeof rawPhoto === 'string' && rawPhoto.includes('|||')) {
+    try {
+      extra = JSON.parse(rawPhoto.split('|||')[1] || '{}');
+    } catch (e) {
+      console.warn("Failed to parse packed profile_photo JSON:", e);
+    }
+  }
+
+  const pick = (...vals: any[]): string => {
+    for (const v of vals) {
+      if (v !== undefined && v !== null) {
+        const s = String(v).trim();
+        if (s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') return s;
+      }
+    }
+    return '';
+  };
+
+  const addr = pick(user.address, extra.address, user.street, extra.street, user.business_address, extra.business_address, user.businessAddress, extra.businessAddress, user.address_line1, extra.address_line1, user.addressLine1, extra.addressLine1);
+  const area = pick(user.area, extra.area, user.locality, extra.locality);
+  const city = pick(user.city, extra.city, user.business_city, extra.business_city, user.businessCity, extra.businessCity);
+  const state = pick(user.state, extra.state, user.business_state, extra.business_state, user.businessState, extra.businessState);
+  const pincode = pick(user.pincode, extra.pincode, user.pin_code, extra.pin_code, user.pinCode, extra.pinCode, user.zip, extra.zip, user.postal_code, extra.postal_code, user.postalCode, extra.postalCode);
+
+  const addressParts = [addr, area, city, state].filter(Boolean);
 
   let fullAddress = addressParts.join(', ');
   if (pincode) {
@@ -199,36 +218,46 @@ export function OneToOneMeetings() {
   const fetchMeetingsAndUsers = async () => {
     try {
       setLoading(true);
-      // 1. Fetch Users
-      let queryBuilder = supabase.from('users').select('*').eq('status', 'ACTIVE');
-      
-      const currentChapterId = profile?.chapter_id || profile?.chapterId;
-      if (memberTab === 'my_chapter') {
-        if (profile?.role === 'MASTER_ADMIN') {
-          // If we had a master chapter filter, we'd apply it.
-        } else if (currentChapterId) {
-          queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
-        } else {
-          setAllUsersList([]);
-          setMembers([]);
-          return;
-        }
-      }
-      
-      if (profile?.role !== 'MASTER_ADMIN' && currentChapterId && memberTab === 'my_chapter') {
-        // Redundant but ensuring it strictly applies
-        queryBuilder = queryBuilder.eq('chapter_id', currentChapterId);
-      }
+      // 1. Fetch Users directly from Supabase
+      const { data: usersData, error: uErr } = await supabase
+        .from('users')
+        .select('*');
 
-      const { data: usersData, error: uErr } = await queryBuilder;
-      
-      let currentUsers = allUsersList;
       if (usersData && !uErr) {
-        currentUsers = usersData;
-        setAllUsersList(usersData);
-        const memberList = usersData
-          .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile))
-          .filter(m => m.role !== 'MASTER_ADMIN');
+        const processedUsers = usersData.map((doc: any) => {
+          let photo = doc.profile_photo || doc.photo_url || doc.photoURL || '';
+          let extraData: any = {};
+          if (typeof photo === 'string' && photo.includes('|||')) {
+            const parts = photo.split('|||');
+            photo = parts[0];
+            try {
+              extraData = JSON.parse(parts[1] || '{}');
+            } catch (e) {}
+          }
+          return {
+            ...doc,
+            ...extraData,
+            photoURL: photo,
+            profile_photo: photo,
+            photo_url: photo,
+            uid: doc.id
+          };
+        });
+
+        setAllUsersList(processedUsers);
+
+        const currentChapterId = profile?.chapter_id || profile?.chapterId;
+        const memberList = processedUsers
+          .filter((m: any) => {
+            if (m.role === 'MASTER_ADMIN') return false;
+            if (m.status && m.status.toUpperCase() === 'INACTIVE') return false;
+            if (memberTab === 'my_chapter' && currentChapterId && profile?.role !== 'MASTER_ADMIN') {
+              return String(m.chapter_id) === String(currentChapterId);
+            }
+            return true;
+          })
+          .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile));
+
         setMembers(memberList);
       }
 
@@ -319,11 +348,64 @@ export function OneToOneMeetings() {
     return () => unsubscribe();
   }, [profile, isAdmin, isChapterAdmin, memberTab]);
 
+  // Listen for profile-updated and dashboard-refresh events
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchMeetingsAndUsers();
+    };
+    window.addEventListener('profile-updated', handleRefresh);
+    window.addEventListener('dashboard-refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('profile-updated', handleRefresh);
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+    };
+  }, []);
+
   // Derive Logged In User Record & Chapter ID
   const currentAuthId = profile?.id || profile?.uid;
   const currentUserRecord = useMemo(() => {
-    return allUsersList.find(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId)) || profile;
+    const foundInList = allUsersList.find(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
+    if (foundInList && getUserFullAddress(foundInList)) {
+      return foundInList;
+    }
+    if (profile && getUserFullAddress(profile)) {
+      return profile;
+    }
+    return foundInList || profile;
   }, [allUsersList, currentAuthId, profile]);
+
+  // Fetch latest profile from Supabase for logged in user if needed
+  useEffect(() => {
+    if (!currentAuthId) return;
+    supabase
+      .from('users')
+      .select('*')
+      .eq('id', currentAuthId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (data && !error) {
+          let photo = data.profile_photo || data.photo_url || data.photoURL || '';
+          let extraData: any = {};
+          if (typeof photo === 'string' && photo.includes('|||')) {
+            const parts = photo.split('|||');
+            photo = parts[0];
+            try {
+              extraData = JSON.parse(parts[1] || '{}');
+            } catch (e) {}
+          }
+          const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+          setAllUsersList(prev => {
+            const idx = prev.findIndex(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...updatedUser };
+              return next;
+            }
+            return [...prev, updatedUser];
+          });
+        }
+      });
+  }, [currentAuthId]);
 
   const currentUserId = currentUserRecord?.id || profile?.id;
   const currentUserChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
@@ -383,6 +465,40 @@ export function OneToOneMeetings() {
     if (!formData.participantId) return null;
     return allUsersList.find(m => String(m.id) === String(formData.participantId) || String(m.uid) === String(formData.participantId)) || null;
   }, [allUsersList, formData.participantId]);
+
+  // Fetch latest profile from Supabase for selected member when participantId changes
+  useEffect(() => {
+    if (!formData.participantId) return;
+    const pid = formData.participantId;
+    supabase
+      .from('users')
+      .select('*')
+      .eq('id', pid)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (data && !error) {
+          let photo = data.profile_photo || data.photo_url || data.photoURL || '';
+          let extraData: any = {};
+          if (typeof photo === 'string' && photo.includes('|||')) {
+            const parts = photo.split('|||');
+            photo = parts[0];
+            try {
+              extraData = JSON.parse(parts[1] || '{}');
+            } catch (e) {}
+          }
+          const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+          setAllUsersList(prev => {
+            const idx = prev.findIndex(u => String(u.id) === String(pid) || String(u.uid) === String(pid));
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...updatedUser };
+              return next;
+            }
+            return [...prev, updatedUser];
+          });
+        }
+      });
+  }, [formData.participantId]);
 
   const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
 
