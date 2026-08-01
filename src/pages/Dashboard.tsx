@@ -4,9 +4,9 @@ import {
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
-  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X} from 'lucide-react';
+  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X, Building2, Search, FileText} from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
 import { cn } from '../lib/utils';
@@ -188,6 +188,8 @@ export function Analytics() {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [isFilterLoading, setIsFilterLoading] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(false);
 
   const availableMembersForFilter = useMemo(() => {
     let list = allUsersList.filter(u => u.role !== 'MASTER_ADMIN');
@@ -1653,952 +1655,346 @@ export function Analytics() {
     }
   };
   
-  const renderChaptersDetails = () => {
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Region</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Day</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Time</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {allChapters.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Chapters Available
-                </td>
-              </tr>
-            ) : (
-              allChapters.map((c) => (
-                <tr key={c.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{c.chapterName || c.chapter_name || c.name || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.region || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.meetingDay || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{c.meetingTime || 'N/A'}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderTotalMembersDetails = () => {
-    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Leadership Position</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Business</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Subscription Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Members Available
-                </td>
-              </tr>
-            ) : (
-              list.map((m) => {
-                const isSubActive = isMemberActive(m);
-                return (
-                  <tr key={m.uid || m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {m.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
-                       m.role === 'PRESIDENT' ? 'President' :
-                       m.role === 'VICE_PRESIDENT' ? 'Vice President' :
-                       m.role === 'TREASURER' ? 'Treasurer' : (m.position && m.position.toLowerCase() !== 'none' ? m.position : 'Member')}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
-                    <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        isSubActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {isSubActive ? 'Active' : 'Inactive / Expired'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderActiveMembersDetails = () => {
-    const list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN' && isMemberActive(u));
-
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Leadership Position</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Business</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Subscription Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Active Members Found
-                </td>
-              </tr>
-            ) : (
-              list.map((m) => (
-                <tr key={m.uid || m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                    {m.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
-                       m.role === 'PRESIDENT' ? 'President' :
-                       m.role === 'VICE_PRESIDENT' ? 'Vice President' :
-                       m.role === 'TREASURER' ? 'Treasurer' : 'Member'}
-                  </td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.businessName || m.company || 'N/A'}</td>
-                  <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
-                    <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      Active
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderInactiveMembersDetails = () => {
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Member Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone Number</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Chapter Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Position</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Subscription Status</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Password Status</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Inactive Reason</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {inactiveMembersList.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Inactive Members Found
-                </td>
-              </tr>
-            ) : (
-              inactiveMembersList.map((m) => (
-                <tr key={m.uid} className="hover:bg-white/[0.02] transition-colors duration-200">
-                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.name}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.phone}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.chapterName}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.position}</td>
-                  <td className="p-4 text-sm whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                      m.subscriptionStatus === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                      m.subscriptionStatus === 'Expired' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                      'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                    }`}>
-                      {m.subscriptionStatus}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                      m.passwordStatus === 'Changed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}>
-                      {m.passwordStatus}
-                    </span>
-                  </td>
-                  <td className="p-4 text-sm font-bold text-right whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                      m.inactiveReason === 'Both' ? 'bg-red-500/10 text-red-550 border border-red-500/20' :
-                      m.inactiveReason === 'Subscription Expired' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}>
-                      {m.inactiveReason}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderBusinessDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN' ? allSlips : chapterSlips;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Giver of Business</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Notes</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Business Value</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Business Transactions Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((slip) => {
-                const giver = chapterUsers.find(u => u.uid === slip.fromUserId);
-                const recipient = chapterUsers.find(u => u.uid === slip.toUserId);
-                return (
-                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || slip.fromUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || slip.toUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{slip.customerName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{slip.notes || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {slip.createdAt ? new Date(slip.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
-                      ₹{Number(slip.businessValue || 0).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderReferralsDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN' ? allReferrals : chapterReferralsList;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">From</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">To</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Referrals Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((ref) => {
-                const giver = chapterUsers.find(u => u.uid === ref.fromUserId);
-                const receiver = chapterUsers.find(u => u.uid === ref.toUserId);
-                return (
-                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        ref.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        ref.status === 'APPROVED' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                        ref.status === 'REJECTED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {ref.status || 'PENDING'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderMeetingsDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN'
-      ? meetings
-      : meetings.filter(m => m.chapter_id === profile?.chapter_id);
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Topic</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Time</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Attendance Rate</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Meetings Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((m) => {
-                let attendanceRate = 'N/A';
-                if (m.attendance) {
-                  const values = Object.values(m.attendance);
-                  if (values.length > 0) {
-                    const present = values.filter(status => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(status))).length;
-                    attendanceRate = `${Math.round((present / values.length) * 100)}% (${present}/${values.length})`;
-                  }
-                }
-                return (
-                  <tr key={m.id} onClick={() => setViewingMeetingDetails(m)} className="hover:bg-white/[0.04] transition-colors duration-200 cursor-pointer">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{m.title || m.topic || 'Weekly Sync'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{attendanceRate}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        {(() => {
-                          const isMCompleted = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED';
-                          const isMCancelled = m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
-                          return (
-                            <span className={cn(
-                              "px-2 py-1 rounded-[8px] text-[11px] font-black uppercase",
-                              isMCancelled ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                              isMCompleted ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                              "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                            )}>
-                              {isMCancelled ? 'Cancelled' : isMCompleted ? 'Completed' : 'Upcoming'}
-                            </span>
-                          );
-                        })()}
-                        <button 
-                          type="button" 
-                          onClick={(e) => { e.stopPropagation(); setViewingMeetingDetails(m); }} 
-                          className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-[8px] text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderOneToOnesDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN'
-      ? oneToOnes
-      : oneToOnes.filter(m => 
-          chapterUserIds.includes((m.organizer_id || m.creatorId)) || 
-          (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid)))
-        );
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Initiated By</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Partner</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Topic / Purpose</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Time</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No 1-to-1 Meetings Found
-                </td>
-              </tr>
-            ) : (
-              list.map((m) => {
-                const creator = chapterUsers.find(u => u.uid === (m.organizer_id || m.creatorId));
-                const partnerId = m.participantIds?.find((id: string) => id !== (m.organizer_id || m.creatorId));
-                const partner = chapterUsers.find(u => u.uid === partnerId);
-                return (
-                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{creator?.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{partner?.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{m.topic || m.purpose || 'Synergy Sync'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{m.time || 'N/A'}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        m.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        m.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                        'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {m.status || 'PENDING'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderAttendanceDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN' 
-      ? meetings.filter(m => m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED')
-      : meetings.filter(m => m.chapter_id === profile?.chapter_id && (m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED'));
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Meeting Topic / Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Present</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Late</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Substitute</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Absent</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Attendance Rate</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Attendance Records Found
-                </td>
-              </tr>
-            ) : (
-              list.map((m) => {
-                let present = 0;
-                let late = 0;
-                let sub = 0;
-                let absent = 0;
-                let total = 0;
-                if (m.attendance) {
-                  Object.values(m.attendance).forEach(status => {
-                    total++;
-                    const s = String(status).toUpperCase();
-                    if (s === 'PRESENT' || s === 'YES') present++;
-                    else if (s === 'LATE') late++;
-                    else if (s === 'SUBSTITUTE') sub++;
-                    else absent++;
-                  });
-                }
-                const presentTotal = present + late + sub;
-                const rate = total === 0 ? 0 : Math.round((presentTotal / total) * 100);
-                return (
-                  <tr key={m.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">
-                      <div>{m.title || m.topic || 'Weekly Sync'}</div>
-                      <div className="text-xs text-[#9CA3AF] font-medium">{m.date ? new Date(m.date).toLocaleDateString() : 'N/A'}</div>
-                    </td>
-                    <td className="p-4 text-sm text-center text-emerald-400 font-bold whitespace-nowrap">{present}</td>
-                    <td className="p-4 text-sm text-center text-amber-400 font-bold whitespace-nowrap">{late}</td>
-                    <td className="p-4 text-sm text-center text-blue-400 font-bold whitespace-nowrap">{sub}</td>
-                    <td className="p-4 text-sm text-center text-red-400 font-bold whitespace-nowrap">{absent}</td>
-                    <td className="p-4 text-sm text-right font-black text-white whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        rate >= 80 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        rate >= 50 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                        'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {rate}%
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderTestimonialsDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN'
-      ? allTestimonials
-      : allTestimonials.filter(t => t.chapter_id === profile?.chapter_id);
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Company / Designation</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Testimonials Found
-                </td>
-              </tr>
-            ) : (
-              list.map((t) => (
-                <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                  <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{t.name || 'N/A'}</td>
-                  <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                    {t.designation || 'N/A'} {t.company ? `(${t.company})` : ''}
-                  </td>
-                  <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
-                    {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
-                  </td>
-                  <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || 'N/A'}</td>
-                  <td className="p-4 text-sm text-right whitespace-nowrap">
-                    <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                      ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    }`}>
-                      {t.status || 'PENDING'}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderGuestInvitesDetails = () => {
-    const list = profile?.role === 'MASTER_ADMIN'
-      ? guestInvitations
-      : guestInvitations.filter(g => chapterUserIds.includes(g.createdBy));
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Guest Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Invited By</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Email</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Phone</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Guest Invites Found
-                </td>
-              </tr>
-            ) : (
-              list.map((g) => {
-                const inviter = chapterUsers.find(u => u.uid === g.createdBy);
-                return (
-                  <tr key={g.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{g.guestName || g.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{inviter?.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{g.guestEmail || g.email || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{g.guestPhone || g.phone || 'N/A'}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        g.status === 'Attended' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {g.status || 'Invited'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderBusinessSentDetails = () => {
-    const list = businessSentSlips;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Referral Receiver</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Transaction Value</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Thank You Slip Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Business Sent Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((slip) => {
-                const receiverId = String(slip.receiver_id || slip.submitted_by || slip.fromUserId || '');
-                const receiverName = getMemberName(receiverId);
-                const custName = slip.customerName || slip.customer_name || slip.contact_name || 'N/A';
-                const val = Number(slip.businessValue || slip.transactionValue || 0);
-                const dateStr = slip.createdAt ? new Date(slip.createdAt).toLocaleDateString('en-GB') : 'N/A';
-                const statusStr = slip.status || 'Completed';
-
-                return (
-                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{custName}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiverName}</td>
-                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
-                      ₹{val.toLocaleString('en-IN')}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{dateStr}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        {statusStr}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderBusinessReceivedDetails = () => {
-    const list = businessReceivedSlips;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Customer Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Referral Receiver</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Transaction Value</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Thank You Slip Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Business Received Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((slip) => {
-                const receiverId = String(slip.receiver_id || slip.submitted_by || slip.fromUserId || '');
-                const receiverName = getMemberName(receiverId);
-                const custName = slip.customerName || slip.customer_name || slip.contact_name || 'N/A';
-                const val = Number(slip.businessValue || slip.transactionValue || 0);
-                const dateStr = slip.createdAt ? new Date(slip.createdAt).toLocaleDateString('en-GB') : 'N/A';
-                const statusStr = slip.status || 'Completed';
-
-                return (
-                  <tr key={slip.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{custName}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiverName}</td>
-                    <td className="p-4 text-sm font-black text-right text-emerald-400 whitespace-nowrap">
-                      ₹{val.toLocaleString('en-IN')}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{dateStr}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className="px-2 py-1 rounded-[8px] text-[11px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        {statusStr}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderReferralsSentDetails = () => {
-    const list = referralsSentList;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Sender</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Receiver</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Referrals Sent Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((ref) => {
-                const giver = chapterUsers.find(u => u.uid === ref.fromUserId) || allUsersList.find(u => u.uid === ref.fromUserId);
-                const receiver = chapterUsers.find(u => u.uid === ref.toUserId) || allUsersList.find(u => u.uid === ref.toUserId);
-                return (
-                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || ref.toUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || ref.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        ['COMPLETED', 'CONVERTED', 'CLOSED'].includes(String(ref.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        ['APPROVED', 'IN_PROGRESS'].includes(String(ref.status).toUpperCase()) ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {ref.status || 'PENDING'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderReferralsReceivedDetails = () => {
-    const list = referralsReceivedList;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Sender</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Receiver</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Contact Name</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Requirement</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Date</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Referrals Received Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((ref) => {
-                const giver = chapterUsers.find(u => u.uid === ref.fromUserId) || allUsersList.find(u => u.uid === ref.fromUserId);
-                const receiver = chapterUsers.find(u => u.uid === ref.toUserId) || allUsersList.find(u => u.uid === ref.toUserId);
-                return (
-                  <tr key={ref.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{giver?.name || ref.fromUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{receiver?.name || ref.toUserName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{ref.contactName || ref.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 max-w-xs truncate">{ref.requirement || ref.notes || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">
-                      {ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        ['COMPLETED', 'CONVERTED', 'CLOSED'].includes(String(ref.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        ['APPROVED', 'IN_PROGRESS'].includes(String(ref.status).toUpperCase()) ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {ref.status || 'PENDING'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderTestimonialsGivenDetails = () => {
-    const list = testimonialsGivenList;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author (Given By)</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Testimonials Given Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((t) => {
-                const author = allUsersList.find(u => u.uid === t.authorMemberId || u.id === t.authorMemberId);
-                const recipient = allUsersList.find(u => u.uid === t.recipientMemberId || u.id === t.recipientMemberId);
-                return (
-                  <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{author?.name || t.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || t.recipientName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
-                      {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || t.content || 'N/A'}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {t.status || 'APPROVED'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderTestimonialsReceivedDetails = () => {
-    const list = testimonialsReceivedList;
-    return (
-      <div className="overflow-x-auto rounded-[16px] border border-white/5 bg-[#0F172A] custom-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="border-b border-white/10 bg-[#1E293B]">
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Author</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Recipient (Received By)</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-center">Rating</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider">Testimonial</th>
-              <th className="p-4 text-xs font-black text-[#9CA3AF] uppercase tracking-wider text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-sm font-bold text-[#6B7280] uppercase tracking-wide">
-                  No Testimonials Received Recorded
-                </td>
-              </tr>
-            ) : (
-              list.map((t) => {
-                const author = allUsersList.find(u => u.uid === t.authorMemberId || u.id === t.authorMemberId);
-                const recipient = allUsersList.find(u => u.uid === t.recipientMemberId || u.id === t.recipientMemberId);
-                return (
-                  <tr key={t.id} className="hover:bg-white/[0.02] transition-colors duration-200">
-                    <td className="p-4 text-sm font-bold text-white whitespace-nowrap">{author?.name || t.name || 'N/A'}</td>
-                    <td className="p-4 text-sm text-white/80 whitespace-nowrap">{recipient?.name || t.recipientName || 'N/A'}</td>
-                    <td className="p-4 text-sm text-center font-bold text-yellow-400 whitespace-nowrap">
-                      {'★'.repeat(t.rating || 5)}{'☆'.repeat(5 - (t.rating || 5))}
-                    </td>
-                    <td className="p-4 text-sm text-white/80 max-w-sm truncate">{t.testimonial || t.content || 'N/A'}</td>
-                    <td className="p-4 text-sm text-right whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-[8px] text-[11px] font-black uppercase ${
-                        ['APPROVED', 'PUBLISHED'].includes(String(t.status).toUpperCase()) ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {t.status || 'APPROVED'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
+  
   const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
+
+    if (analyticsLoading) {
+      return (
+        <div className="flex flex-col gap-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="p-5 bg-gradient-to-b from-[#151C2E] to-[#111827] rounded-[20px] border border-white/5 shadow-xl flex flex-col gap-4 animate-pulse">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-[12px] bg-white/5 shrink-0" />
+                  <div className="flex flex-col gap-2">
+                    <div className="w-32 h-4 bg-white/10 rounded-md" />
+                    <div className="w-24 h-3 bg-white/5 rounded-md" />
+                  </div>
+                </div>
+                <div className="w-16 h-6 bg-white/10 rounded-md shrink-0" />
+              </div>
+              <div className="pt-4 border-t border-white/5 flex flex-col gap-3">
+                <div className="flex justify-between">
+                  <div className="w-12 h-3 bg-white/5 rounded-md" />
+                  <div className="w-20 h-3 bg-white/10 rounded-md" />
+                </div>
+                <div className="flex justify-between">
+                  <div className="w-16 h-3 bg-white/5 rounded-md" />
+                  <div className="w-24 h-3 bg-white/10 rounded-md" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (analyticsError) {
+      return (
+        <div className="py-16 flex flex-col items-center justify-center text-center">
+          <div className="w-24 h-24 bg-red-500/10 rounded-[24px] flex items-center justify-center mb-6 border border-red-500/20 shadow-2xl">
+            <AlertTriangle className="text-red-400 w-10 h-10" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">Failed to load records</h3>
+          <p className="text-neutral-400 text-sm max-w-sm mb-8 leading-relaxed">
+            There was an error while preparing the data. Please try again.
+          </p>
+          <button 
+            onClick={() => {
+              setAnalyticsLoading(true);
+              setAnalyticsError(false);
+              setTimeout(() => setAnalyticsLoading(false), 600);
+            }}
+            className="px-6 py-3 bg-[#151C2E] hover:bg-[#1E293B] border border-white/5 text-white rounded-[12px] font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+          >
+            <RotateCcw size={14} /> Retry
+          </button>
+        </div>
+      );
+    }
     const norm = analyticsModalCategory.toLowerCase().trim();
-    if (norm === 'total members') return renderTotalMembersDetails();
-    if (norm === 'active members') return renderActiveMembersDetails();
-    if (norm === 'inactive members') return renderInactiveMembersDetails();
-    if (norm === 'referrals sent') return renderReferralsSentDetails();
-    if (norm === 'referrals received') return renderReferralsReceivedDetails();
-    if (norm === 'business sent') return renderBusinessSentDetails();
-    if (norm === 'business received') return renderBusinessReceivedDetails();
-    if (norm === 'thank you slips sent') return renderBusinessSentDetails();
-    if (norm === 'thank you slips received') return renderBusinessReceivedDetails();
-    if (norm === 'testimonials given') return renderTestimonialsGivenDetails();
-    if (norm === 'testimonials received') return renderTestimonialsReceivedDetails();
-    if (norm === 'guests invited' || norm.includes('guest') || norm.includes('visitor')) return renderGuestInvitesDetails();
-    if (norm === 'one-to-one meetings' || norm.includes('one-to-one')) return renderOneToOnesDetails();
-    if (norm === 'chapter meetings' || norm === 'meetings' || norm === 'upcoming meetings') return renderMeetingsDetails();
-    if (norm.includes('business')) return renderBusinessDetails();
-    if (norm.includes('referral')) return renderReferralsDetails();
-    if (norm.includes('attendance') || norm.includes('weekly meeting attendance')) return renderAttendanceDetails();
-    if (norm.includes('testimonial')) return renderTestimonialsDetails();
-    if (norm.includes('chapter')) return renderChaptersDetails();
-    return <div className="p-4 text-center font-bold text-neutral-400 uppercase tracking-widest text-xs">No detail view implemented for this category.</div>;
+    let records = [];
+
+    // Helper to format role
+    const formatRole = (role, position) => {
+      if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+      if (role === 'PRESIDENT') return 'President';
+      if (role === 'VICE_PRESIDENT') return 'Vice President';
+      if (role === 'TREASURER') return 'Treasurer';
+      if (position && position.toLowerCase() !== 'none') return position;
+      return 'Member';
+    };
+
+    if (norm.includes('member')) {
+      let list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
+      if (norm.includes('active') && !norm.includes('inactive')) {
+        list = list.filter(u => isMemberActive(u));
+      } else if (norm.includes('inactive')) {
+        list = list.filter(u => !isMemberActive(u));
+      }
+      
+      records = list.map(m => {
+        const isSubActive = isMemberActive(m);
+        return {
+          id: m.uid || m.id,
+          title: m.name || 'N/A',
+          subtitle: m.phone || 'N/A',
+          icon: <User size={18} className="text-primary" />,
+          badgeText: isSubActive ? 'Active' : 'Inactive / Expired',
+          badgeColor: isSubActive ? 'emerald' : 'red',
+          details: [
+            { label: 'Role', value: formatRole(m.role, m.position) },
+            { label: 'Business', value: m.businessName || m.company || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('chapter') && !norm.includes('meeting')) {
+      records = allChapters.map(c => ({
+        id: c.id,
+        title: c.chapterName || c.chapter_name || c.name || 'N/A',
+        subtitle: c.region || 'N/A',
+        icon: <Building2 size={18} className="text-primary" />,
+        badgeText: 'Chapter',
+        badgeColor: 'blue',
+        details: [
+          { label: 'Meeting Day', value: c.meetingDay || 'N/A' },
+          { label: 'Time', value: c.meetingTime || 'N/A' }
+        ]
+      }));
+    } else if (norm.includes('business') || norm.includes('thank you')) {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allSlips : chapterSlips;
+      
+      if (norm.includes('sent')) {
+        list = list.filter(s => s.fromUserId === (profile?.uid || profile?.id));
+      } else if (norm.includes('received')) {
+        list = list.filter(s => s.toUserId === (profile?.uid || profile?.id));
+      }
+
+      records = list.map(slip => {
+        const giver = chapterUsers.find(u => u.uid === slip.fromUserId);
+        const recipient = chapterUsers.find(u => u.uid === slip.toUserId);
+        return {
+          id: slip.id,
+          title: slip.customerName || 'N/A',
+          subtitle: norm.includes('sent') ? `To: ${recipient?.name || slip.toUserName || 'N/A'}` : `From: ${giver?.name || slip.fromUserName || 'N/A'}`,
+          icon: <Briefcase size={18} className="text-primary" />,
+          badgeText: `₹${Number(slip.amount || 0).toLocaleString()}`,
+          badgeColor: 'emerald',
+          date: slip.createdAt ? new Date(slip.createdAt).toLocaleDateString() : 'N/A',
+          details: [
+            { label: 'Giver', value: giver?.name || slip.fromUserName || 'N/A' },
+            { label: 'Recipient', value: recipient?.name || slip.toUserName || 'N/A' },
+            { label: 'Notes', value: slip.notes || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('referral')) {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allReferrals : chapterReferrals;
+      
+      if (norm.includes('sent')) {
+        list = list.filter(s => s.fromUserId === (profile?.uid || profile?.id));
+      } else if (norm.includes('received')) {
+        list = list.filter(s => s.toUserId === (profile?.uid || profile?.id));
+      }
+
+      records = list.map(ref => {
+        const giver = chapterUsers.find(u => u.uid === ref.fromUserId);
+        const recipient = chapterUsers.find(u => u.uid === ref.toUserId);
+        const st = (ref.status || '').toLowerCase();
+        let bColor = 'amber';
+        if (st === 'closed' || st === 'completed') bColor = 'emerald';
+        if (st === 'cancelled') bColor = 'red';
+
+        return {
+          id: ref.id,
+          title: ref.customerName || 'N/A',
+          subtitle: ref.requirement || 'N/A',
+          icon: <Share2 size={18} className="text-primary" />,
+          badgeText: ref.status || 'Pending',
+          badgeColor: bColor,
+          date: ref.createdAt ? new Date(ref.createdAt).toLocaleDateString() : 'N/A',
+          details: [
+            { label: 'Giver', value: giver?.name || ref.fromUserName || 'N/A' },
+            { label: 'Recipient', value: recipient?.name || ref.toUserName || 'N/A' },
+            { label: 'Notes', value: ref.notes || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('one-to-one')) {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allOneToOnes : chapterOneToOnes;
+      
+      records = list.map(m => {
+        const sender = chapterUsers.find(u => String(u.uid) === String(m.sender_id || m.organizer_id));
+        const receiver = chapterUsers.find(u => String(u.uid) === String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0])));
+        const st = (m.status || '').toLowerCase();
+        let bColor = 'amber';
+        if (st === 'completed') bColor = 'emerald';
+        if (st === 'cancelled') bColor = 'red';
+
+        return {
+          id: m.id,
+          title: `${sender?.name || 'N/A'} & ${receiver?.name || 'N/A'}`,
+          subtitle: m.venue || m.meetingLocation || 'Online',
+          icon: <Handshake size={18} className="text-primary" />,
+          badgeText: m.status || 'Scheduled',
+          badgeColor: bColor,
+          date: `${m.date || m.scheduledDate || ''} ${m.time || m.meetingTime || ''}`.trim() || 'N/A',
+          details: [
+            { label: 'Notes', value: m.notes || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('guest') || norm.includes('visitor')) {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allGuestInvites : chapterGuestInvites;
+      
+      records = list.map(g => {
+        const inviter = chapterUsers.find(u => String(u.uid) === String(g.inviterId));
+        const st = (g.status || '').toLowerCase();
+        let bColor = 'amber';
+        if (st === 'attended') bColor = 'emerald';
+        if (st === 'no-show') bColor = 'red';
+
+        return {
+          id: g.id,
+          title: g.guestName || 'N/A',
+          subtitle: g.profession || 'N/A',
+          icon: <UserPlus size={18} className="text-primary" />,
+          badgeText: g.status || 'Expected',
+          badgeColor: bColor,
+          date: g.visitDate ? new Date(g.visitDate).toLocaleDateString() : 'N/A',
+          details: [
+            { label: 'Inviter', value: inviter?.name || g.inviterName || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('testimonial')) {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allTestimonials : chapterTestimonials;
+      
+      if (norm.includes('given')) {
+        list = list.filter(s => s.giverId === (profile?.uid || profile?.id));
+      } else if (norm.includes('received')) {
+        list = list.filter(s => s.receiverId === (profile?.uid || profile?.id));
+      }
+
+      records = list.map(t => {
+        const giver = chapterUsers.find(u => String(u.uid) === String(t.giverId));
+        const receiver = chapterUsers.find(u => String(u.uid) === String(t.receiverId));
+        let extraData = {};
+        let text = t.testimonial || '';
+        if (text.includes('|||')) {
+          const parts = text.split('|||');
+          text = parts[0];
+          try { extraData = JSON.parse(parts[1] || '{}'); } catch (e) {}
+        }
+        return {
+          id: t.id,
+          title: (extraData && extraData.title) ? extraData.title : 'Testimonial',
+          subtitle: norm.includes('given') ? `To: ${receiver?.name || 'N/A'}` : `From: ${giver?.name || 'N/A'}`,
+          icon: <Star size={18} className="text-primary" />,
+          badgeText: 'Published',
+          badgeColor: 'blue',
+          date: t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A',
+          details: [
+            { label: 'Giver', value: giver?.name || 'N/A' },
+            { label: 'Recipient', value: receiver?.name || 'N/A' },
+            { label: 'Text', value: text || 'N/A' }
+          ]
+        };
+      });
+    } else if (norm.includes('attendance') || norm.includes('meeting') || norm === 'meetings') {
+      const isGlobal = profile?.role === 'MASTER_ADMIN';
+      let list = isGlobal ? allMeetings : chapterMeetings;
+      
+      records = list.map(m => {
+        return {
+          id: m.id,
+          title: m.title || 'Chapter Meeting',
+          subtitle: m.type || 'N/A',
+          icon: <Calendar size={18} className="text-primary" />,
+          badgeText: m.status || 'Scheduled',
+          badgeColor: (m.status || '').toLowerCase() === 'completed' ? 'emerald' : 'amber',
+          date: m.date ? new Date(m.date).toLocaleDateString() : 'N/A',
+          details: [
+            { label: 'Location', value: m.location || 'N/A' },
+            { label: 'Time', value: `${m.startTime || ''} - ${m.endTime || ''}`.trim() || 'N/A' }
+          ]
+        };
+      });
+    }
+
+    if (records.length === 0) {
+      return (
+        <div className="py-16 flex flex-col items-center justify-center text-center">
+          <div className="w-24 h-24 bg-[#151C2E] rounded-[24px] flex items-center justify-center mb-6 border border-white/5 shadow-2xl">
+            <Search className="text-primary w-10 h-10 opacity-50" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">No Records Found</h3>
+          <p className="text-neutral-400 text-sm max-w-sm mb-8 leading-relaxed">
+            There are currently no records available for this category. New activities will appear here automatically.
+          </p>
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('dashboard-refresh'))}
+            className="px-6 py-3 bg-[#151C2E] hover:bg-[#1E293B] border border-white/5 text-white rounded-[12px] font-bold text-xs uppercase tracking-wider transition-all shadow-lg"
+          >
+            Refresh Dashboard
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {records.map((r, idx) => (
+          <div key={r.id || idx} className="p-5 bg-gradient-to-b from-[#151C2E] to-[#111827] rounded-[20px] border border-white/5 shadow-xl hover:shadow-2xl hover:border-primary/20 transition-all flex flex-col gap-4 group">
+            <div className="flex justify-between items-start gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-[12px] bg-[#0F172A] border border-white/5 flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                  {r.icon || <FileText size={18} className="text-primary" />}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold text-white truncate" title={r.title}>{r.title || 'N/A'}</h4>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5" title={r.subtitle}>{r.subtitle || 'N/A'}</p>
+                </div>
+              </div>
+              {r.badgeText && (
+                <span className={`px-2.5 py-1 rounded-[8px] text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                  r.badgeColor === 'emerald' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                  r.badgeColor === 'red' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                  r.badgeColor === 'amber' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                  r.badgeColor === 'blue' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                  'bg-neutral-500/10 text-neutral-400 border border-neutral-500/20'
+                }`}>
+                  {r.badgeText}
+                </span>
+              )}
+            </div>
+            
+            {(r.date || (r.details && r.details.length > 0)) && (
+              <div className="pt-4 border-t border-white/5 flex flex-col gap-2.5">
+                {r.date && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px]">Date</span>
+                    <span className="text-neutral-300 font-medium">{r.date}</span>
+                  </div>
+                )}
+                {r.details && r.details.map((d, i) => (
+                  <div key={i} className="flex justify-between items-start gap-4 text-xs">
+                    <span className="text-neutral-500 font-bold uppercase tracking-wider text-[9px] mt-0.5 shrink-0">{d.label}</span>
+                    <span className="text-neutral-300 font-medium text-right break-words line-clamp-2" title={d.value}>{d.value || 'N/A'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const getGreeting = () => {
@@ -2951,6 +2347,11 @@ export function Analytics() {
             guestsJoinedCount={userGuestsJoined}
             onCardClick={(label) => {
               setAnalyticsModalCategory(label);
+              setAnalyticsLoading(true);
+              setAnalyticsError(false);
+              setTimeout(() => {
+                setAnalyticsLoading(false);
+              }, 600);
             }}
           />
         </>
@@ -3164,14 +2565,53 @@ export function Analytics() {
         </div>
       </Modal>
 
-      <Modal 
-        isOpen={analyticsModalCategory !== null} 
-        onClose={() => setAnalyticsModalCategory(null)} 
-        title={analyticsModalCategory || ''} 
-        maxWidth="max-w-6xl" 
-      > 
-        {renderAnalyticsDetails()} 
-      </Modal> 
+      <AnimatePresence>
+        {analyticsModalCategory !== null && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 lg:p-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAnalyticsModalCategory(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md transition-all duration-500"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-6xl max-h-[90vh] flex flex-col bg-[#0B1220] rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden"
+            >
+              {/* Header */}
+              <div className="shrink-0 p-6 sm:p-8 border-b border-white/5 relative overflow-hidden bg-[#111827]">
+                <div className="absolute top-[-50%] right-[-10%] w-[50%] h-[200%] bg-primary/10 blur-[80px] rounded-full pointer-events-none" />
+                <div className="flex items-start justify-between gap-4 relative z-10">
+                  <div className="flex items-center gap-4 sm:gap-5">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[16px] bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                      <Activity size={24} className="text-primary" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">{analyticsModalCategory}</h2>
+                      <p className="text-[10px] sm:text-xs font-bold text-neutral-400 mt-1.5 uppercase tracking-widest">Detailed Activity & Records</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAnalyticsModalCategory(null)}
+                    className="p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-[12px] border border-white/5 transition-all text-neutral-400 hover:text-white group shrink-0"
+                  >
+                    <X size={20} className="group-hover:scale-110 transition-transform" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8 bg-gradient-to-b from-[#0B1220] to-[#111827]">
+                {renderAnalyticsDetails()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence> 
 
       <Modal
         isOpen={viewingMeetingDetails !== null}
