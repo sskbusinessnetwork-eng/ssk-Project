@@ -474,6 +474,8 @@ export function Profile() {
       if (refreshProfile) {
         await refreshProfile();
       }
+      
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       setSuccessMessage("Profile updated successfully.");
       setShowSuccess(true);
@@ -481,8 +483,6 @@ export function Profile() {
         setShowSuccess(false);
         setSuccessMessage(null);
       }, 3000);
-
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     } catch (error: any) {
       console.error("Complete Supabase profile update error:", error);
       if (error?.message === "You can only edit your own profile.") {

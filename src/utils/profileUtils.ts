@@ -3,7 +3,6 @@ import { UserProfile } from '../types';
 export const REQUIRED_PROFILE_FIELDS = [
   { key: 'photoURL', label: 'Profile Photo' },
   { key: 'name', label: 'Full Name' },
-  { key: 'whatsappNumber', label: 'WhatsApp Number' },
   { key: 'phone', label: 'Mobile Number' },
   { key: 'email', label: 'Email Address' },
   { key: 'businessName', label: 'Business Name' },
@@ -31,9 +30,6 @@ export function calculateProfileCompletion(profile: any): {
         break;
       case 'name':
         val = profile.name || profile.full_name;
-        break;
-      case 'whatsappNumber':
-        val = profile.whatsappNumber || profile.whatsapp_number || profile.whatsapp || profile.phone;
         break;
       case 'phone':
         val = profile.phone || profile.mobile || profile.phone_number;

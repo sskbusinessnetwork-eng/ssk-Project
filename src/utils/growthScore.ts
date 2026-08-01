@@ -224,7 +224,8 @@ export function getWorkspaceChecklistTasks(
         link: '/profile',
         linkText: isProfileCompleteAuto ? 'VIEW' : 'COMPLETE',
         iconColor: 'text-amber-400',
-        bgColor: 'bg-amber-500/10'
+        bgColor: 'bg-amber-500/10',
+        pointsVal: 100
       });
     }
 

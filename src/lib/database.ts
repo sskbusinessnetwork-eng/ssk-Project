@@ -355,6 +355,7 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   pincode: true,
   bio: true,
   website: true,
+  category: true,
   password_changed: true,
   push_token: true,
   subscription_status: true,
