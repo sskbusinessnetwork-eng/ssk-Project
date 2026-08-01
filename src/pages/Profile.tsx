@@ -184,28 +184,28 @@ export function Profile() {
 
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
-  const compressImage = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
+  const compressImage = (file: File): Promise<{ blob: Blob; ext: string; contentType: string }> => {
+    return new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = objectUrl;
+
+      img.onload = () => {
+        try {
           const canvas = document.createElement('canvas');
           const MAX_WIDTH = 800;
           const MAX_HEIGHT = 800;
-          let width = img.width;
-          let height = img.height;
+          let width = img.width || 800;
+          let height = img.height || 800;
 
           if (width > height) {
             if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
+              height = Math.round(height * (MAX_WIDTH / width));
               width = MAX_WIDTH;
             }
           } else {
             if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
+              width = Math.round(width * (MAX_HEIGHT / height));
               height = MAX_HEIGHT;
             }
           }
@@ -213,23 +213,47 @@ export function Profile() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
+          if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            return resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg', contentType: file.type || 'image/jpeg' });
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
 
           canvas.toBlob(
             (blob) => {
-              if (blob) {
-                resolve(blob);
+              URL.revokeObjectURL(objectUrl);
+              if (blob && blob.size > 0) {
+                resolve({ blob, ext: 'webp', contentType: 'image/webp' });
               } else {
-                reject(new Error('Canvas to Blob failed'));
+                canvas.toBlob(
+                  (jpegBlob) => {
+                    if (jpegBlob && jpegBlob.size > 0) {
+                      resolve({ blob: jpegBlob, ext: 'jpg', contentType: 'image/jpeg' });
+                    } else {
+                      resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg', contentType: file.type || 'image/jpeg' });
+                    }
+                  },
+                  'image/jpeg',
+                  0.85
+                );
               }
             },
             'image/webp',
-            0.8
+            0.82
           );
-        };
-        img.onerror = (error) => reject(error);
+        } catch (err) {
+          URL.revokeObjectURL(objectUrl);
+          console.warn("Canvas image compression failed, falling back to original file:", err);
+          resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg', contentType: file.type || 'image/jpeg' });
+        }
       };
-      reader.onerror = (error) => reject(error);
+
+      img.onerror = (err) => {
+        URL.revokeObjectURL(objectUrl);
+        console.warn("Image load failed during compression, falling back to original file:", err);
+        resolve({ blob: file, ext: file.name.split('.').pop() || 'jpg', contentType: file.type || 'image/jpeg' });
+      };
     });
   };
 
@@ -238,15 +262,20 @@ export function Profile() {
     if (!file || !currentUserProfile?.uid) return;
 
     // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setErrorMessage('Invalid file type. Please upload a JPG, PNG, or WEBP image.');
+    const lowerType = (file.type || '').toLowerCase();
+    const fileName = (file.name || '').toLowerCase();
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
+    const isExtensionValid = validExtensions.some(ext => fileName.endsWith(ext));
+    const isTypeValid = lowerType.startsWith('image/') || isExtensionValid;
+
+    if (!isTypeValid) {
+      setErrorMessage('Invalid file format. Please select an image (JPG, PNG, WEBP, or HEIC) from your gallery.');
       setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('File size too large. Please select an image under 5MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      setErrorMessage('File size too large. Please select an image under 15MB.');
       setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
@@ -255,45 +284,84 @@ export function Profile() {
       setIsUploadingPhoto(true);
       setErrorMessage(null);
 
-      // Compress image
-      const compressedBlob = await compressImage(file);
-      const fileExt = 'webp';
-      const fileName = `${currentUserProfile.uid}_${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      // Compress or prepare image blob
+      const { blob: uploadBlob, ext: fileExt, contentType } = await compressImage(file);
+      const currentUserId = currentUserProfile.id || currentUserProfile.uid;
+      const targetFileName = `${currentUserId}_${Date.now()}.${fileExt}`;
+      const filePath = targetFileName;
 
-      // Delete old photo if it exists and is from our bucket
+      // Delete old photo from Supabase storage if it exists in profile_photos
       if (formData.photoURL && formData.photoURL.includes('supabase.co/storage/v1/object/public/profile_photos/')) {
         try {
-          const oldUrl = new URL(formData.photoURL);
+          const oldUrlStr = formData.photoURL.split('?')[0];
+          const oldUrl = new URL(oldUrlStr);
           const pathSegments = oldUrl.pathname.split('/');
           const oldFileName = pathSegments[pathSegments.length - 1];
-          if (oldFileName) {
-            await supabase.storage.from('profile_photos').remove([oldFileName]);
+          if (oldFileName && oldFileName !== targetFileName) {
+            await supabase.storage.from('profile_photos').remove([decodeURIComponent(oldFileName)]);
           }
         } catch (err) {
-          console.warn("Failed to delete old profile photo", err);
+          console.warn("Failed to delete old profile photo from storage:", err);
         }
       }
 
-      // Upload new photo
-      const { error: uploadError, data } = await supabase.storage
+      // Upload new photo to Supabase Storage bucket 'profile_photos'
+      const { error: uploadError } = await supabase.storage
         .from('profile_photos')
-        .upload(filePath, compressedBlob, {
-          contentType: 'image/webp',
+        .upload(filePath, uploadBlob, {
+          contentType,
           upsert: true
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Supabase Storage Upload Error Details:", uploadError);
+        throw new Error(`Upload to storage failed (${uploadError.message || 'Storage error'}). Please check network or storage permissions.`);
+      }
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('profile_photos')
         .getPublicUrl(filePath);
 
-      // Update formData and database
-      setFormData(prev => ({ ...prev, photoURL: publicUrl }));
-      const currentUserId = currentUserProfile.id || currentUserProfile.uid;
-      await databaseService.update('users', currentUserId, { photoURL: publicUrl });
+      if (!publicUrl) {
+        throw new Error("Could not generate public URL for uploaded profile photo.");
+      }
+
+      const photoUrlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
+
+      // Update local form state immediately so the new picture displays instantly
+      setFormData(prev => ({ ...prev, photoURL: photoUrlWithCacheBust }));
+
+      // Update Supabase users table directly
+      const { error: directDbError } = await supabase
+        .from('users')
+        .update({
+          profile_photo: photoUrlWithCacheBust,
+          photo_url: photoUrlWithCacheBust,
+          photoURL: photoUrlWithCacheBust
+        })
+        .eq('id', currentUserId);
+
+      if (directDbError) {
+        console.warn("Direct Supabase users table update warning:", directDbError);
+      }
+
+      // Also update via databaseService to ensure local cached objects/helpers are updated
+      await databaseService.update('users', currentUserId, { photoURL: photoUrlWithCacheBust });
+
+      // If user is Master Admin, update master_admins table if applicable
+      if (currentUserProfile.role === 'MASTER_ADMIN') {
+        try {
+          await supabase
+            .from('master_admins')
+            .update({ profile_photo: photoUrlWithCacheBust })
+            .eq('id', currentUserId);
+        } catch (mErr) {
+          console.warn("Master admin photo update warning:", mErr);
+        }
+      }
+
+      // Refresh AuthContext profile & sync localStorage
       if (refreshProfile) {
         await refreshProfile();
       }
@@ -309,7 +377,7 @@ export function Profile() {
       setIsUploadingPhoto(false);
       // Reset input so the same file can be uploaded again if needed
       if (e.target) {
-         e.target.value = '';
+        e.target.value = '';
       }
     }
   };
@@ -901,7 +969,7 @@ export function Profile() {
               ) : (
                 <Camera size={16} />
               )}
-              <input type="file" className="hidden" accept="image/jpeg,image/png,image/jpg,image/webp" onChange={handlePhotoUpload} disabled={isUploadingPhoto} />
+              <input type="file" className="hidden" accept="image/*,image/jpeg,image/png,image/jpg,image/webp,image/heic,image/heif" onChange={handlePhotoUpload} disabled={isUploadingPhoto} />
             </label>
           </div>
           <div>

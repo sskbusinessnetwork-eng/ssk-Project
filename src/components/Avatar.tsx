@@ -36,6 +36,10 @@ export function Avatar({ src, name, size = 'md', className, fallbackClassName }:
 
   const [imgError, setImgError] = React.useState(false);
 
+  React.useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   if (avatarSrc && !imgError) {
     return (
       <img
