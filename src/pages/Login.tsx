@@ -474,7 +474,7 @@ export function Login() {
           className="mt-8 text-center space-y-4"
         >
           {supabaseConnected !== null && (
-            <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
+            <div className="hidden items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest" style={{ display: 'none' }} aria-hidden="true">
               {supabaseConnected ? (
                 <>
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
