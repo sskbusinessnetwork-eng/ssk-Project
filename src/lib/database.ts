@@ -590,9 +590,26 @@ export async function addDoc(collectionRef: any, data: any) {
       created_at: cleanData.created_at || cleanData.createdAt || new Date().toISOString()
     };
 
+    if (cleanSlipPayload.referral_id) {
+      const { data: existing } = await supabase
+        .from('thank_you_slips')
+        .select('id')
+        .eq('referral_id', String(cleanSlipPayload.referral_id));
+
+      if (existing && existing.length > 0) {
+        throw new Error("A Thank You Slip has already been submitted for this referral.");
+      }
+    }
+
     const { data: result, error } = await supabase.from('thank_you_slips').insert([cleanSlipPayload]).select().single();
     if (!error && result) {
       return { id: result.id };
+    }
+
+    if (error) {
+      if (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate')) {
+        throw new Error("A Thank You Slip has already been submitted for this referral.");
+      }
     }
 
     console.warn("addDoc direct Supabase thank_you_slips insert warning, trying /api/thank-you-slips/create fallback:", error);

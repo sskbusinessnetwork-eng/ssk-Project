@@ -60,14 +60,16 @@ export function getMeetingExactDateTime(meeting: Meeting): Date {
 
 export function isMeetingCompleted(m: any): boolean {
   if (!m) return false;
-  if (m.status === 'COMPLETED' || m.status === 'Completed') return true;
+  const s = String(m.status || '').trim().toUpperCase();
+  if (s === 'COMPLETED' || s === 'DONE') return true;
   if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return true;
   return false;
 }
 
 export function isMeetingCancelled(m: any): boolean {
   if (!m) return false;
-  if (m.status === 'CANCELLED' || m.status === 'Cancelled') return true;
+  const s = String(m.status || '').trim().toUpperCase();
+  if (s === 'CANCELLED' || s === 'CANCELED') return true;
   if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return true;
   return false;
 }
@@ -866,10 +868,7 @@ export function Meetings() {
       ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
       : targetChapterId ? [where('chapter_id', '==', targetChapterId), orderBy('date', 'desc'), limit(50)] : [orderBy('date', 'desc'), limit(50)];
 
-    const isMeetingDone = (m: Meeting) => {
-      return m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
-             m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
-    };
+    const isMeetingDoneLocal = (m: Meeting) => isMeetingDone(m);
 
     const unsubscribe = databaseService.subscribe<Meeting>('meetings', constraints, (data) => {
       setMeetings(data);

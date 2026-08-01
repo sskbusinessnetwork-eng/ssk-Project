@@ -603,6 +603,17 @@ async function startServer() {
         created_at: slipData.created_at || slipData.createdAt || new Date().toISOString()
       };
 
+      if (cleanDbPayload.referral_id) {
+        const { data: existing } = await adminSupabase
+          .from('thank_you_slips')
+          .select('id')
+          .eq('referral_id', String(cleanDbPayload.referral_id));
+
+        if (existing && existing.length > 0) {
+          return res.status(400).json({ error: "A Thank You Slip has already been submitted for this referral." });
+        }
+      }
+
       const { data: result, error } = await adminSupabase
         .from('thank_you_slips')
         .insert([cleanDbPayload])

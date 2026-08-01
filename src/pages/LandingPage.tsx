@@ -160,9 +160,20 @@ export function LandingPage() {
           .select('*')
           .or(`chapter_id.eq.${selectedChapter.chapterId},admin_id.eq.${selectedChapter.adminId}`)
           .gte('date', todayStr)
+          .neq('status', 'Completed')
+          .neq('status', 'COMPLETED')
+          .neq('status', 'Completed ')
+          .neq('status', 'Cancelled')
+          .neq('status', 'CANCELLED')
           .order('date', { ascending: true });
 
-        const upcoming = meetingsData?.find(m => m.status !== 'COMPLETED' && m.is_completed !== 'true' && m.isCompleted !== true);
+        const upcoming = meetingsData?.find(m => {
+          const s = String(m.status || '').trim().toUpperCase();
+          if (s === 'COMPLETED' || s === 'CANCELLED') return false;
+          if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
+          if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
+          return true;
+        });
 
         if (upcoming) {
           setSelectedMeeting(upcoming);

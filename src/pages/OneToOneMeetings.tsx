@@ -909,7 +909,10 @@ export function OneToOneMeetings() {
 
   const upcomingMeetings = useMemo(() => {
     const rawUpcoming = meetings.filter(m => {
-      if (m.status === 'COMPLETED' || m.status === 'CANCELLED' || m.status === 'NOT_COMPLETED') return false;
+      const statusUpper = String(m.status || '').trim().toUpperCase();
+      if (statusUpper === 'COMPLETED' || statusUpper === 'CANCELLED' || statusUpper === 'NOT_COMPLETED') return false;
+      if (m.isCompleted === true || (m.isCompleted as any) === 'true' || (m as any).is_completed === true || (m as any).is_completed === 'true') return false;
+      if (m.isCancelled === true || (m.isCancelled as any) === 'true' || (m as any).is_cancelled === true || (m as any).is_cancelled === 'true') return false;
 
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
@@ -950,17 +953,17 @@ export function OneToOneMeetings() {
 
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-primary/10 text-primary rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
-            <Users size={24} />
+    <div className="space-y-4 sm:space-y-8 max-w-7xl mx-auto px-3 sm:px-6 lg:px-6 py-4 sm:py-6 md:py-8">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 border-b border-white/5 pb-4 sm:pb-6">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 text-primary rounded-xl sm:rounded-[16px] flex items-center justify-center shrink-0 shadow-sm shadow-primary/5">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
               1-to-1 Meetings
             </h1>
-            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-[0.15em] mt-0.5">
+            <p className="text-[9px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-[0.15em] mt-0.5">
               Personalized direct business networking
             </p>
           </div>
@@ -969,9 +972,9 @@ export function OneToOneMeetings() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={handleOpenScheduleModal}
-              className="flex items-center justify-center gap-2 px-6 h-11 bg-primary text-white rounded-[12px] font-bold uppercase tracking-wider transition-all active:scale-95 text-xs shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90 cursor-pointer"
+              className="flex items-center justify-center gap-2 px-4 sm:px-6 h-9 sm:h-11 bg-primary text-white rounded-xl sm:rounded-[12px] font-bold uppercase tracking-wider transition-all active:scale-95 text-[10px] sm:text-xs shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-primary/10 hover:bg-primary/90 cursor-pointer"
             >
-              <Plus size={16} />
+              <Plus className="w-4 h-4" />
               <span>Schedule 1:1 Meeting</span>
             </button>
           </div>
@@ -979,19 +982,19 @@ export function OneToOneMeetings() {
       </header>
 
       {(isAdmin || isChapterAdmin) && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Member Filter */}
-          <div className="bg-[#111827] p-6 rounded-[2.5rem] border border-white/5 shadow-sm flex flex-col md:flex-row md:items-center gap-4">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 bg-primary/10 rounded-[12px] flex items-center justify-center text-primary">
-                <Users size={20} />
+          <div className="bg-[#111827] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-sm flex flex-col md:flex-row md:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-xl sm:rounded-[12px] flex items-center justify-center text-primary">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest">Filter by Member</h2>
+              <h2 className="text-xs sm:text-sm font-bold text-white uppercase tracking-widest">Filter by Member</h2>
             </div>
             <select
               value={selectedMemberId}
               onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-[12px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm bg-[#151C2E] text-white"
+              className="flex-1 px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-[12px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-xs sm:text-sm bg-[#151C2E] text-white"
             >
               <option value="" className="bg-[#111827] text-white">All Members (Overall Analytics)</option>
               {members.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
@@ -1001,23 +1004,23 @@ export function OneToOneMeetings() {
           </div>
 
           {/* Analytics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-2.5 sm:gap-6">
             <button
               onClick={() => {
                 setHistoryType('scheduled');
                 setIsHistoryModalOpen(true);
               }}
-              className="group relative bg-[#0F172A] p-6 rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
+              className="group relative bg-[#0F172A] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full -mr-16 -mt-16 blur-2xl" />
               <div className="relative z-10">
-                <div className="w-12 h-12 bg-white/10 rounded-[16px] flex items-center justify-center text-primary mb-6">
-                  <Calendar size={24} />
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-[16px] flex items-center justify-center text-primary mb-2 sm:mb-6">
+                  <Calendar className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
-                <p className="text-[10px] font-bold text-neutral-300 uppercase tracking-[0.2em] mb-2">Total Meetings Scheduled</p>
-                <h2 className="text-4xl font-bold text-white tracking-tight">{stats?.scheduled}</h2>
-                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mt-4 flex items-center gap-2">
-                  View Detailed History <ChevronRight size={12} />
+                <p className="text-[8.5px] sm:text-[10px] font-bold text-neutral-300 uppercase tracking-wider sm:tracking-[0.2em] mb-1 sm:mb-2 truncate">Meetings Scheduled</p>
+                <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">{stats?.scheduled}</h2>
+                <p className="text-[8px] sm:text-[10px] font-bold text-primary uppercase tracking-widest mt-2 sm:mt-4 flex items-center gap-1 sm:gap-2 truncate">
+                  <span>View History</span> <ChevronRight className="w-3 h-3" />
                 </p>
               </div>
             </button>
@@ -1027,17 +1030,17 @@ export function OneToOneMeetings() {
                 setHistoryType('attended');
                 setIsHistoryModalOpen(true);
               }}
-              className="group relative bg-[#111827] p-6 rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
+              className="group relative bg-[#111827] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl" />
               <div className="relative z-10">
-                <div className="w-12 h-12 bg-primary/10 rounded-[16px] flex items-center justify-center text-primary mb-6">
-                  <CheckCircle2 size={24} />
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-primary/10 rounded-xl sm:rounded-[16px] flex items-center justify-center text-primary mb-2 sm:mb-6">
+                  <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em] mb-2">Total Meetings Attended</p>
-                <h2 className="text-4xl font-bold text-white tracking-tight">{stats?.attended}</h2>
-                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mt-4 flex items-center gap-2">
-                  View Detailed History <ChevronRight size={12} />
+                <p className="text-[8.5px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-wider sm:tracking-[0.2em] mb-1 sm:mb-2 truncate">Meetings Attended</p>
+                <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">{stats?.attended}</h2>
+                <p className="text-[8px] sm:text-[10px] font-bold text-primary uppercase tracking-widest mt-2 sm:mt-4 flex items-center gap-1 sm:gap-2 truncate">
+                  <span>View History</span> <ChevronRight className="w-3 h-3" />
                 </p>
               </div>
             </button>
@@ -1045,17 +1048,17 @@ export function OneToOneMeetings() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
         {/* Upcoming Meetings */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-primary/10 rounded-[12px] flex items-center justify-center text-primary">
-              <Calendar size={20} />
+        <section className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-xl sm:rounded-[12px] flex items-center justify-center text-primary">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h2 className="text-xl font-bold text-white uppercase tracking-tight">Upcoming Meetings</h2>
+            <h2 className="text-base sm:text-xl font-bold text-white uppercase tracking-tight">Upcoming Meetings</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {upcomingMeetings.length > 0 ? (
               upcomingMeetings.slice(0, 1).map((meeting) => (
                 <MeetingCard 
@@ -1073,23 +1076,23 @@ export function OneToOneMeetings() {
                 />
               ))
             ) : (
-              <div className="col-span-full p-12 text-center bg-[#111827] rounded-[24px] border border-dashed border-white/5">
-                <p className="text-neutral-400 font-medium italic text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
+              <div className="col-span-full p-8 sm:p-12 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-dashed border-white/5">
+                <p className="text-neutral-400 font-medium italic text-[10px] sm:text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
               </div>
             )}
           </div>
         </section>
 
         {/* Meeting History */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-[#111827] rounded-[12px] flex items-center justify-center text-neutral-400 border border-white/5">
-              <History size={20} />
+        <section className="space-y-3 sm:space-y-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 mb-1 sm:mb-2">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#111827] rounded-xl sm:rounded-[12px] flex items-center justify-center text-neutral-400 border border-white/5">
+              <History className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <h2 className="text-xl font-bold text-white uppercase tracking-tight">Meeting History</h2>
+            <h2 className="text-base sm:text-xl font-bold text-white uppercase tracking-tight">Meeting History</h2>
           </div>
           
-          <div className="bg-[#111827] rounded-[24px] border border-white/5 shadow-sm overflow-hidden">
+          <div className="bg-[#111827] rounded-xl sm:rounded-[24px] border border-white/5 shadow-sm overflow-hidden">
             <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
               <div className="divide-y divide-white/5">
                 {pastMeetings.length > 0 ? (
@@ -1117,31 +1120,31 @@ export function OneToOneMeetings() {
                     }
 
                     return (
-                      <div key={meeting.id} className="p-4 hover:bg-[#1C2538] transition-all group">
-                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                      <div key={meeting.id} className="p-3 sm:p-4 hover:bg-[#1C2538] transition-all group">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 sm:gap-4 items-center">
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Scheduled By</p>
-                            <p className="text-[10px] font-bold text-white truncate">{senderName}</p>
-                            <p className="text-[8px] text-neutral-400 truncate">{formatUserRoleOrPosition(sender)}</p>
+                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Scheduled By</p>
+                            <p className="text-[10px] sm:text-xs font-bold text-white truncate">{senderName}</p>
+                            <p className="text-[8px] sm:text-[9px] text-neutral-400 truncate">{formatUserRoleOrPosition(sender)}</p>
                           </div>
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Meeting With</p>
-                            <p className="text-[10px] font-bold text-white truncate">{receiverName}</p>
-                            <p className="text-[8px] text-neutral-400 truncate">{formatUserRoleOrPosition(receiver)}</p>
+                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Meeting With</p>
+                            <p className="text-[10px] sm:text-xs font-bold text-white truncate">{receiverName}</p>
+                            <p className="text-[8px] sm:text-[9px] text-neutral-400 truncate">{formatUserRoleOrPosition(receiver)}</p>
                           </div>
                           <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Date & Time</p>
-                            <p className="text-[10px] font-bold text-white">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
-                            <p className="text-[9px] text-neutral-400 font-medium">{formatTime12h(meeting.time)}</p>
+                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Date & Time</p>
+                            <p className="text-[10px] sm:text-xs font-bold text-white">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
+                            <p className="text-[8px] sm:text-[9px] text-neutral-400 font-medium">{formatTime12h(meeting.time)}</p>
                           </div>
                           <div className="md:col-span-2">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Location & Note</p>
-                            <p className="text-[10px] text-white font-semibold truncate">{locationDisplay}</p>
-                            <p className="text-[9px] text-neutral-400 italic line-clamp-1">{meeting.notes || '-'}</p>
+                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Location & Note</p>
+                            <p className="text-[10px] sm:text-xs text-white font-semibold truncate">{locationDisplay}</p>
+                            <p className="text-[8px] sm:text-[9px] text-neutral-400 italic line-clamp-1">{meeting.notes || '-'}</p>
                           </div>
-                          <div className="md:col-span-1 text-right">
+                          <div className="col-span-2 md:col-span-1 text-left md:text-right">
                             <span className={cn(
-                              "inline-flex items-center px-2.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider",
+                              "inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wider",
                               meeting.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
                             )}>
                               {meeting.status}
@@ -1931,7 +1934,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       className={cn(
-        "group relative bg-[#111827] p-5 rounded-[16px] border transition-all duration-300 flex flex-col h-full overflow-hidden",
+        "group relative bg-[#111827] p-3.5 sm:p-5 rounded-xl sm:rounded-[16px] border transition-all duration-300 flex flex-col h-full overflow-hidden",
         isOverdue 
           ? "border-amber-500/30 shadow-sm bg-amber-500/5" 
           : "border-white/5 shadow-sm hover:border-white/10 hover:shadow-2xl"
@@ -1942,56 +1945,56 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
         isOverdue ? "bg-amber-500/5" : "bg-primary/5"
       )} />
       
-      <div className="relative z-10 flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="relative z-10 flex items-start justify-between mb-3 sm:mb-4">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className={cn(
-            "w-11 h-11 rounded-[12px] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300",
+            "w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-[12px] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300",
             isOverdue ? "bg-amber-500 text-black font-bold" : (isCreator ? "bg-primary text-white" : "bg-[#151C2E] text-white")
           )}>
-            <Users size={22} strokeWidth={2} />
+            <Users className="w-4 h-4 sm:w-5.5 sm:h-5.5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-white tracking-tight leading-tight truncate">
+            <h3 className="text-xs sm:text-[15px] font-semibold text-white tracking-tight leading-tight truncate">
               {isAdmin ? 'One-to-One Meeting' : (isCreator ? 'Organized by You' : 'Invited to Meeting')}
             </h3>
-            <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
               Scheduled By: {senderName}
             </p>
           </div>
         </div>
         <div className={cn(
-          "px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider border shrink-0 flex items-center gap-1.5",
+          "px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider border shrink-0 flex items-center gap-1 sm:gap-1.5",
           isOverdue 
             ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
             : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
         )}>
           {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-          {isOverdue ? 'Due for Update' : 'Upcoming'}
+          {isOverdue ? 'Due' : 'Upcoming'}
         </div>
       </div>
 
-      <div className="relative z-10 space-y-3 mb-5 flex-grow">
+      <div className="relative z-10 space-y-2.5 sm:space-y-3 mb-4 sm:mb-5 flex-grow">
         {/* Participants Section */}
-        <div className="p-3 bg-[#151C2E] rounded-[12px] border border-white/5 space-y-2">
-          <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Participants</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="p-2.5 sm:p-3 bg-[#151C2E] rounded-xl sm:rounded-[12px] border border-white/5 space-y-2">
+          <p className="text-[8px] sm:text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Participants</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             {/* Sender */}
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar src={senderPhoto} name={senderName} size="w-8 h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <Avatar src={senderPhoto} name={senderName} size="w-7 h-7 sm:w-8 sm:h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
               <div className="min-w-0">
-                <p className="text-[8px] font-bold text-primary uppercase tracking-wider">Sender (Host)</p>
-                <p className="text-xs font-bold text-white truncate">{senderName}</p>
-                <p className="text-[9px] text-neutral-400 font-medium truncate">{senderRole} • {senderChapter}</p>
+                <p className="text-[7.5px] sm:text-[8px] font-bold text-primary uppercase tracking-wider">Sender (Host)</p>
+                <p className="text-[11px] sm:text-xs font-bold text-white truncate">{senderName}</p>
+                <p className="text-[8.5px] sm:text-[9px] text-neutral-400 font-medium truncate">{senderRole} • {senderChapter}</p>
               </div>
             </div>
 
             {/* Receiver */}
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar src={receiverPhoto} name={receiverName} size="w-8 h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <Avatar src={receiverPhoto} name={receiverName} size="w-7 h-7 sm:w-8 sm:h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
               <div className="min-w-0">
-                <p className="text-[8px] font-bold text-primary uppercase tracking-wider">Receiver (Participant)</p>
-                <p className="text-xs font-bold text-white truncate">{receiverName}</p>
-                <p className="text-[9px] text-neutral-400 font-medium truncate">{receiverRole} • {receiverChapter}</p>
+                <p className="text-[7.5px] sm:text-[8px] font-bold text-primary uppercase tracking-wider">Receiver (Participant)</p>
+                <p className="text-[11px] sm:text-xs font-bold text-white truncate">{receiverName}</p>
+                <p className="text-[8.5px] sm:text-[9px] text-neutral-400 font-medium truncate">{receiverRole} • {receiverChapter}</p>
               </div>
             </div>
           </div>

@@ -813,10 +813,10 @@ export function Referrals() {
       const { data: existingSlips } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .eq('referral_id', selectedReferral.id);
+        .eq('referral_id', String(selectedReferral.id));
 
       if (existingSlips && existingSlips.length > 0) {
-        throw new Error("Thank You Slip already submitted.");
+        throw new Error("A Thank You Slip has already been submitted for this referral.");
       }
 
       const targetReferrerId = String(originalSenderId);
@@ -835,15 +835,13 @@ export function Referrals() {
         created_at: new Date().toISOString()
       };
 
-      try {
-        await databaseService.create('thank_you_slips', cleanDbPayload);
-      } catch (dbErr) {
-        console.warn("databaseService create slip notice:", dbErr);
-      }
-
+      // Perform single direct Supabase insert
       const { error: directSlipErr } = await supabase.from('thank_you_slips').insert([cleanDbPayload]);
       if (directSlipErr) {
-        console.warn("Direct Supabase slip insert notice in Referrals:", directSlipErr);
+        if (directSlipErr.code === '23505' || directSlipErr.message?.toLowerCase().includes('unique') || directSlipErr.message?.toLowerCase().includes('duplicate')) {
+          throw new Error("A Thank You Slip has already been submitted for this referral.");
+        }
+        throw new Error(directSlipErr.message || "Failed to submit Thank You Slip.");
       }
 
       const { error: updateErr } = await supabase

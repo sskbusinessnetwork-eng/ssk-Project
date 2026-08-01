@@ -6,6 +6,7 @@ import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
 import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData } from '../utils/growthScore';
+import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
@@ -141,7 +142,7 @@ export function Reports() {
         });
 
         unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {
-          setThankYouSlips(data);
+          setThankYouSlips(deduplicateSlips(data));
         });
 
       } catch (err) {

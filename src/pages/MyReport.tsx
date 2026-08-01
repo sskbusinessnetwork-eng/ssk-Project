@@ -9,6 +9,7 @@ import { calculateChapterGrowthScoreData, isDateInRange } from '../utils/growthS
 import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
+import { deduplicateSlips } from '../utils/deduplicateSlips';
 
 export function MyReport() {
   const { profile } = useAuth();
@@ -47,7 +48,7 @@ export function MyReport() {
         if (isMounted) {
           setAllUsersList(usersRes.data || []);
           setAllReferrals(refsRes.data || []);
-          setAllSlips(slipsRes.data || []);
+          setAllSlips(deduplicateSlips(slipsRes.data || []));
           setOneToOnes(o2oRes.data || []);
           setMeetings(meetRes.data || []);
           setGuestInvitations(guestsRes.data || []);
@@ -426,6 +427,7 @@ export function MyReport() {
           inactiveMembersCount={inactiveMembersCount}
           referralsSentCount={referralsSentCount}
           referralsReceivedCount={referralsReceivedCount}
+          businessGeneratedTotal={businessSentTotal}
           businessSentTotal={businessSentTotal}
           businessReceivedTotal={businessReceivedTotal}
           businessSentCount={businessSentCount}

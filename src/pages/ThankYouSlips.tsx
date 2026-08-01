@@ -18,6 +18,7 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { ThankYouSlip, Referral, UserProfile, Category } from '../types';
 import { Modal } from '../components/Modal';
+import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { format as originalFormat, isValid } from 'date-fns';
 import {  where, orderBy  } from '../lib/database';
 import { cn } from '../lib/utils';
@@ -122,7 +123,7 @@ export function ThankYouSlips() {
       orderBy('createdAt', 'desc')
     ], (data) => {
       if (data && data.length > 0) {
-        setSlips(data);
+        setSlips(deduplicateSlips(data));
         setLoading(false);
       }
     });
@@ -133,7 +134,7 @@ export function ThankYouSlips() {
       orderBy('createdAt', 'desc')
     ], (data) => {
       if (data && data.length > 0) {
-        setReceivedSlips(data);
+        setReceivedSlips(deduplicateSlips(data));
       }
     });
 
@@ -172,7 +173,7 @@ export function ThankYouSlips() {
             };
             mapSent.set(item.id, item);
           });
-          setSlips(Array.from(mapSent.values()));
+          setSlips(deduplicateSlips(Array.from(mapSent.values())));
         }
 
         if (recRes.error) {
@@ -193,7 +194,7 @@ export function ThankYouSlips() {
             };
             mapRec.set(item.id, item);
           });
-          setReceivedSlips(Array.from(mapRec.values()));
+          setReceivedSlips(deduplicateSlips(Array.from(mapRec.values())));
         }
 
         if (isMasterAdmin) {
@@ -215,7 +216,7 @@ export function ThankYouSlips() {
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
             }));
-            setAllSlips(mappedAll);
+            setAllSlips(deduplicateSlips(mappedAll));
           }
         }
       } catch (err: any) {
@@ -306,7 +307,7 @@ export function ThankYouSlips() {
       const constraints = [orderBy('createdAt', 'desc')];
 
       unsubscribeAll = databaseService.subscribe<ThankYouSlip>('thank_you_slips', constraints, (data) => {
-        setAllSlips(data);
+        setAllSlips(deduplicateSlips(data));
       });
 
       // Fetch users to resolve names
@@ -409,7 +410,7 @@ export function ThankYouSlips() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmitting) return;
 
     const selectedReferral = referrals.find(r => String(r.id) === String(formData.referralId));
     if (!selectedReferral) {
@@ -458,7 +459,7 @@ export function ThankYouSlips() {
       }
 
       if (existingSlips && existingSlips.length > 0) {
-        throw new Error("This referral already has a Thank You Slip.");
+        throw new Error("A Thank You Slip has already been submitted for this referral.");
       }
 
       const targetSenderId = String(originalSenderId);
@@ -481,17 +482,16 @@ export function ThankYouSlips() {
         created_at: new Date().toISOString()
       };
 
-      // Perform direct Supabase insert
+      // Perform single direct Supabase insert
       const { data: insertedData, error: insertError } = await supabase
         .from('thank_you_slips')
         .insert([cleanDbPayload])
         .select()
         .single();
 
-      // REQUIREMENT 8: Display exact Supabase error if insert fails
       if (insertError) {
         if (insertError.code === '23505' || insertError.message?.toLowerCase().includes('unique') || insertError.message?.toLowerCase().includes('duplicate')) {
-          throw new Error("This referral already has a Thank You Slip.");
+          throw new Error("A Thank You Slip has already been submitted for this referral.");
         }
         const errorParts = [
           insertError.message,
@@ -515,14 +515,8 @@ export function ThankYouSlips() {
         createdAt: cleanDbPayload.created_at
       };
 
-      try {
-        await databaseService.create('thank_you_slips', cleanDbPayload);
-      } catch (dbErr) {
-        console.warn("databaseService create slip notice:", dbErr);
-      }
-
-      // REQUIREMENT 7: Real-time update local state
-      setSlips(prev => [slipObject, ...prev.filter(s => s.id !== slipObject.id)]);
+      // Real-time update local state with deduplication
+      setSlips(prev => deduplicateSlips([slipObject, ...prev]));
 
       // Remove referral from dropdown immediately
       setReferrals(prev => prev.filter(r => String(r.id) !== String(selectedReferral.id)));
@@ -577,11 +571,6 @@ export function ThankYouSlips() {
     }
   };
 
-  // Business Generated (Sent): Business generated for other members (slips received by logged-in user where logged-in user is toUserId / sender)
-  const totalBusinessSent = receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
-  // Business Received: Business received by logged-in user (slips submitted by logged-in user where logged-in user is fromUserId / receiver)
-  const totalBusinessReceived = slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
-  
   const filteredSlips = allSlips.filter(slip => {
     if (isChapterAdmin) {
       const associatedMemberIds = [...allUsers.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid];
@@ -609,7 +598,15 @@ export function ThankYouSlips() {
     return true;
   });
 
-  const totalBusinessGenerated = filteredSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
+  // Business Generated & Business Sent: Business generated for other members
+  const totalBusinessSent = isMasterAdmin 
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
+    : receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+  const totalBusinessGenerated = totalBusinessSent;
+  // Business Received: Business received by logged-in user (slips submitted by logged-in user where logged-in user is fromUserId / receiver)
+  const totalBusinessReceived = slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+
+  // totalBusinessGenerated is synchronized with totalBusinessSent above
 
   const totalBusinessReceivedFiltered = filteredSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
 
@@ -645,45 +642,45 @@ export function ThankYouSlips() {
   };
 
   return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6 py-6 md:py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-6 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-8">
         {/* Header Section */}
-        <header className="relative p-6 md:p-8 bg-[#111827] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
+        <header className="relative p-4 sm:p-6 md:p-8 bg-[#111827] border border-white/5 rounded-2xl sm:rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -mr-32 -mt-32 blur-3xl animate-pulse" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-secondary/10 rounded-full -ml-24 -mb-24 blur-2xl" />
           
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-[16px] flex items-center justify-center text-white shadow-inner">
-                <Award size={32} strokeWidth={1.5} />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-5">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-white/10 backdrop-blur-md rounded-xl sm:rounded-[16px] flex items-center justify-center text-white shadow-inner shrink-0">
+                <Award className="w-6 h-6 sm:w-8 sm:h-8" strokeWidth={1.5} />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-tight uppercase">
                   Thank You Slips
                 </h1>
-                <p className="text-[10px] text-neutral-300 font-bold uppercase tracking-[0.15em] mt-0.5">
+                <p className="text-[9px] sm:text-[10px] text-neutral-300 font-bold uppercase tracking-[0.15em] mt-0.5">
                   Business Value generated through the network
                 </p>
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-4">
               {!isMasterAdmin && (
                 <button
                   onClick={() => {
                     setError(null);
                     setIsModalOpen(true);
                   }}
-                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-primary text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary/90 active:scale-95 shadow-lg cursor-pointer"
+                  className="group relative flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-4 bg-primary text-white rounded-xl sm:rounded-[16px] text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all hover:bg-primary/90 active:scale-95 shadow-lg cursor-pointer"
                 >
-                  <Plus size={18} />
+                  <Plus className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                   <span>Give Thank You Slip</span>
                 </button>
               )}
               <button
                 onClick={downloadReport}
-                className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-white/20 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)] cursor-pointer"
+                className="group relative flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-xl sm:rounded-[16px] text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all hover:bg-white/20 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)] cursor-pointer"
               >
-                <Download size={18} />
+                <Download className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 <span>Export Report</span>
               </button>
             </div>
@@ -694,37 +691,37 @@ export function ThankYouSlips() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-[#111827] p-6 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6"
+          className="bg-[#111827] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-2xl space-y-3 sm:space-y-6"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-secondary rounded-full" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-[0.2em] font-display">Filter Reports</h2>
+          <div className="flex items-center gap-2.5">
+            <div className="w-1.5 h-4 sm:h-6 bg-secondary rounded-full" />
+            <h2 className="text-xs sm:text-sm font-bold text-white uppercase tracking-[0.15em] sm:tracking-[0.2em] font-display">Filter Reports</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">Start Date</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-6 items-end">
+            <div className="space-y-1 sm:space-y-2">
+              <label className="text-[9px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">Start Date</label>
               <input
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full px-5 py-3 rounded-[16px] bg-[#151C2E] border border-white/5 text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-[16px] bg-[#151C2E] border border-white/5 text-xs sm:text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 style={{ colorScheme: 'dark' }}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">End Date</label>
+            <div className="space-y-1 sm:space-y-2">
+              <label className="text-[9px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-widest ml-1">End Date</label>
               <input
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full px-5 py-3 rounded-[16px] bg-[#151C2E] border border-white/5 text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full px-3 py-2 sm:px-5 sm:py-3 rounded-xl sm:rounded-[16px] bg-[#151C2E] border border-white/5 text-xs sm:text-sm font-bold text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 style={{ colorScheme: 'dark' }}
               />
             </div>
-            <div className="flex items-end">
+            <div className="col-span-2 sm:col-span-1 flex items-end">
               <button
                 onClick={() => setFilters({ startDate: '', endDate: '', category: '', fromUserId: '', toUserId: '' })}
-                className="px-6 py-3 text-xs font-bold text-red-400 uppercase tracking-widest hover:bg-red-500/10 rounded-[12px] transition-all"
+                className="w-full sm:w-auto px-3 sm:px-6 py-2 sm:py-3 text-[10px] sm:text-xs font-bold text-red-400 uppercase tracking-widest hover:bg-red-500/10 rounded-xl sm:rounded-[12px] transition-all"
               >
                 Reset Filters
               </button>
@@ -733,34 +730,34 @@ export function ThankYouSlips() {
         </motion.div>
 
         {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
         {!isMasterAdmin ? (
           <>
-            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
-                <TrendingUp size={15} strokeWidth={2.5} />
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-xl sm:rounded-[14px] p-2.5 sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[95px] sm:h-[135px] transition-all duration-300 w-full gap-0.5 sm:gap-1">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Business Generated</span>
-              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+              <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-0.5">Business Generated</span>
+              <div className="text-[15px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-0.5">
                 ₹{totalBusinessSent.toLocaleString()}
               </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
+                <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                   {slips.length} slips submitted
                 </span>
               </div>
             </div>
 
-            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
-                <Award size={15} strokeWidth={2.5} />
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-xl sm:rounded-[14px] p-2.5 sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[95px] sm:h-[135px] transition-all duration-300 w-full gap-0.5 sm:gap-1">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+                <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Business Received</span>
-              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+              <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-0.5">Business Received</span>
+              <div className="text-[15px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-0.5">
                 ₹{totalBusinessReceived.toLocaleString()}
               </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
+                <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                   {receivedSlips.length} slips received
                 </span>
               </div>
@@ -768,46 +765,46 @@ export function ThankYouSlips() {
           </>
         ) : (
           <>
-            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
-                <TrendingUp size={15} strokeWidth={2.5} />
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-xl sm:rounded-[14px] p-2.5 sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[95px] sm:h-[135px] transition-all duration-300 w-full gap-0.5 sm:gap-1">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/30 bg-emerald-950/80 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Total Generated</span>
-              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+              <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-0.5">Total Generated</span>
+              <div className="text-[15px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-0.5">
                 ₹{totalBusinessGenerated.toLocaleString()}
               </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
+                <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                   Network-wide passed
                 </span>
               </div>
             </div>
 
-            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
-                <Award size={15} strokeWidth={2.5} />
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-xl sm:rounded-[14px] p-2.5 sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[95px] sm:h-[135px] transition-all duration-300 w-full gap-0.5 sm:gap-1">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 border border-blue-500/30 bg-blue-950/80 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]">
+                <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Total Received</span>
-              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+              <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-0.5">Total Received</span>
+              <div className="text-[15px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-0.5">
                 ₹{totalBusinessReceivedFiltered.toLocaleString()}
               </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
+                <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                   Network-wide received
                 </span>
               </div>
             </div>
 
-            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[110px] sm:h-[135px] transition-all duration-300 w-full gap-1 col-span-2 sm:col-span-1 lg:col-span-1">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-amber-500/30 bg-amber-950/80 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
-                <TrendingUp size={15} strokeWidth={2.5} />
+            <div className="bg-[#0F172A]/80 backdrop-blur-md rounded-xl sm:rounded-[14px] p-2.5 sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[95px] sm:h-[135px] transition-all duration-300 w-full gap-0.5 sm:gap-1 col-span-2 sm:col-span-1 lg:col-span-1">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 border border-amber-500/30 bg-amber-950/80 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-1">Network Volume</span>
-              <div className="text-[18px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-1">
+              <span className="text-[9px] sm:text-[11px] font-bold text-[#9CA3AF] uppercase tracking-wider leading-none truncate w-full mt-0.5">Network Volume</span>
+              <div className="text-[15px] sm:text-[22px] font-black text-white leading-none tracking-tight truncate w-full mt-0.5">
                 ₹{totalNetworkBusiness.toLocaleString()}
               </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-1">
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
+              <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
+                <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
                   Total transaction volume
                 </span>
               </div>
@@ -818,11 +815,11 @@ export function ThankYouSlips() {
 
       {/* Tabs / Section Header */}
       {!isMasterAdmin ? (
-        <div className="flex p-1.5 bg-[#151C2E] rounded-[12px] w-full md:w-fit border border-white/5">
+        <div className="flex p-1 bg-[#151C2E] rounded-xl sm:rounded-[12px] w-full md:w-fit border border-white/5">
           <button
             onClick={() => setActiveTab('sent')}
             className={cn(
-              "flex-1 md:flex-none px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+              "flex-1 md:flex-none px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300",
               activeTab === 'sent' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:text-white"
             )}
           >
@@ -831,7 +828,7 @@ export function ThankYouSlips() {
           <button
             onClick={() => setActiveTab('received')}
             className={cn(
-              "flex-1 md:flex-none px-6 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300",
+              "flex-1 md:flex-none px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all duration-300",
               activeTab === 'received' ? "bg-primary text-white shadow-sm" : "text-neutral-400 hover:text-white"
             )}
           >
@@ -839,18 +836,18 @@ export function ThankYouSlips() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-[#111827] rounded-[16px] border border-white/5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-primary rounded-full" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 p-4 sm:p-6 bg-[#111827] rounded-xl sm:rounded-[16px] border border-white/5 shadow-sm">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-1.5 h-5 sm:h-6 bg-primary rounded-full" />
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                 Business Activity Reports
               </h2>
-              <p className="text-neutral-400 text-xs font-medium tracking-wide">Viewing all business activity across the network.</p>
+              <p className="text-neutral-400 text-[10px] sm:text-xs font-medium tracking-wide">Viewing all business activity across the network.</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="px-6 py-2 bg-primary/10 text-primary rounded-full text-[10px] font-bold uppercase tracking-[0.2em] border border-primary/20">
+          <div className="flex items-center gap-3">
+            <div className="px-4 sm:px-6 py-1.5 sm:py-2 bg-primary/10 text-primary rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] border border-primary/20">
               {isMasterAdmin ? 'Master Admin' : 'Chapter Admin'}
             </div>
           </div>
@@ -858,14 +855,14 @@ export function ThankYouSlips() {
       )}
 
       {/* Slips List */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {loading ? (
-          <div className="py-24 text-center">
-            <div className="w-16 h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Loading Slips...</p>
+          <div className="py-16 sm:py-24 text-center">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin mx-auto mb-3 sm:mb-4" />
+            <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-widest">Loading Slips...</p>
           </div>
         ) : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {(activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).map((slip) => {
               const targetUser = activeTab === 'sent'
                 ? allUsers.find(u => String(u.uid) === String(slip.toUserId) || String(u.id) === String(slip.toUserId))
@@ -878,52 +875,52 @@ export function ThankYouSlips() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={slip.id}
-                  className="group bg-[#111827] p-6 rounded-[16px] border border-white/5 shadow-sm hover:border-white/10 transition-all duration-300 space-y-4"
+                  className="group bg-[#111827] p-3.5 sm:p-6 rounded-xl sm:rounded-[16px] border border-white/5 shadow-sm hover:border-white/10 transition-all duration-300 space-y-3 sm:space-y-4"
                 >
                   {/* Top Bar: Slip Number, Status Badge & Date/Time */}
-                  <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                  <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-white/5">
                     <div className="flex items-center gap-2">
                       <div className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center shadow-sm",
+                        "w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shadow-sm shrink-0",
                         activeTab === 'sent' ? "bg-emerald-500/10 text-emerald-400" : 
                         activeTab === 'received' ? "bg-primary/10 text-primary" : "bg-[#151C2E] text-neutral-400"
                       )}>
-                        {activeTab === 'sent' ? <TrendingUp size={18} /> : <Award size={18} />}
+                        {activeTab === 'sent' ? <TrendingUp className="w-4 h-4 sm:w-4.5 sm:h-4.5" /> : <Award className="w-4 h-4 sm:w-4.5 sm:h-4.5" />}
                       </div>
                       <div>
-                        <span className="text-xs font-bold text-white tracking-wide block">
+                        <span className="text-[11px] sm:text-xs font-bold text-white tracking-wide block">
                           #TYS-{slip.id.slice(-6).toUpperCase()}
                         </span>
-                        <span className="inline-block px-2 py-0.5 text-[9px] font-bold uppercase rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mt-0.5">
+                        <span className="inline-block px-2 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mt-0.5">
                           Completed
                         </span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] font-medium text-neutral-400 block">
+                      <span className="text-[9px] sm:text-[10px] font-medium text-neutral-400 block">
                         {format(new Date(slip.createdAt), 'dd MMM yyyy, hh:mm a')}
                       </span>
                     </div>
                   </div>
 
                   {/* Grid Details */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-2">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Referral ID</p>
-                      <p className="text-xs font-bold text-primary truncate">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-4 py-1 sm:py-2">
+                    <div className="space-y-0.5 sm:space-y-1">
+                      <p className="text-[9px] sm:text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Referral ID</p>
+                      <p className="text-[11px] sm:text-xs font-bold text-primary truncate">
                         #REF-{(slip.referralId || 'N/A').slice(-6).toUpperCase()}
                       </p>
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    <div className="space-y-0.5 sm:space-y-1">
+                      <p className="text-[9px] sm:text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
                         {activeTab === 'sent' ? 'Referral Receiver' : activeTab === 'received' ? 'Referral Sender' : 'Members'}
                       </p>
                       {activeTab === 'sent' ? (
                         <Link 
                           to={`/profile?id=${slip.toUserId}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
+                          className="text-[11px] sm:text-xs font-bold text-white hover:text-primary transition-colors truncate block"
                         >
                           {getUserName(slip.toUserId)}
                         </Link>
@@ -931,21 +928,21 @@ export function ThankYouSlips() {
                         <Link 
                           to={`/profile?id=${slip.fromUserId}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs font-bold text-white hover:text-primary transition-colors truncate block"
+                          className="text-[11px] sm:text-xs font-bold text-white hover:text-primary transition-colors truncate block"
                         >
                           {getUserName(slip.fromUserId)}
                         </Link>
                       ) : (
-                        <div className="text-xs font-medium text-white">
-                          <div>From: {getUserName(slip.fromUserId)}</div>
-                          <div>To: {getUserName(slip.toUserId)}</div>
+                        <div className="text-[10px] sm:text-xs font-medium text-white">
+                          <div className="truncate">From: {getUserName(slip.fromUserId)}</div>
+                          <div className="truncate">To: {getUserName(slip.toUserId)}</div>
                         </div>
                       )}
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Category</p>
-                      <span className="inline-block px-2 py-0.5 text-[10px] font-semibold text-neutral-300 bg-white/5 rounded-md border border-white/10 truncate max-w-full">
+                    <div className="space-y-0.5 sm:space-y-1">
+                      <p className="text-[9px] sm:text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Category</p>
+                      <span className="inline-block px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold text-neutral-300 bg-white/5 rounded-md border border-white/10 truncate max-w-full">
                         {businessCategory}
                       </span>
                     </div>

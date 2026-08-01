@@ -70,9 +70,23 @@ export function Guests() {
           .select('*')
           .eq('chapter_id', userChapterId)
           .gte('date', todayStr)
+          .neq('status', 'Completed')
+          .neq('status', 'COMPLETED')
+          .neq('status', 'Completed ')
+          .neq('status', 'Cancelled')
+          .neq('status', 'CANCELLED')
           .order('date', { ascending: true });
         
-        if (fetchedMeetings) setUpcomingMeetings(fetchedMeetings);
+        if (fetchedMeetings) {
+          const activeMeetings = fetchedMeetings.filter((m: any) => {
+            const s = String(m.status || '').trim().toUpperCase();
+            if (s === 'COMPLETED' || s === 'CANCELLED') return false;
+            if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
+            if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
+            return true;
+          });
+          setUpcomingMeetings(activeMeetings);
+        }
       }
       
       // 3. Fetch Guest Invitations History
@@ -482,7 +496,13 @@ SSK Business Network`;
                 className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
               >
                 <option value="" className="bg-[#111827] text-white">Select Upcoming Meeting</option>
-                {upcomingMeetings.map((m) => (
+                {upcomingMeetings.filter((m: any) => {
+                  const s = String(m.status || '').trim().toUpperCase();
+                  if (s === 'COMPLETED' || s === 'CANCELLED') return false;
+                  if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
+                  if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
+                  return true;
+                }).map((m) => (
                   <option key={m.id} value={m.id} className="bg-[#111827] text-white">
                     {m.title || 'Weekly Chapter Meeting'} - {format(new Date(m.date), 'dd MMM yyyy')} {m.time || '10:00 AM'} ({m.venue || m.location || 'SSK Business Hall'})
                   </option>

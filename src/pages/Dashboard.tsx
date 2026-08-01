@@ -19,6 +19,7 @@ import StatGrid from '../components/StatGrid';
 import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
+import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
@@ -329,7 +330,9 @@ export function Analytics() {
     });
 
     // 2. Subscribe to thank you slips
-    const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], setAllSlips);
+    const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {
+      setAllSlips(deduplicateSlips(data));
+    });
     const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
 
     // Fetch thank_you_slips from Supabase as well
@@ -346,10 +349,7 @@ export function Analytics() {
           createdAt: s.created_at || s.createdAt || new Date().toISOString()
         }));
         setAllSlips(prev => {
-          const map = new Map();
-          prev.forEach(item => map.set(String(item.id), item));
-          mappedSbSlips.forEach(item => map.set(String(item.id), item));
-          return Array.from(map.values());
+          return deduplicateSlips([...prev, ...mappedSbSlips]);
         });
       }
     });
@@ -442,7 +442,7 @@ export function Analytics() {
 
   // Effective dataset arrays filtered by global date range, chapter, and member
   const effectiveSlips = useMemo(() => {
-    let list = allSlips;
+    let list = deduplicateSlips(allSlips);
     if (activeDateRange) {
       list = list.filter(s => isDateInRange(s.createdAt || s.created_at || s.date, activeDateRange.start, activeDateRange.end));
     }
@@ -557,15 +557,6 @@ export function Analytics() {
     );
   }, [effectiveReferrals, chapterUserIds, userCandidateIds, usePersonalStats]);
 
-  const businessGeneratedTotal = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      return effectiveSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
-    }
-    return chapterSlips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0) || 0;
-  }, [effectiveSlips, chapterSlips, profile]);
-
-
-
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
@@ -643,6 +634,9 @@ export function Analytics() {
   const businessSentTotal = useMemo(() => {
     return businessSentSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
   }, [businessSentSlips]);
+
+  // Business Generated is synchronized with Business Sent
+  const businessGeneratedTotal = businessSentTotal;
 
   const businessSentCount = useMemo(() => {
     return businessSentSlips.length;
