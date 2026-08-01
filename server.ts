@@ -23,7 +23,8 @@ async function startServer() {
   const PORT = 3000;
 
   app.set('trust proxy', true);
-  app.use(express.json());
+  app.use(express.json({ limit: '20mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
   // Initialize Supabase Client
   const supabaseUrl = process.env.SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co';
@@ -495,6 +496,94 @@ async function startServer() {
     } catch (e: any) {
       console.error("Error in update-position handler:", e);
       return res.status(500).json({ success: false, error: e.message || "Server error updating position" });
+    }
+  });
+
+  // Profile Photo Upload endpoint
+  app.post("/api/profile/upload-photo", async (req, res) => {
+    try {
+      const { userId, imageBase64, mimeType, fileName } = req.body;
+      if (!userId || !imageBase64) {
+        return res.status(400).json({ success: false, error: "Missing required image data or user ID." });
+      }
+
+      const fileExt = (mimeType || '').includes('png') ? 'png' : 'webp';
+      const cleanFileName = fileName || `profiles/${userId}/${Date.now()}.${fileExt}`;
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      let photoUrl = '';
+
+      // 1. Try uploading to Supabase Storage via adminSupabase or supabase
+      try {
+        const { data: uploadData, error: uploadErr } = await adminSupabase.storage
+          .from('profile_photos')
+          .upload(cleanFileName, buffer, {
+            contentType: mimeType || 'image/webp',
+            upsert: true
+          });
+
+        if (!uploadErr && uploadData) {
+          const { data: { publicUrl } } = adminSupabase.storage
+            .from('profile_photos')
+            .getPublicUrl(cleanFileName);
+          if (publicUrl) {
+            photoUrl = `${publicUrl}?t=${Date.now()}`;
+          }
+        } else if (uploadErr) {
+          console.warn("Server Supabase Storage upload warning (using fallback database storage):", uploadErr.message);
+        }
+      } catch (sErr: any) {
+        console.warn("Server Supabase Storage upload exception (using fallback database storage):", sErr?.message || sErr);
+      }
+
+      // 2. Fallback to Data URL if storage bucket is not writeable or blocked by RLS
+      if (!photoUrl) {
+        const prefix = imageBase64.startsWith('data:') ? '' : `data:${mimeType || 'image/webp'};base64,`;
+        photoUrl = `${prefix}${base64Data}`;
+      }
+
+      // 3. Update user profile in Supabase database
+      const { data: existingUser } = await adminSupabase.from('users').select('profile_photo').eq('id', userId).maybeSingle();
+      let extraData: any = {};
+      if (existingUser?.profile_photo?.includes('|||')) {
+        try {
+          extraData = JSON.parse(existingUser.profile_photo.split('|||')[1] || '{}');
+        } catch(e) {}
+      }
+
+      const newPhotoDbStr = Object.keys(extraData).length > 0 ? `${photoUrl}|||${JSON.stringify(extraData)}` : photoUrl;
+
+      const { error: dbErr } = await adminSupabase
+        .from('users')
+        .update({
+          profile_photo: newPhotoDbStr,
+          photo_url: photoUrl,
+          photoURL: photoUrl
+        })
+        .eq('id', userId);
+
+      if (dbErr) {
+        console.warn("Direct DB update by id failed, trying by uid:", dbErr);
+        await adminSupabase
+          .from('users')
+          .update({
+            profile_photo: newPhotoDbStr,
+            photo_url: photoUrl,
+            photoURL: photoUrl
+          })
+          .eq('uid', userId);
+      }
+
+      // Also sync master_admins table if applicable
+      try {
+        await adminSupabase.from('master_admins').update({ profile_photo: photoUrl }).eq('id', userId);
+      } catch(e) {}
+
+      return res.json({ success: true, photoURL: photoUrl });
+    } catch (err: any) {
+      console.error("Error in /api/profile/upload-photo:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to upload profile photo." });
     }
   });
 

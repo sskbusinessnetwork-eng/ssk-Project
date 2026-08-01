@@ -385,26 +385,10 @@ export function getWorkspaceChecklistTasks(
     });
 
 
-    // 8. Give Testimonial Tasks
-    completedReceivedReferrals.forEach(ref => {
-      const senderId = ref.fromUserId || ref.sender_id || ref.authorMemberId;
-      const hasTestimonial = testimonials.some(t => {
-        const author = t.authorMemberId || t.sender_id || t.fromUserId;
-        if (String(author) !== String(userId)) return false;
-        const tRef = t.referralId || t.referral_id;
-        const tRec = t.receiverMemberId || t.receiver_id || t.toUserId;
-        return String(tRef) === String(ref.id) || (Boolean(senderId) && String(tRec) === String(senderId));
-      });
-      rawTasks.push({
-        key: `task_testimonial_ref_${ref.id}_${dateStr}`,
-        label: 'Give Testimonial',
-        desc: 'Submit a testimonial following a successful referral.',
-        autoDone: hasTestimonial,
-        link: `/testimonials?memberId=${senderId}&refId=${ref.id}`,
-        linkText: hasTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
-        iconColor: 'text-indigo-400',
-        bgColor: 'bg-indigo-500/10'
-      });
+    // 8. Give Testimonial Task (Single Consolidated Task)
+    const hasSubmittedTestimonial = testimonials.some(t => {
+      const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId;
+      return String(author || '') === String(userId || '');
     });
 
     const completedOneToOnes = oneToOnes.filter(m => {
@@ -418,40 +402,46 @@ export function getWorkspaceChecklistTasks(
       return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
 
-    completedOneToOnes.forEach(m => {
-      const isOrganizer = String(m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy) === String(userId);
-      const otherMemberId = isOrganizer
-        ? (m.guest_id || m.memberId || m.receiver_id || m.target_user_id || m.withUserId)
-        : (m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy);
+    const hasRefTrigger = completedReceivedReferrals.length > 0;
+    const hasMeetingTrigger = completedOneToOnes.length > 0;
 
-      if (!otherMemberId) return;
-
-      const hasTestimonial = testimonials.some(t => {
-        const author = t.authorMemberId || t.sender_id || t.fromUserId;
-        if (String(author) !== String(userId)) return false;
-        const tMeeting = t.oneToOneId || t.one_to_one_id || t.meetingId;
-        const tRec = t.receiverMemberId || t.receiver_id || t.toUserId;
-        return String(tMeeting) === String(m.id) || (Boolean(otherMemberId) && String(tRec) === String(otherMemberId));
-      });
-
+    if (hasRefTrigger || hasMeetingTrigger || hasSubmittedTestimonial) {
       rawTasks.push({
-        key: `task_testimonial_121_${m.id}_${dateStr}`,
+        key: `task_testimonial_single_${dateStr}`,
         label: 'Give Testimonial',
-        desc: 'Submit a testimonial following your 1-to-1 meeting.',
-        autoDone: hasTestimonial,
-        link: `/testimonials?memberId=${otherMemberId}&oneToOneId=${m.id}`,
-        linkText: hasTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
+        desc: 'Submit a testimonial for a chapter member.',
+        autoDone: hasSubmittedTestimonial,
+        link: '/testimonials',
+        linkText: hasSubmittedTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
         iconColor: 'text-indigo-400',
         bgColor: 'bg-indigo-500/10'
       });
-    });
+    }
 
-    const totalTasksCount = rawTasks.length;
+    // Deduplicate rawTasks by label to guarantee no duplicate tasks exist
+    const deduplicatedRawTasks: typeof rawTasks = [];
+    const seenTaskLabels = new Set<string>();
+
+    for (const task of rawTasks) {
+      const normLabel = task.label.trim().toLowerCase();
+      if (!seenTaskLabels.has(normLabel)) {
+        seenTaskLabels.add(normLabel);
+        deduplicatedRawTasks.push(task);
+      } else if (normLabel === 'give testimonial' && task.autoDone) {
+        const existing = deduplicatedRawTasks.find(t => t.label.trim().toLowerCase() === 'give testimonial');
+        if (existing) {
+          existing.autoDone = true;
+          existing.linkText = 'VIEW';
+        }
+      }
+    }
+
+    const totalTasksCount = deduplicatedRawTasks.length;
 
     // Score Formula: 100 / Today's Total Tasks
     const pointsPerTask = totalTasksCount > 0 ? Number((100 / totalTasksCount).toFixed(1)) : 0;
 
-    const formattedTasks = rawTasks.map(t => ({
+    const formattedTasks = deduplicatedRawTasks.map(t => ({
       key: t.key,
       label: t.label,
       desc: t.desc,

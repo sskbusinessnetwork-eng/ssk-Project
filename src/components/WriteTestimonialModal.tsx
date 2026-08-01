@@ -25,7 +25,7 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!author || !testimonial.trim()) return;
+    if (isSubmitting || !author || !testimonial.trim()) return;
 
     setIsSubmitting(true);
     try {
@@ -34,33 +34,41 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
       const chapterId = receiver.chapter_id || (receiver as any).chapterId || receiver.adminId || author.chapter_id || (author as any).chapterId || author.adminId || null;
 
       await databaseService.create('testimonials', {
+        receiver_id: receiverUid,
         receiverMemberId: receiverUid,
+        author_id: authorUid,
         authorMemberId: authorUid,
+        chapter_id: chapterId,
         chapterId: chapterId,
-        referralId: referralId || null,
         referral_id: referralId || null,
-        oneToOneId: oneToOneId || null,
+        referralId: referralId || null,
         one_to_one_id: oneToOneId || null,
+        oneToOneId: oneToOneId || null,
         rating,
         title: title ? title.trim() : '',
         testimonial: testimonial.trim(),
-        status: 'PENDING',
+        status: 'APPROVED',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
 
+      window.dispatchEvent(new CustomEvent('testimonials-updated'));
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       // Send notification
-      await notificationService.sendNotification({
-        userId: receiver.uid || (receiver as any).id,
-        role: receiver.role || 'MEMBER',
-        type: 'TESTIMONIAL',
-        title: 'Testimonial Received',
-        message: `You received a Testimonial from ${author.name}.`,
-        relatedUserId: author.uid || (author as any).id,
-        link: '/testimonials'
-      });
+      try {
+        await notificationService.sendNotification({
+          userId: receiver.uid || (receiver as any).id,
+          role: receiver.role || 'MEMBER',
+          type: 'TESTIMONIAL',
+          title: 'Testimonial Received',
+          message: `You received a Testimonial from ${author.name}.`,
+          relatedUserId: author.uid || (author as any).id,
+          link: '/testimonials'
+        });
+      } catch (nErr) {
+        console.warn("Notification send warning:", nErr);
+      }
 
       setSuccess(true);
       setTimeout(() => {
@@ -70,9 +78,9 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
         setRating(5);
         onClose();
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating testimonial', error);
-      alert('Failed to submit testimonial.');
+      alert('Failed to submit testimonial: ' + (error?.message || 'Server error'));
     } finally {
       setIsSubmitting(false);
     }

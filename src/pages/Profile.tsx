@@ -287,47 +287,71 @@ export function Profile() {
       // Compress or prepare image blob
       const { blob: uploadBlob, ext: fileExt, contentType } = await compressImage(file);
       const currentUserId = currentUserProfile.id || currentUserProfile.uid;
-      const targetFileName = `${currentUserId}_${Date.now()}.${fileExt}`;
-      const filePath = targetFileName;
+      const targetFileName = `profiles/${currentUserId}/${Date.now()}.${fileExt}`;
 
-      // Delete old photo from Supabase storage if it exists in profile_photos
-      if (formData.photoURL && formData.photoURL.includes('supabase.co/storage/v1/object/public/profile_photos/')) {
-        try {
-          const oldUrlStr = formData.photoURL.split('?')[0];
-          const oldUrl = new URL(oldUrlStr);
-          const pathSegments = oldUrl.pathname.split('/');
-          const oldFileName = pathSegments[pathSegments.length - 1];
-          if (oldFileName && oldFileName !== targetFileName) {
-            await supabase.storage.from('profile_photos').remove([decodeURIComponent(oldFileName)]);
+      let photoUrlWithCacheBust = '';
+
+      // 1. Try uploading to client Supabase Storage bucket 'profile_photos'
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from('profile_photos')
+          .upload(targetFileName, uploadBlob, {
+            contentType,
+            upsert: true
+          });
+
+        if (uploadError) {
+          console.error("Supabase Storage Upload Error Details:", uploadError);
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from('profile_photos')
+            .getPublicUrl(targetFileName);
+
+          if (publicUrl) {
+            photoUrlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
           }
-        } catch (err) {
-          console.warn("Failed to delete old profile photo from storage:", err);
+        }
+      } catch (clientStorageErr) {
+        console.error("Supabase Storage Client Upload Error Details:", clientStorageErr);
+      }
+
+      // 2. If client storage was blocked by RLS or failed, use server endpoint / base64 fallback
+      if (!photoUrlWithCacheBust) {
+        const reader = new FileReader();
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(uploadBlob);
+        });
+
+        try {
+          const resp = await fetch('/api/profile/upload-photo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUserId,
+              imageBase64: base64Data,
+              mimeType: contentType,
+              fileName: targetFileName
+            })
+          });
+
+          const resData = await resp.json();
+          if (resData.success && resData.photoURL) {
+            photoUrlWithCacheBust = resData.photoURL;
+          } else {
+            console.warn("Backend upload endpoint warning, using base64 URL:", resData.error);
+            photoUrlWithCacheBust = base64Data;
+          }
+        } catch (apiErr) {
+          console.warn("Backend upload API unavailable, using base64 URL:", apiErr);
+          photoUrlWithCacheBust = base64Data;
         }
       }
 
-      // Upload new photo to Supabase Storage bucket 'profile_photos'
-      const { error: uploadError } = await supabase.storage
-        .from('profile_photos')
-        .upload(filePath, uploadBlob, {
-          contentType,
-          upsert: true
-        });
-
-      if (uploadError) {
-        console.error("Supabase Storage Upload Error Details:", uploadError);
-        throw new Error(`Upload to storage failed (${uploadError.message || 'Storage error'}). Please check network or storage permissions.`);
+      if (!photoUrlWithCacheBust) {
+        throw new Error("Could not save profile picture. Please try again.");
       }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profile_photos')
-        .getPublicUrl(filePath);
-
-      if (!publicUrl) {
-        throw new Error("Could not generate public URL for uploaded profile photo.");
-      }
-
-      const photoUrlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
 
       // Update local form state immediately so the new picture displays instantly
       setFormData(prev => ({ ...prev, photoURL: photoUrlWithCacheBust }));
@@ -369,9 +393,10 @@ export function Profile() {
       setSuccessMessage('Profile picture updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
     } catch (error: any) {
       console.error("Error uploading photo:", error);
-      setErrorMessage(error.message || 'Failed to upload profile picture.');
+      setErrorMessage(error.message || 'Failed to upload profile picture. Please try again.');
       setTimeout(() => setErrorMessage(null), 5000);
     } finally {
       setIsUploadingPhoto(false);

@@ -77,14 +77,31 @@ export function Testimonials() {
         setLoading(false);
       }
     );
+
+    const handleRefresh = async () => {
+      try {
+        const freshData = await databaseService.list<Testimonial>('testimonials');
+        setTestimonials(freshData);
+      } catch (e) {
+        console.warn("Refresh testimonials notice:", e);
+      }
+    };
+
+    window.addEventListener('testimonials-updated', handleRefresh);
+    window.addEventListener('dashboard-refresh', handleRefresh);
     
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener('testimonials-updated', handleRefresh);
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+    };
   }, [profile]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this testimonial?')) {
       try {
         await databaseService.delete('testimonials', id);
+        window.dispatchEvent(new CustomEvent('testimonials-updated'));
       } catch (error) {
         console.error("Delete error", error);
         alert('Failed to delete.');
@@ -103,31 +120,30 @@ export function Testimonials() {
   };
 
   const receivedTestimonials = useMemo(() => {
-    return testimonials.filter(t => t.receiverMemberId === currentUserId);
+    return testimonials.filter(t => {
+      const recId = t.receiverMemberId || t.receiver_id || (t as any).receiverId;
+      return String(recId || '') === String(currentUserId || '');
+    });
   }, [testimonials, currentUserId]);
 
   const sentTestimonials = useMemo(() => {
-    return testimonials.filter(t => t.authorMemberId === currentUserId);
+    return testimonials.filter(t => {
+      const authId = t.authorMemberId || t.author_id || (t as any).authorId;
+      return String(authId || '') === String(currentUserId || '');
+    });
   }, [testimonials, currentUserId]);
 
   const filteredTestimonials = useMemo(() => {
     let filtered = testimonials;
 
     if (activeTab === 'received') {
-      filtered = testimonials.filter(t => t.receiverMemberId === currentUserId);
+      filtered = receivedTestimonials;
     } else if (activeTab === 'sent') {
-      filtered = testimonials.filter(t => t.authorMemberId === currentUserId);
-    } else if (activeTab === 'chapter') {
-      if (!isMasterAdmin) {
-        filtered = filtered.filter(t => {
-          const cId = t.chapterId || (t as any).chapter_id;
-          const authorChap = users[t.authorMemberId]?.chapter_id || users[t.authorMemberId]?.adminId;
-          const receiverChap = users[t.receiverMemberId]?.chapter_id || users[t.receiverMemberId]?.adminId;
-          return (cId && cId === userChapterId) || (authorChap && authorChap === userChapterId) || (receiverChap && receiverChap === userChapterId);
-        });
-      }
-    } else if (activeTab === 'all') {
-      // Master admin all
+      filtered = sentTestimonials;
+    } else if (activeTab === 'all' && isMasterAdmin) {
+      // Master admin view all
+    } else {
+      filtered = receivedTestimonials;
     }
 
     // Search filter
@@ -251,35 +267,6 @@ export function Testimonials() {
               </span>
             )}
           </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('give');
-              handleOpenGiveTestimonial();
-            }}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer",
-              activeTab === 'give' ? "bg-primary text-white shadow-md" : "text-[#9CA3AF] hover:text-white hover:bg-white/5"
-            )}
-          >
-            <Sparkles size={15} />
-            Give Testimonial
-          </button>
-
-          {isChapterAdmin && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('chapter')}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer",
-                activeTab === 'chapter' ? "bg-primary text-white shadow-md" : "text-[#9CA3AF] hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Building2 size={15} />
-              Chapter Testimonials
-            </button>
-          )}
 
           {isMasterAdmin && (
             <button

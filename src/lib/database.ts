@@ -292,8 +292,14 @@ export async function getDocs(queryRef: any) {
         } catch(e) {}
       }
       const camelExtra = keysToCamel(extraData);
+      const authorId = r.authorMemberId || r.authorId || r.author_id || r.fromUserId || r.from_user_id || '';
+      const receiverId = r.receiverMemberId || r.receiverId || r.receiver_id || r.toUserId || r.to_user_id || '';
       return {
         ...r,
+        authorMemberId: authorId,
+        receiverMemberId: receiverId,
+        author_id: authorId,
+        receiver_id: receiverId,
         testimonial: body,
         ...camelExtra
       };
@@ -568,11 +574,36 @@ export async function addDoc(collectionRef: any, data: any) {
   }
 
   if (collectionPath === 'testimonials') {
-    if (cleanData.title) {
-      const extra = { title: cleanData.title };
-      cleanData.testimonial = (cleanData.testimonial || '') + '|||' + JSON.stringify(extra);
+    const authorId = cleanData.author_id || cleanData.authorId || cleanData.authorMemberId || cleanData.author_member_id || cleanData.fromUserId || cleanData.from_user_id || null;
+    const receiverId = cleanData.receiver_id || cleanData.receiverId || cleanData.receiverMemberId || cleanData.receiver_member_id || cleanData.toUserId || cleanData.to_user_id || null;
+
+    let body = cleanData.testimonial || '';
+    if (cleanData.title || cleanData.referralId || cleanData.oneToOneId || cleanData.referral_id || cleanData.one_to_one_id) {
+      const extra = {
+        title: cleanData.title || '',
+        referralId: cleanData.referralId || cleanData.referral_id || '',
+        oneToOneId: cleanData.oneToOneId || cleanData.one_to_one_id || ''
+      };
+      body = (body || '') + '|||' + JSON.stringify(extra);
     }
-    delete cleanData.title;
+
+    const cleanTestimonialPayload = {
+      author_id: authorId,
+      receiver_id: receiverId,
+      chapter_id: cleanData.chapter_id || cleanData.chapterId || null,
+      rating: Number(cleanData.rating || 5),
+      testimonial: body,
+      status: cleanData.status || 'APPROVED',
+      created_at: cleanData.created_at || cleanData.createdAt || new Date().toISOString(),
+      updated_at: cleanData.updated_at || cleanData.updatedAt || new Date().toISOString()
+    };
+
+    const { data: result, error } = await supabase.from('testimonials').insert([cleanTestimonialPayload]).select().single();
+    if (error) {
+      console.error("addDoc testimonials error:", error);
+      throw new Error(error.message || 'Failed to submit testimonial.');
+    }
+    return { id: result?.id || Math.random().toString(36).substring(2, 15) };
   }
 
   if (collectionPath === 'thank_you_slips') {
