@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -32,6 +32,7 @@ const format = (date: any, formatStr: string, options?: any) => {
 
 export function ThankYouSlips() {
   const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [slips, setSlips] = useState<ThankYouSlip[]>([]);
   const [receivedSlips, setReceivedSlips] = useState<ThankYouSlip[]>([]);
   const [allSlips, setAllSlips] = useState<ThankYouSlip[]>([]);
@@ -395,6 +396,17 @@ export function ThankYouSlips() {
     }
   };
 
+  useEffect(() => {
+    const paramRefId = searchParams.get('referralId');
+    if (paramRefId && referrals.length > 0) {
+      const matchedRef = referrals.find(r => String(r.id) === String(paramRefId));
+      if (matchedRef) {
+        handleReferralSelect(matchedRef.id);
+        setIsModalOpen(true);
+      }
+    }
+  }, [searchParams, referrals]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
@@ -655,9 +667,21 @@ export function ThankYouSlips() {
             </div>
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              {!isMasterAdmin && (
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-primary text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary/90 active:scale-95 shadow-lg cursor-pointer"
+                >
+                  <Plus size={18} />
+                  <span>Give Thank You Slip</span>
+                </button>
+              )}
               <button
                 onClick={downloadReport}
-                className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-white/20 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)]"
+                className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-[16px] text-xs font-bold uppercase tracking-[0.2em] transition-all hover:bg-white/20 active:scale-95 shadow-[0_4px_20px_rgba(0,0,0,0.03)] cursor-pointer"
               >
                 <Download size={18} />
                 <span>Export Report</span>

@@ -802,8 +802,10 @@ export function Referrals() {
       const originalSenderId = refRecord?.sender_id || refRecord?.from_user_id || refRecord?.fromUserId || selectedReferral.sender_id || selectedReferral.fromUserId || (selectedReferral as any).from_user_id;
       const originalReceiverId = refRecord?.receiver_id || refRecord?.to_user_id || refRecord?.toUserId || selectedReferral.receiver_id || selectedReferral.toUserId || (selectedReferral as any).to_user_id;
 
+      const userCandidateIds = Array.from(new Set([profile.id, profile.uid].filter(Boolean))).map(String);
+
       // Rule 1: Validate that ONLY the Referral Receiver (Member B) can submit
-      if (String(currentUserId) !== String(originalReceiverId)) {
+      if (userCandidateIds.length > 0 && !userCandidateIds.includes(String(originalReceiverId)) && String(currentUserId) !== String(originalReceiverId)) {
         throw new Error("Only the referral receiver can submit a Thank You Slip for this referral.");
       }
 
