@@ -591,11 +591,11 @@ async function startServer() {
       const slipData = req.body || {};
       const cleanDbPayload = {
         referral_id: slipData.referral_id || slipData.referralId || null,
-        sender_id: slipData.sender_id || slipData.senderId || slipData.to_user_id || slipData.toUserId || null,
-        receiver_id: slipData.receiver_id || slipData.receiverId || slipData.from_user_id || slipData.fromUserId || null,
-        submitted_by: slipData.submitted_by || slipData.submittedBy || slipData.receiver_id || slipData.from_user_id || null,
-        from_user_id: slipData.from_user_id || slipData.fromUserId || slipData.receiver_id || null,
-        to_user_id: slipData.to_user_id || slipData.toUserId || slipData.sender_id || null,
+        sender_id: slipData.sender_id || slipData.senderId || slipData.from_user_id || slipData.fromUserId || slipData.submitted_by || slipData.submittedBy || null,
+        receiver_id: slipData.receiver_id || slipData.receiverId || slipData.to_user_id || slipData.toUserId || null,
+        submitted_by: slipData.submitted_by || slipData.submittedBy || slipData.from_user_id || slipData.fromUserId || null,
+        from_user_id: slipData.from_user_id || slipData.fromUserId || slipData.submitted_by || slipData.submittedBy || null,
+        to_user_id: slipData.to_user_id || slipData.toUserId || null,
         customer_name: slipData.customer_name || slipData.customerName || '',
         business_value: Number(slipData.business_value || slipData.businessValue || slipData.businessAmount || 0),
         notes: slipData.notes || slipData.thankYouMessage || slipData.businessDescription || '',

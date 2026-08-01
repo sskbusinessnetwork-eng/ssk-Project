@@ -48,7 +48,18 @@ export function MyReport() {
         if (isMounted) {
           setAllUsersList(usersRes.data || []);
           setAllReferrals(refsRes.data || []);
-          setAllSlips(deduplicateSlips(slipsRes.data || []));
+          const mappedSlips = (slipsRes.data || []).map((s: any) => {
+            const from = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+            const to = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== from ? s.receiver_id : (s.sender_id && String(s.sender_id) !== from ? s.sender_id : '')) || '');
+            return {
+              ...s,
+              id: String(s.id),
+              fromUserId: from,
+              toUserId: to,
+              businessValue: Number(s.business_value || s.businessValue || s.amount || 0)
+            };
+          });
+          setAllSlips(deduplicateSlips(mappedSlips));
           setOneToOnes(o2oRes.data || []);
           setMeetings(meetRes.data || []);
           setGuestInvitations(guestsRes.data || []);
@@ -173,24 +184,24 @@ export function MyReport() {
   });
 
   const chapterSlips = effectiveSlips.filter(s => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.sender_id || s.from_user_id));
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.receiver_id || s.to_user_id));
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
     return (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) ||
            (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId));
   });
 
   const referralsSentCount = chapterReferrals.filter(r => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (r.fromUserId || r.sender_id));
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (r.fromUserId || r.from_user_id || r.sender_id));
     return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
   }).length;
 
   const referralsReceivedCount = chapterReferrals.filter(r => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (r.toUserId || r.receiver_id));
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (r.toUserId || r.to_user_id || r.receiver_id));
     return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
   }).length;
 
   const businessSentTotal = chapterSlips.reduce((acc, s) => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.sender_id || s.from_user_id));
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
     if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
       return acc + (Number(s.businessValue || s.amount) || 0);
     }
@@ -198,7 +209,7 @@ export function MyReport() {
   }, 0);
 
   const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.receiver_id || s.to_user_id));
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
     if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
       return acc + (Number(s.businessValue || s.amount) || 0);
     }
@@ -206,12 +217,12 @@ export function MyReport() {
   }, 0);
 
   const businessSentCount = chapterSlips.filter(s => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.sender_id || s.from_user_id));
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
     return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
   }).length;
 
   const businessReceivedCount = chapterSlips.filter(s => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.receiver_id || s.to_user_id));
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
     return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
   }).length;
 

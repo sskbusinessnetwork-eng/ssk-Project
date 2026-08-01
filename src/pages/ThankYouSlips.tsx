@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -105,6 +105,70 @@ export function ThankYouSlips() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
 
+  // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
+  const fetchConvertedReferrals = useCallback(async () => {
+    if (!profile) return;
+    const userCandidateIds = Array.from(new Set([profile.id, profile.uid].filter(Boolean))).map(String);
+    if (userCandidateIds.length === 0) return;
+
+    const currentUid = String(profile.id || profile.uid);
+
+    // Fetch existing slips to filter out referrals that already have a slip
+    const { data: existingSlips } = await supabase
+      .from('thank_you_slips')
+      .select('referral_id, referralId');
+
+    const existingSlipReferralIds = new Set<string>();
+    if (existingSlips) {
+      existingSlips.forEach((s: any) => {
+        const refId = String(s.referral_id || s.referralId || '');
+        if (refId && refId !== 'null' && refId !== 'undefined') {
+          existingSlipReferralIds.add(refId);
+        }
+      });
+    }
+
+    const recOrClause = userCandidateIds.map(id => `receiver_id.eq.${id},to_user_id.eq.${id}`).join(',');
+    const { data: rawRefs } = await supabase
+      .from('referrals')
+      .select('*')
+      .or(recOrClause);
+
+    if (rawRefs && rawRefs.length > 0) {
+      const converted = rawRefs.filter((r: any) => {
+        const sUpper = String(r.status || '').toUpperCase();
+        const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
+        const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || '');
+        const isReceiver = userCandidateIds.includes(receiverId) || receiverId === currentUid;
+        const hasSlip = existingSlipReferralIds.has(String(r.id));
+        return isConverted && isReceiver && !hasSlip;
+      }).map((r: any) => ({
+        id: String(r.id),
+        sender_id: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
+        fromUserId: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
+        receiver_id: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
+        toUserId: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
+        contactName: r.contact_name || r.customer_name || 'Client',
+        contactPhone: r.contact_phone || r.phone || r.contact_number || r.mobile || 'N/A',
+        requirement: r.business_requirement || r.requirement || '',
+        notes: r.notes || '',
+        status: r.status,
+        createdAt: r.created_at || r.createdAt
+      } as Referral));
+      setReferrals(converted);
+    } else {
+      databaseService.list<Referral>('referrals', [
+        where('toUserId', '==', currentUid)
+      ]).then(list => {
+        setReferrals(list.filter(r => {
+          const sUpper = String(r.status || '').toUpperCase();
+          const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
+          return isConverted && !existingSlipReferralIds.has(String(r.id));
+        }));
+      });
+    }
+  }, [profile]);
+
   useEffect(() => {
     if (isMasterAdmin) {
       setActiveTab('all' as any);
@@ -147,8 +211,8 @@ export function ThankYouSlips() {
 
       setError(null);
       try {
-        const sentOrClause = userCandidateIds.flatMap(id => [`from_user_id.eq.${id}`, `submitted_by.eq.${id}`, `receiver_id.eq.${id}`]).join(',');
-        const receivedOrClause = userCandidateIds.flatMap(id => [`to_user_id.eq.${id}`, `sender_id.eq.${id}`]).join(',');
+        const sentOrClause = userCandidateIds.flatMap(id => [`from_user_id.eq.${id}`, `submitted_by.eq.${id}`]).join(',');
+        const receivedOrClause = userCandidateIds.flatMap(id => [`to_user_id.eq.${id}`]).join(',');
 
         const [sentRes, recRes] = await Promise.all([
           supabase.from('thank_you_slips').select('*').or(sentOrClause).order('created_at', { ascending: false }),
@@ -161,11 +225,13 @@ export function ThankYouSlips() {
         } else if (sentRes.data) {
           const mapSent = new Map<string, ThankYouSlip>();
           sentRes.data.forEach((s: any) => {
+            const from = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+            const to = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== from ? s.receiver_id : (s.sender_id && String(s.sender_id) !== from ? s.sender_id : '')) || '');
             const item: ThankYouSlip = {
               id: String(s.id),
               referralId: String(s.referral_id || s.referralId || ''),
-              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
-              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
+              fromUserId: from,
+              toUserId: to,
               customerName: s.customer_name || s.customerName || s.contact_name || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
               notes: s.notes || s.thank_you_message || '',
@@ -182,11 +248,13 @@ export function ThankYouSlips() {
         } else if (recRes.data) {
           const mapRec = new Map<string, ThankYouSlip>();
           recRes.data.forEach((s: any) => {
+            const from = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+            const to = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== from ? s.receiver_id : (s.sender_id && String(s.sender_id) !== from ? s.sender_id : '')) || '');
             const item: ThankYouSlip = {
               id: String(s.id),
               referralId: String(s.referral_id || s.referralId || ''),
-              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
-              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
+              fromUserId: from,
+              toUserId: to,
               customerName: s.customer_name || s.customerName || s.contact_name || '',
               businessValue: Number(s.business_value || s.businessValue || 0),
               notes: s.notes || s.thank_you_message || '',
@@ -206,16 +274,20 @@ export function ThankYouSlips() {
           if (allError) {
             console.error("Error fetching all thank you slips:", allError);
           } else if (allData) {
-            const mappedAll: ThankYouSlip[] = allData.map((s: any) => ({
-              id: String(s.id),
-              referralId: String(s.referral_id || s.referralId || ''),
-              fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || s.receiver_id || ''),
-              toUserId: String(s.to_user_id || s.toUserId || s.sender_id || ''),
-              customerName: s.customer_name || s.customerName || s.contact_name || '',
-              businessValue: Number(s.business_value || s.businessValue || 0),
-              notes: s.notes || s.thank_you_message || '',
-              createdAt: s.created_at || s.createdAt || new Date().toISOString()
-            }));
+            const mappedAll: ThankYouSlip[] = allData.map((s: any) => {
+              const from = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+              const to = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== from ? s.receiver_id : (s.sender_id && String(s.sender_id) !== from ? s.sender_id : '')) || '');
+              return {
+                id: String(s.id),
+                referralId: String(s.referral_id || s.referralId || ''),
+                fromUserId: from,
+                toUserId: to,
+                customerName: s.customer_name || s.customerName || s.contact_name || '',
+                businessValue: Number(s.business_value || s.businessValue || 0),
+                notes: s.notes || s.thank_you_message || '',
+                createdAt: s.created_at || s.createdAt || new Date().toISOString()
+              };
+            });
             setAllSlips(deduplicateSlips(mappedAll));
           }
         }
@@ -224,66 +296,6 @@ export function ThankYouSlips() {
         setError("Failed to fetch thank you slips. Please try again.");
       } finally {
         setLoading(false);
-      }
-    };
-
-    // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
-    const fetchConvertedReferrals = async () => {
-      if (userCandidateIds.length === 0) return;
-
-      const currentUid = String(profile?.id || profile?.uid);
-
-      // Fetch existing slips to filter out referrals that already have a slip
-      const { data: existingSlips } = await supabase
-        .from('thank_you_slips')
-        .select('referral_id, referralId');
-
-      const existingSlipReferralIds = new Set<string>();
-      if (existingSlips) {
-        existingSlips.forEach((s: any) => {
-          const refId = String(s.referral_id || s.referralId || '');
-          if (refId) existingSlipReferralIds.add(refId);
-        });
-      }
-
-      const recOrClause = userCandidateIds.map(id => `receiver_id.eq.${id},to_user_id.eq.${id}`).join(',');
-      const { data: rawRefs } = await supabase
-        .from('referrals')
-        .select('*')
-        .or(recOrClause);
-
-      if (rawRefs && rawRefs.length > 0) {
-        const converted = rawRefs.filter((r: any) => {
-          const sUpper = String(r.status || '').toUpperCase();
-          const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
-          const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || '');
-          const isReceiver = userCandidateIds.includes(receiverId) || receiverId === currentUid;
-          const hasSlip = existingSlipReferralIds.has(String(r.id));
-          return isConverted && isReceiver && !hasSlip;
-        }).map((r: any) => ({
-          id: String(r.id),
-          sender_id: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
-          fromUserId: String(r.sender_id || r.from_user_id || r.fromUserId || ''),
-          receiver_id: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
-          toUserId: String(r.receiver_id || r.to_user_id || r.toUserId || ''),
-          contactName: r.contact_name || r.customer_name || 'Client',
-          contactPhone: r.contact_phone || r.phone || r.contact_number || r.mobile || 'N/A',
-          requirement: r.business_requirement || r.requirement || '',
-          notes: r.notes || '',
-          status: r.status,
-          createdAt: r.created_at || r.createdAt
-        } as Referral));
-        setReferrals(converted);
-      } else {
-        databaseService.list<Referral>('referrals', [
-          where('toUserId', '==', currentUid)
-        ]).then(list => {
-          setReferrals(list.filter(r => {
-            const sUpper = String(r.status || '').toUpperCase();
-            const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
-            return isConverted && !existingSlipReferralIds.has(String(r.id));
-          }));
-        });
       }
     };
 
@@ -452,13 +464,14 @@ export function ThankYouSlips() {
       const { data: existingSlips, error: checkError } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .eq('referral_id', String(selectedReferral.id));
+        .or(`referral_id.eq.${String(selectedReferral.id)},referralId.eq.${String(selectedReferral.id)}`);
 
       if (checkError) {
         console.warn("Check existing slips notice:", checkError);
       }
 
       if (existingSlips && existingSlips.length > 0) {
+        setReferrals(prev => prev.filter(r => String(r.id) !== String(selectedReferral.id)));
         throw new Error("A Thank You Slip has already been submitted for this referral.");
       }
 
@@ -467,8 +480,8 @@ export function ThankYouSlips() {
       // Clean payload for thank_you_slips table (REQUIREMENT 1)
       const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
-        sender_id: targetSenderId,
-        receiver_id: currentUserId,
+        sender_id: currentUserId,
+        receiver_id: targetSenderId,
         submitted_by: currentUserId,
         contact_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
         customer_name: formData.customerName || selectedReferral.contactName || refRow?.contact_name || refRow?.customer_name || '',
@@ -598,13 +611,18 @@ export function ThankYouSlips() {
     return true;
   });
 
-  // Business Generated & Business Sent: Business generated for other members
+  // Business Generated & Business Sent: Total business sent by the user (slips submitted by user)
   const totalBusinessSent = isMasterAdmin 
     ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
-    : receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+    : slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+  
+  // Business Generated always equals Business Sent
   const totalBusinessGenerated = totalBusinessSent;
-  // Business Received: Business received by logged-in user (slips submitted by logged-in user where logged-in user is fromUserId / receiver)
-  const totalBusinessReceived = slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+
+  // Business Received: Total business received by the user (slips received where user is toUserId)
+  const totalBusinessReceived = isMasterAdmin
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
+    : receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
 
   // totalBusinessGenerated is synchronized with totalBusinessSent above
 
@@ -668,6 +686,7 @@ export function ThankYouSlips() {
                 <button
                   onClick={() => {
                     setError(null);
+                    fetchConvertedReferrals();
                     setIsModalOpen(true);
                   }}
                   className="group relative flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:px-6 sm:py-4 bg-primary text-white rounded-xl sm:rounded-[16px] text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all hover:bg-primary/90 active:scale-95 shadow-lg cursor-pointer"
@@ -1142,12 +1161,12 @@ export function ThankYouSlips() {
               <p className="text-xs text-neutral-400 italic">This message will be visible to the member who provided the referral.</p>
             </div>
 
-            <div className="pt-4">
+            <div className="sticky bottom-0 bg-[#111827] pt-3 pb-2 sm:pb-1 -mx-4 px-4 sm:-mx-6 sm:px-6 border-t border-white/5 shadow-xl z-10 mt-6">
               <button
                 type="submit"
                 disabled={isSubmitting}
                 className={cn(
-                  "w-full py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all shadow-2xl active:scale-[0.98] flex items-center justify-center gap-2 text-xs uppercase tracking-widest",
+                  "w-full py-3.5 sm:py-4 bg-primary text-white rounded-xl sm:rounded-[12px] font-bold hover:bg-primary/90 transition-all shadow-2xl active:scale-[0.98] flex items-center justify-center gap-2 text-xs uppercase tracking-widest cursor-pointer",
                   isSubmitting && "opacity-70 cursor-not-allowed"
                 )}
               >

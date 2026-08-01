@@ -813,7 +813,7 @@ export function Referrals() {
       const { data: existingSlips } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .eq('referral_id', String(selectedReferral.id));
+        .or(`referral_id.eq.${String(selectedReferral.id)},referralId.eq.${String(selectedReferral.id)}`);
 
       if (existingSlips && existingSlips.length > 0) {
         throw new Error("A Thank You Slip has already been submitted for this referral.");
@@ -823,8 +823,8 @@ export function Referrals() {
 
       const cleanDbPayload = {
         referral_id: String(selectedReferral.id),
-        sender_id: targetReferrerId,
-        receiver_id: currentUserId,
+        sender_id: currentUserId,
+        receiver_id: targetReferrerId,
         submitted_by: currentUserId,
         from_user_id: currentUserId,
         to_user_id: targetReferrerId,
@@ -1593,7 +1593,7 @@ export function Referrals() {
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 sticky bottom-0 bg-[#111827] pt-3 pb-2 sm:pb-1 -mx-4 px-4 sm:-mx-6 sm:px-6 border-t border-white/5 shadow-xl z-10 mt-6">
             <button
               type="button"
               onClick={() => {
@@ -1601,7 +1601,7 @@ export function Referrals() {
                 setIsDetailModalOpen(true);
               }}
               disabled={isSubmitting}
-              className="flex-1 px-6 py-4 border border-white/10 text-neutral-400 rounded-[12px] font-bold uppercase tracking-widest text-[10px] hover:bg-[#1C2538] transition-all disabled:opacity-50"
+              className="flex-1 px-4 sm:px-6 py-3.5 sm:py-4 border border-white/10 text-neutral-400 rounded-xl sm:rounded-[12px] font-bold uppercase tracking-widest text-[10px] sm:text-xs hover:bg-[#1C2538] transition-all disabled:opacity-50 cursor-pointer"
             >
               Back
             </button>
@@ -1609,7 +1609,7 @@ export function Referrals() {
               type="submit"
               disabled={isSubmitting}
               className={cn(
-                "flex-2 py-4 bg-red-600 text-white rounded-[12px] font-bold hover:bg-red-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-red-500/20 flex items-center justify-center gap-2",
+                "flex-2 py-3.5 sm:py-4 bg-red-600 text-white rounded-xl sm:rounded-[12px] font-bold hover:bg-red-700 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-red-500/20 flex items-center justify-center gap-2 text-xs uppercase tracking-widest cursor-pointer",
                 isSubmitting && "opacity-70 cursor-not-allowed"
               )}
             >

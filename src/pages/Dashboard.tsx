@@ -338,16 +338,20 @@ export function Analytics() {
     // Fetch thank_you_slips from Supabase as well
     supabase.from('thank_you_slips').select('*').then(({ data: sbSlips }) => {
       if (sbSlips && sbSlips.length > 0) {
-        const mappedSbSlips = sbSlips.map((s: any) => ({
-          id: String(s.id),
-          referralId: String(s.referral_id || s.referralId || ''),
-          fromUserId: String(s.from_user_id || s.sender_id || s.fromUserId || ''),
-          toUserId: String(s.to_user_id || s.receiver_id || s.toUserId || ''),
-          customerName: s.customer_name || s.customerName || '',
-          businessValue: Number(s.business_value || s.businessValue || 0),
-          notes: s.notes || '',
-          createdAt: s.created_at || s.createdAt || new Date().toISOString()
-        }));
+        const mappedSbSlips = sbSlips.map((s: any) => {
+          const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+          const slipReceiver = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== slipSender ? s.receiver_id : (s.sender_id && String(s.sender_id) !== slipSender ? s.sender_id : '')) || '');
+          return {
+            id: String(s.id),
+            referralId: String(s.referral_id || s.referralId || ''),
+            fromUserId: slipSender,
+            toUserId: slipReceiver,
+            customerName: s.customer_name || s.customerName || '',
+            businessValue: Number(s.business_value || s.businessValue || 0),
+            notes: s.notes || '',
+            createdAt: s.created_at || s.createdAt || new Date().toISOString()
+          };
+        });
         setAllSlips(prev => {
           return deduplicateSlips([...prev, ...mappedSbSlips]);
         });
@@ -560,12 +564,12 @@ export function Analytics() {
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || '');
+        const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
         return subBy === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const subBy = String(s.submitted_by || s.fromUserId || s.from_user_id || '');
+      const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
       return usePersonalStats ? userCandidateIds.includes(subBy) : chapterUserIds.includes(subBy);
     });
   }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
@@ -573,13 +577,13 @@ export function Analytics() {
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const sendBy = String(s.receiver_id || s.toUserId || s.to_user_id || '');
-        return sendBy === String(appliedMemberFilter);
+        const recBy = String(s.toUserId || s.to_user_id || '');
+        return recBy === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const sendBy = String(s.receiver_id || s.toUserId || s.to_user_id || '');
-      return usePersonalStats ? userCandidateIds.includes(sendBy) : chapterUserIds.includes(sendBy);
+      const recBy = String(s.toUserId || s.to_user_id || '');
+      return usePersonalStats ? userCandidateIds.includes(recBy) : chapterUserIds.includes(recBy);
     });
   }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 

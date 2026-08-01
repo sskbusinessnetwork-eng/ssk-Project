@@ -578,11 +578,11 @@ export async function addDoc(collectionRef: any, data: any) {
   if (collectionPath === 'thank_you_slips') {
     const cleanSlipPayload = {
       referral_id: cleanData.referral_id || cleanData.referralId || null,
-      sender_id: cleanData.sender_id || cleanData.senderId || cleanData.to_user_id || cleanData.toUserId || null,
-      receiver_id: cleanData.receiver_id || cleanData.receiverId || cleanData.from_user_id || cleanData.fromUserId || null,
-      submitted_by: cleanData.submitted_by || cleanData.submittedBy || cleanData.receiver_id || cleanData.from_user_id || null,
-      from_user_id: cleanData.from_user_id || cleanData.fromUserId || cleanData.receiver_id || null,
-      to_user_id: cleanData.to_user_id || cleanData.toUserId || cleanData.sender_id || null,
+      sender_id: cleanData.sender_id || cleanData.senderId || cleanData.from_user_id || cleanData.fromUserId || cleanData.submitted_by || cleanData.submittedBy || null,
+      receiver_id: cleanData.receiver_id || cleanData.receiverId || cleanData.to_user_id || cleanData.toUserId || null,
+      submitted_by: cleanData.submitted_by || cleanData.submittedBy || cleanData.from_user_id || cleanData.fromUserId || null,
+      from_user_id: cleanData.from_user_id || cleanData.fromUserId || cleanData.submitted_by || cleanData.submittedBy || null,
+      to_user_id: cleanData.to_user_id || cleanData.toUserId || null,
       customer_name: cleanData.customer_name || cleanData.customerName || '',
       business_value: Number(cleanData.business_value || cleanData.businessValue || cleanData.businessAmount || 0),
       notes: cleanData.notes || cleanData.thankYouMessage || cleanData.businessDescription || '',

@@ -92,11 +92,19 @@ export function MemberCompanionView({
     const year = now.getFullYear();
     const month = now.getMonth();
     
-    const userId = profile?.uid || profile?.id || '';
+    const userCandidateIds = [profile?.uid, profile?.id].filter(Boolean).map(String);
 
     // Filter to only the user's data
-    const userSlips = allSlips.filter(s => s.fromUserId === userId || s.toUserId === userId);
-    const userRefs = allReferrals.filter(r => r.fromUserId === userId || r.toUserId === userId);
+    const userSlips = allSlips.filter(s => {
+      const from = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+      const to = String(s.toUserId || s.to_user_id || '');
+      return userCandidateIds.includes(from) || userCandidateIds.includes(to);
+    });
+    const userRefs = allReferrals.filter(r => {
+      const from = String(r.fromUserId || r.from_user_id || r.sender_id || '');
+      const to = String(r.toUserId || r.to_user_id || r.receiver_id || '');
+      return userCandidateIds.includes(from) || userCandidateIds.includes(to);
+    });
 
     // Business Analytics Calculations
     let businessSent = 0;
@@ -109,28 +117,31 @@ export function MemberCompanionView({
     userSlips.forEach(s => {
       const val = Number(s.businessValue || s.transactionValue) || 0;
       const d = new Date(s.createdAt || s.date);
+      const from = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+      const to = String(s.toUserId || s.to_user_id || '');
       
-      if (s.fromUserId === userId) businessSent += val;
-      if (s.toUserId === userId) businessReceived += val;
+      const isSender = userCandidateIds.includes(from);
+      const isReceiver = userCandidateIds.includes(to);
+
+      if (isSender) businessSent += val;
+      if (isReceiver) businessReceived += val;
       
       const isThisMonth = d.getFullYear() === year && d.getMonth() === month;
-      if (isThisMonth) {
-        if (s.fromUserId === userId || s.toUserId === userId) {
-           thisMonthBusiness += val;
-        }
+      if (isThisMonth && (isSender || isReceiver)) {
+        thisMonthBusiness += val;
       }
 
-      if (d.toDateString() === todayStr) {
-        if (s.fromUserId === userId || s.toUserId === userId) {
-           todayBusiness += val;
-        }
+      if (d.toDateString() === todayStr && (isSender || isReceiver)) {
+        todayBusiness += val;
       }
     });
 
+    const businessGenerated = businessSent;
     const totalBusiness = businessSent + businessReceived;
 
     const userBusinessStats = {
       businessSent,
+      businessGenerated,
       businessReceived,
       totalBusiness,
       thisMonthBusiness,
