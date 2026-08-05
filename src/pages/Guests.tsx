@@ -92,11 +92,10 @@ export function Guests() {
       // 3. Fetch Guest Invitations History
       let invsQuery = supabase.from('guest_invitations').select('*');
       if (profile.role === 'MASTER_ADMIN') {
-        // Master Admin sees all
-      } else if (isChapterAdmin && userChapterId) {
-        invsQuery = invsQuery.or(`invited_by.eq.${userId},invited_by_chapter.eq.${userChapterId}`);
+        // Master Admin sees all in system view
       } else {
-        invsQuery = invsQuery.eq('invited_by', userId);
+        // Members, Chapter Admins, Position Holders only see their own invited guests on their personal page
+        invsQuery = invsQuery.or(`invited_by.eq.${userId},invited_by_user_id.eq.${userId},created_by.eq.${userId}`);
       }
 
       const { data: invs } = await invsQuery.order('created_at', { ascending: false });
@@ -111,7 +110,7 @@ export function Guests() {
             if (extra.guest_invitations && Array.isArray(extra.guest_invitations)) {
               const existingIds = new Set(combinedInvs.map((i: any) => i.id));
               for (const extraInv of extra.guest_invitations) {
-                if (!existingIds.has(extraInv.id)) {
+                if (!existingIds.has(extraInv.id) && (profile.role === 'MASTER_ADMIN' || extraInv.invited_by === userId || extraInv.invited_by_user_id === userId || extraInv.created_by === userId)) {
                   combinedInvs.push(extraInv);
                 }
               }
@@ -143,14 +142,18 @@ export function Guests() {
       return;
     }
 
-    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || profile.role === 'MASTER_ADMIN';
-    if (!isChapterAdmin) {
-      setError("ONLY the Chapter Admin can invite a guest for a meeting belonging to their chapter.");
+    if (profile.role === 'MASTER_ADMIN') {
+      setError("Master Admin cannot invite guests.");
       return;
     }
 
     const userId = profile.id || profile.uid;
     const userChapterId = profile.chapter_id || (profile as any).chapterId;
+
+    if (!userChapterId) {
+      setError("You must belong to a chapter to invite guests.");
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -158,15 +161,55 @@ export function Guests() {
       const selectedMeeting = upcomingMeetings.find(m => m.id === formData.meetingId);
       if (!selectedMeeting) throw new Error("Please select a valid meeting.");
 
-      if (profile.role !== 'MASTER_ADMIN' && selectedMeeting.chapter_id !== userChapterId) {
+      if (selectedMeeting.chapter_id && userChapterId && String(selectedMeeting.chapter_id).trim() !== String(userChapterId).trim()) {
         throw new Error("You can only invite guests to meetings belonging to your own chapter.");
       }
 
+      const getFormattedRole = (user: any): string => {
+        const pos = user.position ? String(user.position).trim() : '';
+        if (pos) {
+          const pLower = pos.toLowerCase();
+          if (pLower === 'president') return 'President';
+          if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+          if (pLower === 'treasurer') return 'Treasurer';
+          if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+          if (pLower === 'member') return 'Member';
+          return pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+        if (user.role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+        return 'Member';
+      };
+
+      // Fetch dynamic Chapter Name
+      let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
+
+      if (!resolvedChapterName && userChapterId) {
+        const { data: chap } = await supabase
+          .from('chapters')
+          .select('chapter_name')
+          .eq('id', userChapterId)
+          .maybeSingle();
+        if (chap?.chapter_name) {
+          resolvedChapterName = chap.chapter_name;
+        }
+      }
+
+      if (!resolvedChapterName) {
+        resolvedChapterName = 'SSK Business Network';
+      }
+
+      const invitedByName = profile.name || profile.full_name || (profile as any).fullName || 'Member';
+      const invitedByRole = getFormattedRole(profile);
+
       const newInvitation = {
         invited_by: userId,
+        invited_by_user_id: userId,
         created_by: userId,
-        invited_by_name: profile.name || profile.full_name || 'Chapter Admin',
+        invited_by_name: invitedByName,
+        invited_by_role: invitedByRole,
+        chapter_id: userChapterId || selectedMeeting.chapter_id,
         invited_by_chapter: userChapterId || selectedMeeting.chapter_id,
+        chapter_name: resolvedChapterName,
         guest_name: formData.guestName,
         guest_phone: formData.guestPhone,
         guest_whatsapp: formData.guestWhatsapp,
@@ -190,7 +233,6 @@ export function Guests() {
       if (!insertError && data && data.length > 0) {
         insertSuccess = true;
       } else {
-        // Fall back to server API endpoint which verifies Chapter Admin and chapter meeting ownership
         const res = await fetch('/api/guests/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -213,40 +255,7 @@ export function Guests() {
 
       // Refresh list
       fetchInitialData();
-      
-      // Fetch dynamic Chapter Name
-      let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
 
-      if (!resolvedChapterName) {
-        const targetChapterId = userChapterId || selectedMeeting.chapter_id;
-        if (targetChapterId) {
-          const { data: chap } = await supabase
-            .from('chapters')
-            .select('chapter_name')
-            .eq('id', targetChapterId)
-            .maybeSingle();
-          if (chap?.chapter_name) {
-            resolvedChapterName = chap.chapter_name;
-          }
-        }
-      }
-
-      if (!resolvedChapterName && userId) {
-        const { data: chap } = await supabase
-          .from('chapters')
-          .select('chapter_name')
-          .or(`chapter_admin_id.eq.${userId},president_id.eq.${userId},vice_president_id.eq.${userId},treasurer_id.eq.${userId}`)
-          .maybeSingle();
-        if (chap?.chapter_name) {
-          resolvedChapterName = chap.chapter_name;
-        }
-      }
-
-      if (!resolvedChapterName) {
-        resolvedChapterName = 'SSK Business Network';
-      }
-
-      const invitedByName = profile.name || profile.full_name || (profile as any).fullName || 'Member';
       const venue = selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall';
       const locationLink = selectedMeeting.location_link || selectedMeeting.locationLink || selectedMeeting.location_url || (selectedMeeting.location && selectedMeeting.location.startsWith('http') ? selectedMeeting.location : '') || selectedMeeting.location || 'N/A';
 
@@ -265,7 +274,7 @@ We would be delighted to have you join us to connect with local business profess
 Looking forward to seeing you.
 
 Regards,
-${invitedByName}
+${invitedByName} (${invitedByRole})
 ${resolvedChapterName} Chapter
 SSK Business Network`;
       
@@ -281,8 +290,9 @@ SSK Business Network`;
         meetingId: ''
       });
       
-      // Update workspace checklist automatically
+      // Broadcast events so Growth Score, My Analytics, Chapter Analytics, and My Chapter Report update instantly
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
     } catch (error: any) {
       console.error("Error sending invitation:", error);
       setError(error.message || "Failed to send invitation. Please try again.");
@@ -298,18 +308,20 @@ SSK Business Network`;
           <h1 className="text-2xl font-bold text-white tracking-tight">Guest Invitations</h1>
           <p className="text-sm text-neutral-400 mt-1">Invite and track your guests to upcoming chapter meetings.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => {
-              setIsModalOpen(true);
-              setShowSuccess(false);
-            }}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-[12px] font-bold uppercase tracking-widest hover:bg-primary/90 transition-all text-xs"
-          >
-            <Plus size={16} />
-            <span>Invite a New Guest</span>
-          </button>
-        </div>
+        {profile?.role !== 'MASTER_ADMIN' && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => {
+                setIsModalOpen(true);
+                setShowSuccess(false);
+              }}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-[12px] font-bold uppercase tracking-widest hover:bg-primary/90 transition-all text-xs"
+            >
+              <Plus size={16} />
+              <span>Invite a New Guest</span>
+            </button>
+          </div>
+        )}
       </header>
 
       {/* Guest Invitation History */}

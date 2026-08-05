@@ -825,7 +825,10 @@ export function Members() {
               <div className="space-y-4">
                 {memberInvites.length > 0 ? (
                   memberInvites.map((invite) => {
-                    const inviter = members.find(m => m.uid === invite.createdBy);
+                    const inviterId = String((invite as any).invited_by_user_id || (invite as any).invited_by || invite.createdBy || (invite as any).user_id || '').trim();
+                    const inviter = members.find(m => String(m.uid || m.id) === inviterId);
+                    const inviterName = (invite as any).invited_by_name || inviter?.name || 'Member';
+                    const inviterRole = (invite as any).invited_by_role || inviter?.position || '';
                     return (
                       <div key={invite.id} className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
@@ -833,10 +836,10 @@ export function Members() {
                             <UserPlus size={20} />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-white">{invite.guestName}</h4>
-                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{invite.guestBusiness}</p>
+                            <h4 className="text-sm font-bold text-white">{invite.guestName || (invite as any).guest_name}</h4>
+                            <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{invite.guestBusiness || (invite as any).business_category}</p>
                             <p className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1">
-                              Invited By: {inviter?.name || 'Member'}
+                              Invited By: {inviterName}{inviterRole ? ` (${inviterRole})` : ''}
                             </p>
                           </div>
                         </div>

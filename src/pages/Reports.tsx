@@ -421,7 +421,10 @@ export function Reports() {
       ).length;
 
       // 4. Guests Invited
-      const guestsInvited = reportsData.guests.filter(g => g.createdBy === member.uid).length;
+      const guestsInvited = reportsData.guests.filter(g => {
+        const inviterId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+        return inviterId === String(member.uid || member.id);
+      }).length;
 
       // 5. Testimonials Submitted
       const testimonialsSubmitted = reportsData.testimonials.filter(t => t.authorMemberId === member.uid).length;

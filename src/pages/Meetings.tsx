@@ -2,6 +2,7 @@ import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
 import { getCleanFullName } from '../utils/authUtils';
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Calendar, 
@@ -295,6 +296,9 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
 
 export function Meetings() {
   const { profile, refreshProfile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const urlMeetingId = searchParams.get('meetingId');
+
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -331,6 +335,60 @@ export function Meetings() {
   const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
+
+  const primaryFocusMeeting = React.useMemo(() => {
+    if (urlMeetingId) {
+      const found = meetings.find(m => String(m.id) === String(urlMeetingId));
+      if (found) return found;
+    }
+    const userChapId = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
+    const chapterMeetings = meetings.filter(m => {
+      const mChap = String(m.chapter_id || (m as any)?.chapterId || '').trim();
+      return !userChapId || !mChap || mChap === userChapId;
+    });
+    if (chapterMeetings.length > 0) {
+      return chapterMeetings[0];
+    }
+    return meetings[0] || null;
+  }, [meetings, urlMeetingId, profile?.chapter_id, (profile as any)?.chapterId]);
+
+  const handleMarkUserAttendance = async (meeting: Meeting, status: 'Present' | 'Absent') => {
+    if (!profile || !meeting) return;
+    const uId = profile.uid || profile.id;
+
+    const currentAttendance = { ...(meeting.attendance || {}) };
+    currentAttendance[uId] = status;
+
+    setMeetings(prev => prev.map(m => m.id === meeting.id ? { ...m, attendance: currentAttendance } : m));
+    if (selectedMeeting?.id === meeting.id) {
+      setSelectedMeeting(prev => prev ? { ...prev, attendance: currentAttendance } : null);
+    }
+
+    try {
+      await supabase
+        .from('meetings')
+        .update({ attendance: currentAttendance })
+        .eq('id', meeting.id);
+    } catch (e) {
+      console.error('Failed to update attendance in Supabase:', e);
+    }
+
+    try {
+      await databaseService.update('meetings', meeting.id, { attendance: currentAttendance });
+    } catch (e) {
+      console.error('Failed to update attendance in local DB:', e);
+    }
+
+    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    window.dispatchEvent(new CustomEvent('profile-updated'));
+    if (refreshProfile) refreshProfile();
+
+    if (status === 'Present') {
+      setSuccess('Attendance marked as Present! Growth score points awarded.');
+    } else {
+      setSuccess('Attendance recorded as Absent.');
+    }
+  };
 
   const [defaultSetupData, setDefaultSetupData] = useState({
     adminId: '',
@@ -1703,6 +1761,243 @@ export function Meetings() {
 
       {/* Main Content Area */}
       <div className="space-y-12">
+        {/* PRIMARY FOCUS MEETING DETAILS CARD */}
+        {primaryFocusMeeting && (
+          <div className="bg-[#151C2E] p-6 sm:p-8 rounded-[24px] border border-primary/30 shadow-2xl shadow-primary/5 space-y-6 relative overflow-hidden">
+            <div className="absolute -top-24 -right-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Top Header Row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1.5">
+                  <Building size={12} />
+                  {getChapterName(primaryFocusMeeting)}
+                </span>
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-primary/10 text-primary border border-primary/20">
+                  {(primaryFocusMeeting.location || '').toLowerCase().includes('zoom') || (primaryFocusMeeting.location || '').toLowerCase().includes('http') ? 'Online Meeting' : 'In-Person / Offline'}
+                </span>
+              </div>
+              <span className={cn(
+                "px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border",
+                isMeetingDone(primaryFocusMeeting) ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                primaryFocusMeeting.isCancelled ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                "bg-amber-500/10 text-amber-400 border-amber-500/20"
+              )}>
+                {isMeetingDone(primaryFocusMeeting) ? 'Completed' : primaryFocusMeeting.isCancelled ? 'Cancelled' : 'Upcoming Scheduled'}
+              </span>
+            </div>
+
+            {/* Title & Host */}
+            <div>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tight font-display leading-tight">
+                {primaryFocusMeeting.title || primaryFocusMeeting.topic || `${getChapterName(primaryFocusMeeting)} Chapter Meeting`}
+              </h2>
+              <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider mt-1.5 flex items-center gap-2">
+                <Users size={14} className="text-primary" />
+                Hosted By: <span className="text-white font-extrabold">{getScheduledByName(primaryFocusMeeting)}</span>
+              </p>
+            </div>
+
+            {/* Primary Metadata Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-[#111827]/80 p-4 sm:p-5 rounded-[18px] border border-white/5">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Calendar size={13} className="text-primary" /> Meeting Date
+                </p>
+                <p className="text-sm font-bold text-white">
+                  {primaryFocusMeeting.date ? format(new Date(primaryFocusMeeting.date), 'EEEE, dd MMM yyyy') : 'N/A'}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Clock size={13} className="text-primary" /> Meeting Time
+                </p>
+                <p className="text-sm font-bold text-white">
+                  {primaryFocusMeeting.time ? formatTime12h(primaryFocusMeeting.time) : '10:00 AM'}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <MapPin size={13} className="text-primary" /> Location
+                </p>
+                <p className="text-sm font-bold text-white truncate">
+                  {primaryFocusMeeting.location || 'SSK Chapter Venue'}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Shield size={13} className="text-primary" /> Meeting Type
+                </p>
+                <p className="text-sm font-bold text-white">
+                  {(primaryFocusMeeting.location || '').toLowerCase().includes('zoom') || (primaryFocusMeeting.location || '').toLowerCase().includes('http') ? 'Online (Virtual)' : 'Offline (In-Person)'}
+                </p>
+              </div>
+            </div>
+
+            {/* Attendance Interactive Section */}
+            <div className="pt-2 border-t border-white/5">
+              {(() => {
+                const userId = profile?.uid || profile?.id;
+                const currentAtt = String((primaryFocusMeeting.attendance || {})[userId] || '').trim();
+                const isPresent = ['Present', 'PRESENT', 'Yes', 'YES', 'Substitute', 'SUBSTITUTE'].includes(currentAtt);
+                const isAbsent = ['Absent', 'ABSENT', 'No', 'NO'].includes(currentAtt);
+
+                return (
+                  <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-primary" />
+                        Chapter Meeting Attendance
+                      </h4>
+                      <p className="text-[11px] text-neutral-400">
+                        Mark your attendance to complete your Workspace Checklist task and update your Growth Score.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      {isPresent ? (
+                        <div className="flex items-center gap-3">
+                          <span className="px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-[12px] font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 size={16} /> Marked Present
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Absent')}
+                            className="px-3 py-2 bg-[#151C2E] hover:bg-[#1C2538] text-neutral-400 hover:text-white border border-white/10 rounded-[12px] text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                          >
+                            Change to Absent
+                          </button>
+                        </div>
+                      ) : isAbsent ? (
+                        <div className="flex items-center gap-3">
+                          <span className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-[12px] font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <XCircle size={16} /> Marked Absent
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Present')}
+                            className="px-3 py-2 bg-primary text-white hover:bg-primary/90 rounded-[12px] text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
+                          >
+                            Change to Present
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Present')}
+                            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
+                          >
+                            <CheckCircle2 size={16} />
+                            Mark Present
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Absent')}
+                            className="px-5 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                          >
+                            <XCircle size={16} />
+                            Mark Absent
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* COMPACT SECONDARY MICRO CARDS GRID */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <div className="w-1.5 h-4 bg-primary/60 rounded-full" />
+            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-display">
+              Meeting Overview & Secondary Details
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Micro Card 1: Attendees */}
+            <div 
+              onClick={() => primaryFocusMeeting && handleOpenAttendanceReport(primaryFocusMeeting)}
+              className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
+            >
+              <div className="flex items-center justify-between text-neutral-400">
+                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <Users size={12} className="text-primary" /> Attendees
+                </span>
+                <ChevronRight size={12} />
+              </div>
+              <div>
+                <p className="text-base font-black text-white">
+                  {primaryFocusMeeting ? Object.keys(primaryFocusMeeting.attendance || {}).length : 0} Members Marked
+                </p>
+                <p className="text-[10px] text-neutral-400 font-medium">Click to view full roster report</p>
+              </div>
+            </div>
+
+            {/* Micro Card 2: Agenda & Notes */}
+            <div 
+              onClick={() => {
+                if (primaryFocusMeeting) {
+                  setSelectedMeeting(primaryFocusMeeting);
+                  setNotes(primaryFocusMeeting.notes || primaryFocusMeeting.description || '');
+                  setIsNotesModalOpen(true);
+                }
+              }}
+              className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
+            >
+              <div className="flex items-center justify-between text-neutral-400">
+                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText size={12} className="text-primary" /> Agenda & Notes
+                </span>
+                <ChevronRight size={12} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white line-clamp-1">
+                  {primaryFocusMeeting?.description || primaryFocusMeeting?.notes || 'Weekly Chapter Agenda'}
+                </p>
+                <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Click to view notes</p>
+              </div>
+            </div>
+
+            {/* Micro Card 3: Guests */}
+            <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
+              <div className="flex items-center justify-between text-neutral-400">
+                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <UserPlus size={12} className="text-primary" /> Guests
+                </span>
+              </div>
+              <div>
+                <p className="text-base font-black text-white">
+                  {meetingGuests.length} Guests Invited
+                </p>
+                <p className="text-[10px] text-neutral-400 font-medium">Chapter guest invitations</p>
+              </div>
+            </div>
+
+            {/* Micro Card 4: Documents & Fee */}
+            <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
+              <div className="flex items-center justify-between text-neutral-400">
+                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <Shield size={12} className="text-primary" /> Meeting Fee
+                </span>
+              </div>
+              <div>
+                <p className="text-base font-black text-emerald-400">
+                  ₹{primaryFocusMeeting?.fee || 0}
+                </p>
+                <p className="text-[10px] text-neutral-400 font-medium">Fee configuration</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 1. Upcoming Meetings */}
         {scheduledMeetings.length > 0 ? (
           <div className="space-y-4">
@@ -2224,7 +2519,7 @@ export function Meetings() {
                               <div className="min-w-0">
                                 <p className="text-sm font-bold text-white truncate">{guest.guest_name}</p>
                                 <p className="text-[10px] text-neutral-400 truncate mt-0.5">
-                                  Invited by {inviter?.name || guest.invited_by_name || 'Member'} • {guest.business_category || 'Guest'}
+                                  Invited by {inviter?.name || guest.invited_by_name || 'Member'}{guest.invited_by_role ? ` (${guest.invited_by_role})` : inviter?.position ? ` (${inviter.position})` : ''} • {guest.business_category || 'Guest'}
                                 </p>
                               </div>
                             </td>

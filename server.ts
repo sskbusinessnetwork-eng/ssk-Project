@@ -121,7 +121,7 @@ async function startServer() {
     }
   });
 
-  // Invite Guest endpoint (Only Chapter Admin for their own chapter meeting)
+  // Invite Guest endpoint (Members, Chapter Admins, Position Holders)
   app.post("/api/guests/invite", async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     try {
@@ -145,11 +145,8 @@ async function startServer() {
         return res.status(403).json({ success: false, error: "Account is not active." });
       }
 
-      const isChapterAdmin = caller.role === 'CHAPTER_ADMIN' || caller.position === 'chapter_admin';
-      const isMasterAdmin = caller.role === 'MASTER_ADMIN';
-
-      if (!isChapterAdmin && !isMasterAdmin) {
-        return res.status(403).json({ success: false, error: "Only Chapter Admins can invite guests." });
+      if (caller.role === 'MASTER_ADMIN') {
+        return res.status(403).json({ success: false, error: "Master Admin cannot invite guests." });
       }
 
       // 2. Verify selected meeting belongs to caller's chapter
@@ -164,16 +161,36 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Invalid meeting selected." });
       }
 
-      if (!isMasterAdmin && meeting.chapter_id && caller.chapter_id && String(meeting.chapter_id).trim() !== String(caller.chapter_id).trim()) {
-        return res.status(403).json({ success: false, error: "Chapter Admin can only invite guests to meetings belonging to their own chapter." });
+      if (meeting.chapter_id && caller.chapter_id && String(meeting.chapter_id).trim() !== String(caller.chapter_id).trim()) {
+        return res.status(403).json({ success: false, error: "You can only invite guests to meetings belonging to your own chapter." });
       }
+
+      const formatRole = (pos?: string, role?: string) => {
+        if (pos && typeof pos === 'string' && pos.trim()) {
+          const pLower = pos.trim().toLowerCase();
+          if (pLower === 'president') return 'President';
+          if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+          if (pLower === 'treasurer') return 'Treasurer';
+          if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+          if (pLower === 'member') return 'Member';
+          return pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+        if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+        return 'Member';
+      };
+
+      const callerRole = formatRole(caller.position, caller.role);
 
       // 3. Prepare sanitised invitation payload
       const invitePayload = {
         invited_by: caller.id,
+        invited_by_user_id: caller.id,
         created_by: caller.id,
-        invited_by_name: caller.name || newInvitation.invited_by_name || 'Chapter Admin',
-        invited_by_chapter: caller.chapter_id,
+        invited_by_name: caller.name || newInvitation.invited_by_name || 'Member',
+        invited_by_role: newInvitation.invited_by_role || callerRole,
+        chapter_id: caller.chapter_id || meeting.chapter_id,
+        invited_by_chapter: caller.chapter_id || meeting.chapter_id,
+        chapter_name: newInvitation.chapter_name || '',
         guest_name: newInvitation.guest_name,
         guest_phone: newInvitation.guest_phone,
         guest_whatsapp: newInvitation.guest_whatsapp,

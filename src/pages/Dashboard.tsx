@@ -711,7 +711,7 @@ export function Analytics() {
     const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
     return effectiveGuestInvitations.filter(g => {
       const gChapId = String(g.chapter_id || g.chapterId || '').trim();
-      const inviter = String(g.inviterId || g.inviter_id || '');
+      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
       if (usePersonalStats) return userCandidateIds.includes(inviter);
       return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
     });
@@ -722,7 +722,7 @@ export function Analytics() {
   const userGuestsJoined = useMemo(() => {
     if (!profile) return 0;
     return effectiveGuestInvitations.filter(g => {
-      const inviter = String(g.inviterId || g.inviter_id || g.user_id || '');
+      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
       if (!userCandidateIds.includes(inviter)) return false;
       const st = String(g.status || g.attendance_status || '').toLowerCase();
       return st === 'present' || st === 'attended' || st === 'joined' || st === 'converted' || g.is_converted === true || g.isConverted === true;
@@ -1901,15 +1901,19 @@ export function Analytics() {
 
       if (!isGlobal) {
         list = list.filter(g => {
-            if (usePersonalStats) {
-               return String(g.inviterId) === String(profile?.id || profile?.uid);
-            }
-            return String(g.chapter_id) === String(profile?.chapter_id);
+          const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          if (usePersonalStats) {
+             return invId === String(profile?.id || profile?.uid);
+          }
+          return String(g.chapter_id || g.chapterId) === String(profile?.chapter_id);
         });
       }
       
       records = list.map(g => {
-        const inviter = allUsersList.find(u => String(u.uid) === String(g.inviterId)) || chapterUsers.find(u => String(u.uid) === String(g.inviterId));
+        const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+        const inviter = allUsersList.find(u => String(u.uid || u.id) === invId) || chapterUsers.find(u => String(u.uid || u.id) === invId);
+        const inviterName = g.invited_by_name || inviter?.name || g.inviterName || 'Member';
+        const inviterRole = g.invited_by_role || (inviter?.position ? inviter.position : 'Member');
         const st = (g.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'attended') bColor = 'emerald';
@@ -1917,14 +1921,14 @@ export function Analytics() {
 
         return {
           id: g.id,
-          title: g.guestName || 'N/A',
-          subtitle: `Invited By: ${inviter?.name || g.inviterName || 'N/A'}`,
+          title: g.guest_name || g.guestName || 'N/A',
+          subtitle: `Invited By: ${inviterName}${inviterRole ? ` (${inviterRole})` : ''}`,
           icon: <UserPlus size={20} className="text-white/70" />,
           badgeText: g.status || 'Expected',
           badgeColor: bColor,
-          date: g.visitDate ? formatDate(g.visitDate) : null,
+          date: g.created_at || g.visitDate ? formatDate(g.created_at || g.visitDate) : null,
           time: null,
-          notes: g.profession ? `Profession: ${g.profession}` : '-'
+          notes: g.business_category || g.profession ? `Business: ${g.business_category || g.profession}` : '-'
         };
       });
     } else if (norm.includes('testimonial')) {

@@ -232,8 +232,8 @@ export function getWorkspaceChecklistTasks(
     }
 
     const hasGuestAuto = guestInvitations.some(g => {
-      const creator = g.createdBy || g.member_id || g.invited_by || g.user_id;
-      return creator === userId && g.status !== 'Cancelled' && g.status !== 'Invalid' && (isDateInRange(g.created_at || g.createdAt || g.date) || (!isNaN(new Date(g.created_at || g.createdAt || g.date).getTime()) && Math.abs(new Date().getTime() - new Date(g.created_at || g.createdAt || g.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
+      const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
+      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && (isDateInRange(g.created_at || g.createdAt || g.date) || (!isNaN(new Date(g.created_at || g.createdAt || g.date).getTime()) && Math.abs(new Date().getTime() - new Date(g.created_at || g.createdAt || g.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
     rawTasks.push({
       key: `task_invite_guest_${dateStr}`,
@@ -302,28 +302,112 @@ export function getWorkspaceChecklistTasks(
     });
     
     // 6. Attend Chapter Meeting
-    const hasAttendMeetingAuto = meetings.some(m => {
-      const matchChapter = String(m.chapter_id || m.chapterId) === String(profile.chapter_id || profile.chapterId);
-      const att = (m.attendance || {})[userId];
-      const isPresent = att === 'Present' || att === 'PRESENT' || att === 'Yes' || att === 'YES' || att === 'Substitute' || att === 'SUBSTITUTE';
-      
-      // We check if they attended ANY meeting recently to keep it in sync with the Analytics Card (within 30 days)
-      const d = new Date(m.meeting_date || m.date || m.created_at || m.createdAt);
-      const isRecent = !isNaN(d.getTime()) && Math.abs(new Date().getTime() - d.getTime()) < 30 * 24 * 60 * 60 * 1000;
-      
-      // If it matches today, or is recent, we mark it done.
-      return (matchChapter || Boolean(m.id)) && isPresent && (isDateInRange(m.meeting_date || m.date || m.created_at || m.createdAt) || isRecent);
+    const userChapterId = String(profile.chapter_id || profile.chapterId || '').trim();
+
+    const getMeetingStartTimeMs = (m: any): number => {
+      const rawDate = m.date || m.meeting_date || m.created_at || m.createdAt;
+      if (!rawDate) return 0;
+      let d = new Date(rawDate);
+      if (isNaN(d.getTime())) return 0;
+      if (m.time && typeof m.time === 'string') {
+        const timeStr = m.time.trim();
+        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+        if (match) {
+          let hours = parseInt(match[1], 10);
+          const minutes = parseInt(match[2], 10);
+          const ampm = match[3];
+          if (ampm) {
+            if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+          }
+          d.setHours(hours, minutes, 0, 0);
+        }
+      }
+      return d.getTime();
+    };
+
+    const userChapterMeetings = meetings.filter(m => {
+      const mChap = String(m.chapter_id || m.chapterId || '').trim();
+      return !userChapterId || !mChap || mChap === userChapterId;
     });
-    rawTasks.push({
-      key: `task_chapter_meeting_${dateStr}`,
-      label: 'Attend Chapter Meeting',
-      desc: 'Attend your chapter meeting.',
-      autoDone: hasAttendMeetingAuto,
-      link: '/meetings',
-      linkText: hasAttendMeetingAuto ? 'VIEW' : 'ATTEND',
-      iconColor: 'text-purple-400',
-      bgColor: 'bg-purple-500/10'
-    });
+
+    let meetingTaskToRender: {
+      meeting: any;
+      taskIsVisible: boolean;
+      taskIsCompleted: boolean;
+      isAbsent: boolean;
+    } | null = null;
+
+    const nowMs = new Date().getTime();
+
+    for (const m of userChapterMeetings) {
+      const attMap = m.attendance || {};
+      const userAtt = String(attMap[userId] || m.attendance_status || '').trim();
+      const isPresent = ['Present', 'PRESENT', 'Yes', 'YES', 'Substitute', 'SUBSTITUTE'].includes(userAtt);
+      const isAbsent = ['Absent', 'ABSENT', 'No', 'NO'].includes(userAtt);
+      const isMarked = isPresent || isAbsent;
+
+      const meetingStartMs = getMeetingStartTimeMs(m);
+      const windowStartMs = meetingStartMs > 0 ? meetingStartMs - (24 * 60 * 60 * 1000) : 0;
+      const windowEndMs = meetingStartMs > 0 ? meetingStartMs + (12 * 60 * 60 * 1000) : 0;
+
+      let taskIsVisible = false;
+      let taskIsCompleted = false;
+
+      if (isMarked) {
+        taskIsVisible = true;
+        taskIsCompleted = true;
+      } else if (meetingStartMs > 0) {
+        if (nowMs >= windowStartMs && nowMs <= windowEndMs) {
+          taskIsVisible = true;
+          taskIsCompleted = false;
+        } else if (nowMs > windowEndMs && (nowMs - windowEndMs) < 7 * 24 * 60 * 60 * 1000) {
+          taskIsVisible = true;
+          taskIsCompleted = false;
+        } else {
+          taskIsVisible = false;
+          taskIsCompleted = false;
+        }
+      } else if (m.id) {
+        taskIsVisible = true;
+        taskIsCompleted = false;
+      }
+
+      if (taskIsVisible) {
+        if (!meetingTaskToRender || (!meetingTaskToRender.taskIsCompleted && taskIsCompleted)) {
+          meetingTaskToRender = {
+            meeting: m,
+            taskIsVisible,
+            taskIsCompleted,
+            isAbsent
+          };
+        } else if (!meetingTaskToRender.taskIsCompleted && !taskIsCompleted) {
+          meetingTaskToRender = {
+            meeting: m,
+            taskIsVisible,
+            taskIsCompleted,
+            isAbsent
+          };
+        }
+      }
+    }
+
+    if (meetingTaskToRender && meetingTaskToRender.taskIsVisible) {
+      const targetMeetingId = meetingTaskToRender.meeting.id;
+      rawTasks.push({
+        key: `task_chapter_meeting_${targetMeetingId || dateStr}`,
+        label: 'Attend Chapter Meeting',
+        desc: meetingTaskToRender.taskIsCompleted
+          ? (meetingTaskToRender.isAbsent ? 'Attendance Recorded (Absent).' : 'Attended chapter meeting.')
+          : `Attend chapter meeting "${meetingTaskToRender.meeting.title || 'Weekly Chapter Meeting'}".`,
+        autoDone: meetingTaskToRender.taskIsCompleted,
+        noPoints: meetingTaskToRender.isAbsent,
+        link: targetMeetingId ? `/meetings?meetingId=${targetMeetingId}&attend=true` : '/meetings?attend=true',
+        linkText: meetingTaskToRender.taskIsCompleted ? 'VIEW' : 'ATTEND',
+        iconColor: 'text-purple-400',
+        bgColor: 'bg-purple-500/10'
+      });
+    }
 
     // 7. Referral Conversion & Thank You Slip Workflow
     const receivedReferrals = allReferrals.filter(r => {
@@ -581,7 +665,8 @@ export function calculateMemberGrowthScoreData(input: {
   });
 
   guestInvitations.forEach(g => {
-    if ((g.createdBy || g.member_id || g.invited_by || g.user_id) === userId) {
+    const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
+    if (creator === String(userId)) {
       addDateIfValid(g.created_at || g.date);
     }
   });
