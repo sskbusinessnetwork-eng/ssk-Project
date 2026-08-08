@@ -613,11 +613,12 @@ export function ThankYouSlips() {
 
   // Business Generated & Business Sent: Total business sent by the user (slips submitted by user)
   const totalBusinessSent = isMasterAdmin 
-    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
     : allSlips.reduce((acc, slip) => {
-        const ref = referrals.find(r => String(r.id) === String(slip.referralId));
-        const senderId = ref ? String(ref.fromUserId) : String(slip.toUserId);
-        return String(senderId) === String(currentUserId) ? acc + (Number(slip.businessValue) || 0) : acc;
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
+        const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(slip.toUserId);
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value) || 0;
+        return String(senderId) === String(currentUserId) ? acc + val : acc;
       }, 0);
   
   // Business Generated always equals Business Sent
@@ -625,18 +626,19 @@ export function ThankYouSlips() {
 
   // Business Received: Total business received by the user (slips received where user is toUserId)
   const totalBusinessReceived = isMasterAdmin
-    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
     : allSlips.reduce((acc, slip) => {
-        const ref = referrals.find(r => String(r.id) === String(slip.referralId));
-        const receiverId = ref ? String(ref.toUserId) : String(slip.fromUserId);
-        return String(receiverId) === String(currentUserId) ? acc + (Number(slip.businessValue) || 0) : acc;
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
+        const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(slip.fromUserId);
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value) || 0;
+        return String(receiverId) === String(currentUserId) ? acc + val : acc;
       }, 0);
 
   // totalBusinessGenerated is synchronized with totalBusinessSent above
 
-  const totalBusinessReceivedFiltered = filteredSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
+  const totalBusinessReceivedFiltered = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0);
 
-  const totalNetworkBusiness = filteredSlips.reduce((acc, slip) => acc + slip.businessValue, 0);
+  const totalNetworkBusiness = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0);
 
   const downloadReport = () => {
     const dataToExport = isMasterAdmin || activeTab === 'chapter' ? filteredSlips : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips);

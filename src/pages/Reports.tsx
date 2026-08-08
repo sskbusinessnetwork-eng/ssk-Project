@@ -344,7 +344,7 @@ export function Reports() {
 
   const statsSummary = useMemo(() => {
     // Total Revenue
-    const totalRevenue = reportsData.slips.reduce((sum, s) => sum + (Number(s.businessValue) || 0), 0);
+    const totalRevenue = reportsData.slips.reduce((sum, s) => sum + (Number(s.businessValue || s.business_value) || 0), 0);
 
     // Referrals Total
     const referralsTotal = reportsData.referrals.length;

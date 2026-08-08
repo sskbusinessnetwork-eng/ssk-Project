@@ -202,34 +202,36 @@ export function MyReport() {
 
   const businessSentTotal = chapterSlips.reduce((acc, s) => {
     const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
-    const senderId = ref ? String(ref.fromUserId || ref.from_user_id) : String(s.toUserId || s.to_user_id);
+    const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
     const sender = chapterUsers.find(u => String(u.id || u.uid) === senderId);
     if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
-      return acc + (Number(s.businessValue || s.amount) || 0);
+      const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.amount || 0);
+      return acc + val;
     }
     return acc;
   }, 0);
 
   const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
     const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
-    const receiverId = ref ? String(ref.toUserId || ref.to_user_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
+    const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
     const receiver = chapterUsers.find(u => String(u.id || u.uid) === receiverId);
     if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
-      return acc + (Number(s.businessValue || s.amount) || 0);
+      const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.amount || 0);
+      return acc + val;
     }
     return acc;
   }, 0);
 
   const businessSentCount = chapterSlips.filter(s => {
     const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
-    const senderId = ref ? String(ref.fromUserId || ref.from_user_id) : String(s.toUserId || s.to_user_id);
+    const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
     const sender = chapterUsers.find(u => String(u.id || u.uid) === senderId);
     return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
   }).length;
 
   const businessReceivedCount = chapterSlips.filter(s => {
     const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
-    const receiverId = ref ? String(ref.toUserId || ref.to_user_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
+    const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
     const receiver = chapterUsers.find(u => String(u.id || u.uid) === receiverId);
     return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
   }).length;

@@ -111,7 +111,7 @@ export function MemberCompanionView({
     const todayStr = now.toDateString();
 
     userSlips.forEach(s => {
-      const val = Number(s.businessValue || s.transactionValue) || 0;
+      const val = Number(s.businessValue || s.business_value || s.transactionValue) || 0;
       const d = new Date(s.createdAt || s.date);
       
       const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));

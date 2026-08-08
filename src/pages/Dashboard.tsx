@@ -581,14 +581,14 @@ export function Analytics() {
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
-        const senderId = ref ? String(ref.fromUserId) : String(s.toUserId || s.to_user_id || '');
+        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
         return senderId === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
-      const senderId = ref ? String(ref.fromUserId) : String(s.toUserId || s.to_user_id || '');
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
       return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
     });
   }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
@@ -596,14 +596,14 @@ export function Analytics() {
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
-        const receiverId = ref ? String(ref.toUserId) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
         return receiverId === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
-      const receiverId = ref ? String(ref.toUserId) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
       return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
     });
   }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
@@ -657,7 +657,11 @@ export function Analytics() {
   const testimonialsReceivedCount = useMemo(() => testimonialsReceivedList.length, [testimonialsReceivedList]);
 
   const businessSentTotal = useMemo(() => {
-    return businessSentSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
+    return businessSentSlips.reduce((sum, s) => {
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.transactionValue || 0);
+      return sum + val;
+    }, 0);
   }, [businessSentSlips]);
 
   // Business Generated is synchronized with Business Sent
@@ -668,7 +672,11 @@ export function Analytics() {
   }, [businessSentSlips]);
 
   const businessReceivedTotal = useMemo(() => {
-    return businessReceivedSlips.reduce((sum, s) => sum + (Number(s.businessValue || s.transactionValue) || 0), 0);
+    return businessReceivedSlips.reduce((sum, s) => {
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.transactionValue || 0);
+      return sum + val;
+    }, 0);
   }, [businessReceivedSlips]);
 
   const businessReceivedCount = useMemo(() => {
