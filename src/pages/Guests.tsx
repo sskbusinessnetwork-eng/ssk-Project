@@ -17,16 +17,11 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { db } from '../lib/database';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 export function Guests() {
   const { profile } = useAuth();

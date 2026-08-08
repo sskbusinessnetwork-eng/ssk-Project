@@ -120,11 +120,12 @@ export function Connections() {
     userChapVal: string | null | undefined,
     profileObj: any
   ) => {
+    const memId = String(member.chapter_id || (member as any).chapterId || '').trim().toLowerCase();
+    const memName = String(member.chapterName || (member as any).chapter_name || (member as any).chapter || '').trim().toLowerCase();
+
     if (profileObj?.role === 'MASTER_ADMIN') {
       if (masterSelectedChapterId) {
         const selId = String(masterSelectedChapterId).trim().toLowerCase();
-        const memId = String(member.chapter_id || (member as any).chapterId || '').trim().toLowerCase();
-        const memName = String(member.chapterName || (member as any).chapter_name || (member as any).chapter || '').trim().toLowerCase();
         return memId === selId || memName === selId;
       }
       return true;
@@ -132,9 +133,6 @@ export function Connections() {
 
     const myId = String(userChapId || profileObj?.chapter_id || profileObj?.chapterId || '').trim().toLowerCase();
     const myName = String(userChapName || userChapVal || profileObj?.chapterName || (profileObj as any)?.chapter_name || profileObj?.chapter || '').trim().toLowerCase();
-
-    const memId = String(member.chapter_id || (member as any).chapterId || '').trim().toLowerCase();
-    const memName = String(member.chapterName || (member as any).chapter_name || (member as any).chapter || '').trim().toLowerCase();
 
     // 1. Non-empty chapter ID match
     if (myId && memId && myId === memId) {

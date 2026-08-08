@@ -23,7 +23,8 @@ import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { OneToOneMeeting, UserProfile } from '../types';
 import { Modal } from '../components/Modal';
-import { isAfter, parseISO, format as originalFormat, isValid, addDays, addWeeks, addMonths } from 'date-fns';
+import { isAfter, parseISO, isValid, addDays, addWeeks, addMonths } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { where, orderBy, collection, getDocs, query, or } from '../lib/database';
 import { db } from '../lib/database';
 import { cn } from '../lib/utils';
@@ -66,7 +67,7 @@ function calculateNextOccurrenceDate(
         }
       }
     }
-    return originalFormat(nextDate, 'yyyy-MM-dd');
+    return format(nextDate, 'yyyy-MM-dd');
   } catch (e) {
     console.warn("Error calculating next occurrence date:", e);
     return new Date().toISOString().split('T')[0];
@@ -91,12 +92,6 @@ function getMeetingExactDateTime(meeting: any): Date {
   const { hours, minutes } = parseTimeTo24h(meeting.time || '10:00 AM');
   return new Date(year, month, day, hours, minutes, 0, 0);
 }
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 const getUserFullName = (user: any): string => {
   if (!user) return '';

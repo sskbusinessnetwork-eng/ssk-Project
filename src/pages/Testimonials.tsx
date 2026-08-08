@@ -5,18 +5,13 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile, Testimonial, Chapter } from '../types';
 import { MessageSquare, Star, Search, Plus, Trash2, Send, Inbox, Sparkles, Building2, User, ChevronRight } from 'lucide-react';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { Modal } from '../components/Modal';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 import { getDisplayPosition as formatPosition } from "../utils/authUtils";
 

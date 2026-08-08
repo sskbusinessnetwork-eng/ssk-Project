@@ -22,15 +22,10 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { Notification } from '../types';
 import { notificationService, TaskChecklistItem } from '../services/notificationService';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 type FilterCategory = 'ALL' | 'UNREAD' | 'MEETINGS' | 'REFERRALS' | 'GUESTS' | 'SUBSCRIPTION' | 'SYSTEM';
 

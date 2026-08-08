@@ -31,16 +31,11 @@ import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
 import {  where, orderBy, limit  } from '../lib/database';
-import { startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore, format as originalFormat, isValid } from 'date-fns';
+import { startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore, isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
 import { parseTimeTo24h, formatTime12h, parseTo12hParts } from '../utils/timeUtils';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 export function getMeetingExactDateTime(meeting: Meeting): Date {
   if (!meeting || !meeting.date) return new Date();
@@ -64,8 +59,12 @@ export function getMeetingExactDateTime(meeting: Meeting): Date {
 export function isMeetingCompleted(m: any): boolean {
   if (!m) return false;
   const s = String(m.status || '').trim().toUpperCase();
-  if (s === 'COMPLETED' || s === 'DONE') return true;
+  if (['COMPLETED', 'DONE', 'CONCLUDED', 'ENDED'].includes(s)) return true;
   if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return true;
+  const dt = getMeetingExactDateTime(m);
+  if (dt && dt.getTime() < Date.now()) {
+    return true;
+  }
   return false;
 }
 
@@ -1711,9 +1710,9 @@ export function Meetings() {
       .filter(m => {
         if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
         const st = String(m.status || '').trim().toUpperCase();
-        if (st === 'COMPLETED' || st === 'CANCELLED' || st === 'CANCELED' || st === 'DONE') return false;
+        if (['COMPLETED', 'CANCELLED', 'CANCELED', 'DONE', 'CONCLUDED', 'ENDED'].includes(st)) return false;
         const dt = getMeetingExactDateTime(m);
-        return dt.getTime() >= Date.now() - 2 * 60 * 60 * 1000;
+        return dt.getTime() >= Date.now();
       })
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 

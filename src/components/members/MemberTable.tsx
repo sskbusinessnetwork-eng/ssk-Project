@@ -23,15 +23,10 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
-import { differenceInDays, format as originalFormat, isValid } from 'date-fns';
+import { differenceInDays, isValid } from 'date-fns';
+import { safeFormat as format } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { isMemberActive } from '../../utils/memberStatus';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 interface MemberTableProps {
   currentUserId?: string;

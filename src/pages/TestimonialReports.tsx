@@ -2,15 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {  collection, query, onSnapshot, getDocs, doc, getDoc  } from '../lib/database';
 import { db } from '../lib/database';
 import { Testimonial, UserProfile } from '../types';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { Star } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 export function TestimonialReports() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);

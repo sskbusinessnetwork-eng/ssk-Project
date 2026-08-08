@@ -39,18 +39,13 @@ import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { PositionManagement } from '../components/positions/PositionManagement';
 import {  where, doc, setDoc, addDoc, collection, query, getDocs, orderBy  } from '../lib/database';
 import { db } from '../lib/database';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
 import { safeFetch } from '../utils/apiUtils';
 import { supabase } from '../lib/supabaseClient';
 import bcrypt from 'bcryptjs';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 const formatDateForStorage = (dateStr: string) => {
   if (!dateStr) return '';

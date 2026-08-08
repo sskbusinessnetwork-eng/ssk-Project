@@ -6,15 +6,10 @@ import {
   Clock, Target, ChevronRight, TrendingUp, CheckSquare, ChevronDown, ArrowRight, Crown, Tags, CreditCard, Settings
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { format as originalFormat, isValid } from 'date-fns';
+import { isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 
 import { cn } from '../lib/utils';
-
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
 
 interface MasterAdminCompanionViewProps {
   profile: UserProfile | null;

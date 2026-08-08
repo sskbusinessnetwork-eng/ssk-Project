@@ -1,4 +1,5 @@
-import { addYears, format as originalFormat, isValid } from 'date-fns';
+import { addYears, isValid } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
@@ -25,12 +26,6 @@ import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calcul
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 
-const format = (date: any, formatStr: string, options?: any) => {
-  if (!date) return 'N/A';
-  const d = new Date(date);
-  return isValid(d) ? originalFormat(d, formatStr, options) : 'N/A';
-};
-
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
 }
@@ -38,15 +33,15 @@ export function cleanHeroName(name: string): string {
 const isToday = (dateStr: string) => {
   if (!dateStr) return false;
   if (dateStr.length === 10 && dateStr.includes('-')) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const now = new Date();
-    return y === now.getFullYear() && (m - 1) === now.getMonth() && d === now.getDate();
+    const [y, m, dayVal] = dateStr.split('-').map(Number);
+    const blockDate = new Date();
+    return y === blockDate.getFullYear() && (m - 1) === blockDate.getMonth() && dayVal === blockDate.getDate();
   }
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-         d.getMonth() === now.getMonth() &&
-         d.getDate() === now.getDate();
+  const parsedDate = new Date(dateStr);
+  const parsedNow = new Date();
+  return parsedDate.getFullYear() === parsedNow.getFullYear() &&
+         parsedDate.getMonth() === parsedNow.getMonth() &&
+         parsedDate.getDate() === parsedNow.getDate();
 };
 
 export function Analytics() {
@@ -1721,7 +1716,7 @@ export function Analytics() {
       try {
         const d = new Date(dateString);
         if (isNaN(d.getTime())) return null;
-        return originalFormat(d, 'dd MMM yyyy');
+        return format(d, 'dd MMM yyyy');
       } catch (e) {
         return null;
       }
@@ -1737,7 +1732,7 @@ export function Analytics() {
              const d = new Date();
              d.setHours(parseInt(parts[0], 10) || 0);
              d.setMinutes(parseInt(parts[1], 10) || 0);
-             return originalFormat(d, 'h:mm a');
+             return format(d, 'h:mm a');
           }
         }
         if (dateString) {
@@ -1746,7 +1741,7 @@ export function Analytics() {
           // check if time is explicitly set and not 00:00:00 (unless actually midnight)
           // Simplified: just return time from the Date object
           if (dateString.includes('T')) {
-            return originalFormat(d, 'h:mm a');
+            return format(d, 'h:mm a');
           }
         }
         return null;

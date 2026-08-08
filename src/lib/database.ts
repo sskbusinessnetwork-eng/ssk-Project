@@ -508,12 +508,12 @@ export async function setDoc(docRef: any, data: any, options?: any) {
       }
     } catch (e) {}
     
-    const snakeData = keysToSnake(cleanData);
-    const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
-    const { error } = await supabase.from('users').upsert({ id, ...preparedSnake }, { onConflict: 'id' });
-    if (error) {
-      console.error("setDoc error:", error);
-      throw new Error(error.message || 'Database upsert failed');
+    const userSnakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(userSnakeData, existingPhoto);
+    const { error: userError } = await supabase.from('users').upsert({ id, ...preparedSnake }, { onConflict: 'id' });
+    if (userError) {
+      console.error("setDoc error:", userError);
+      throw new Error(userError.message || 'Database upsert failed');
     }
     return;
   }
@@ -549,14 +549,14 @@ export async function addDoc(collectionRef: any, data: any) {
   }
 
   if (collectionPath === 'users') {
-    const snakeData = keysToSnake(cleanData);
-    const preparedSnake = prepareUserPayload(snakeData, '');
-    const { data: result, error } = await supabase.from(collectionPath).insert(preparedSnake).select().single();
-    if (error) {
-      console.error("addDoc error:", error);
-      throw new Error(error.message || 'Database insert failed');
+    const userSnakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(userSnakeData, '');
+    const { data: userResult, error: userError } = await supabase.from(collectionPath).insert(preparedSnake).select().single();
+    if (userError) {
+      console.error("addDoc error:", userError);
+      throw new Error(userError.message || 'Database insert failed');
     }
-    return { id: result?.id || Math.random().toString(36).substring(2, 15) };
+    return { id: userResult?.id || Math.random().toString(36).substring(2, 15) };
   }
   
   if (collectionPath === 'notifications') {
@@ -598,12 +598,12 @@ export async function addDoc(collectionRef: any, data: any) {
       updated_at: cleanData.updated_at || cleanData.updatedAt || new Date().toISOString()
     };
 
-    const { data: result, error } = await supabase.from('testimonials').insert([cleanTestimonialPayload]).select().single();
-    if (error) {
-      console.error("addDoc testimonials error:", error);
-      throw new Error(error.message || 'Failed to submit testimonial.');
+    const { data: testResult, error: testError } = await supabase.from('testimonials').insert([cleanTestimonialPayload]).select().single();
+    if (testError) {
+      console.error("addDoc testimonials error:", testError);
+      throw new Error(testError.message || 'Failed to submit testimonial.');
     }
-    return { id: result?.id || Math.random().toString(36).substring(2, 15) };
+    return { id: testResult?.id || Math.random().toString(36).substring(2, 15) };
   }
 
   if (collectionPath === 'thank_you_slips') {
@@ -632,18 +632,18 @@ export async function addDoc(collectionRef: any, data: any) {
       }
     }
 
-    const { data: result, error } = await supabase.from('thank_you_slips').insert([cleanSlipPayload]).select().single();
-    if (!error && result) {
-      return { id: result.id };
+    const { data: slipResult, error: slipError } = await supabase.from('thank_you_slips').insert([cleanSlipPayload]).select().single();
+    if (!slipError && slipResult) {
+      return { id: slipResult.id };
     }
 
-    if (error) {
-      if (error.code === '23505' || error.message?.toLowerCase().includes('unique') || error.message?.toLowerCase().includes('duplicate')) {
+    if (slipError) {
+      if (slipError.code === '23505' || slipError.message?.toLowerCase().includes('unique') || slipError.message?.toLowerCase().includes('duplicate')) {
         throw new Error("A Thank You Slip has already been submitted for this referral.");
       }
     }
 
-    console.warn("addDoc direct Supabase thank_you_slips insert warning, trying /api/thank-you-slips/create fallback:", error);
+    console.warn("addDoc direct Supabase thank_you_slips insert warning, trying /api/thank-you-slips/create fallback:", slipError);
     try {
       const resp = await fetch('/api/thank-you-slips/create', {
         method: 'POST',
@@ -711,8 +711,8 @@ export async function updateDoc(docRef: any, partialData: any) {
       }
     } catch (e) {}
     
-    const snakeData = keysToSnake(cleanData);
-    const preparedSnake = prepareUserPayload(snakeData, existingPhoto);
+    const userSnakeData = keysToSnake(cleanData);
+    const preparedSnake = prepareUserPayload(userSnakeData, existingPhoto);
     
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
@@ -731,10 +731,10 @@ export async function updateDoc(docRef: any, partialData: any) {
         throw new Error(data.error || 'Failed to update user');
       }
     } else {
-      const { error } = await supabase.from('users').update(preparedSnake).eq('id', id);
-      if (error) {
-        console.error("updateDoc error:", error);
-        throw new Error(error.message || 'Database update failed');
+      const { error: userUpdateError } = await supabase.from('users').update(preparedSnake).eq('id', id);
+      if (userUpdateError) {
+        console.error("updateDoc error:", userUpdateError);
+        throw new Error(userUpdateError.message || 'Database update failed');
       }
     }
     return;
