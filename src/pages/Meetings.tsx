@@ -438,6 +438,9 @@ export function Meetings() {
     if (!profile || !meeting) return false;
     if (profile.role === 'MASTER_ADMIN') return true;
 
+    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || (profile as any).chapter_position === 'chapter_admin';
+    if (!isChapAdminRole) return false;
+
     const userChap = profile.chapter_id || (profile as any).chapterId;
     const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
 
@@ -1878,11 +1881,12 @@ export function Meetings() {
             </div>
 
             {/* Attendance & Management Section */}
-            <div className="pt-2 border-t border-white/5">
-              {(() => {
-                const canEdit = canUserUpdateMeeting(primaryFocusMeeting);
+            {(() => {
+              const isChapAdmin = isMasterAdmin || isChapterAdmin || canUserUpdateMeeting(primaryFocusMeeting);
+              if (!isChapAdmin) return null;
 
-                return canEdit ? (
+              return (
+                <div className="pt-2 border-t border-white/5">
                   <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
@@ -1894,56 +1898,45 @@ export function Meetings() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMeeting(primaryFocusMeeting);
-                        const normalizedAttendance: Record<string, any> = {};
-                        if (primaryFocusMeeting.attendance) {
-                          Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
-                            const v = String(val);
-                            if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                            else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                            else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                            else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                            else normalizedAttendance[uid] = val;
-                          });
-                        }
-                        setTempAttendance(normalizedAttendance);
-                        setTempAmount(primaryFocusMeeting.amountCollected || {});
-                        setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
-                        setIsUpdateModalOpen(true);
-                      }}
-                      className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer shrink-0"
-                    >
-                      <Settings size={16} />
-                      Update Meeting
-                    </button>
-                  </div>
-                ) : (
-                  <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-primary" />
-                        Chapter Attendance Roster (View Only)
-                      </h4>
-                      <p className="text-[11px] text-neutral-400">
-                        Meeting attendance and collections are recorded and updated by your Chapter Admin.
-                      </p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMeeting(primaryFocusMeeting);
+                          const normalizedAttendance: Record<string, any> = {};
+                          if (primaryFocusMeeting.attendance) {
+                            Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
+                              const v = String(val);
+                              if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                              else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                              else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                              else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                              else normalizedAttendance[uid] = val;
+                            });
+                          }
+                          setTempAttendance(normalizedAttendance);
+                          setTempAmount(primaryFocusMeeting.amountCollected || {});
+                          setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
+                          setIsUpdateModalOpen(true);
+                        }}
+                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                      >
+                        <Settings size={16} />
+                        Update Meeting
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAttendanceReport(primaryFocusMeeting)}
+                        className="px-5 py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Users size={16} className="text-primary" />
+                        View Attendance Roster
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAttendanceReport(primaryFocusMeeting)}
-                      className="px-5 py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shrink-0"
-                    >
-                      <Users size={16} className="text-primary" />
-                      View Attendance Roster
-                    </button>
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -1958,23 +1951,37 @@ export function Meetings() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Micro Card 1: Attendees */}
-            <div 
-              onClick={() => primaryFocusMeeting && handleOpenAttendanceReport(primaryFocusMeeting)}
-              className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
-            >
-              <div className="flex items-center justify-between text-neutral-400">
-                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <Users size={12} className="text-primary" /> Attendees
-                </span>
-                <ChevronRight size={12} />
-              </div>
-              <div>
-                <p className="text-base font-black text-white">
-                  {primaryFocusMeeting ? Object.keys(primaryFocusMeeting.attendance || {}).length : 0} Members Marked
-                </p>
-                <p className="text-[10px] text-neutral-400 font-medium">Click to view full roster report</p>
-              </div>
-            </div>
+            {(() => {
+              const isChapAdmin = isMasterAdmin || isChapterAdmin || canUserUpdateMeeting(primaryFocusMeeting);
+              return (
+                <div 
+                  onClick={() => {
+                    if (isChapAdmin && primaryFocusMeeting) {
+                      handleOpenAttendanceReport(primaryFocusMeeting);
+                    }
+                  }}
+                  className={cn(
+                    "p-3.5 bg-[#111827] rounded-[14px] border border-white/5 transition-all flex flex-col justify-between h-24",
+                    isChapAdmin ? "hover:border-white/20 cursor-pointer" : "cursor-default"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-neutral-400">
+                    <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                      <Users size={12} className="text-primary" /> Attendees
+                    </span>
+                    {isChapAdmin && <ChevronRight size={12} />}
+                  </div>
+                  <div>
+                    <p className="text-base font-black text-white">
+                      {primaryFocusMeeting ? Object.keys(primaryFocusMeeting.attendance || {}).length : 0} Members Marked
+                    </p>
+                    <p className="text-[10px] text-neutral-400 font-medium">
+                      {isChapAdmin ? "Click to view full roster report" : "Recorded by Chapter Admin"}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Micro Card 2: Agenda & Notes */}
             <div 
@@ -3485,55 +3492,7 @@ export function Meetings() {
 
               {isMeetingDone(readOnlyMeeting) && renderMeetingSummary(readOnlyMeeting, readOnlyGuests)}
 
-              {/* Chapter Members Attendance Roster (View Only) */}
-              <div className="space-y-2 pt-2">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <Users size={14} className="text-primary" />
-                  Chapter Members Attendance Roster ({chapterMembers.length})
-                </h3>
-                <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
-                  <table className="w-full text-left border-collapse min-w-[500px]">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-[#111827]">
-                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Name</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Position</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Status</th>
-                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-right">Collection</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {chapterMembers.length > 0 ? (
-                        chapterMembers.map(m => {
-                          const status = readOnlyMeeting.attendance?.[m.uid] || readOnlyMeeting.attendance?.[m.id];
-                          const displayObj = getAttendanceDisplay(status);
-                          const amount = readOnlyMeeting.amountCollected?.[m.uid] || readOnlyMeeting.amountCollected?.[m.id] || 0;
-                          return (
-                            <tr key={m.uid || m.id} className="hover:bg-[#1C2538] transition-colors">
-                              <td className="py-2.5 px-3 text-xs font-bold text-white">
-                                <div className="flex items-center gap-2">
-                                  <Avatar src={m.photoURL} name={m.name || m.displayName || 'Member'} size="w-6 h-6" className="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
-                                  <span>{m.name || m.displayName || 'Unnamed Member'}</span>
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-xs text-neutral-300 font-medium">{getMemberPositionLabel(m)}</td>
-                              <td className="py-2.5 px-3">
-                                <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border", displayObj.color)}>
-                                  {displayObj.label}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 text-xs font-bold text-emerald-400 text-right">₹{Number(amount).toLocaleString()}</td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="py-4 text-center text-xs text-neutral-400">No chapter members found.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+
 
               {(readOnlyMeeting.description || readOnlyMeeting.notes) && (
                 <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-1.5">
