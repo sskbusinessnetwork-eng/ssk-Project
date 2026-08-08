@@ -2,6 +2,7 @@ import { Avatar } from '../../components/Avatar';
 import React, { useState } from 'react';
 import { 
   Phone, 
+  PhoneCall,
   Briefcase, 
   Tags, 
   UserCheck, 

@@ -12,7 +12,8 @@ import {
   Building2,
   FileText,
   Filter,
-  RotateCcw
+  RotateCcw,
+  PhoneCall
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
@@ -610,7 +611,7 @@ export function Referrals() {
     const requiredFields = [
       { id: 'toUserId', value: formData.toUserId, name: 'Member' },
       { id: 'contactName', value: formData.contactName, name: 'Contact Name' },
-      { id: 'contactPhone', value: formData.contactPhone, PhoneCall, name: 'Contact Phone' },
+      { id: 'contactPhone', value: formData.contactPhone, name: 'Contact Phone' },
       { id: 'requirement', value: formData.requirement, name: 'Requirement' }
     ];
 

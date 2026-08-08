@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserPlus, Lock, Eye, EyeOff, Smartphone, Briefcase, Tag, Globe, MapPin, Calendar, HelpCircle } from 'lucide-react';
 import { Modal } from '../Modal';
 import { Category } from '../../types';
@@ -31,6 +31,8 @@ export function AddMemberModal({
   error,
   errors = {}
 }: AddMemberModalProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <Modal
       isOpen={isOpen}

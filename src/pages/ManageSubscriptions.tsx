@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
-import { Search, Filter, Shield, Calendar, CreditCard, ChevronDown, Check, X, Building, AlertTriangle } from 'lucide-react';
+import { Search, Filter, Shield, Calendar, CreditCard, ChevronDown, Check, X, Building, AlertTriangle, PhoneCall } from 'lucide-react';
 import { UserProfile, Chapter } from '../types';
 import { differenceInDays, addYears, isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';

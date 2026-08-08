@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserCircle, Save, Smartphone, Briefcase, Tag, Globe, MapPin, Lock, HelpCircle, Eye, EyeOff } from 'lucide-react';
 import { Modal } from '../Modal';
 import { Category, UserProfile } from '../../types';
@@ -27,6 +27,8 @@ export function EditMemberModal({
   isMasterAdmin,
   categories
 }: EditMemberModalProps) {
+  const [showPassword, setShowPassword] = useState(false);
+
   useEffect(() => {
     if (member) {
       setFormData({

@@ -24,7 +24,8 @@ import {
   Info,
   Building,
   Eye,
-  ExternalLink
+  ExternalLink,
+  PhoneCall
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayPosition } from '../utils/authUtils';

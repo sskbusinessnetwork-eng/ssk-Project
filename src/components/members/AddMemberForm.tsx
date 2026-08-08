@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
 import { db, collection, query, where, getDocs, doc, setDoc, getDoc, addDoc } from '../../lib/database';
 import { useAuth } from '../../hooks/useAuth';
-import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
