@@ -22,7 +22,9 @@ import {
   Shield,
   Filter,
   Info,
-  Building
+  Building,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayPosition } from '../utils/authUtils';
@@ -1619,50 +1621,91 @@ export function Meetings() {
   const completedMeetings = [...filteredMeetings.filter(m => isMeetingDone(m))]
     .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
 
-  // Upcoming Meetings calculation:
-  let scheduledMeetings: Meeting[] = [];
-
-  if (isMasterAdmin) {
-    // Master Admin upcoming meetings: ONE nearest upcoming meeting PER chapter
-    const rawUpcoming = meetings.filter(m => !isMeetingDone(m));
+  // Render meeting location cleanly with links
+  const renderMeetingLocation = (meeting: Meeting) => {
+    const rawLoc = (meeting.location || '').trim();
+    const explicitLink = (meeting as any).locationUrl || (meeting as any).mapUrl || (meeting as any).link || (meeting as any).meetingLink;
     
-    // Filter by selected chapter if a filter is active
-    const upcomingToGroup = activeChapterId
-      ? rawUpcoming.filter(m => {
-          const mChap = m.chapter_id || (m as any).chapterId;
-          const mAdmin = m.adminId || (m as any).admin_id;
-          const cKey = getMeetingCanonicalChapterKey(m);
-          return mChap === activeChapterId || mAdmin === activeChapterId || cKey === activeChapterId;
-        })
-      : rawUpcoming;
+    const urlMatch = rawLoc.match(/https?:\/\/[^\s]+/i);
+    const foundUrl = urlMatch ? urlMatch[0] : (explicitLink || (rawLoc.startsWith('http') ? rawLoc : null));
 
-    // Group upcoming meetings by chapter key
-    const chapterGroups: Record<string, Meeting[]> = {};
-    upcomingToGroup.forEach(m => {
-      const chapKey = getMeetingCanonicalChapterKey(m);
-      if (!chapterGroups[chapKey]) {
-        chapterGroups[chapKey] = [];
-      }
-      chapterGroups[chapKey].push(m);
-    });
+    const isOnline = rawLoc.toLowerCase().includes('zoom') || 
+                     rawLoc.toLowerCase().includes('http') || 
+                     rawLoc.toLowerCase().includes('meet') || 
+                     rawLoc.toLowerCase().includes('teams') || 
+                     rawLoc.toLowerCase().includes('online');
 
-    // Select nearest upcoming meeting (index 0 when sorted by date/time ascending) for each chapter
-    const nearestPerChapter: Meeting[] = [];
-    Object.values(chapterGroups).forEach(group => {
-      group.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
-      if (group[0]) {
-        nearestPerChapter.push(group[0]);
-      }
-    });
+    if (isOnline) {
+      const joinUrl = foundUrl || explicitLink;
+      return (
+        <div className="space-y-0.5">
+          <span className="font-bold text-white text-xs block">Online Meeting</span>
+          {joinUrl ? (
+            <a
+              href={joinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold"
+            >
+              <ExternalLink size={12} />
+              Join Meeting
+            </a>
+          ) : (
+            <span className="text-[10px] text-neutral-400 font-medium">Virtual / Online</span>
+          )}
+        </div>
+      );
+    }
 
-    // Sort resulting per-chapter nearest meetings chronologically
-    scheduledMeetings = nearestPerChapter.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
-  } else {
-    // Chapter Admin / Member: show only the single next upcoming recurring meeting for their chapter
-    const upcomingList = [...filteredMeetings.filter(m => !isMeetingDone(m))]
+    // Physical Address
+    const addressText = rawLoc || 'SSK Chapter Venue';
+    const mapUrl = foundUrl || explicitLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`;
+
+    return (
+      <div className="space-y-0.5 max-w-[260px]">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-white truncate" title={addressText}>
+          <MapPin size={13} className="text-primary shrink-0" />
+          <span className="truncate">{addressText}</span>
+        </div>
+        <a
+          href={mapUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-bold ml-4"
+        >
+          View Map
+          <ExternalLink size={10} />
+        </a>
+      </div>
+    );
+  };
+
+  // Deduplicated Upcoming Meetings for table/list view (prevent duplicate rendering)
+  const upcomingTableMeetings = React.useMemo(() => {
+    const isPrimaryDisplayed = (isMasterAdmin || isChapterAdmin) && !!primaryFocusMeeting;
+    const primaryId = isPrimaryDisplayed ? String(primaryFocusMeeting.id) : null;
+
+    const seenIds = new Set<string>();
+    if (primaryId) {
+      seenIds.add(primaryId);
+    }
+
+    const rawUpcoming = (isMasterAdmin ? meetings : filteredMeetings)
+      .filter(m => !isMeetingDone(m) && !m.isCancelled)
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
-    scheduledMeetings = upcomingList.slice(0, 1);
-  }
+
+    const result: Meeting[] = [];
+    for (const m of rawUpcoming) {
+      const mId = String(m.id);
+      if (!seenIds.has(mId)) {
+        seenIds.add(mId);
+        result.push(m);
+      }
+    }
+    return result;
+  }, [meetings, filteredMeetings, primaryFocusMeeting, isMasterAdmin, isChapterAdmin]);
 
   const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
     const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
@@ -2079,83 +2122,133 @@ export function Meetings() {
         )}
 
         {/* 1. Upcoming Meetings */}
-        {scheduledMeetings.length > 0 ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-primary rounded-full" />
-                <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">
-                  Upcoming Meetings ({scheduledMeetings.length})
-                </h2>
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-6 bg-primary rounded-full" />
+              <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">
+                Upcoming Meetings {upcomingTableMeetings.length > 0 ? `(${upcomingTableMeetings.length})` : ''}
+              </h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {scheduledMeetings.map((meeting) => {
-                const chapterName = getChapterName(meeting);
-                const scheduledBy = getScheduledByName(meeting);
-                const meetingTitle = `${chapterName} Meeting`;
-                const meetingStatus = getMeetingStatus(meeting);
+          </div>
 
-                return (
-                  <div 
-                    key={meeting.id} 
-                    onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="bg-[#111827] p-4 rounded-[16px] border border-white/5 hover:border-primary/40 hover:bg-[#1C2538] transition-all flex flex-col justify-between cursor-pointer group shadow-sm"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-widest bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
-                          <Building size={11} />
-                          {chapterName}
-                        </span>
-                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", meetingStatus.color)}>
-                          {meetingStatus.label}
-                        </span>
-                      </div>
+          {upcomingTableMeetings.length > 0 ? (
+            <div>
+              {/* Desktop Compact Table */}
+              <div className="hidden md:block overflow-hidden bg-[#111827] rounded-[18px] border border-white/5 shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 bg-[#151C2E]/60 text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                      <th className="py-3.5 px-6">Date</th>
+                      <th className="py-3.5 px-6">Time</th>
+                      <th className="py-3.5 px-6">Address / Location</th>
+                      <th className="py-3.5 px-6 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-xs text-neutral-200">
+                    {upcomingTableMeetings.map((meeting) => {
+                      const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                      const timeFormatted = formatTime12h(meeting.time || '07:30');
+                      const canUpdate = canUserUpdateMeeting(meeting);
 
-                      <h3 className="text-sm font-bold text-white uppercase tracking-tight leading-snug mb-2 group-hover:text-primary transition-colors">
-                        {meetingTitle}
-                      </h3>
-
-                      <div className="space-y-1.5 mb-4 text-[11px] text-neutral-300">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={13} className="text-primary shrink-0" />
-                          <span className="font-semibold text-white">{format(new Date(meeting.date), 'EEEE, MMM do yyyy')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock size={13} className="text-primary shrink-0" />
-                          <span>{formatTime12h(meeting.time || '07:30')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin size={13} className="text-primary shrink-0" />
-                          <span className="truncate">{meeting.location || 'Meeting Venue'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-neutral-400">
-                          <Users size={12} className="text-neutral-400 shrink-0" />
-                          <span>Scheduled By: <strong className="text-white font-bold">{scheduledBy}</strong></span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-white/5">
-                      {isMasterAdmin ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAttendanceReport(meeting);
-                          }}
-                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
+                      return (
+                        <tr 
+                          key={meeting.id} 
+                          className="hover:bg-[#151C2E] transition-colors"
                         >
-                          <Info size={12} />
-                          View Details
-                        </button>
-                      ) : canUserUpdateMeeting(meeting) ? (
-                        <div className="grid grid-cols-2 gap-2">
+                          <td className="py-3.5 px-6 font-bold text-white whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Calendar size={14} className="text-primary shrink-0" />
+                              <span>{dateFormatted}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-6 whitespace-nowrap font-medium text-neutral-300">
+                            <div className="flex items-center gap-2">
+                              <Clock size={14} className="text-primary shrink-0" />
+                              <span>{timeFormatted}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-6">
+                            {renderMeetingLocation(meeting)}
+                          </td>
+                          <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              {canUpdate && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMeeting(meeting);
+                                    const normalizedAttendance: Record<string, any> = {};
+                                    if (meeting.attendance) {
+                                      Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                        const v = String(val);
+                                        if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                        else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                        else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                        else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                        else normalizedAttendance[uid] = val;
+                                      });
+                                    }
+                                    setTempAttendance(normalizedAttendance);
+                                    setTempAmount(meeting.amountCollected || {});
+                                    setTempMemberNotes(meeting.memberNotes || {});
+                                    setIsUpdateModalOpen(true);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Settings size={12} />
+                                  Update
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAttendanceReport(meeting)}
+                                className="px-3.5 py-1.5 bg-[#151C2E] text-white border border-white/10 hover:bg-[#1C2538] hover:border-white/20 rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Eye size={12} className="text-primary" />
+                                View
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Compact Stacked List */}
+              <div className="block md:hidden space-y-2.5">
+                {upcomingTableMeetings.map((meeting) => {
+                  const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                  const timeFormatted = formatTime12h(meeting.time || '07:30');
+                  const canUpdate = canUserUpdateMeeting(meeting);
+
+                  return (
+                    <div 
+                      key={meeting.id}
+                      className="bg-[#111827] p-3.5 rounded-[14px] border border-white/5 space-y-2.5 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between text-xs font-bold text-white pb-2 border-b border-white/5">
+                        <div className="flex items-center gap-2">
+                          <Calendar size={13} className="text-primary" />
+                          <span>{dateFormatted}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-neutral-300 font-medium text-[11px]">
+                          <Clock size={13} className="text-primary" />
+                          <span>{timeFormatted}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-0.5">
+                        {renderMeetingLocation(meeting)}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
+                        {canUpdate && (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               setSelectedMeeting(meeting);
                               const normalizedAttendance: Record<string, any> = {};
                               if (meeting.attendance) {
@@ -2173,61 +2266,42 @@ export function Meetings() {
                               setTempMemberNotes(meeting.memberNotes || {});
                               setIsUpdateModalOpen(true);
                             }}
-                            className="py-1.5 bg-emerald-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center justify-center gap-1"
+                            className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
                           >
-                            <Settings size={11} />
+                            <Settings size={12} />
                             Update
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenAttendanceReport(meeting);
-                            }}
-                            className="py-1.5 bg-[#151C2E] text-primary border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1"
-                          >
-                            <FileText size={11} />
-                            Report
-                          </button>
-                        </div>
-                      ) : (
+                        )}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAttendanceReport(meeting);
-                          }}
-                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
+                          onClick={() => handleOpenAttendanceReport(meeting)}
+                          className="px-3 py-1.5 bg-[#151C2E] text-white border border-white/10 hover:bg-[#1C2538] hover:border-white/20 rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
                         >
-                          <Info size={12} />
-                          View Details
+                          <Eye size={12} className="text-primary" />
+                          View
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-1.5 h-6 bg-primary rounded-full" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">Upcoming Meetings</h2>
-            </div>
-            <div className="p-12 text-center bg-[#111827] rounded-[24px] border border-dashed border-white/5">
-              <div className="w-12 h-12 bg-[#151C2E] rounded-full flex items-center justify-center mx-auto mb-3 text-neutral-400">
-                <Calendar size={24} />
+                  );
+                })}
               </div>
-              <h3 className="text-base font-bold text-white">No upcoming meetings scheduled.</h3>
-              <p className="text-xs text-neutral-400 mt-1">
-                {isChapterAdmin 
-                  ? "Click the button above to schedule a new meeting." 
-                  : "No upcoming meetings scheduled for the selected view."}
+            </div>
+          ) : (
+            <div className="p-8 text-center bg-[#111827] rounded-[20px] border border-dashed border-white/5">
+              <div className="w-10 h-10 bg-[#151C2E] rounded-full flex items-center justify-center mx-auto mb-2 text-neutral-400">
+                <Calendar size={20} />
+              </div>
+              <h3 className="text-sm font-bold text-white">No upcoming meetings scheduled.</h3>
+              <p className="text-[11px] text-neutral-400 mt-0.5">
+                {(isMasterAdmin || isChapterAdmin) && primaryFocusMeeting 
+                  ? "The primary focus meeting is displayed above. No additional upcoming meetings are scheduled." 
+                  : isChapterAdmin 
+                    ? "Click the button above to schedule a new meeting." 
+                    : "No upcoming meetings scheduled for this chapter."}
               </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 2. Meeting History */}
         <div className="space-y-4">
