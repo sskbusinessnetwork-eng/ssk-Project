@@ -237,11 +237,11 @@ export function getWorkspaceChecklistTasks(
     });
     rawTasks.push({
       key: `task_invite_guest_${dateStr}`,
-      label: 'Invite a New Guest',
+      label: 'Invite Guest',
       desc: 'Invite a guest to join your chapter.',
       autoDone: hasGuestAuto,
       link: hasGuestAuto ? '/guests' : '/guests?action=new',
-      linkText: hasGuestAuto ? 'VIEW' : 'INVITE',
+      linkText: hasGuestAuto ? 'VIEW' : 'INVITE GUEST',
       iconColor: 'text-pink-400',
       bgColor: 'bg-pink-500/10'
     });
@@ -270,11 +270,11 @@ export function getWorkspaceChecklistTasks(
     });
     rawTasks.push({
       key: `task_schedule_meeting_${dateStr}`,
-      label: 'Schedule Meeting',
+      label: 'Schedule 1:1 Meeting',
       desc: 'Schedule a 1-to-1 or chapter meeting.',
       autoDone: hasScheduleMeetingAuto,
       link: hasScheduleMeetingAuto ? '/one-to-one' : '/one-to-one?action=new',
-      linkText: hasScheduleMeetingAuto ? 'VIEW' : 'SCHEDULE',
+      linkText: hasScheduleMeetingAuto ? 'VIEW' : 'SCHEDULE 1:1',
       iconColor: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10'
     });

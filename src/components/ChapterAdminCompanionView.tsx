@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
   Calendar, CheckCircle2, UserPlus, Users, Share2, Handshake,
@@ -48,6 +48,7 @@ export function ChapterAdminCompanionView({
   chapterReferralsList = [],
   tasks = [],
 }: ChapterAdminCompanionViewProps) {
+  const navigate = useNavigate();
   
   const formatRevenueLabel = (val: number) => {
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -240,7 +241,10 @@ export function ChapterAdminCompanionView({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
               whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-              className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] py-4"
+              className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-4 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] py-4 cursor-pointer"
+              onClick={() => {
+                if (task.link) navigate(task.link);
+              }}
             >
               {/* Left Column: Title only */}
               <div className="flex flex-col flex-1 min-w-0 pr-2">
@@ -261,9 +265,12 @@ export function ChapterAdminCompanionView({
                   task.customActions.map((act: any, i: number) => (
                     <button
                       key={i}
-                      onClick={act.onClick}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        act.onClick();
+                      }}
                       className={cn(
-                        "h-7 w-full px-3 flex items-center justify-center text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-[8px] transition-all border",
+                        "h-7 w-full px-3 flex items-center justify-center text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-[8px] transition-all border cursor-pointer",
                         act.className
                       )}
                     >
@@ -271,12 +278,16 @@ export function ChapterAdminCompanionView({
                     </button>
                   ))
                 ) : (
-                  <Link 
-                    to={task.link} 
-                    className="h-9 sm:h-10 w-[95px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0"
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (task.link) navigate(task.link);
+                    }}
+                    className="h-9 sm:h-10 w-[95px] sm:w-[105px] flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0 cursor-pointer"
                   >
                     {task.linkText}
-                  </Link>
+                  </button>
                 )}
               </motion.div>
             </motion.div>
