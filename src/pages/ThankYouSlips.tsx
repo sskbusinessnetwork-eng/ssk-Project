@@ -614,7 +614,11 @@ export function ThankYouSlips() {
   // Business Generated & Business Sent: Total business sent by the user (slips submitted by user)
   const totalBusinessSent = isMasterAdmin 
     ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
-    : slips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+    : allSlips.reduce((acc, slip) => {
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId));
+        const senderId = ref ? String(ref.fromUserId) : String(slip.toUserId);
+        return String(senderId) === String(currentUserId) ? acc + (Number(slip.businessValue) || 0) : acc;
+      }, 0);
   
   // Business Generated always equals Business Sent
   const totalBusinessGenerated = totalBusinessSent;
@@ -622,7 +626,11 @@ export function ThankYouSlips() {
   // Business Received: Total business received by the user (slips received where user is toUserId)
   const totalBusinessReceived = isMasterAdmin
     ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0)
-    : receivedSlips.reduce((acc, slip) => acc + (Number(slip.businessValue) || 0), 0);
+    : allSlips.reduce((acc, slip) => {
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId));
+        const receiverId = ref ? String(ref.toUserId) : String(slip.fromUserId);
+        return String(receiverId) === String(currentUserId) ? acc + (Number(slip.businessValue) || 0) : acc;
+      }, 0);
 
   // totalBusinessGenerated is synchronized with totalBusinessSent above
 

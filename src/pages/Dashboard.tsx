@@ -581,30 +581,32 @@ export function Analytics() {
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        // Business SENT by user means they are the recipient of the Thank You Slip (toUserId)
-        const recBy = String(s.toUserId || s.to_user_id || '');
-        return recBy === String(appliedMemberFilter);
+        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
+        const senderId = ref ? String(ref.fromUserId) : String(s.toUserId || s.to_user_id || '');
+        return senderId === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const recBy = String(s.toUserId || s.to_user_id || '');
-      return usePersonalStats ? userCandidateIds.includes(recBy) : chapterUserIds.includes(recBy);
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
+      const senderId = ref ? String(ref.fromUserId) : String(s.toUserId || s.to_user_id || '');
+      return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
     });
-  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
+  }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        // Business RECEIVED by user means they submitted the Thank You Slip (fromUserId)
-        const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-        return subBy === String(appliedMemberFilter);
+        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
+        const receiverId = ref ? String(ref.toUserId) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+        return receiverId === String(appliedMemberFilter);
       });
     }
     return effectiveSlips.filter(s => {
-      const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-      return usePersonalStats ? userCandidateIds.includes(subBy) : chapterUserIds.includes(subBy);
+      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId));
+      const receiverId = ref ? String(ref.toUserId) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+      return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
     });
-  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
+  }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 
   const referralsSentList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
