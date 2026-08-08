@@ -114,7 +114,7 @@ export function MemberCompanionView({
       const val = Number(s.businessValue || s.transactionValue) || 0;
       const d = new Date(s.createdAt || s.date);
       
-      const ref = userReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
       const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
       const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
       
