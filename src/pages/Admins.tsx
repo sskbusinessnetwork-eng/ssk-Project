@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Plus, Shield, Phone, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Shield, Phone, PhoneCall, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
@@ -19,6 +19,7 @@ export function Admins() {
   const [activeTab, setActiveTab] = useState<'admins' | 'positions'>('admins');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<UserProfile | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -281,9 +282,16 @@ export function Admins() {
                             </div>
                             <div>
                               <span className="font-bold text-neutral-900 block">{admin.name}</span>
-                              <span className="text-[10px] text-neutral-600 font-bold uppercase tracking-widest">
-                                {admin.phone}
-                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-neutral-600 font-bold uppercase tracking-widest">
+                                  {admin.phone}
+                                </span>
+                                {admin.phone && (
+                                  <a href={`tel:${admin.phone}`} className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="Call">
+                                    <PhoneCall size={10} />
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -386,7 +394,14 @@ export function Admins() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Phone</p>
-                      <p className="text-xs font-bold text-neutral-700">{admin.phone || 'N/A'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-neutral-700">{admin.phone || 'N/A'}</p>
+                        {admin.phone && (
+                          <a href={`tel:${admin.phone}`} className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors shrink-0" title="Call">
+                            <PhoneCall size={10} />
+                          </a>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Chapter</p>
@@ -529,13 +544,20 @@ export function Admins() {
                 <Lock className="absolute left-3 top-1/2 -tranneutral-y-1/2 text-neutral-500" size={18} />
                 <input
                   required={!editingAdmin}
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder={editingAdmin ? "Leave blank to keep current" : "Minimum 6 characters"}
                   minLength={6}
-                  className="w-full pl-10 pr-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full pl-10 pr-10 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
           </div>

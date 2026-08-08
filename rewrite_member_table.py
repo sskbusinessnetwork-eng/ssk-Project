@@ -1,99 +1,12 @@
-import { Avatar } from '../../components/Avatar';
-import React, { useState } from 'react';
-import { 
-  Phone, 
-  Briefcase, 
-  Tags, 
-  UserCheck, 
-  UserMinus, 
-  CreditCard, 
-  Trash2,
-  Building2,
-  Edit2,
-  Shield,
-  AlertTriangle,
-  Bell,
-  Users,
-  Settings,
-  MapPin,
-  Calendar,
-  MoreVertical,
-  Eye,
-  Lock
-} from 'lucide-react';
-import { UserProfile } from '../../types';
-import { cn } from '../../lib/utils';
-import { differenceInDays, isValid } from 'date-fns';
-import { safeFormat as format } from '../../utils/dateUtils';
-import { useNavigate } from 'react-router-dom';
-import { isMemberActive } from '../../utils/memberStatus';
+import re
 
-interface MemberTableProps {
-  currentUserId?: string;
-  members: UserProfile[];
-  adminMap: Record<string, string>;
-  loading: boolean;
-  isMasterAdmin: boolean;
-  isChapterAdmin: boolean;
-  onUpdateStatus: (uid: string, status: UserProfile['membershipStatus']) => void;
-  onOpenSubModal: (member: UserProfile) => void;
-  onEditMember: (member: UserProfile) => void;
-  onDeleteMember: (member: UserProfile) => void;
-  onResetPassword: (member: UserProfile) => void;
-}
+with open('src/components/members/MemberTable.tsx', 'r') as f:
+    content = f.read()
 
-import { getDisplayPosition } from '../../utils/authUtils';
+# Replace from <div className="space-y-6"> to the end of the file.
+pattern = re.compile(r'    <div className="space-y-6">.*', re.DOTALL)
 
-export function MemberTable({
-  currentUserId,
-  members,
-  adminMap,
-  loading,
-  isMasterAdmin,
-  isChapterAdmin,
-  onUpdateStatus,
-  onOpenSubModal,
-  onEditMember,
-  onDeleteMember,
-  onResetPassword
-}: MemberTableProps) {
-  const navigate = useNavigate();
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-
-  const getPositionText = (member: UserProfile) => {
-    const position = member.position;
-    if (!position || position === 'member') return null;
-    return (
-      <span className="text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10">
-        {position.replace('_', ' ')}
-      </span>
-    );
-  };
-
-  const toggleActionsMenu = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setActiveMenuId(activeMenuId === id ? null : id);
-  };
-
-  React.useEffect(() => {
-    const handleOutsideClick = () => setActiveMenuId(null);
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="bg-[#111827] rounded-[24px] border border-white/5 p-16 text-center shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
-        <div className="w-10 h-10 border-4 border-primary/25 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest">Loading Roster...</p>
-      </div>
-    );
-  }
-
-  const showActions = isMasterAdmin || isChapterAdmin;
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+replacement = """    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {members.length > 0 ? (
         members.map((member) => {
           const displayPosition = getDisplayPosition(member.position, member.role);
@@ -115,21 +28,9 @@ export function MemberTable({
                   {displayPosition && (
                     <p className="text-[10px] font-medium text-neutral-400 mt-0.5">{displayPosition}</p>
                   )}
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-medium">
-                      <Phone size={10} className="text-neutral-500" />
-                      <span>{member.phone || 'No Phone'}</span>
-                    </div>
-                    {member.phone && (
-                      <a 
-                        href={`tel:${member.phone}`} 
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors"
-                        title="Call Member"
-                      >
-                        <PhoneCall size={10} />
-                      </a>
-                    )}
+                  <div className="flex items-center gap-1 mt-2 text-[11px] text-neutral-300 font-medium">
+                    <Phone size={10} className="text-neutral-500" />
+                    <span>{member.phone || 'No Phone'}</span>
                   </div>
                 </div>
               </div>
@@ -199,3 +100,8 @@ export function MemberTable({
     </div>
   );
 }
+"""
+
+content = re.sub(pattern, replacement, content)
+with open('src/components/members/MemberTable.tsx', 'w') as f:
+    f.write(content)

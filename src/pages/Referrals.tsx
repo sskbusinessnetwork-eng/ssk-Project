@@ -610,7 +610,7 @@ export function Referrals() {
     const requiredFields = [
       { id: 'toUserId', value: formData.toUserId, name: 'Member' },
       { id: 'contactName', value: formData.contactName, name: 'Contact Name' },
-      { id: 'contactPhone', value: formData.contactPhone, name: 'Contact Phone' },
+      { id: 'contactPhone', value: formData.contactPhone, PhoneCall, name: 'Contact Phone' },
       { id: 'requirement', value: formData.requirement, name: 'Requirement' }
     ];
 
@@ -1295,7 +1295,14 @@ export function Referrals() {
                             <p className="text-[10px] text-neutral-400">{ref.receiverChapter || 'N/A'}</p>
                           </td>
                           <td className="p-4 align-top max-w-xs">
-                            <p className="font-semibold text-white truncate">{ref.contactName} {ref.contactPhone ? `(${ref.contactPhone})` : ''}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-white truncate">{ref.contactName} {ref.contactPhone ? `(${ref.contactPhone})` : ''}</p>
+                              {ref.contactPhone && (
+                                <a href={`tel:${ref.contactPhone}`} className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors shrink-0" title="Call">
+                                  <PhoneCall size={12} />
+                                </a>
+                              )}
+                            </div>
                             <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">{ref.requirement}</p>
                           </td>
                           <td className="p-4 align-top text-center whitespace-nowrap">
@@ -1847,7 +1854,14 @@ export function Referrals() {
                     <div>
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Contact Details</p>
                       <p className="text-sm font-bold text-white">{selectedReferral.contactName}</p>
-                      <p className="text-xs font-medium text-neutral-400">{selectedReferral.contactPhone}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium text-neutral-400">{selectedReferral.contactPhone}</p>
+                        {selectedReferral.contactPhone && (
+                          <a href={`tel:${selectedReferral.contactPhone}`} className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Call">
+                            <PhoneCall size={10} />
+                          </a>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Created At</p>

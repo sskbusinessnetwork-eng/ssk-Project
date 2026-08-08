@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { Lock, ShieldAlert, CheckCircle2, ArrowRight, AlertCircle, X } from 'lucide-react';
+import { Lock, ShieldAlert, Eye, EyeOff, CheckCircle2, ArrowRight, AlertCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { databaseService } from '../services/databaseService';
 import { getDashboardPath } from '../utils/authUtils';
@@ -17,6 +17,9 @@ export function SetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [successPopup, setSuccessPopup] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -171,16 +174,25 @@ export function SetPassword() {
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-[0.5px] ml-1">
                 Current Password *
               </label>
-              <input
-                type="password"
-                value={currentPassword}
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
                 onChange={(e) => {
                   setCurrentPassword(e.target.value);
                   if (errors.currentPassword) setErrors({ ...errors, currentPassword: '' });
                 }}
                 placeholder="Enter current password"
-                className={`w-full h-[50px] px-4 bg-[#0F172A] border ${errors.currentPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
+                className={`w-full h-[50px] px-4 pr-12 bg-[#0F172A] border ${errors.currentPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
               />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+              >
+                {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
               {errors.currentPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.currentPassword}</p>}
             </div>
 
@@ -188,16 +200,25 @@ export function SetPassword() {
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-[0.5px] ml-1">
                 New Password *
               </label>
-              <input
-                type="password"
-                value={newPassword}
+              <div className="relative">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
                 onChange={(e) => {
                   setNewPassword(e.target.value);
                   if (errors.newPassword) setErrors({ ...errors, newPassword: '' });
                 }}
                 placeholder="Min. 8 chars, upper, lower, number, special"
-                className={`w-full h-[50px] px-4 bg-[#0F172A] border ${errors.newPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
+                className={`w-full h-[50px] px-4 pr-12 bg-[#0F172A] border ${errors.newPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
               />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+              >
+                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
               {errors.newPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.newPassword}</p>}
             </div>
 
@@ -205,16 +226,25 @@ export function SetPassword() {
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-[0.5px] ml-1">
                 Confirm New Password *
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
                 onChange={(e) => {
                   setConfirmPassword(e.target.value);
                   if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
                 }}
                 placeholder="Repeat new password"
-                className={`w-full h-[50px] px-4 bg-[#0F172A] border ${errors.confirmPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
+                className={`w-full h-[50px] px-4 pr-12 bg-[#0F172A] border ${errors.confirmPassword ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-xl outline-none transition-all text-white placeholder-white/50 text-sm`}
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
               {errors.confirmPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.confirmPassword}</p>}
             </div>
 

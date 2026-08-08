@@ -23,6 +23,7 @@ export function AddMemberForm() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
 
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
@@ -340,14 +341,20 @@ export function AddMemberForm() {
           <div className="relative">
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
             <input
-              type="text"
+              type={showPassword ? "text" : "password"}
               name="password"
               value={formData.password}
               onChange={handleChange}
               placeholder="Set initial password"
-              className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-              
+              className="w-full h-11 pl-11 pr-10 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
           <p className="text-[10px] text-neutral-500 ml-1">Member will be prompted to change this on first login.</p>
         {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password}</p>}

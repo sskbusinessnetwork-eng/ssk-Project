@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../lib/database';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc } from '../lib/database';
 import { useAuth } from '../hooks/useAuth';
-import { User, Phone, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check, RefreshCw, Trash2, Edit2 } from 'lucide-react';
+import { User, Phone, PhoneCall, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check, RefreshCw, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { UserProfile, ChapterPosition, Category } from '../types';
@@ -313,9 +313,23 @@ export function OnboardMember() {
                     <div className="text-xs text-neutral-500">{member.category || 'No Category'}</div>
                   </td>
                   <td className="p-4">
-                    <div className="flex flex-col gap-1 text-sm text-neutral-600">
-                      <div className="flex items-center gap-1.5"><Phone size={12}/> {member.phone}</div>
-                      {member.whatsappNumber && <div className="flex items-center gap-1.5"><Phone size={12} className="text-emerald-500"/> {member.whatsappNumber}</div>}
+                    <div className="flex flex-col gap-2 text-sm text-neutral-600">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5"><Phone size={12}/> {member.phone}</div>
+                        {member.phone && (
+                          <a href={`tel:${member.phone}`} className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Call">
+                            <PhoneCall size={10} />
+                          </a>
+                        )}
+                      </div>
+                      {member.whatsappNumber && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5"><Phone size={12} className="text-emerald-500"/> {member.whatsappNumber}</div>
+                          <a href={`https://wa.me/${member.whatsappNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="WhatsApp">
+                            <PhoneCall size={10} />
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="p-4 text-sm text-neutral-600">

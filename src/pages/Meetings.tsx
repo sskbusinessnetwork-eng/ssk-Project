@@ -2172,112 +2172,102 @@ export function Meetings() {
           </div>
 
           {upcomingTableMeetings.length > 0 ? (
-            <div className="bg-[#111827] rounded-[18px] border border-white/5 overflow-hidden shadow-sm flex flex-col">
-              <div className="overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5 text-[10px] uppercase tracking-wider text-neutral-400 bg-[#151C2E]/50">
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap">Date & Time</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold">Address</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap">Status</th>
-                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap text-right sm:text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {paginatedUpcomingTableMeetings.map((meeting) => {
-                      const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
-                      const timeFormatted = formatTime12h(meeting.time || '07:30');
-                      const canUpdate = canUserUpdateMeeting(meeting);
-                      const mStatus = getMeetingStatus(meeting);
+            <div className="w-full space-y-4">
+              <div className="flex flex-col gap-3 sm:gap-4 w-full">
+              {paginatedUpcomingTableMeetings.map((meeting) => {
+                const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                const timeFormatted = formatTime12h(meeting.time || '07:30');
+                const canUpdate = canUserUpdateMeeting(meeting);
+                const mStatus = getMeetingStatus(meeting);
 
-                      return (
-                        <tr 
-                          key={meeting.id}
-                          onClick={() => handleOpenAttendanceReport(meeting)}
-                          className="hover:bg-[#151C2E]/80 transition-colors group cursor-pointer"
-                        >
-                          {/* Date & Time */}
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
-                            <div className="flex flex-col gap-1 min-w-[100px]">
-                              <div className="flex items-center gap-1.5 text-white font-medium text-xs whitespace-nowrap">
-                                <Calendar size={12} className="text-primary shrink-0" />
-                                <span>{dateFormatted}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] whitespace-nowrap">
-                                <Clock size={12} className="shrink-0" />
-                                <span>{timeFormatted}</span>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Address */}
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
-                            <div className="flex items-start gap-1.5 max-w-[120px] sm:max-w-[200px] md:max-w-[250px] lg:max-w-[300px]" title={meeting.location || 'N/A'}>
-                              <MapPin size={12} className="text-neutral-400 shrink-0 mt-0.5" />
-                              <span className="text-xs text-neutral-300 truncate leading-snug whitespace-normal line-clamp-2 md:line-clamp-1 md:truncate">
-                                {meeting.location || 'N/A'}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Status */}
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
-                            <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap", mStatus.color)}>
-                              {mStatus.label}
-                            </span>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle text-right sm:text-left">
-                            {canUpdate ? (
-                              <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end sm:justify-start gap-1.5 sm:gap-2">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedMeeting(meeting);
-                                    const normalizedAttendance = {};
-                                    if (meeting.attendance) {
-                                      Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                        const v = String(val);
-                                        if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                        else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                        else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                        else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                        else normalizedAttendance[uid] = val;
-                                      });
-                                    }
-                                    setTempAttendance(normalizedAttendance);
-                                    setTempAmount(meeting.amountCollected || {});
-                                    setTempMemberNotes(meeting.memberNotes || {});
-                                    setIsUpdateModalOpen(true);
-                                  }}
-                                  className="px-2.5 py-1.5 bg-[#151C2E] hover:bg-emerald-600/20 text-emerald-400 border border-white/5 hover:border-emerald-500/30 rounded-[6px] text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap"
-                                >
-                                  Update
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedMeeting(meeting);
-                                    setIsCancelConfirmOpen(true);
-                                  }}
-                                  className="px-2.5 py-1.5 bg-[#151C2E] hover:bg-red-500/20 text-red-400 border border-white/5 hover:border-red-500/30 rounded-[6px] text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-neutral-500 italic whitespace-nowrap">No actions</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                return (
+                  <motion.div
+                    key={meeting.id}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => handleOpenAttendanceReport(meeting)}
+                    className="group bg-[#111827] border border-white/5 hover:border-white/10 rounded-xl sm:rounded-[18px] p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex flex-col gap-2 sm:gap-3 flex-1 min-w-0">
+                      {/* Top: Status & Title */}
+                      <div className="flex items-start justify-between sm:justify-start gap-3">
+                        <h3 className="text-[14px] sm:text-[16px] font-black text-white uppercase tracking-wide truncate leading-tight">
+                          {meeting.title || meeting.topic || `${getChapterName(meeting)} MEETING`}
+                        </h3>
+                        <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0", mStatus.color)}>
+                          {mStatus.label}
+                        </span>
+                      </div>
+                      
+                      {/* Info: Date & Location */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5">
+                        <div className="flex items-center gap-2 text-neutral-300 text-[11px] sm:text-xs font-bold">
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <Calendar size={12} className="text-primary" />
+                          </div>
+                          <span>{dateFormatted} &middot; {timeFormatted}</span>
+                        </div>
+                        <div className="flex items-start sm:items-center gap-2 text-neutral-400 text-[11px] sm:text-xs font-semibold">
+                          <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                            <MapPin size={12} />
+                          </div>
+                          <span className="truncate max-w-[200px] sm:max-w-[250px]">{meeting.location || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 mt-2 sm:mt-0 shrink-0 w-full sm:w-auto">
+                      {canUpdate ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              const normalizedAttendance: Record<string, string> = {};
+                              if (meeting.attendance) {
+                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                  const v = String(val);
+                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                  else normalizedAttendance[uid] = String(val);
+                                });
+                              }
+                              setTempAttendance(normalizedAttendance);
+                              setTempAmount(meeting.amountCollected || {});
+                              setTempMemberNotes(meeting.memberNotes || {});
+                              setIsUpdateModalOpen(true);
+                            }}
+                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
+                          >
+                            Update
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              setIsCancelConfirmOpen(true);
+                            }}
+                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <div className="w-full text-right sm:text-left">
+                          <span className="text-[10px] text-neutral-500 italic block py-2 sm:py-0">No actions</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
 
               {/* Pagination */}
               {totalUpcomingPages > 1 && (
@@ -2393,24 +2383,16 @@ export function Meetings() {
                   <div
                     key={meeting.id}
                     onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="px-4 sm:px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                    className="px-4 py-3.5 flex flex-col justify-between gap-1 hover:bg-[#151C2E] transition-colors cursor-pointer group"
                   >
-                    <div className="flex items-start md:items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 md:w-8.5 md:h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors mt-0.5 md:mt-0">
-                        <Calendar size={15} className="text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-tight line-clamp-2 md:truncate group-hover:text-primary transition-colors leading-tight">
-                          {meetingTitle}
-                        </h4>
-                        <p className="text-[11px] text-neutral-400 font-medium mt-1 md:mt-0.5">
-                          {dateTimeCombined}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-0 ml-11 md:ml-0 md:shrink-0">
-                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", badge.color)}>
+                    <h4 className="text-[13px] sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors leading-tight">
+                      {meetingTitle}
+                    </h4>
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-neutral-400 font-medium truncate">
+                        {dateTimeCombined}
+                      </p>
+                      <span className={cn("px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border shrink-0", badge.color)}>
                         {badge.label}
                       </span>
                     </div>
@@ -2461,107 +2443,104 @@ export function Meetings() {
             <div className="p-4 border-b border-white/5 bg-[#151C2E]">
               <h3 className="text-sm font-bold text-white">Members</h3>
             </div>
-            <div className="overflow-x-auto">
-              <div className="min-w-[600px] px-4 sm:px-0">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5">
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Position</th>
-                      <th className="py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {(() => {
-                      const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
-                      const getPositionRank = (u: any) => {
-                        const role = String(u.role || '').toUpperCase();
-                        const pos = String(u.position || u.chapter_position || '').toLowerCase();
-                        if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
-                        if (pos === 'president') return 2;
-                        if (pos.includes('vice')) return 3;
-                        if (pos === 'secretary') return 4;
-                        if (pos === 'treasurer') return 5;
-                        return 6;
+            <div className="flex flex-col divide-y divide-white/5">
+                  {(() => {
+                    const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
+                    const getPositionRank = (u: any) => {
+                      const role = String(u.role || '').toUpperCase();
+                      const pos = String(u.position || u.chapter_position || '').toLowerCase();
+                      if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
+                      if (pos === 'president') return 2;
+                      if (pos.includes('vice')) return 3;
+                      if (pos === 'secretary') return 4;
+                      if (pos === 'treasurer') return 5;
+                      return 6;
+                    };
+                    const meetingMembers = (modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
+                      if (m.role === 'MASTER_ADMIN') return false;
+                      return Boolean(m.chapter_id && meetingChapId && String(m.chapter_id).trim() === String(meetingChapId).trim());
+                    })).sort((a, b) => {
+                      const rankA = getPositionRank(a);
+                      const rankB = getPositionRank(b);
+                      if (rankA !== rankB) return rankA - rankB;
+                      return (a.name || '').localeCompare(b.name || '');
+                    });
+
+                    if (meetingMembers.length === 0) {
+                      return (
+                        <div className="py-6 text-center text-xs text-neutral-400 font-medium">
+                          No members found for this chapter.
+                        </div>
+                      );
+                    }
+
+                    return meetingMembers.map((member) => {
+                      const mId = member.id || member.uid;
+                      const attendanceVal = tempAttendance[mId] || 'Present';
+                      const amtVal = tempAmount[mId] || '';
+                      
+                      const getStatusColor = (status: string) => {
+                        const s = String(status || '').toLowerCase();
+                        if (s === 'present') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                        if (s === 'absent') return 'text-red-400 bg-red-500/10 border-red-500/20';
+                        if (s === 'substitute') return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+                        if (s === 'medical') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                        return 'text-neutral-400 bg-[#151C2E] border-white/10';
                       };
-
-                      const meetingMembers = (modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
-                        if (m.role === 'MASTER_ADMIN') return false;
-                        return Boolean(m.chapter_id && meetingChapId && String(m.chapter_id).trim() === String(meetingChapId).trim());
-                      })).sort((a, b) => {
-                        const rankA = getPositionRank(a);
-                        const rankB = getPositionRank(b);
-                        if (rankA !== rankB) return rankA - rankB;
-                        return (a.name || '').localeCompare(b.name || '');
-                      });
-
-                      if (meetingMembers.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={4} className="py-6 text-center text-xs text-neutral-400 font-medium">
-                              No members found for this chapter.
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return meetingMembers.map((member) => {
-                        const status = tempAttendance[member.uid];
-                        const amount = tempAmount[member.uid] || 0;
-                        return (
-                          <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
-                                <Avatar src={member.photoURL} name={member.name} size="w-8 h-8" className="rounded-lg shrink-0" fallbackClassName="rounded-lg text-xs" />
-                                <div className="min-w-0">
-                                  <p className="text-sm font-bold text-white truncate">{member.name || member.displayName}</p>
-                                  {member.businessName && <p className="text-[10px] text-neutral-400 truncate">{member.businessName}</p>}
-                                </div>
+                      
+                      return (
+                        <div key={mId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+                              {member.name || member.displayName || 'Unknown Member'}
+                            </h4>
+                            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+                              {member.position || member.chapter_position || 'Member'}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
+                            <select
+                              value={attendanceVal}
+                              onChange={(e) => {
+                                setTempAttendance({ ...tempAttendance, [mId]: e.target.value });
+                                if (e.target.value === 'Absent' || e.target.value === 'Medical') {
+                                  setTempAmount(prev => {
+                                    const next = { ...prev };
+                                    delete next[mId];
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className={cn(
+                                "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
+                                getStatusColor(attendanceVal)
+                              )}
+                            >
+                              <option value="Present" className="bg-[#111827] text-white">Present</option>
+                              <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                              <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
+                              <option value="Medical" className="bg-[#111827] text-white">Medical</option>
+                            </select>
+                            
+                            {(attendanceVal === 'Present' || attendanceVal === 'Substitute') && (
+                              <div className="relative flex-shrink-0 w-24">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-[11px]">₹</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  value={amtVal}
+                                  onChange={(e) => setTempAmount({ ...tempAmount, [mId]: e.target.value })}
+                                  className="w-full pl-6 pr-2 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-white placeholder-neutral-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                                />
                               </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="text-xs font-semibold text-neutral-300">
-                                {getMemberPositionLabel(member)}
-                              </span>
-                            </td>
-                            <td className="py-4 text-center">
-                              <select
-                                id={`attendance-select-${member.uid}`}
-                                value={status || ''}
-                                onChange={(e) => setTempAttendance(prev => ({ ...prev, [member.uid]: e.target.value as any }))}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white cursor-pointer",
-                                  status === 'Present' || status === 'PRESENT' || status === 'Yes' || status === 'YES' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
-                                  status === 'Absent' || status === 'ABSENT' || status === 'No' || status === 'NO' ? "border-red-500/30 text-red-400 bg-red-500/10" :
-                                  status === 'Substitute' || status === 'SUBSTITUTE' ? "border-amber-500/30 text-amber-400 bg-amber-500/10" :
-                                  status === 'Medical' || status === 'MEDICAL' ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10" :
-                                  "border-white/5 text-neutral-400"
-                                )}
-                              >
-                                <option value="" className="bg-[#111827] text-white">Select Status</option>
-                                <option value="Present" className="bg-[#111827] text-white">Present</option>
-                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
-                                <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
-                                <option value="Medical" className="bg-[#111827] text-white">Medical</option>
-                              </select>
-                            </td>
-                            <td className="py-4 px-4 text-right">
-                              <input
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setTempAmount(prev => ({ ...prev, [member.uid]: parseInt(e.target.value) || 0 }))}
-                                className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
           </div>
           
           {/* Guests Section */}
@@ -2570,62 +2549,55 @@ export function Meetings() {
               <h3 className="text-sm font-bold text-white">Guests</h3>
             </div>
             {meetingGuests.length > 0 ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[600px] px-4 sm:px-0">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/5">
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Guest Name</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Attendance</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {meetingGuests.map((guest) => {
-                        const status = tempGuestAttendance[guest.id] || '';
-                        const amount = tempAmount[guest.id] || 0;
-                        const inviter = guestInviters[guest.invited_by];
+              <div className="flex flex-col divide-y divide-white/5">
+                {meetingGuests.map((guest) => {
+                  const status = tempGuestAttendance[guest.id] || '';
+                  const amount = tempAmount[guest.id] || 0;
+                  const inviter = guestInviters[guest.invited_by];
+                  
+                  return (
+                    <div key={guest.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-secondary transition-colors">
+                          {guest.guest_name}
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-neutral-400 truncate mt-0.5 font-semibold uppercase tracking-wider">
+                          Invited by {inviter?.name || guest.invited_by_name || 'Member'}{guest.invited_by_role ? ` (${guest.invited_by_role})` : inviter?.position ? ` (${inviter.position})` : ''} • {guest.business_category || 'Guest'}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
+                        <select
+                          value={status}
+                          onChange={(e) => setTempGuestAttendance(prev => ({ ...prev, [guest.id]: e.target.value }))}
+                          className={cn(
+                            "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
+                            status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
+                            status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10" :
+                            "border-white/5 text-neutral-400 bg-[#151C2E]"
+                          )}
+                        >
+                          <option value="" className="bg-[#111827] text-white">Select Status</option>
+                          <option value="Present" className="bg-[#111827] text-white">Present</option>
+                          <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                        </select>
                         
-                        return (
-                          <tr key={guest.id} className="hover:bg-[#1C2538] transition-colors">
-                            <td className="py-4 px-4">
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-white truncate">{guest.guest_name}</p>
-                                <p className="text-[10px] text-neutral-400 truncate mt-0.5">
-                                  Invited by {inviter?.name || guest.invited_by_name || 'Member'}{guest.invited_by_role ? ` (${guest.invited_by_role})` : inviter?.position ? ` (${inviter.position})` : ''} • {guest.business_category || 'Guest'}
-                                </p>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <select
-                                value={status}
-                                onChange={(e) => setTempGuestAttendance(prev => ({ ...prev, [guest.id]: e.target.value }))}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-lg border focus:ring-2 focus:ring-primary/20 outline-none text-xs font-bold transition-all bg-[#151C2E] text-white cursor-pointer",
-                                  status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
-                                  status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10" :
-                                  "border-white/5 text-neutral-400"
-                                )}
-                              >
-                                <option value="" className="bg-[#111827] text-white">Select Status</option>
-                                <option value="Present" className="bg-[#111827] text-white">Present</option>
-                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
-                              </select>
-                            </td>
-                            <td className="py-4 px-4 text-right">
-                              <input
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setTempAmount(prev => ({ ...prev, [guest.id]: parseInt(e.target.value) || 0 }))}
-                                className="w-20 px-2 py-1.5 rounded-lg border border-white/5 bg-[#151C2E] focus:ring-2 focus:ring-blue-500 outline-none text-right text-sm font-bold text-white float-right"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                        {(status === 'Present' || status === 'Substitute') && (
+                          <div className="relative flex-shrink-0 w-24">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-[11px]">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={amount}
+                              onChange={(e) => setTempAmount(prev => ({ ...prev, [guest.id]: parseInt(e.target.value) || 0 }))}
+                              className="w-full pl-6 pr-2 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-white placeholder-neutral-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="p-8 text-center text-sm font-medium text-neutral-400">
@@ -2697,45 +2669,29 @@ export function Meetings() {
             </div>
           </div>
 
-          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="bg-[#151C2E] border-b border-white/5">
-                  <th className="px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member Name</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Status</th>
-                  <th className="px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Contribution</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
-                  const status = detailsMeeting?.attendance[member.uid];
-                  const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
-                  return (
-                    <tr key={member.uid} className="hover:bg-[#1C2538] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar src={member.photoURL} name={member.name || member.displayName || 'Member'} size="w-6 h-6" className="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
-                          <p className="text-xs font-bold text-white">{member.name || member.displayName || 'Unnamed Member'}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {(() => {
-                          const displayObj = getAttendanceDisplay(status);
-                          return (
-                            <span className={cn("px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border", displayObj.color)}>
-                              {displayObj.label}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <p className="text-xs font-bold text-white">₹{amount.toLocaleString()}</p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex flex-col divide-y divide-white/5 bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden">
+            {members.filter(m => m.adminId === detailsMeeting?.adminId || m.uid === detailsMeeting?.adminId).map((member) => {
+              const status = detailsMeeting?.attendance?.[member.uid];
+              const amount = detailsMeeting?.amountCollected?.[member.uid] || 0;
+              const displayObj = getAttendanceDisplay(status);
+              
+              return (
+                <div key={member.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar src={member.photoURL} name={member.name || member.displayName || 'Member'} size="w-8 h-8" className="rounded-xl" fallbackClassName="rounded-xl text-xs" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] sm:text-sm font-bold text-white truncate">{member.name || member.displayName || 'Unnamed Member'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto ml-11 sm:ml-0">
+                    <span className={cn("px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-widest border shrink-0", displayObj.color)}>
+                      {displayObj.label}
+                    </span>
+                    <p className="text-xs font-bold text-white whitespace-nowrap">₹{amount.toLocaleString()}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20 flex items-center justify-between">
@@ -3216,83 +3172,59 @@ export function Meetings() {
             </p>
           </div>
 
-          <div className="overflow-x-auto -mx-6 px-6">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="border-b border-white/5">
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Date</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Time</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Venue</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest text-right">Amount</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Member</th>
-                  <th className="py-4 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Chapter</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {completedMeetings.length > 0 ? (
-                  completedMeetings.map((meeting) => {
-                    const status = meeting.attendance[profile?.uid || ''];
-                    const amount = meeting.amountCollected?.[profile?.uid || ''] || 0;
-                    const chapterName = adminAdmins.find(a => a.uid === meeting.adminId)?.name || 'Chapter';
-                    const memberName = profile?.name || profile?.displayName || 'Member';
-                    
-                    return (
-                      <tr key={meeting.id} className="hover:bg-[#1C2538] transition-colors">
-                        <td className="py-4 px-4">
-                          <p className="text-sm font-bold text-white">
-                            {format(new Date(meeting.date), 'dd MMM yyyy')}
-                          </p>
-                        </td>
-                        <td className="py-4 px-4">
-                          <p className="text-xs font-medium text-neutral-400">{formatTime12h(meeting.time || '07:30')}</p>
-                        </td>
-                        <td className="py-4 px-4">
-                          <p className="text-xs font-medium text-neutral-400 truncate max-w-[150px]" title={meeting.location}>
-                            {meeting.location || 'Meeting Venue'}
-                          </p>
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          {(() => {
-                            const displayObj = getAttendanceDisplay(status);
-                            return (
-                              <span className={cn(
-                                "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                                displayObj.color
-                              )}>
-                                {displayObj.label}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <p className="text-sm font-bold text-white">
-                            ₹{amount.toLocaleString()}
-                          </p>
-                        </td>
-                        <td className="py-4 px-4">
-                          <p className="text-xs font-bold text-neutral-400">{memberName}</p>
-                        </td>
-                        <td className="py-4 px-4">
-                          <p className="text-xs font-bold text-neutral-400">{chapterName}</p>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 bg-[#151C2E] rounded-full flex items-center justify-center text-neutral-400 border border-white/5">
-                          <Calendar size={24} />
-                        </div>
-                        <p className="text-sm font-bold text-neutral-400">No records found</p>
+          <div className="flex flex-col divide-y divide-white/5 border border-white/5 rounded-[16px] bg-[#111827] overflow-hidden">
+            {completedMeetings.length > 0 ? (
+              completedMeetings.map((meeting) => {
+                const status = meeting.attendance[profile?.uid || ''];
+                const amount = meeting.amountCollected?.[profile?.uid || ''] || 0;
+                const chapterName = adminAdmins.find(a => a.uid === meeting.adminId)?.name || 'Chapter';
+                
+                return (
+                  <div key={meeting.id} className="flex flex-col p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] sm:text-sm font-bold text-white truncate">
+                          {format(new Date(meeting.date), 'dd MMM yyyy')} &middot; {formatTime12h(meeting.time || '07:30')}
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] font-semibold text-neutral-400 mt-0.5 truncate uppercase tracking-wider">
+                          {chapterName}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                      <div className="shrink-0 text-right">
+                        {(() => {
+                          const displayObj = getAttendanceDisplay(status);
+                          return (
+                            <span className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
+                              displayObj.color
+                            )}>
+                              {displayObj.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                      <div className="flex items-center gap-1.5 text-neutral-400 font-medium truncate max-w-[200px]" title={meeting.location}>
+                        <MapPin size={12} className="shrink-0" />
+                        <span className="truncate">{meeting.location || 'Meeting Venue'}</span>
+                      </div>
+                      <div className="font-bold text-white bg-white/5 px-2.5 py-1 rounded-lg">
+                        ₹{amount.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-12 text-center">
+                <div className="w-12 h-12 bg-[#151C2E] rounded-full flex items-center justify-center text-neutral-400 border border-white/5 mx-auto mb-3">
+                  <Calendar size={24} />
+                </div>
+                <p className="text-sm font-bold text-neutral-400">No records found</p>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
@@ -3363,63 +3295,47 @@ export function Meetings() {
                 <Users size={14} className="text-primary" />
                 Member Attendance Roster
               </h3>
-              <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
-                <table className="w-full text-left border-collapse min-w-[600px]">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-[#111827]">
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Name</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Position</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-center">Status</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-right">Fee (₹)</th>
-                      <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {(() => {
-                      const meetingChapId = reportMeeting.chapter_id || (reportMeeting as any).chapterId || (reportMeeting.adminId ? usersMap[reportMeeting.adminId]?.chapter_id : null);
-                      const members = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
-                      
-                      if (members.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={5} className="py-6 text-center text-xs text-neutral-400 font-medium">
-                              No member records found for this chapter.
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return members.map(m => {
-                        const rawStatus = reportMeeting.attendance?.[m.uid];
-                        const displayStatus = getAttendanceDisplay(rawStatus);
-                        const fee = reportMeeting.amountCollected?.[m.uid] || 0;
-                        const note = reportMeeting.memberNotes?.[m.uid] || '-';
-
-                        return (
-                          <tr key={m.uid} className="hover:bg-[#1C2538] transition-colors">
-                            <td className="py-3 px-4 text-xs font-bold text-white">
-                              {m.name || m.displayName || 'Unnamed Member'}
-                            </td>
-                            <td className="py-3 px-4 text-xs text-neutral-400">
-                              {getMemberPositionLabel(m)}
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border inline-block", displayStatus.color)}>
-                                {displayStatus.label}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-xs font-bold text-right text-white">
-                              ₹{Number(fee).toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 text-xs text-neutral-400 truncate max-w-[150px]" title={note}>
-                              {note}
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
+              <div className="flex flex-col divide-y divide-white/5 border border-white/5 rounded-[12px] bg-[#151C2E] overflow-hidden">
+                {(() => {
+                  const meetingChapId = reportMeeting.chapter_id || (reportMeeting as any).chapterId || (reportMeeting.adminId ? usersMap[reportMeeting.adminId]?.chapter_id : null);
+                  const members = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
+                  
+                  if (members.length === 0) {
+                    return (
+                      <div className="py-6 text-center text-xs text-neutral-400 font-medium">
+                        No member records found for this chapter.
+                      </div>
+                    );
+                  }
+                  
+                  return members.map(m => {
+                    const rawStatus = reportMeeting.attendance?.[m.uid];
+                    const displayStatus = getAttendanceDisplay(rawStatus);
+                    const fee = reportMeeting.amountCollected?.[m.uid] || 0;
+                    const note = reportMeeting.memberNotes?.[m.uid] || '-';
+                    
+                    return (
+                      <div key={m.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+                            {m.name || m.displayName || 'Unnamed Member'}
+                          </h4>
+                          <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+                            {getMemberPositionLabel(m)}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 w-full sm:w-auto">
+                          <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border inline-flex shrink-0", displayStatus.color)}>
+                            {displayStatus.label}
+                          </span>
+                          <span className="text-[13px] font-bold text-white whitespace-nowrap">
+                            ₹{Number(fee).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 
@@ -3430,27 +3346,31 @@ export function Meetings() {
                   <UserPlus size={14} className="text-secondary" />
                   Guest Attendees ({reportGuests.length})
                 </h3>
-                <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
-                  <table className="w-full text-left border-collapse min-w-[600px]">
-                    <thead>
-                      <tr className="border-b border-white/5 bg-[#111827]">
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Guest Name</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Category</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Invited By</th>
-                        <th className="py-3 px-4 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Mobile</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {reportGuests.map(g => (
-                        <tr key={g.id || g.uid} className="hover:bg-[#1C2538] transition-colors">
-                          <td className="py-3 px-4 text-xs font-bold text-white">{g.name || 'Guest'}</td>
-                          <td className="py-3 px-4 text-xs text-neutral-400">{g.businessCategory || g.category || 'N/A'}</td>
-                          <td className="py-3 px-4 text-xs text-neutral-300 font-medium">{g.invitedBy || 'Member'}</td>
-                          <td className="py-3 px-4 text-xs text-neutral-400">{g.mobile || g.phone || 'N/A'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex flex-col divide-y divide-white/5 border border-white/5 rounded-[12px] bg-[#151C2E] overflow-hidden">
+                  {reportGuests.map(g => (
+                    <div key={g.id || g.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-secondary transition-colors">
+                          {g.name || 'Guest'}
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+                          {g.businessCategory || g.category || 'N/A'} • Inv: {g.invitedBy || 'Member'}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-start sm:justify-end gap-2 w-full sm:w-auto mt-1 sm:mt-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-neutral-300 font-medium whitespace-nowrap">
+                            {g.mobile || g.phone || 'N/A'}
+                          </span>
+                          {(g.mobile || g.phone) && (
+                            <a href={`tel:${g.mobile || g.phone}`} className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Call Guest">
+                              <PhoneCall size={12} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

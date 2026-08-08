@@ -35,6 +35,9 @@ export function Testimonials() {
   const [selectedReferral, setSelectedReferral] = useState<any | null>(null);
   const [showWriteModal, setShowWriteModal] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  
+  const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
@@ -412,99 +415,45 @@ export function Testimonials() {
                   key={t.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-[#111827] rounded-[24px] p-5 border border-white/5 flex flex-col justify-between gap-4 relative group hover:border-white/10 transition-all shadow-md"
+                  onClick={() => {
+                    setSelectedTestimonial(t);
+                    setShowDetailModal(true);
+                  }}
+                  className="bg-[#111827] rounded-xl p-3 border border-white/5 flex flex-col gap-2 relative group hover:border-white/10 transition-all shadow-md cursor-pointer"
                 >
-                  <div className="space-y-3">
-                    {/* Top Row: User Avatar & Details + Status / Date */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          src={personPhoto}
-                          name={personName}
-                          size="md"
-                          className="border border-white/10"
-                        />
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">
-                              {isReceivedTab ? 'From:' : isSentTab ? 'To:' : 'From:'}
-                            </span>
-                            <Link
-                              to={`/profile?id=${targetUserId}`}
-                              className="text-sm font-extrabold text-white hover:text-primary transition-colors"
-                            >
-                              {personName}
-                            </Link>
-                          </div>
-                          <div className="text-[11px] font-bold text-primary">
-                            {personPosition}
-                          </div>
-                          <div className="text-[10px] text-[#9CA3AF]">
-                            {personChapter} {personUser?.businessName ? `• ${personUser.businessName}` : ''}
-                          </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar
+                        src={personPhoto}
+                        name={personName}
+                        size="w-8 h-8"
+                        className="border border-white/10 rounded-full"
+                        fallbackClassName="text-xs rounded-full"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1">
+                           <span className="text-white font-bold text-sm truncate">{personName}</span>
+                           {t.status === 'APPROVED' && <Star size={10} className="text-emerald-500 shrink-0" />}
+                        </div>
+                        <div className="text-[10px] text-primary font-semibold truncate">
+                          {personPosition}
                         </div>
                       </div>
-
-                      <div className="flex flex-col items-end gap-1.5">
-                        {/* Status Badge for Sent testimonials */}
-                        {isSentTab && (
-                          <span className={cn(
-                            "px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border",
-                            t.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                            t.status === 'REJECTED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                            "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                          )}>
-                            {t.status || 'PENDING'}
-                          </span>
-                        )}
-
-                        <span className="text-[10px] font-medium text-[#6B7280]">
-                          {format(new Date(t.createdAt), 'dd MMM yyyy')}
-                        </span>
-
-                        {canDelete && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(t.id)}
-                            className="text-[#9CA3AF] hover:text-red-500 transition-colors p-1"
-                            title="Delete Testimonial"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
                     </div>
-
-                    {/* Rating Stars */}
-                    <div className="flex items-center gap-1 text-[#F59E0B] pt-1">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          size={14}
-                          fill={i < (t.rating || 5) ? "currentColor" : "transparent"}
-                          strokeWidth={i < (t.rating || 5) ? 0 : 2}
-                          className={i >= (t.rating || 5) ? "text-[#374151]" : ""}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Title & Message */}
-                    {t.title && (
-                      <h3 className="text-white font-extrabold text-sm">{t.title}</h3>
+                    {isSentTab && (
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border shrink-0",
+                        t.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                        t.status === 'REJECTED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                        "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      )}>
+                        {t.status || 'PENDING'}
+                      </span>
                     )}
-
-                    <p className="text-[#D1D5DB] text-xs sm:text-sm leading-relaxed italic bg-[#151C2E] p-3.5 rounded-[16px] border border-white/5">
-                      "{t.testimonial}"
-                    </p>
                   </div>
-
-                  {/* Footer metadata if in Chapter/All view */}
-                  {(!isReceivedTab && !isSentTab) && (
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] text-[#9CA3AF]">
-                      <span>From: <strong className="text-white">{users[t.authorMemberId]?.name || 'Unknown'}</strong></span>
-                      <span>To: <strong className="text-white">{users[t.receiverMemberId]?.name || 'Unknown'}</strong></span>
-                    </div>
-                  )}
+                  <p className="text-[#9CA3AF] text-xs italic truncate">
+                    "{t.testimonial}"
+                  </p>
                 </motion.div>
               );
             })
@@ -580,6 +529,84 @@ export function Testimonials() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedTestimonial(null);
+        }}
+        title="Testimonial Details"
+      >
+        {selectedTestimonial && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar
+                src={users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.photoURL}
+                name={users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.name}
+                size="w-12 h-12"
+                className="border border-white/10 rounded-full"
+              />
+              <div>
+                <p className="font-bold text-white text-lg">
+                  {users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.name || 'Member'}
+                </p>
+                <p className="text-primary text-sm font-semibold">
+                  {formatPosition(users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.position, users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.role)}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1 text-[#F59E0B]">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star
+                  key={i}
+                  size={16}
+                  fill={i < (selectedTestimonial.rating || 5) ? "currentColor" : "transparent"}
+                  strokeWidth={i < (selectedTestimonial.rating || 5) ? 0 : 2}
+                  className={i >= (selectedTestimonial.rating || 5) ? "text-[#374151]" : ""}
+                />
+              ))}
+            </div>
+
+            {selectedTestimonial.title && (
+              <h3 className="text-white font-extrabold text-base">{selectedTestimonial.title}</h3>
+            )}
+            
+            <p className="text-[#D1D5DB] text-sm leading-relaxed italic bg-[#151C2E] p-4 rounded-xl border border-white/5">
+              "{selectedTestimonial.testimonial}"
+            </p>
+
+            <div className="flex justify-between items-center text-xs text-[#9CA3AF] pt-2 border-t border-white/5">
+              <span>{format(new Date(selectedTestimonial.createdAt), 'dd MMM yyyy')}</span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border",
+                selectedTestimonial.status === 'APPROVED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                selectedTestimonial.status === 'REJECTED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                "bg-amber-500/10 text-amber-400 border-amber-500/20"
+              )}>
+                {selectedTestimonial.status || 'PENDING'}
+              </span>
+            </div>
+            
+            {(isMasterAdmin || isChapterAdmin || selectedTestimonial.authorMemberId === currentUserId) && (
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDelete(selectedTestimonial.id);
+                    setShowDetailModal(false);
+                    setSelectedTestimonial(null);
+                  }}
+                  className="px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg text-xs font-bold transition-colors"
+                >
+                  Delete Testimonial
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Existing Testimonial Submission Modal */}

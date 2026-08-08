@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, doc, addDoc, onSnapshot } from '../l
 import { UserProfile, ChapterPosition, Chapter } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { cn, getMemberPositionKey } from '../lib/utils';
-import { Search, User, Phone, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
+import { Search, User, Phone, PhoneCall, Mail, Clock, ArrowRight, ChevronDown } from 'lucide-react';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { supabase } from '../lib/supabaseClient';
@@ -244,9 +244,16 @@ export function Positions() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5 text-sm text-neutral-400">
-                          <Phone size={14} className="text-neutral-500" />
-                          {member.phone || 'N/A'}
+                        <div className="flex items-center gap-2 text-sm text-neutral-400">
+                          <div className="flex items-center gap-1.5">
+                            <Phone size={14} className="text-neutral-500" />
+                            {member.phone || 'N/A'}
+                          </div>
+                          {member.phone && (
+                            <a href={`tel:${member.phone}`} className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors">
+                              <PhoneCall size={12} />
+                            </a>
+                          )}
                         </div>
                       </td>
                       <td className="p-4">

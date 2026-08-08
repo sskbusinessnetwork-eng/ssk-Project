@@ -7,6 +7,7 @@ import {
   User, 
   Briefcase, 
   Phone, 
+  PhoneCall, 
   Globe, 
   FileText, 
   Save, 
@@ -726,7 +727,14 @@ export function Profile() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Phone Number</p>
-                <p className="text-sm font-bold text-white">{targetProfile.phone || 'Not specified'}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-white">{targetProfile.phone || 'Not specified'}</p>
+                  {targetProfile.phone && (
+                    <a href={`tel:${targetProfile.phone}`} className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors">
+                      <PhoneCall size={12} />
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 

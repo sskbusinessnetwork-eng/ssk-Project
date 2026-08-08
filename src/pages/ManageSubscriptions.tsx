@@ -448,7 +448,14 @@ export function ManageSubscriptions() {
                       <div className="text-xs text-neutral-400">{user.email}</div>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-300">
-                      {user.phone}
+                      <div className="flex items-center gap-2">
+                        {user.phone}
+                        {user.phone && (
+                          <a href={`tel:${user.phone}`} className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="Call">
+                            <PhoneCall size={12} />
+                          </a>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-300">
                       {user.chapterName || chap?.chapter_name || 'N/A'}

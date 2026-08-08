@@ -11,7 +11,8 @@ import {
   Eye,
   AlertCircle,
   CheckCircle2,
-  Phone
+  Phone,
+  PhoneCall
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -366,11 +367,9 @@ SSK Business Network`;
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
           </div>
         ) : invitations.length > 0 ? (
-          <div className="divide-y divide-white/5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {invitations.map((inv) => {
-              const invitedByName = inv.invited_by_name || inv.invited_by_user_name || (profile?.displayName || profile?.name || 'Member');
               const statusLabel = inv.status || 'Upcoming';
-
               return (
                 <div
                   key={inv.id}
@@ -378,30 +377,34 @@ SSK Business Network`;
                     setSelectedGuest(inv);
                     setIsDetailModalOpen(true);
                   }}
-                  className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                  className="p-4 bg-[#111827] rounded-xl border border-white/5 hover:border-white/10 transition-all cursor-pointer group flex flex-col gap-2"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
-                      <UserPlus size={15} className="text-primary" />
-                    </div>
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                      <h4 className="text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
                         {inv.guest_name}
                       </h4>
                       <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
-                        {inv.business_category || 'Business Guest'} &bull; Invited by {invitedByName}
+                        {inv.business_category || 'Business Guest'}
                       </p>
                     </div>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0",
+                      statusLabel.toLowerCase().includes('attended') 
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    )}>
+                      {statusLabel}
+                    </span>
                   </div>
-
-                  <span className={cn(
-                    "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
-                    statusLabel.toLowerCase().includes('attended') 
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                      : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                  )}>
-                    {statusLabel}
-                  </span>
+                  <div className="flex items-center justify-between mt-1 pt-2 border-t border-white/5">
+                    <span className="text-[10px] text-neutral-500 font-medium">
+                      {inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy') : 'Date N/A'}
+                    </span>
+                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider bg-primary/10 hover:bg-primary/20 transition-colors px-2 py-1 rounded-md">
+                      VIEW
+                    </span>
+                  </div>
                 </div>
               );
             })}
@@ -569,18 +572,22 @@ SSK Business Network`;
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Phone Number</p>
-                  <a href={`tel:${selectedGuest.guest_phone}`} className="text-sm font-semibold text-white hover:text-primary transition-colors flex items-center gap-1.5 mt-0.5">
-                    <Phone size={12} className="text-primary" />
-                    {selectedGuest.guest_phone}
-                  </a>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm font-semibold text-white">{selectedGuest.guest_phone}</p>
+                    <a href={`tel:${selectedGuest.guest_phone}`} className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors" title="Call Guest">
+                      <PhoneCall size={12} />
+                    </a>
+                  </div>
                 </div>
 
                 <div>
                   <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">WhatsApp Number</p>
-                  <a href={`https://wa.me/${normalizePhoneNumber(selectedGuest.guest_whatsapp)}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-white hover:text-emerald-400 transition-colors flex items-center gap-1.5 mt-0.5">
-                    <MessageSquare size={12} className="text-emerald-400" />
-                    {selectedGuest.guest_whatsapp}
-                  </a>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-sm font-semibold text-white">{selectedGuest.guest_whatsapp}</p>
+                    <a href={`https://wa.me/${normalizePhoneNumber(selectedGuest.guest_whatsapp)}`} target="_blank" rel="noopener noreferrer" className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-colors" title="WhatsApp Guest">
+                      <MessageSquare size={12} />
+                    </a>
+                  </div>
                 </div>
 
                 <div>

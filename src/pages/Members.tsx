@@ -22,7 +22,9 @@ import {
   UserPlus,
   ChevronRight,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
@@ -67,6 +69,7 @@ export function Members() {
   const [allAdmins, setAllAdmins] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [chapters, setChapters] = useState<{id: string, chapter_name: string}[]>([]);
   const [filters, setFilters] = useState({
@@ -711,18 +714,6 @@ export function Members() {
             >
               Member Directory
             </button>
-            <button 
-              onClick={() => {
-                setActiveTab('invites');
-                setSearchParams({ tab: 'invites' });
-              }}
-              className={cn(
-                "px-6 py-2 text-xs font-bold rounded-lg transition-all",
-                activeTab === 'invites' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
-              )}
-            >
-              Member Invites
-            </button>
             {isMasterAdmin && (
               <button 
                 onClick={() => {
@@ -970,12 +961,19 @@ export function Members() {
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input
                 required
-                type="password"
+                type={showResetPassword ? "text" : "password"}
                 placeholder="Enter new password (min 6 chars)"
                 value={resetPasswordVal}
                 onChange={(e) => setResetPasswordVal(e.target.value)}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+                className="w-full h-11 pl-10 pr-10 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
+              <button
+                type="button"
+                onClick={() => setShowResetPassword(!showResetPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+              >
+                {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
           <div className="flex gap-3 pt-2">
