@@ -18,8 +18,25 @@ import { BrandLogo } from './BrandLogo';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar_collapsed');
+      return saved ? JSON.parse(saved) : false;
+    } catch (e) {
+      return false;
+    }
+  });
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
+
+  const toggleDesktopCollapsed = () => {
+    setIsDesktopCollapsed((prev: boolean) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('sidebar_collapsed', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -114,14 +131,15 @@ export function Layout() {
       <Sidebar 
         isOpen={isMobileSidebarOpen} 
         onClose={() => setIsMobileSidebarOpen(false)} 
-        isCollapsed={false}
+        isCollapsed={isDesktopCollapsed}
+        onToggleCollapse={toggleDesktopCollapsed}
       />
       
       {/* Main Content Area */}
       <main className={cn(
         "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-all duration-300",
         "pb-[110px] lg:pb-0", // padding for floating mobile bottom nav
-        "lg:ml-[280px]"
+        isDesktopCollapsed ? "lg:ml-[78px]" : "lg:ml-[280px]"
       )}>
         
         {/* Top Header */}

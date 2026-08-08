@@ -91,7 +91,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
 
   return (
     <div className={cn(
-      "h-[100vh] h-[100dvh] max-h-[100dvh] bg-[#11131A] flex flex-col fixed left-0 top-0 border-r border-[#1F2937] transition-transform duration-300 ease-in-out",
+      "h-[100vh] h-[100dvh] max-h-[100dvh] bg-[#11131A] flex flex-col fixed left-0 top-0 border-r border-[#1F2937] transition-all duration-300 ease-in-out",
       // Mobile/Tablet off-canvas drawer styling (<1024px)
       "w-[280px] sm:w-[320px] z-[9999]",
       isOpen ? "translate-x-0" : "-translate-x-full",
@@ -101,7 +101,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     )}>
       
       {/* Brand Section (Max 64px) */}
-      <div className="h-[64px] px-4 border-b border-[#1F2937]/50 flex items-center shrink-0 relative">
+      <div className={cn(
+        "h-[64px] border-b border-[#1F2937]/50 flex items-center shrink-0 relative transition-all duration-300",
+        isCollapsed ? "px-2 justify-center gap-1.5" : "px-4 justify-between"
+      )}>
         <button 
           onClick={(e) => {
             e.preventDefault();
@@ -118,28 +121,53 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-full"
+          transition={{ duration: 0.3 }}
+          className="flex items-center gap-2 overflow-hidden"
         >
           {!isCollapsed ? (
             <BrandLogo size="sm" showText={true} lightText={true} />
           ) : (
-            <div className="w-full flex justify-center">
-              <BrandLogo size="sm" showText={false} />
-            </div>
+            <BrandLogo size="sm" showText={false} />
           )}
         </motion.div>
+
+        {/* Desktop Collapse/Expand Toggle Button */}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg bg-[#1F2937]/80 hover:bg-[#1F2937] text-[#9CA3AF] hover:text-white transition-all cursor-pointer border border-white/10 shrink-0 shadow-sm"
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        )}
       </div>
 
-      {/* User Profile (Compact) */}
-      <div className="p-4 border-b border-[#1F2937]/50 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative shrink-0">
-            <Avatar src={profile?.photoURL} name={profile?.name} size={isCollapsed ? "w-10 h-10" : "w-[48px] h-[48px]"} className="border border-[#1F2937] bg-[#111827] mx-auto" fallbackClassName="text-lg" />
+      {/* User Profile (Compact when collapsed) */}
+      <div className={cn("p-4 border-b border-[#1F2937]/50 shrink-0 transition-all duration-300", isCollapsed && "px-2 py-3")}>
+        <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
+          <div className="relative shrink-0 group">
+            <Avatar src={profile?.photoURL} name={profile?.name} size={isCollapsed ? "w-9 h-9" : "w-[48px] h-[48px]"} className="border border-[#1F2937] bg-[#111827] mx-auto" fallbackClassName="text-lg" />
             {!isCollapsed && (
               <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#11131A] flex items-center justify-center">
                 <span className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping opacity-75" />
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              </div>
+            )}
+            {isCollapsed && (
+              <div className="hidden lg:group-hover:flex pointer-events-none absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-[#1F2937] text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap z-[100] border border-white/10 animate-in fade-in duration-150 flex-col gap-0.5">
+                <span className="font-bold text-white">{profile?.name || 'User'}</span>
+                <span className="text-[10px] text-gray-400 capitalize">
+                  {profile?.role === 'MASTER_ADMIN' ? 'Master Admin' :
+                   profile?.role === 'CHAPTER_ADMIN' ? 'Chapter Admin' :
+                   profile?.position === 'president' ? 'President' :
+                   profile?.position === 'vice_president' ? 'Vice President' :
+                   profile?.position === 'treasurer' ? 'Treasurer' :
+                   profile?.position === 'chapter_admin' ? 'Chapter Admin' :
+                   'Associate Member'}
+                </span>
               </div>
             )}
           </div>
@@ -192,12 +220,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
           const isActive = location.pathname === item.path || (isHomeItem && homePaths.includes(location.pathname));
           
           return (
-            <div key={item.path} className="relative">
+            <div key={item.path} className="relative group">
               <Link
                 to={item.path}
                 onClick={() => onClose?.()}
                 className={cn(
                   "flex items-center gap-3 px-3 h-[46px] rounded-[14px] transition-all duration-300 relative overflow-hidden group",
+                  isCollapsed && "justify-center px-0",
                   isActive 
                     ? "text-white font-bold bg-[#E53935]/10 shadow-[0_0_15px_rgba(229,57,53,0.12)] border border-[#E53935]/20" 
                     : "text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white font-medium"
@@ -226,7 +255,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
                 </motion.div>
                 
                 {!isCollapsed && (
-                  <span className="text-[14px] whitespace-nowrap flex-1 relative z-10 font-semibold tracking-tight">
+                  <span className="text-[14px] whitespace-nowrap flex-1 relative z-10 font-semibold tracking-tight truncate">
                     {item.label}
                   </span>
                 )}
@@ -241,35 +270,70 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
                   </motion.span>
                 )}
               </Link>
+
+              {/* Floating Tooltip in Collapsed Desktop Mode */}
+              {isCollapsed && (
+                <div className="hidden lg:group-hover:flex pointer-events-none absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-[#1F2937] text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap z-[100] border border-white/10 items-center gap-1.5 animate-in fade-in duration-150">
+                  <span>{item.label}</span>
+                  {item.badge && (
+                    <span className="bg-[#E53935] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
       {/* Bottom Actions (Sticky) */}
-      <div className="shrink-0 p-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 lg:pb-3 flex flex-col gap-1.5 border-t border-[#1F2937]/50 bg-[#11131A] z-30 relative">
+      <div className={cn(
+        "shrink-0 p-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 lg:pb-3 flex flex-col gap-1.5 border-t border-[#1F2937]/50 bg-[#11131A] z-30 relative transition-all duration-300",
+        isCollapsed && "px-2"
+      )}>
         {canAccessSettings && (
-          <Link 
-            to="/settings" 
-            onClick={() => onClose?.()}
-            className="flex items-center gap-3 px-3 h-[42px] rounded-[14px] text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white transition-all font-medium touch-manipulation"
-          >
-            <Settings size={20} className="shrink-0" />
-            <span className={cn("text-[14px] font-semibold", isCollapsed && "lg:hidden")}>Settings</span>
-          </Link>
+          <div className="relative group w-full">
+            <Link 
+              to="/settings" 
+              onClick={() => onClose?.()}
+              className={cn(
+                "flex items-center gap-3 px-3 h-[42px] rounded-[14px] text-[#9CA3AF] hover:bg-[#1F2937]/50 hover:text-white transition-all font-medium touch-manipulation",
+                isCollapsed && "justify-center px-0"
+              )}
+            >
+              <Settings size={20} className="shrink-0" />
+              <span className={cn("text-[14px] font-semibold truncate", isCollapsed && "hidden")}>Settings</span>
+            </Link>
+            {isCollapsed && (
+              <div className="hidden lg:group-hover:flex pointer-events-none absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-[#1F2937] text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap z-[100] border border-white/10 animate-in fade-in duration-150">
+                Settings
+              </div>
+            )}
+          </div>
         )}
-        <button 
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose?.();
-            handleLogout();
-          }} 
-          className="flex items-center gap-3 px-3 h-[44px] w-full rounded-[14px] text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all font-medium text-left cursor-pointer shrink-0 touch-manipulation z-30"
-        >
-          <LogOut size={20} className="shrink-0 text-red-400" />
-          <span className={cn("text-[14px] font-semibold text-red-400", isCollapsed && "lg:hidden")}>Logout</span>
-        </button>
+        <div className="relative group w-full">
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose?.();
+              handleLogout();
+            }} 
+            className={cn(
+              "flex items-center gap-3 px-3 h-[44px] w-full rounded-[14px] text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all font-medium text-left cursor-pointer shrink-0 touch-manipulation z-30",
+              isCollapsed && "justify-center px-0"
+            )}
+          >
+            <LogOut size={20} className="shrink-0 text-red-400" />
+            <span className={cn("text-[14px] font-semibold text-red-400 truncate", isCollapsed && "hidden")}>Logout</span>
+          </button>
+          {isCollapsed && (
+            <div className="hidden lg:group-hover:flex pointer-events-none absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-[#1F2937] text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap z-[100] border border-white/10 animate-in fade-in duration-150">
+              Logout
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
