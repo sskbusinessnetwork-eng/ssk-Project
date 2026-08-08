@@ -61,10 +61,6 @@ export function isMeetingCompleted(m: any): boolean {
   const s = String(m.status || '').trim().toUpperCase();
   if (['COMPLETED', 'DONE', 'CONCLUDED', 'ENDED'].includes(s)) return true;
   if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return true;
-  const dt = getMeetingExactDateTime(m);
-  if (dt && dt.getTime() < Date.now()) {
-    return true;
-  }
   return false;
 }
 
@@ -223,18 +219,20 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   const existingMeeting = allMeetings.find(m => !isDone(m) && (m.isRecurring || (m as any).is_recurring));
 
   if (existingMeeting) {
-    const updatePayload = {
-      date: occurrenceDate.toISOString(),
+    const updatePayload: any = {
       time: setup.time,
       location: setup.location,
       isRecurring: true,
       chapter_id: targetChapterId,
       adminId: adminId || targetChapterId
     };
+    if (!existingMeeting.date || !isValid(new Date(existingMeeting.date))) {
+      updatePayload.date = occurrenceDate.toISOString();
+    }
     await databaseService.update('meetings', existingMeeting.id, updatePayload);
     try {
       await supabase.from('meetings').update({
-        date: occurrenceDate.toISOString(),
+        ...(updatePayload.date ? { date: updatePayload.date } : {}),
         time: setup.time,
         location: setup.location,
         is_recurring: true,
@@ -244,38 +242,47 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     } catch (e) {}
     occurrenceIdsToPreserve.add(existingMeeting.id);
   } else {
-    const newMeeting: Omit<Meeting, 'id'> = {
-      adminId: adminId || targetChapterId,
-      chapter_id: targetChapterId,
-      date: occurrenceDate.toISOString(),
-      time: setup.time,
-      location: setup.location,
-      attendance: {},
-      amountCollected: {},
-      memberNotes: {},
-      notes: '',
-      isCompleted: false,
-      createdAt: new Date().toISOString(),
-      status: 'UPCOMING',
-      isRecurring: true
-    };
-    const newId = await databaseService.create('meetings', newMeeting);
-    if (newId) {
-      occurrenceIdsToPreserve.add(newId);
-    }
-    try {
-      await supabase.from('meetings').insert([{
-        id: newId,
-        admin_id: adminId || targetChapterId,
+    const sameDateMeeting = allMeetings.find(m => !isDone(m) && m.date && isSameDay(new Date(m.date), occurrenceDate));
+    if (sameDateMeeting) {
+      await databaseService.update('meetings', sameDateMeeting.id, { isRecurring: true });
+      try {
+        await supabase.from('meetings').update({ is_recurring: true }).eq('id', sameDateMeeting.id);
+      } catch (e) {}
+      occurrenceIdsToPreserve.add(sameDateMeeting.id);
+    } else {
+      const newMeeting: Omit<Meeting, 'id'> = {
+        adminId: adminId || targetChapterId,
         chapter_id: targetChapterId,
         date: occurrenceDate.toISOString(),
         time: setup.time,
         location: setup.location,
+        attendance: {},
+        amountCollected: {},
+        memberNotes: {},
+        notes: '',
+        isCompleted: false,
+        createdAt: new Date().toISOString(),
         status: 'UPCOMING',
-        is_recurring: true,
-        created_at: new Date().toISOString()
-      }]);
-    } catch (e) {}
+        isRecurring: true
+      };
+      const newId = await databaseService.create('meetings', newMeeting);
+      if (newId) {
+        occurrenceIdsToPreserve.add(newId);
+      }
+      try {
+        await supabase.from('meetings').insert([{
+          id: newId,
+          admin_id: adminId || targetChapterId,
+          chapter_id: targetChapterId,
+          date: occurrenceDate.toISOString(),
+          time: setup.time,
+          location: setup.location,
+          status: 'UPCOMING',
+          is_recurring: true,
+          created_at: new Date().toISOString()
+        }]);
+      } catch (e) {}
+    }
   }
 
   // Purge any excess non-completed recurring meetings beyond the single upcoming meeting
@@ -1698,7 +1705,7 @@ export function Meetings() {
     );
   };
 
-  // Deduplicated Upcoming Meetings for table/list view (prevent duplicate rendering)
+  // Deduplicated Upcoming & Action Required Meetings for table/list view (prevent duplicate rendering)
   const upcomingTableMeetings = React.useMemo(() => {
     const seenIds = new Set<string>();
 
@@ -1707,8 +1714,7 @@ export function Meetings() {
         if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
         const st = String(m.status || '').trim().toUpperCase();
         if (['COMPLETED', 'CANCELLED', 'CANCELED', 'DONE', 'CONCLUDED', 'ENDED'].includes(st)) return false;
-        const dt = getMeetingExactDateTime(m);
-        return dt.getTime() >= Date.now();
+        return true;
       })
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 
@@ -2191,9 +2197,14 @@ export function Meetings() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                        Upcoming
-                      </span>
+                      {(() => {
+                        const mStatus = getMeetingStatus(meeting);
+                        return (
+                          <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", mStatus.color)}>
+                            {mStatus.label}
+                          </span>
+                        );
+                      })()}
                       {canUpdate && (
                         <button
                           type="button"

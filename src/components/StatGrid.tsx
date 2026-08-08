@@ -137,8 +137,8 @@ export default function StatGrid({
           color: 'text-orange-400',
           bg: 'bg-orange-950/80 border-orange-500/30 text-orange-400 shadow-[0_0_12px_rgba(249,115,22,0.2)]',
           rows: [
-            { label: 'Scheduled', value: String(meetingsScheduledCount ?? upcomingSyncsCount ?? 0) },
-            { label: 'Attended', value: String(meetingsAttendedCount ?? chapterMeetingsCount ?? 0) },
+            { label: 'Scheduled', value: String(meetingsScheduledCount ?? 0) },
+            { label: 'Attended', value: String(meetingsAttendedCount ?? 0) },
           ]
         },
         {
@@ -149,7 +149,7 @@ export default function StatGrid({
           bg: 'bg-blue-950/80 border-blue-500/30 text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.2)]',
           rows: [
             { label: 'Scheduled', value: String(oneToOneScheduledCount ?? 0) },
-            { label: 'Completed', value: String(oneToOneCompletedCount ?? oneToOneMeetingsCount ?? 0) },
+            { label: 'Completed', value: String(oneToOneCompletedCount ?? 0) },
           ]
         },
         {

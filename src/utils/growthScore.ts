@@ -264,9 +264,6 @@ export function getWorkspaceChecklistTasks(
     const hasScheduleMeetingAuto = oneToOnes.some(m => {
       const isCreator = m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || m.created_by === userId || m.createdBy === userId;
       return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
-    }) || meetings.some(m => {
-      const isCreator = m.created_by === userId || m.createdBy === userId || m.adminId === userId || m.admin_id === userId;
-      return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
     });
     rawTasks.push({
       key: `task_schedule_meeting_${dateStr}`,

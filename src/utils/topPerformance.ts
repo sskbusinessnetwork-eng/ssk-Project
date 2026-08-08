@@ -141,7 +141,7 @@ export async function fetchTopPerformingMembers(customSettings?: TopPerformanceS
   const [users, referrals, oneToOnes, meetings, guestInvitations] = await Promise.all([
     databaseService.list<UserProfile>('users'),
     databaseService.list<any>('referrals'),
-    databaseService.list<any>('one_to_ones'),
+    databaseService.list<any>('one_to_one_meetings'),
     databaseService.list<any>('meetings'),
     databaseService.list<any>('guest_invitations'),
   ]);

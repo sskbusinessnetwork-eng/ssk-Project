@@ -270,10 +270,10 @@ export function Reports() {
       let isScopeValid = true;
       if (selectedChapterId && selectedChapterId !== 'ALL') {
         const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
-        isScopeValid = chapterMemberUids.includes(m.organizer_id || m.creatorId) || (m.participantIds && m.participantIds.some(pid => chapterMemberUids.includes(pid)));
+        isScopeValid = chapterMemberUids.includes(m.organizer_id || m.creatorId || m.sender_id) || (m.participantIds && m.participantIds.some(pid => chapterMemberUids.includes(pid))) || chapterMemberUids.includes(m.receiver_id || m.member_id);
       }
       if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = (m.organizer_id || m.creatorId) === selectedMemberId || (m.participantIds && m.participantIds.includes(selectedMemberId)) || m.member_id === selectedMemberId;
+        isScopeValid = (m.organizer_id || m.creatorId || m.sender_id) === selectedMemberId || (m.participantIds && m.participantIds.includes(selectedMemberId)) || (m.member_id || m.receiver_id) === selectedMemberId;
       }
       return isDateValid && isScopeValid;
     });

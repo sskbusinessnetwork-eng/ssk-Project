@@ -30,6 +30,29 @@ export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
 }
 
+export function isUserOneToOneParticipant(m: any, userCandidateIds: string[]): boolean {
+  if (!m || !userCandidateIds || userCandidateIds.length === 0) return false;
+  const candidateSet = new Set(userCandidateIds.map(id => String(id || '').trim()).filter(Boolean));
+  if (candidateSet.size === 0) return false;
+
+  const senderId = String(m.sender_id || m.senderId || '').trim();
+  const receiverId = String(m.receiver_id || m.receiverId || '').trim();
+  const organizerId = String(m.organizer_id || m.organizerId || '').trim();
+  const memberId = String(m.member_id || m.memberId || '').trim();
+  const creatorId = String(m.creatorId || m.creator_id || m.createdBy || m.created_by || '').trim();
+
+  if (senderId && candidateSet.has(senderId)) return true;
+  if (receiverId && candidateSet.has(receiverId)) return true;
+  if (organizerId && candidateSet.has(organizerId)) return true;
+  if (memberId && candidateSet.has(memberId)) return true;
+  if (creatorId && candidateSet.has(creatorId)) return true;
+
+  if (Array.isArray(m.participantIds)) {
+    if (m.participantIds.some((pid: any) => candidateSet.has(String(pid || '').trim()))) return true;
+  }
+  return false;
+}
+
 const isToday = (dateStr: string) => {
   if (!dateStr) return false;
   if (dateStr.length === 10 && dateStr.includes('-')) {
@@ -365,10 +388,9 @@ export function Analytics() {
     // 4. Subscribe to 1-to-1s
     const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
       setOneToOnes(data);
-      if (profile.role === 'MEMBER') {
-        setCreatedOneToOnes(data.filter(m => (m.organizer_id || m.creatorId) === profile.uid));
-        setParticipatedOneToOnes(data.filter(m => ([m.member_id, ...(m.participantIds || [])]).includes(profile.uid)));
-      }
+      const userCand = [profile.id, profile.uid].filter(Boolean).map(String);
+      setCreatedOneToOnes(data.filter(m => isUserOneToOneParticipant(m, userCand)));
+      setParticipatedOneToOnes(data.filter(m => isUserOneToOneParticipant(m, userCand)));
     });
 
     // 5. Subscribe to guest invitations
@@ -693,8 +715,10 @@ export function Analytics() {
     }
     const chapterOneToOnes = effectiveOneToOnes.filter(m => 
       usePersonalStats 
-        ? (userCandidateIds.includes(m.organizer_id) || userCandidateIds.includes(m.creatorId) || (m.participantIds || []).some((id: string) => userCandidateIds.includes(id)))
-        : (chapterUserIds.includes(m.organizer_id) || chapterUserIds.includes(m.creatorId) || (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid))))
+        ? isUserOneToOneParticipant(m, userCandidateIds)
+        : (chapterUserIds.includes(String(m.organizer_id || m.creatorId || m.sender_id || '')) ||
+           chapterUserIds.includes(String(m.member_id || m.receiver_id || '')) ||
+           (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(String(pid)))))
     );
     return chapterOneToOnes.length;
   }, [effectiveOneToOnes, chapterUserIds, userCandidateIds, profile, usePersonalStats]);
@@ -751,20 +775,16 @@ export function Analytics() {
   const userOneToOnesScheduled = useMemo(() => {
     if (!profile) return 0;
     return effectiveOneToOnes.filter(m => {
-      const isUser = userCandidateIds.includes(String(m.organizer_id || m.creatorId || '')) ||
-                     (m.participantIds && m.participantIds.some((pid: string) => userCandidateIds.includes(String(pid))));
-      if (!isUser) return false;
+      if (!isUserOneToOneParticipant(m, userCandidateIds)) return false;
       const status = String(m.status || '').toUpperCase();
-      return status === 'UPCOMING' || status === 'SCHEDULED' || status === 'RESCHEDULED' || status === 'PENDING' || status === 'APPROVED' || !status;
+      return status !== 'CANCELLED' && status !== 'NOT_COMPLETED';
     }).length;
   }, [effectiveOneToOnes, userCandidateIds, profile]);
 
   const userOneToOnesCompleted = useMemo(() => {
     if (!profile) return 0;
     return effectiveOneToOnes.filter(m => {
-      const isUser = userCandidateIds.includes(String(m.organizer_id || m.creatorId || '')) ||
-                     (m.participantIds && m.participantIds.some((pid: string) => userCandidateIds.includes(String(pid))));
-      if (!isUser) return false;
+      if (!isUserOneToOneParticipant(m, userCandidateIds)) return false;
       const status = String(m.status || '').toUpperCase();
       return status === 'COMPLETED' || m.isCompleted === true || (m.isCompleted as any) === 'true';
     }).length;
@@ -1851,27 +1871,27 @@ export function Analytics() {
           notes: ref.notes || ref.requirement || '-'
         };
       });
-    } else if (norm.includes('one-to-one') || norm.includes('one to one')) {
+    } else if (norm.includes('one-to-one') || norm.includes('one to one') || norm.includes('1-to-1') || norm.includes('1:1') || norm.includes('1 to 1')) {
       let list = effectiveOneToOnes;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
 
       if (!isGlobal) {
          list = list.filter(m => {
-            const orgId = String(m.organizer_id || m.creatorId || '');
-            const pIds = (m.participantIds || []).map((id: string) => String(id));
             if (usePersonalStats) {
-                const uid = String(profile?.id || profile?.uid);
-                return orgId === uid || pIds.includes(uid);
+                return isUserOneToOneParticipant(m, userCandidateIds);
             }
-            return String(m.chapter_id) === String(profile?.chapter_id);
+            const orgId = String(m.organizer_id || m.creatorId || m.sender_id || '');
+            const recId = String(m.member_id || m.receiver_id || '');
+            const pIds = (m.participantIds || []).map((id: string) => String(id));
+            return chapterUserIds.includes(orgId) || chapterUserIds.includes(recId) || pIds.some(pid => chapterUserIds.includes(pid));
          });
       }
       
       records = list.map(m => {
         const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
         const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
-        const sender = allUsersList.find(u => String(u.uid) === senderId) || chapterUsers.find(u => String(u.uid) === senderId);
-        const receiver = allUsersList.find(u => String(u.uid) === receiverId) || chapterUsers.find(u => String(u.uid) === receiverId);
+        const sender = allUsersList.find(u => String(u.uid || u.id) === senderId) || chapterUsers.find(u => String(u.uid || u.id) === senderId);
+        const receiver = allUsersList.find(u => String(u.uid || u.id) === receiverId) || chapterUsers.find(u => String(u.uid || u.id) === receiverId);
         
         const st = (m.status || '').toLowerCase();
         let bColor = 'amber';
@@ -1880,8 +1900,8 @@ export function Analytics() {
 
         return {
           id: m.id,
-          title: `${sender?.name || 'Unknown'} & ${receiver?.name || 'Unknown'}`,
-          subtitle: m.venue || m.meetingLocation || m.locationType || 'Online',
+          title: `${sender?.name || 'Member'} & ${receiver?.name || 'Member'}`,
+          subtitle: m.venue || m.meetingLocation || m.locationType || 'Online Meeting',
           icon: <Handshake size={20} className="text-white/70" />,
           badgeText: m.status || 'Scheduled',
           badgeColor: bColor,
