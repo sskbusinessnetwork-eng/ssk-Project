@@ -1108,7 +1108,7 @@ export function Analytics() {
             chapterName: m.chapterName || m.chapter_name || 'Chapter',
             dateTime: mTime,
             time: mTime,
-            status: m.isCompleted ? 'COMPLETED' : 'SCHEDULED'
+            status: (m.isCompleted === true || String(m.isCompleted) === 'true') ? 'COMPLETED' : 'SCHEDULED'
           });
         }
       });
@@ -2733,11 +2733,11 @@ const getGreeting = () => {
                 <span className="text-neutral-400 font-bold uppercase tracking-wider">Status:</span>
                 <span className={cn(
                   "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
-                  viewingMeetingDetails.isCancelled || viewingMeetingDetails.status === 'CANCELLED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                  viewingMeetingDetails.isCompleted || viewingMeetingDetails.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                  (viewingMeetingDetails.isCancelled === true || String(viewingMeetingDetails.isCancelled) === 'true') || viewingMeetingDetails.status === 'CANCELLED' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                  (viewingMeetingDetails.isCompleted === true || String(viewingMeetingDetails.isCompleted) === 'true') || viewingMeetingDetails.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
                   "bg-amber-500/10 text-amber-400 border-amber-500/20"
                 )}>
-                  {viewingMeetingDetails.isCancelled || viewingMeetingDetails.status === 'CANCELLED' ? 'Cancelled' : viewingMeetingDetails.isCompleted || viewingMeetingDetails.status === 'COMPLETED' ? 'Completed' : 'Upcoming'}
+                  {(viewingMeetingDetails.isCancelled === true || String(viewingMeetingDetails.isCancelled) === 'true') || viewingMeetingDetails.status === 'CANCELLED' ? 'Cancelled' : (viewingMeetingDetails.isCompleted === true || String(viewingMeetingDetails.isCompleted) === 'true') || viewingMeetingDetails.status === 'COMPLETED' ? 'Completed' : 'Upcoming'}
                 </span>
               </div>
             </div>

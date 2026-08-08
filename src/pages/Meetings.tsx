@@ -535,7 +535,7 @@ export function Meetings() {
     }
     const userChapIdStr = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
     const activeMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
-      if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
+      if (isMeetingDone(m)) return false;
       const mChap = String(m.chapter_id || (m as any)?.chapterId || '').trim();
       return !userChapIdStr || !mChap || mChap === userChapIdStr;
     });
@@ -1630,7 +1630,7 @@ export function Meetings() {
   const completedMeetings = React.useMemo(() => {
     const seenIds = new Set<string>();
     const rawHistory = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => isMeetingDone(m) || m.isCancelled || m.isCompleted || ['COMPLETED', 'CANCELLED', 'CANCELED', 'DONE'].includes(String(m.status || '').trim().toUpperCase()))
+      .filter(m => isMeetingDone(m))
       .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
 
     const result: Meeting[] = [];
@@ -1710,12 +1710,7 @@ export function Meetings() {
     const seenIds = new Set<string>();
 
     const rawUpcoming = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => {
-        if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
-        const st = String(m.status || '').trim().toUpperCase();
-        if (['COMPLETED', 'CANCELLED', 'CANCELED', 'DONE', 'CONCLUDED', 'ENDED'].includes(st)) return false;
-        return true;
-      })
+      .filter(m => !isMeetingDone(m))
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 
     const result: Meeting[] = [];
@@ -1923,7 +1918,7 @@ export function Meetings() {
       {/* Main Content Area */}
       <div className="space-y-12">
         {/* PRIMARY FOCUS MEETING DETAILS CARD - Chapter Admin Only */}
-        {(isMasterAdmin || isChapterAdmin) && primaryFocusMeeting && (
+        {false && primaryFocusMeeting && (
           <div className="bg-[#151C2E] p-6 sm:p-8 rounded-[24px] border border-primary/30 shadow-2xl shadow-primary/5 space-y-6 relative overflow-hidden">
             <div className="absolute -top-24 -right-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -2065,7 +2060,7 @@ export function Meetings() {
         )}
 
         {/* SECONDARY MICRO CARDS GRID - Chapter Admin Only */}
-        {(isMasterAdmin || isChapterAdmin) && (
+        {false && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <div className="w-1.5 h-4 bg-primary/60 rounded-full" />
@@ -2180,23 +2175,23 @@ export function Meetings() {
                   <div 
                     key={meeting.id} 
                     onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                    className="px-4 sm:px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 hover:bg-[#151C2E] transition-colors cursor-pointer group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                    <div className="flex items-start md:items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 md:w-8.5 md:h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors mt-0.5 md:mt-0">
                         <Calendar size={15} className="text-primary" />
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-white uppercase tracking-tight line-clamp-2 md:truncate group-hover:text-primary transition-colors leading-tight">
                           {meetingTitle}
                         </h4>
-                        <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                        <p className="text-[11px] text-neutral-400 font-medium mt-1 md:mt-0.5">
                           {dateFormatted} &bull; {timeFormatted}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-0 ml-11 md:ml-0 md:shrink-0">
                       {(() => {
                         const mStatus = getMeetingStatus(meeting);
                         return (
@@ -2206,32 +2201,44 @@ export function Meetings() {
                         );
                       })()}
                       {canUpdate && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedMeeting(meeting);
-                            const normalizedAttendance: Record<string, any> = {};
-                            if (meeting.attendance) {
-                              Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                const v = String(val);
-                                if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                else normalizedAttendance[uid] = val;
-                              });
-                            }
-                            setTempAttendance(normalizedAttendance);
-                            setTempAmount(meeting.amountCollected || {});
-                            setTempMemberNotes(meeting.memberNotes || {});
-                            setIsUpdateModalOpen(true);
-                          }}
-                          className="p-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
-                          title="Update Meeting Data"
-                        >
-                          <Settings size={13} />
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              const normalizedAttendance: Record<string, any> = {};
+                              if (meeting.attendance) {
+                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                  const v = String(val);
+                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                  else normalizedAttendance[uid] = val;
+                                });
+                              }
+                              setTempAttendance(normalizedAttendance);
+                              setTempAmount(meeting.amountCollected || {});
+                              setTempMemberNotes(meeting.memberNotes || {});
+                              setIsUpdateModalOpen(true);
+                            }}
+                            className="flex-1 sm:flex-none justify-center px-3 py-1.5 bg-[#151C2E] hover:bg-emerald-600/20 text-emerald-400 border border-white/5 hover:border-emerald-500/30 rounded-[8px] text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                          >
+                            Update Meeting
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMeeting(meeting);
+                              setIsCancelConfirmOpen(true);
+                            }}
+                            className="flex-1 sm:flex-none justify-center px-3 py-1.5 bg-[#151C2E] hover:bg-red-500/20 text-red-400 border border-white/5 hover:border-red-500/30 rounded-[8px] text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -2321,25 +2328,27 @@ export function Meetings() {
                   <div
                     key={meeting.id}
                     onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                    className="px-4 sm:px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 hover:bg-[#151C2E] transition-colors cursor-pointer group"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                    <div className="flex items-start md:items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 md:w-8.5 md:h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors mt-0.5 md:mt-0">
                         <Calendar size={15} className="text-primary" />
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-white uppercase tracking-tight line-clamp-2 md:truncate group-hover:text-primary transition-colors leading-tight">
                           {meetingTitle}
                         </h4>
-                        <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                        <p className="text-[11px] text-neutral-400 font-medium mt-1 md:mt-0.5">
                           {dateTimeCombined}
                         </p>
                       </div>
                     </div>
 
-                    <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", badge.color)}>
-                      {badge.label}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-0 ml-11 md:ml-0 md:shrink-0">
+                      <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", badge.color)}>
+                        {badge.label}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
