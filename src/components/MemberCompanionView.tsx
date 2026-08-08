@@ -125,11 +125,11 @@ export function MemberCompanionView({
       if (isReceiverOfSlip) businessSent += val;
       
       const isThisMonth = d.getFullYear() === year && d.getMonth() === month;
-      if (isThisMonth && (isSender || isReceiver)) {
+      if (isThisMonth && (isSenderOfSlip || isReceiverOfSlip)) {
         thisMonthBusiness += val;
       }
 
-      if (d.toDateString() === todayStr && (isSender || isReceiver)) {
+      if (d.toDateString() === todayStr && (isSenderOfSlip || isReceiverOfSlip)) {
         todayBusiness += val;
       }
     });
