@@ -812,6 +812,108 @@ async function startServer() {
     }
   });
 
+  // Meeting Attendance & Collection Update Endpoint
+  app.post("/api/meetings/update", async (req, res) => {
+    try {
+      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted } = req.body || {};
+      if (!meetingId || !callerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required meetingId or callerId.",
+          error: "Missing required parameters."
+        });
+      }
+
+      // Fetch caller account
+      const { data: caller, error: callerErr } = await adminSupabase
+        .from('users')
+        .select('*')
+        .or(`id.eq.${callerId},uid.eq.${callerId}`)
+        .single();
+
+      if (callerErr || !caller) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized user account.",
+          error: "Unauthorized user account."
+        });
+      }
+
+      const isChapAdmin = caller.role === 'CHAPTER_ADMIN' || caller.role === 'MASTER_ADMIN' || caller.position === 'chapter_admin';
+      if (!isChapAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: "Only Chapter Admin or Position Holders can update meeting attendance.",
+          error: "Permission denied: Normal Member cannot modify attendance."
+        });
+      }
+
+      // Fetch target meeting
+      const { data: meeting, error: meetingErr } = await adminSupabase
+        .from('meetings')
+        .select('*')
+        .eq('id', meetingId)
+        .single();
+
+      if (meetingErr || !meeting) {
+        return res.status(404).json({
+          success: false,
+          message: "Target meeting not found.",
+          error: "Meeting not found."
+        });
+      }
+
+      // Verify chapter restriction
+      if (caller.role !== 'MASTER_ADMIN') {
+        const callerChap = caller.chapter_id || caller.chapterId;
+        const meetingChap = meeting.chapter_id || meeting.chapterId;
+        if (callerChap && meetingChap && String(callerChap).trim() !== String(meetingChap).trim()) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only update meetings belonging to your own chapter.",
+            error: "You can only update meetings belonging to your own chapter."
+          });
+        }
+      }
+
+      const updatePayload: any = {
+        updated_at: new Date().toISOString()
+      };
+      if (attendance) updatePayload.attendance = attendance;
+      if (amountCollected) updatePayload.amount_collected = amountCollected;
+      if (memberNotes) updatePayload.member_notes = memberNotes;
+      if (isCompleted || isCompleted === undefined) {
+        updatePayload.is_completed = true;
+        updatePayload.status = 'COMPLETED';
+      }
+
+      const { error: updateErr } = await adminSupabase
+        .from('meetings')
+        .update(updatePayload)
+        .eq('id', meetingId);
+
+      if (updateErr) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to update meeting in database.",
+          error: updateErr.message
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Meeting attendance & collection updated successfully."
+      });
+    } catch (err: any) {
+      console.error("Error in /api/meetings/update:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update meeting.",
+        error: err.message || "Server error"
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

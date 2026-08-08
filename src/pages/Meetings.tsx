@@ -354,6 +354,10 @@ export function Meetings() {
 
   const handleMarkUserAttendance = async (meeting: Meeting, status: 'Present' | 'Absent') => {
     if (!profile || !meeting) return;
+    if (!canUserUpdateMeeting(meeting)) {
+      setError("Only Chapter Admin or Position Holders can update meeting attendance.");
+      return;
+    }
     const uId = profile.uid || profile.id;
 
     const currentAttendance = { ...(meeting.attendance || {}) };
@@ -433,9 +437,6 @@ export function Meetings() {
   const canUserViewReport = (meeting: Meeting | null): boolean => {
     if (!profile || !meeting) return false;
     if (profile.role === 'MASTER_ADMIN') return true;
-
-    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
-    if (!isChapAdminRole) return false;
 
     const userChap = profile.chapter_id || (profile as any).chapterId;
     const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
@@ -1237,7 +1238,7 @@ export function Meetings() {
   };
 
   const handleSaveUpdate = async () => {
-    if (!selectedMeeting || isMasterAdmin) return;
+    if (!selectedMeeting) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
       setError("Only the Chapter Admin of this chapter can update this meeting.");
       return;
@@ -1345,6 +1346,37 @@ export function Meetings() {
         }
       }
       
+      // Call backend API endpoint to validate and update meeting
+      try {
+        const callerId = profile?.uid || profile?.id;
+        const apiRes = await fetch('/api/meetings/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meetingId: selectedMeeting.id,
+            callerId,
+            attendance: tempAttendance,
+            amountCollected: tempAmount,
+            memberNotes: tempMemberNotes,
+            isCompleted: true
+          })
+        });
+        const text = await apiRes.text();
+        let resData: any = null;
+        try {
+          resData = text ? JSON.parse(text) : null;
+        } catch (pErr) {
+          console.warn("Non-JSON API response for meeting update:", text);
+        }
+        if (resData && !resData.success) {
+          setError(resData.message || resData.error || "Failed to update meeting.");
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (apiErr) {
+        console.warn("Notice: API meeting update fetch notice:", apiErr);
+      }
+
       // Update direct Supabase table first
       const { error: dbErr } = await supabase
         .from('meetings')
@@ -1845,74 +1877,69 @@ export function Meetings() {
               </div>
             </div>
 
-            {/* Attendance Interactive Section */}
+            {/* Attendance & Management Section */}
             <div className="pt-2 border-t border-white/5">
               {(() => {
-                const userId = profile?.uid || profile?.id;
-                const currentAtt = String((primaryFocusMeeting.attendance || {})[userId] || '').trim();
-                const isPresent = ['Present', 'PRESENT', 'Yes', 'YES', 'Substitute', 'SUBSTITUTE'].includes(currentAtt);
-                const isAbsent = ['Absent', 'ABSENT', 'No', 'NO'].includes(currentAtt);
+                const canEdit = canUserUpdateMeeting(primaryFocusMeeting);
 
-                return (
+                return canEdit ? (
+                  <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <Shield size={16} className="text-primary" />
+                        Chapter Meeting Management
+                      </h4>
+                      <p className="text-[11px] text-neutral-400">
+                        As Chapter Admin, you can update attendance, status, and collection amounts for chapter members.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMeeting(primaryFocusMeeting);
+                        const normalizedAttendance: Record<string, any> = {};
+                        if (primaryFocusMeeting.attendance) {
+                          Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
+                            const v = String(val);
+                            if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                            else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                            else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                            else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                            else normalizedAttendance[uid] = val;
+                          });
+                        }
+                        setTempAttendance(normalizedAttendance);
+                        setTempAmount(primaryFocusMeeting.amountCollected || {});
+                        setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
+                        setIsUpdateModalOpen(true);
+                      }}
+                      className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer shrink-0"
+                    >
+                      <Settings size={16} />
+                      Update Meeting
+                    </button>
+                  </div>
+                ) : (
                   <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
                         <CheckCircle2 size={16} className="text-primary" />
-                        Chapter Meeting Attendance
+                        Chapter Attendance Roster (View Only)
                       </h4>
                       <p className="text-[11px] text-neutral-400">
-                        Mark your attendance to complete your Workspace Checklist task and update your Growth Score.
+                        Meeting attendance and collections are recorded and updated by your Chapter Admin.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      {isPresent ? (
-                        <div className="flex items-center gap-3">
-                          <span className="px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-[12px] font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
-                            <CheckCircle2 size={16} /> Marked Present
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Absent')}
-                            className="px-3 py-2 bg-[#151C2E] hover:bg-[#1C2538] text-neutral-400 hover:text-white border border-white/10 rounded-[12px] text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                          >
-                            Change to Absent
-                          </button>
-                        </div>
-                      ) : isAbsent ? (
-                        <div className="flex items-center gap-3">
-                          <span className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-[12px] font-black text-xs uppercase tracking-wider flex items-center gap-1.5">
-                            <XCircle size={16} /> Marked Absent
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Present')}
-                            className="px-3 py-2 bg-primary text-white hover:bg-primary/90 rounded-[12px] text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm cursor-pointer"
-                          >
-                            Change to Present
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Present')}
-                            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all cursor-pointer"
-                          >
-                            <CheckCircle2 size={16} />
-                            Mark Present
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMarkUserAttendance(primaryFocusMeeting, 'Absent')}
-                            className="px-5 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                          >
-                            <XCircle size={16} />
-                            Mark Absent
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAttendanceReport(primaryFocusMeeting)}
+                      className="px-5 py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shrink-0"
+                    >
+                      <Users size={16} className="text-primary" />
+                      View Attendance Roster
+                    </button>
                   </div>
                 );
               })()}
@@ -3418,6 +3445,7 @@ export function Meetings() {
           const meetingChapId = readOnlyMeeting.chapter_id || (readOnlyMeeting as any).chapterId || (readOnlyMeeting.adminId ? usersMap[readOnlyMeeting.adminId]?.chapter_id : null);
           const chapterObj = meetingChapId ? chaptersMap[meetingChapId] : null;
           const scheduledBy = chapterObj?.name || chapterObj?.title || profile?.chapter_name || 'Chapter Admin';
+          const chapterMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && String(u.chapter_id || (u as any)?.chapterId).trim() === String(meetingChapId).trim());
 
           return (
             <div className="space-y-5">
@@ -3456,6 +3484,56 @@ export function Meetings() {
               </div>
 
               {isMeetingDone(readOnlyMeeting) && renderMeetingSummary(readOnlyMeeting, readOnlyGuests)}
+
+              {/* Chapter Members Attendance Roster (View Only) */}
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Users size={14} className="text-primary" />
+                  Chapter Members Attendance Roster ({chapterMembers.length})
+                </h3>
+                <div className="overflow-x-auto border border-white/5 rounded-[12px] bg-[#151C2E]">
+                  <table className="w-full text-left border-collapse min-w-[500px]">
+                    <thead>
+                      <tr className="border-b border-white/5 bg-[#111827]">
+                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Name</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Position</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Status</th>
+                        <th className="py-2.5 px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider text-right">Collection</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {chapterMembers.length > 0 ? (
+                        chapterMembers.map(m => {
+                          const status = readOnlyMeeting.attendance?.[m.uid] || readOnlyMeeting.attendance?.[m.id];
+                          const displayObj = getAttendanceDisplay(status);
+                          const amount = readOnlyMeeting.amountCollected?.[m.uid] || readOnlyMeeting.amountCollected?.[m.id] || 0;
+                          return (
+                            <tr key={m.uid || m.id} className="hover:bg-[#1C2538] transition-colors">
+                              <td className="py-2.5 px-3 text-xs font-bold text-white">
+                                <div className="flex items-center gap-2">
+                                  <Avatar src={m.photoURL} name={m.name || m.displayName || 'Member'} size="w-6 h-6" className="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
+                                  <span>{m.name || m.displayName || 'Unnamed Member'}</span>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-xs text-neutral-300 font-medium">{getMemberPositionLabel(m)}</td>
+                              <td className="py-2.5 px-3">
+                                <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-widest border", displayObj.color)}>
+                                  {displayObj.label}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-xs font-bold text-emerald-400 text-right">₹{Number(amount).toLocaleString()}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="py-4 text-center text-xs text-neutral-400">No chapter members found.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               {(readOnlyMeeting.description || readOnlyMeeting.notes) && (
                 <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-1.5">
