@@ -240,7 +240,7 @@ export function getWorkspaceChecklistTasks(
       label: 'Invite a New Guest',
       desc: 'Invite a guest to join your chapter.',
       autoDone: hasGuestAuto,
-      link: '/guests',
+      link: hasGuestAuto ? '/guests' : '/guests?action=new',
       linkText: hasGuestAuto ? 'VIEW' : 'INVITE',
       iconColor: 'text-pink-400',
       bgColor: 'bg-pink-500/10'
@@ -255,7 +255,7 @@ export function getWorkspaceChecklistTasks(
       label: 'Pass Referral',
       desc: 'Pass a referral to a chapter member.',
       autoDone: hasPassRefAuto,
-      link: '/refer',
+      link: hasPassRefAuto ? '/referrals' : '/referrals?action=new',
       linkText: hasPassRefAuto ? 'VIEW' : 'PASS REFERRAL',
       iconColor: 'text-emerald-400',
       bgColor: 'bg-emerald-500/10'
@@ -273,7 +273,7 @@ export function getWorkspaceChecklistTasks(
       label: 'Schedule Meeting',
       desc: 'Schedule a 1-to-1 or chapter meeting.',
       autoDone: hasScheduleMeetingAuto,
-      link: '/one-to-one',
+      link: hasScheduleMeetingAuto ? '/one-to-one' : '/one-to-one?action=new',
       linkText: hasScheduleMeetingAuto ? 'VIEW' : 'SCHEDULE',
       iconColor: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10'
@@ -295,7 +295,7 @@ export function getWorkspaceChecklistTasks(
       label: 'One-to-One Meeting',
       desc: 'Complete today\'s scheduled 1-to-1 meeting.',
       autoDone: has121Auto,
-      link: '/one-to-one',
+      link: has121Auto ? '/one-to-one' : '/one-to-one?action=new',
       linkText: has121Auto ? 'VIEW' : 'COMPLETE 1-ON-1',
       iconColor: 'text-blue-400',
       bgColor: 'bg-blue-500/10'
@@ -455,7 +455,7 @@ export function getWorkspaceChecklistTasks(
           label: `Send Thank You Slip to ${senderName}`,
           desc: `Send a Thank You Slip to ${senderName} for converted referral (${contactOrCustomerName}).`,
           autoDone: hasSlip,
-          link: `/thank-you-slips?referralId=${ref.id}`,
+          link: hasSlip ? '/thank-you-slips' : `/thank-you-slips?referralId=${ref.id}&action=new`,
           linkText: hasSlip ? 'VIEW' : 'SEND SLIP',
           iconColor: 'text-teal-400',
           bgColor: 'bg-teal-500/10'
@@ -469,7 +469,50 @@ export function getWorkspaceChecklistTasks(
     });
 
 
-    // 8. Give Testimonial Task (Single Consolidated Task)
+    // 8. Give Testimonial Task (Assigned to Referral Sender AFTER Thank You Slip is submitted by Receiver)
+    const sentReferrals = allReferrals.filter(r => {
+      const sender = r.fromUserId || r.sender_id || r.from_user_id || r.authorMemberId || r.submitted_by;
+      return String(sender || '') === String(userId) && isDateInRange(r.updated_at || r.updatedAt || r.created_at || r.createdAt || r.date);
+    });
+
+    let createdRefTestimonialTask = false;
+
+    sentReferrals.forEach(ref => {
+      // Step 5: ONLY AFTER the Thank You Slip is successfully submitted by Referral Receiver
+      const hasSlip = allSlips.some(s => String(s.referralId || s.referral_id || '') === String(ref.id || ''));
+
+      if (hasSlip) {
+        createdRefTestimonialTask = true;
+        const receiverId = ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId;
+        const receiverMember = (allUsers || []).find((u: any) =>
+          String(u.id || '').trim() === String(receiverId || '').trim() ||
+          String(u.uid || '').trim() === String(receiverId || '').trim()
+        );
+        const receiverName = receiverMember?.name || (receiverMember as any)?.full_name || receiverMember?.displayName || ref.toUserName || ref.to_user_name || 'Chapter Member';
+        const contactOrCustomerName = ref.contactName || ref.contact_name || ref.customerName || ref.customer_name || 'Referral';
+
+        // Check if Member A (Referral Sender) has submitted a testimonial for this referral
+        const hasSubmittedTestimonialForRef = testimonials.some(t => {
+          const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId;
+          if (String(author || '') !== String(userId || '')) return false;
+          const matchRef = String(t.referral_id || t.referralId || '') === String(ref.id || '');
+          const matchReceiver = String(t.receiverMemberId || t.receiver_id || t.toUserId || '') === String(receiverId || '');
+          return matchRef || (matchReceiver && String(t.referral_id || t.referralId || '') === String(ref.id || ''));
+        });
+
+        rawTasks.push({
+          key: `task_give_testimonial_ref_${ref.id}_${dateStr}`,
+          label: `Give Testimonial to ${receiverName}`,
+          desc: `Give a testimonial to ${receiverName} for completed referral (${contactOrCustomerName}).`,
+          autoDone: hasSubmittedTestimonialForRef,
+          link: hasSubmittedTestimonialForRef ? '/testimonials' : `/testimonials?referralId=${ref.id}&recipientId=${receiverId}&action=new`,
+          linkText: hasSubmittedTestimonialForRef ? 'VIEW' : 'GIVE TESTIMONIAL',
+          iconColor: 'text-indigo-400',
+          bgColor: 'bg-indigo-500/10'
+        });
+      }
+    });
+
     const hasSubmittedTestimonial = testimonials.some(t => {
       const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId;
       return String(author || '') === String(userId || '');
@@ -486,16 +529,15 @@ export function getWorkspaceChecklistTasks(
       return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
 
-    const hasRefTrigger = completedReceivedReferrals.length > 0;
     const hasMeetingTrigger = completedOneToOnes.length > 0;
 
-    if (hasRefTrigger || hasMeetingTrigger || hasSubmittedTestimonial) {
+    if (!createdRefTestimonialTask && (hasMeetingTrigger || hasSubmittedTestimonial)) {
       rawTasks.push({
         key: `task_testimonial_single_${dateStr}`,
         label: 'Give Testimonial',
         desc: 'Submit a testimonial for a chapter member.',
         autoDone: hasSubmittedTestimonial,
-        link: '/testimonials',
+        link: hasSubmittedTestimonial ? '/testimonials' : '/testimonials?action=new',
         linkText: hasSubmittedTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
         iconColor: 'text-indigo-400',
         bgColor: 'bg-indigo-500/10'
@@ -511,8 +553,8 @@ export function getWorkspaceChecklistTasks(
       if (!seenTaskLabels.has(normLabel)) {
         seenTaskLabels.add(normLabel);
         deduplicatedRawTasks.push(task);
-      } else if (normLabel === 'give testimonial' && task.autoDone) {
-        const existing = deduplicatedRawTasks.find(t => t.label.trim().toLowerCase() === 'give testimonial');
+      } else if (normLabel.includes('give testimonial') && task.autoDone) {
+        const existing = deduplicatedRawTasks.find(t => t.label.trim().toLowerCase() === normLabel);
         if (existing) {
           existing.autoDone = true;
           existing.linkText = 'VIEW';

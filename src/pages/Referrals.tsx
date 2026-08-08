@@ -92,8 +92,12 @@ export function Referrals() {
 
   useEffect(() => {
     const toUserId = searchParams.get('to');
-    if (toUserId) {
-      setFormData(prev => ({ ...prev, toUserId }));
+    const action = searchParams.get('action');
+    const openModal = searchParams.get('openModal');
+    if (toUserId || action === 'new' || openModal === 'true') {
+      if (toUserId) {
+        setFormData(prev => ({ ...prev, toUserId }));
+      }
       setIsModalOpen(true);
       setMemberFilter('all');
     }

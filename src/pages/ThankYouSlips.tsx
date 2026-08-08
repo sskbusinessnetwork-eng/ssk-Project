@@ -411,12 +411,19 @@ export function ThankYouSlips() {
 
   useEffect(() => {
     const paramRefId = searchParams.get('referralId');
-    if (paramRefId && referrals.length > 0) {
-      const matchedRef = referrals.find(r => String(r.id) === String(paramRefId));
-      if (matchedRef) {
-        handleReferralSelect(matchedRef.id);
-        setIsModalOpen(true);
+    const action = searchParams.get('action');
+    const openModal = searchParams.get('openModal');
+
+    if (paramRefId) {
+      if (referrals.length > 0) {
+        const matchedRef = referrals.find(r => String(r.id) === String(paramRefId));
+        if (matchedRef) {
+          handleReferralSelect(matchedRef.id);
+        }
       }
+      setIsModalOpen(true);
+    } else if (action === 'new' || openModal === 'true') {
+      setIsModalOpen(true);
     }
   }, [searchParams, referrals]);
 

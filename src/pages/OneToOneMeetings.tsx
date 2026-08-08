@@ -205,6 +205,13 @@ export function OneToOneMeetings() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const updateId = params.get('update');
+    const action = params.get('action');
+    const openModal = params.get('openModal');
+
+    if ((action === 'new' || openModal === 'true') && !isModalOpen) {
+      handleOpenScheduleModal();
+    }
+
     if (updateId && meetings.length > 0) {
       const meetingToUpdate = meetings.find(m => m.id === updateId);
       if (meetingToUpdate && !isAttendanceModalOpen) {

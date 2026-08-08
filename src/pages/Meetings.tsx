@@ -560,6 +560,14 @@ export function Meetings() {
     }, 10);
   };
 
+  useEffect(() => {
+    const attend = searchParams.get('attend');
+    const openDetails = searchParams.get('openDetails');
+    if ((attend === 'true' || openDetails === 'true') && primaryFocusMeeting && !isReadOnlyModalOpen) {
+      handleOpenReadOnlyMeetingDetails(primaryFocusMeeting);
+    }
+  }, [searchParams, primaryFocusMeeting]);
+
   const handleOpenAttendanceReport = async (meeting: Meeting) => {
     if (!canUserViewReport(meeting)) {
       handleOpenReadOnlyMeetingDetails(meeting);

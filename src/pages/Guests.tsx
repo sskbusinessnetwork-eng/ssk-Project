@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
 import { 
@@ -29,12 +30,21 @@ const format = (date: any, formatStr: string, options?: any) => {
 
 export function Guests() {
   const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   
   const [invitations, setInvitations] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const openModal = searchParams.get('openModal');
+    if (action === 'new' || openModal === 'true') {
+      setIsModalOpen(true);
+    }
+  }, [searchParams]);
   const [error, setError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -225,27 +235,51 @@ export function Guests() {
       };
 
       let insertSuccess = false;
-      const { data, error: insertError } = await supabase
-        .from('guest_invitations')
-        .insert([newInvitation])
-        .select();
+      try {
+        const { data, error: insertError } = await supabase
+          .from('guest_invitations')
+          .insert([newInvitation])
+          .select();
 
-      if (!insertError && data && data.length > 0) {
-        insertSuccess = true;
-      } else {
-        const res = await fetch('/api/guests/invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            newInvitation,
-            callerId: userId
-          })
-        });
-        const resData = await res.json();
-        if (resData.success) {
+        if (!insertError && data && data.length > 0) {
+          insertSuccess = true;
+        }
+      } catch (dbErr) {
+        console.warn("Direct Supabase guest invitation insert notice:", dbErr);
+      }
+
+      if (!insertSuccess) {
+        let resData: any = null;
+        try {
+          const res = await fetch('/api/guests/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              newInvitation,
+              callerId: userId
+            })
+          });
+          const text = await res.text();
+          try {
+            resData = text ? JSON.parse(text) : null;
+          } catch (pErr) {
+            console.warn("Raw response text from /api/guests/invite was not JSON:", text);
+          }
+        } catch (fetchErr) {
+          console.warn("Fetch error for /api/guests/invite:", fetchErr);
+        }
+
+        if (resData && resData.success) {
           insertSuccess = true;
         } else {
-          throw new Error(resData.error || insertError?.message || "Failed to send guest invitation.");
+          // Local databaseService fallback
+          try {
+            await databaseService.create('guest_invitations', newInvitation);
+            insertSuccess = true;
+          } catch (localDbErr) {
+            console.error("Local database fallback save error:", localDbErr);
+            throw new Error(resData?.error || resData?.message || "Failed to save guest invitation.");
+          }
         }
       }
 

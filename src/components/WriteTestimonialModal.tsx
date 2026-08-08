@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Star, MessageSquare } from 'lucide-react';
+import { X, Star, MessageSquare, Sparkles } from 'lucide-react';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { UserProfile } from '../types';
@@ -11,10 +11,11 @@ interface WriteTestimonialModalProps {
   author: UserProfile | null;
   receiver: UserProfile;
   referralId?: string;
+  referralObj?: any;
   oneToOneId?: string;
 }
 
-export function WriteTestimonialModal({ isOpen, onClose, author, receiver, referralId, oneToOneId }: WriteTestimonialModalProps) {
+export function WriteTestimonialModal({ isOpen, onClose, author, receiver, referralId, referralObj, oneToOneId }: WriteTestimonialModalProps) {
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState('');
   const [testimonial, setTestimonial] = useState('');
@@ -22,6 +23,10 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
   const [success, setSuccess] = useState(false);
 
   if (!isOpen) return null;
+
+  const targetRefId = referralId || referralObj?.id || null;
+  const customerName = referralObj?.contactName || referralObj?.contact_name || referralObj?.customerName || referralObj?.customer_name || '';
+  const refTitle = referralObj?.title || referralObj?.referral_title || referralObj?.business_category || 'Completed Referral';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,8 +45,8 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
         authorMemberId: authorUid,
         chapter_id: chapterId,
         chapterId: chapterId,
-        referral_id: referralId || null,
-        referralId: referralId || null,
+        referral_id: targetRefId,
+        referralId: targetRefId,
         one_to_one_id: oneToOneId || null,
         oneToOneId: oneToOneId || null,
         rating,
@@ -54,6 +59,7 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
 
       window.dispatchEvent(new CustomEvent('testimonials-updated'));
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
 
       // Send notification
       try {
@@ -120,6 +126,37 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
                   <p className="text-sm text-[#9CA3AF]">For {receiver.name}</p>
                 </div>
               </div>
+
+              {/* Auto-Filled Referral Reference Context */}
+              {(targetRefId || customerName) && (
+                <div className="bg-[#1F2937] p-3.5 rounded-xl border border-white/10 space-y-1.5 mb-4 text-xs">
+                  <div className="text-[10px] font-extrabold text-primary uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles size={12} /> Auto-Filled Completed Referral Reference
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-white">
+                    <div>
+                      <span className="text-[#9CA3AF] text-[10px] block">Recipient</span>
+                      <strong className="font-bold">{receiver.name}</strong>
+                    </div>
+                    {targetRefId && (
+                      <div>
+                        <span className="text-[#9CA3AF] text-[10px] block">Referral Ref</span>
+                        <strong className="font-mono text-emerald-400 font-bold">#REF-{String(targetRefId).slice(-6).toUpperCase()}</strong>
+                      </div>
+                    )}
+                    {customerName && (
+                      <div>
+                        <span className="text-[#9CA3AF] text-[10px] block">Customer Name</span>
+                        <strong className="font-bold">{customerName}</strong>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[#9CA3AF] text-[10px] block">Referral</span>
+                      <strong className="font-bold truncate block">{refTitle}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { UserProfile, Testimonial, Chapter } from '../types';
 import { MessageSquare, Star, Search, Plus, Trash2, Send, Inbox, Sparkles, Building2, User, ChevronRight } from 'lucide-react';
 import { format as originalFormat, isValid } from 'date-fns';
 import { cn } from '../lib/utils';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { Modal } from '../components/Modal';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
@@ -22,6 +23,10 @@ import { getDisplayPosition as formatPosition } from "../utils/authUtils";
 export function Testimonials() {
   const { profile } = useAuth();
   const currentUserId = profile?.uid || (profile as any)?.id;
+  const [searchParams] = useSearchParams();
+  const urlReferralId = searchParams.get('referralId');
+  const urlRecipientId = searchParams.get('recipientId');
+
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [users, setUsers] = useState<Record<string, UserProfile>>({});
   const [chaptersMap, setChaptersMap] = useState<Record<string, Chapter>>({});
@@ -32,12 +37,68 @@ export function Testimonials() {
   // Testimonial modal states
   const [showMemberSelectModal, setShowMemberSelectModal] = useState(false);
   const [selectedReceiver, setSelectedReceiver] = useState<UserProfile | null>(null);
+  const [selectedReferral, setSelectedReferral] = useState<any | null>(null);
   const [showWriteModal, setShowWriteModal] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const userChapterId = profile?.chapter_id || (profile as any)?.chapterId || profile?.adminId;
+
+  // Auto-open modal if referralId or recipientId is provided in URL params
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const openModal = searchParams.get('openModal');
+
+    if (!urlReferralId && !urlRecipientId) {
+      if (action === 'new' || openModal === 'true') {
+        setShowMemberSelectModal(true);
+      }
+      return;
+    }
+
+    let isMounted = true;
+    const autoOpenFromUrl = async () => {
+      try {
+        let recUser: UserProfile | null = null;
+        let refObj: any = null;
+
+        if (urlReferralId) {
+          const { data } = await supabase.from('referrals').select('*').eq('id', urlReferralId).maybeSingle();
+          if (data) {
+            refObj = data;
+            const targetRecId = urlRecipientId || data.toUserId || data.receiver_id || data.to_user_id || data.receiverMemberId;
+            if (targetRecId) {
+              if (users[targetRecId]) {
+                recUser = users[targetRecId];
+              } else {
+                recUser = await databaseService.get<UserProfile>('users', targetRecId);
+              }
+            }
+          }
+        }
+
+        if (!recUser && urlRecipientId) {
+          if (users[urlRecipientId]) {
+            recUser = users[urlRecipientId];
+          } else {
+            recUser = await databaseService.get<UserProfile>('users', urlRecipientId);
+          }
+        }
+
+        if (isMounted && recUser) {
+          setSelectedReceiver(recUser);
+          if (refObj) setSelectedReferral(refObj);
+          setShowWriteModal(true);
+        }
+      } catch (err) {
+        console.warn('Auto open testimonial from URL warning:', err);
+      }
+    };
+
+    autoOpenFromUrl();
+    return () => { isMounted = false; };
+  }, [urlReferralId, urlRecipientId, users]);
 
   useEffect(() => {
     if (!profile) return;
@@ -533,9 +594,12 @@ export function Testimonials() {
           onClose={() => {
             setShowWriteModal(false);
             setSelectedReceiver(null);
+            setSelectedReferral(null);
           }}
           author={profile}
           receiver={selectedReceiver}
+          referralId={selectedReferral?.id || urlReferralId || undefined}
+          referralObj={selectedReferral}
         />
       )}
     </div>
