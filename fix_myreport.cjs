@@ -1,44 +1,64 @@
 const fs = require('fs');
-const file = 'src/pages/MyReport.tsx';
-let content = fs.readFileSync(file, 'utf8');
+let code = fs.readFileSync('src/pages/MyReport.tsx', 'utf-8');
 
-// Restore MyReport's date states completely
-content = content.replace(
-  `const [filterStartDate, setFilterStartDate] = useState('');`,
-  `const [filterStartDate, setFilterStartDate] = useState<string>(() => new Date().toISOString().split('T')[0]);`
-);
-content = content.replace(
-  `const [filterEndDate, setFilterEndDate] = useState('');`,
-  `const [filterEndDate, setFilterEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);`
-);
-content = content.replace(
-  `const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);`,
-  `const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    return { start: today, end: end };
-  });`
-);
-content = content.replace(
-  `  const handleClearFilter = () => {
-    setFilterStartDate('');
-    setFilterEndDate('');
-    setActiveDateRange(null);
-    setIsFilterModalOpen(false);
-  };`,
-  `  const handleClearFilter = () => {
-    setFilterStartDate(new Date().toISOString().split('T')[0]);
-    setFilterEndDate(new Date().toISOString().split('T')[0]);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    setActiveDateRange({ start: today, end: end });
-    setIsFilterModalOpen(false);
-  };`
-);
+const oldCode = `  const businessSentTotal = chapterSlips.reduce((acc, s) => {
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
+      return acc + (Number(s.businessValue || s.amount) || 0);
+    }
+    return acc;
+  }, 0);
 
-fs.writeFileSync(file, content);
-console.log("Restored MyReport completely.");
+  const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
+      return acc + (Number(s.businessValue || s.amount) || 0);
+    }
+    return acc;
+  }, 0);
+
+  const businessSentCount = chapterSlips.filter(s => {
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
+  }).length;
+
+  const businessReceivedCount = chapterSlips.filter(s => {
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
+  }).length;`;
+
+const newCode = `  const businessSentTotal = chapterSlips.reduce((acc, s) => {
+    // If user is 'toUserId' (received the slip), they SENT/GENERATED the business
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
+      return acc + (Number(s.businessValue || s.amount) || 0);
+    }
+    return acc;
+  }, 0);
+
+  const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
+    // If user is 'fromUserId' (submitted the slip), they RECEIVED the business
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
+      return acc + (Number(s.businessValue || s.amount) || 0);
+    }
+    return acc;
+  }, 0);
+
+  const businessSentCount = chapterSlips.filter(s => {
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
+  }).length;
+
+  const businessReceivedCount = chapterSlips.filter(s => {
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
+  }).length;`;
+
+if (code.includes(oldCode)) {
+  code = code.replace(oldCode, newCode);
+  fs.writeFileSync('src/pages/MyReport.tsx', code);
+  console.log('SUCCESS MyReport');
+} else {
+  console.log('TARGET NOT FOUND in MyReport');
+}

@@ -116,11 +116,13 @@ export function MemberCompanionView({
       const from = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
       const to = String(s.toUserId || s.to_user_id || '');
       
-      const isSender = userCandidateIds.includes(from);
-      const isReceiver = userCandidateIds.includes(to);
+      // If user is 'from' (submitted the Thank You slip), they RECEIVED the business.
+      // If user is 'to' (received the Thank You slip), they SENT/GENERATED the business.
+      const isSenderOfSlip = userCandidateIds.includes(from);
+      const isReceiverOfSlip = userCandidateIds.includes(to);
 
-      if (isSender) businessSent += val;
-      if (isReceiver) businessReceived += val;
+      if (isSenderOfSlip) businessReceived += val;
+      if (isReceiverOfSlip) businessSent += val;
       
       const isThisMonth = d.getFullYear() === year && d.getMonth() === month;
       if (isThisMonth && (isSender || isReceiver)) {

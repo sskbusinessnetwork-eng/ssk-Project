@@ -201,7 +201,8 @@ export function MyReport() {
   }).length;
 
   const businessSentTotal = chapterSlips.reduce((acc, s) => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    // If user is 'toUserId' (received the slip), they SENT/GENERATED the business
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
     if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
       return acc + (Number(s.businessValue || s.amount) || 0);
     }
@@ -209,7 +210,8 @@ export function MyReport() {
   }, 0);
 
   const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    // If user is 'fromUserId' (submitted the slip), they RECEIVED the business
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
     if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
       return acc + (Number(s.businessValue || s.amount) || 0);
     }
@@ -217,12 +219,12 @@ export function MyReport() {
   }, 0);
 
   const businessSentCount = chapterSlips.filter(s => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
+    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
     return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
   }).length;
 
   const businessReceivedCount = chapterSlips.filter(s => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
+    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
     return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
   }).length;
 
@@ -252,8 +254,8 @@ export function MyReport() {
   const guestsInvitedCount = chapterGuests.length;
   const guestsJoinedCount = chapterGuests.filter(g => g.status === 'JOINED' || g.status === 'ATTENDED').length; // Added Joined metric
   
-  const thankYouSlipsSentCount = businessSentCount;
-  const thankYouSlipsReceivedCount = businessReceivedCount;
+  const thankYouSlipsSentCount = businessReceivedCount;
+  const thankYouSlipsReceivedCount = businessSentCount;
 
   const chapterTestimonials = effectiveTestimonials.filter(t => {
     const author = chapterUsers.find(u => (u.id || u.uid) === (t.authorMemberId || t.author_id));

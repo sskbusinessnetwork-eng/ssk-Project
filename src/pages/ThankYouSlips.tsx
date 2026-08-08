@@ -574,9 +574,7 @@ export function ThankYouSlips() {
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
-        if (receiver) {
-          setShowTestimonialPrompt(true);
-        }
+        // Removed testimonial prompt for receiver
       }, 2000);
     } catch (err: any) {
       console.error("Error submitting thank you slip:", err);
@@ -1186,54 +1184,14 @@ export function ThankYouSlips() {
         )}
       </Modal>
 
-      {/* Testimonial Prompt Modal */}
-      <Modal isOpen={showTestimonialPrompt} onClose={() => setShowTestimonialPrompt(false)} title="Testimonial">
-        <div className="p-6 text-center space-y-6">
-          <div className="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
-            <Award size={32} />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-white mb-2">Would you like to write a testimonial?</h3>
-            <p className="text-[#9CA3AF] text-sm">
-              Sharing a testimonial is a great way to show your appreciation and help others build trust in their services.
-            </p>
-          </div>
-          
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => setShowTestimonialPrompt(false)}
-              className="flex-1 px-4 py-3 rounded-xl font-bold text-white bg-[#1F2937] hover:bg-[#374151] transition-colors"
-            >
-              Maybe Later
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowTestimonialPrompt(false);
-                // We need another state to open the WriteTestimonialModal, let's just use `setIsWritingTestimonial(true)`
-                // which I'll add or use.
-                // Wait, I didn't add setIsWritingTestimonial, so let's just use a trick or add it.
-                // Better to dispatch a custom event or something? No, just add it.
-                document.getElementById('write-testimonial-btn')?.click();
-              }}
-              className="flex-1 px-4 py-3 rounded-xl font-bold text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              Write Testimonial
-            </button>
-            <button id="write-testimonial-btn" className="hidden" onClick={() => setShowWriteModal(true)} />
-          </div>
-        </div>
-      </Modal>
-
-      {testimonialReceiver && (
-        <WriteTestimonialModal
-          isOpen={showWriteModal}
-          onClose={() => setShowWriteModal(false)}
-          author={profile}
-          receiver={testimonialReceiver}
-        />
-      )}
+              {testimonialReceiver && (
+  <WriteTestimonialModal
+    isOpen={showWriteModal}
+    onClose={() => setShowWriteModal(false)}
+    author={profile}
+    receiver={testimonialReceiver}
+  />
+)}
 
       {/* Thank You Slip Details Modal */}
       <Modal

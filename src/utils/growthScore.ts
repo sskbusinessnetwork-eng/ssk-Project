@@ -265,18 +265,7 @@ export function getWorkspaceChecklistTasks(
       const isCreator = m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || m.created_by === userId || m.createdBy === userId;
       return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
     });
-    rawTasks.push({
-      key: `task_schedule_meeting_${dateStr}`,
-      label: 'Schedule 1:1 Meeting',
-      desc: 'Schedule a 1-to-1 or chapter meeting.',
-      autoDone: hasScheduleMeetingAuto,
-      link: hasScheduleMeetingAuto ? '/one-to-one' : '/one-to-one?action=new',
-      linkText: hasScheduleMeetingAuto ? 'VIEW' : 'SCHEDULE 1:1',
-      iconColor: 'text-cyan-400',
-      bgColor: 'bg-cyan-500/10'
-    });
-    
-    // 5. One-to-One Meeting completed
+
     const has121Auto = oneToOnes.some(m => {
       const isParticipant = (
         m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || 
@@ -287,15 +276,18 @@ export function getWorkspaceChecklistTasks(
       const isCompleted = m.status === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
       return isCompleted && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
+
+    const isO2ODone = hasScheduleMeetingAuto || has121Auto;
+
     rawTasks.push({
-      key: `task_one_to_one_${dateStr}`,
-      label: 'One-to-One Meeting',
-      desc: 'Complete today\'s scheduled 1-to-1 meeting.',
-      autoDone: has121Auto,
-      link: has121Auto ? '/one-to-one' : '/one-to-one?action=new',
-      linkText: has121Auto ? 'VIEW' : 'COMPLETE 1-ON-1',
-      iconColor: 'text-blue-400',
-      bgColor: 'bg-blue-500/10'
+      key: `task_schedule_meeting_${dateStr}`,
+      label: 'Schedule 1-to-1 Meeting',
+      desc: 'Schedule or complete a 1-to-1 meeting.',
+      autoDone: isO2ODone,
+      link: isO2ODone ? '/one-to-one' : '/one-to-one?action=new',
+      linkText: isO2ODone ? 'VIEW' : 'SCHEDULE',
+      iconColor: 'text-cyan-400',
+      bgColor: 'bg-cyan-500/10'
     });
     
     // 6. Attend Chapter Meeting
@@ -466,26 +458,22 @@ export function getWorkspaceChecklistTasks(
     });
 
 
-    // 8. Give Testimony Task (Assigned ONLY to the PERSON WHO SENT THE REFERRAL after the referral is updated/processed)
+    // 8. Give Testimony Task (Assigned ONLY to the PERSON WHO SENT THE REFERRAL after receiver submits Thank You Slip)
     const sentReferrals = allReferrals.filter(r => {
       const sender = r.fromUserId || r.sender_id || r.from_user_id || r.authorMemberId || r.submitted_by;
       return String(sender || '').trim() === String(userId || '').trim();
     });
 
     sentReferrals.forEach(ref => {
-      // Check if referral has been updated/recorded as completed/processed according to existing referral workflow
-      const statusNorm = String(ref.status || '').toUpperCase().trim();
-      const isProcessed = statusNorm === 'COMPLETED' ||
-                          statusNorm === 'CONVERTED' ||
-                          statusNorm === 'PROCESSED' ||
-                          statusNorm === 'ACCEPTED' ||
-                          statusNorm === 'CONTACTED' ||
-                          statusNorm === 'IN_PROGRESS' ||
-                          ref.isProcessed === true ||
-                          (statusNorm !== '' && statusNorm !== 'PENDING' && statusNorm !== 'NEW');
+      const receiverId = ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId;
+      
+      // Check if Thank You Slip exists for this referral (meaning receiver submitted it)
+      const hasThankYouSlip = allSlips.some(s => {
+        const sRefId = s.referralId || s.referral_id;
+        return String(sRefId || '') === String(ref.id || '');
+      });
 
-      if (isProcessed) {
-        const receiverId = ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId;
+      if (hasThankYouSlip && receiverId) {
         const receiverMember = (allUsers || []).find((u: any) =>
           String(u.id || '').trim() === String(receiverId || '').trim() ||
           String(u.uid || '').trim() === String(receiverId || '').trim()
@@ -508,8 +496,8 @@ export function getWorkspaceChecklistTasks(
 
         rawTasks.push({
           key: `task_give_testimonial_ref_${ref.id}_${dateStr}`,
-          label: `Give Testimony`,
-          desc: `Share your experience with ${receiverName}.`,
+          label: `Give Testimonial to ${receiverName}`,
+          desc: `Give a testimonial to ${receiverName}`,
           autoDone: hasSubmittedTestimonialForRef,
           link: hasSubmittedTestimonialForRef ? '/testimonials' : `/testimonials?referralId=${ref.id}&recipientId=${receiverId}&action=new`,
           linkText: hasSubmittedTestimonialForRef ? 'VIEW' : 'GIVE TESTIMONY',

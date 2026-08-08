@@ -581,19 +581,7 @@ export function Analytics() {
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
       return effectiveSlips.filter(s => {
-        const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-        return subBy === String(appliedMemberFilter);
-      });
-    }
-    return effectiveSlips.filter(s => {
-      const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-      return usePersonalStats ? userCandidateIds.includes(subBy) : chapterUserIds.includes(subBy);
-    });
-  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
-
-  const businessReceivedSlips = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
-      return effectiveSlips.filter(s => {
+        // Business SENT by user means they are the recipient of the Thank You Slip (toUserId)
         const recBy = String(s.toUserId || s.to_user_id || '');
         return recBy === String(appliedMemberFilter);
       });
@@ -601,6 +589,20 @@ export function Analytics() {
     return effectiveSlips.filter(s => {
       const recBy = String(s.toUserId || s.to_user_id || '');
       return usePersonalStats ? userCandidateIds.includes(recBy) : chapterUserIds.includes(recBy);
+    });
+  }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
+
+  const businessReceivedSlips = useMemo(() => {
+    if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      return effectiveSlips.filter(s => {
+        // Business RECEIVED by user means they submitted the Thank You Slip (fromUserId)
+        const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+        return subBy === String(appliedMemberFilter);
+      });
+    }
+    return effectiveSlips.filter(s => {
+      const subBy = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+      return usePersonalStats ? userCandidateIds.includes(subBy) : chapterUserIds.includes(subBy);
     });
   }, [effectiveSlips, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
 
@@ -2411,8 +2413,8 @@ const getGreeting = () => {
             referralsSentCount={referralsSentCount}
             referralsReceivedCount={referralsReceivedCount}
             thankYouSlipsCount={thankYouSlipsCount}
-            thankYouSlipsSentCount={businessSentCount}
-            thankYouSlipsReceivedCount={businessReceivedCount}
+            thankYouSlipsSentCount={businessReceivedCount}
+            thankYouSlipsReceivedCount={businessSentCount}
             upcomingSyncsCount={upcomingSyncsCount}
             oneToOneMeetingsCount={oneToOneMeetingsCount}
             visitorsAttendedCount={visitorsAttendedCount}
