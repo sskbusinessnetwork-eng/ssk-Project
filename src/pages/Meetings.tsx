@@ -408,6 +408,59 @@ export function Meetings() {
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
+  const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
+    if (!userUid || !m.attendance) {
+      return {
+        label: 'PENDING',
+        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+      };
+    }
+
+    let rawStatus = m.attendance[userUid];
+    if (!rawStatus) {
+      const entry = Object.entries(m.attendance).find(([k]) => k.toLowerCase() === userUid.toLowerCase());
+      if (entry) rawStatus = entry[1];
+    }
+
+    if (!rawStatus) {
+      return {
+        label: 'PENDING',
+        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+      };
+    }
+
+    const s = String(rawStatus).toUpperCase().trim();
+    if (s === 'PRESENT' || s === 'YES') {
+      return {
+        label: 'PRESENT',
+        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      };
+    }
+    if (s === 'ABSENT' || s === 'NO') {
+      return {
+        label: 'ABSENT',
+        color: 'bg-red-500/10 text-red-400 border-red-500/20'
+      };
+    }
+    if (s === 'MEDICAL') {
+      return {
+        label: 'MEDICAL',
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+      };
+    }
+    if (s === 'SUBSTITUTE') {
+      return {
+        label: 'SUBSTITUTE',
+        color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      };
+    }
+
+    return {
+      label: s,
+      color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+    };
+  };
+
   const isDefaultSetupComplete = Boolean(
     defaultSetupData.frequency &&
     (defaultSetupData.frequency === 'Weekly' ? defaultSetupData.day : defaultSetupData.date) &&
@@ -1804,8 +1857,8 @@ export function Meetings() {
 
       {/* Main Content Area */}
       <div className="space-y-12">
-        {/* PRIMARY FOCUS MEETING DETAILS CARD */}
-        {primaryFocusMeeting && (
+        {/* PRIMARY FOCUS MEETING DETAILS CARD - Chapter Admin Only */}
+        {(isMasterAdmin || isChapterAdmin) && primaryFocusMeeting && (
           <div className="bg-[#151C2E] p-6 sm:p-8 rounded-[24px] border border-primary/30 shadow-2xl shadow-primary/5 space-y-6 relative overflow-hidden">
             <div className="absolute -top-24 -right-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -1881,164 +1934,149 @@ export function Meetings() {
             </div>
 
             {/* Attendance & Management Section */}
-            {(() => {
-              const isChapAdmin = isMasterAdmin || isChapterAdmin || canUserUpdateMeeting(primaryFocusMeeting);
-              if (!isChapAdmin) return null;
-
-              return (
-                <div className="pt-2 border-t border-white/5">
-                  <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-                        <Shield size={16} className="text-primary" />
-                        Chapter Meeting Management
-                      </h4>
-                      <p className="text-[11px] text-neutral-400">
-                        As Chapter Admin, you can update attendance, status, and collection amounts for chapter members.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMeeting(primaryFocusMeeting);
-                          const normalizedAttendance: Record<string, any> = {};
-                          if (primaryFocusMeeting.attendance) {
-                            Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
-                              const v = String(val);
-                              if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                              else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                              else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                              else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                              else normalizedAttendance[uid] = val;
-                            });
-                          }
-                          setTempAttendance(normalizedAttendance);
-                          setTempAmount(primaryFocusMeeting.amountCollected || {});
-                          setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
-                          setIsUpdateModalOpen(true);
-                        }}
-                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
-                      >
-                        <Settings size={16} />
-                        Update Meeting
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAttendanceReport(primaryFocusMeeting)}
-                        className="px-5 py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
-                      >
-                        <Users size={16} className="text-primary" />
-                        View Attendance Roster
-                      </button>
-                    </div>
-                  </div>
+            <div className="pt-2 border-t border-white/5">
+              <div className="bg-[#111827] p-5 rounded-[18px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <Shield size={16} className="text-primary" />
+                    Chapter Meeting Management
+                  </h4>
+                  <p className="text-[11px] text-neutral-400">
+                    As Chapter Admin, you can update attendance, status, and collection amounts for chapter members.
+                  </p>
                 </div>
-              );
-            })()}
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMeeting(primaryFocusMeeting);
+                      const normalizedAttendance: Record<string, any> = {};
+                      if (primaryFocusMeeting.attendance) {
+                        Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
+                          const v = String(val);
+                          if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                          else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                          else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                          else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                          else normalizedAttendance[uid] = val;
+                        });
+                      }
+                      setTempAttendance(normalizedAttendance);
+                      setTempAmount(primaryFocusMeeting.amountCollected || {});
+                      setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
+                      setIsUpdateModalOpen(true);
+                    }}
+                    className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                  >
+                    <Settings size={16} />
+                    Update Meeting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAttendanceReport(primaryFocusMeeting)}
+                    className="px-5 py-3 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Users size={16} className="text-primary" />
+                    View Attendance Roster
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* COMPACT SECONDARY MICRO CARDS GRID */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <div className="w-1.5 h-4 bg-primary/60 rounded-full" />
-            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-display">
-              Meeting Overview & Secondary Details
-            </h3>
-          </div>
+        {/* SECONDARY MICRO CARDS GRID - Chapter Admin Only */}
+        {(isMasterAdmin || isChapterAdmin) && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <div className="w-1.5 h-4 bg-primary/60 rounded-full" />
+              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest font-display">
+                Meeting Overview & Secondary Details
+              </h3>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Micro Card 1: Attendees */}
-            {(() => {
-              const isChapAdmin = isMasterAdmin || isChapterAdmin || canUserUpdateMeeting(primaryFocusMeeting);
-              return (
-                <div 
-                  onClick={() => {
-                    if (isChapAdmin && primaryFocusMeeting) {
-                      handleOpenAttendanceReport(primaryFocusMeeting);
-                    }
-                  }}
-                  className={cn(
-                    "p-3.5 bg-[#111827] rounded-[14px] border border-white/5 transition-all flex flex-col justify-between h-24",
-                    isChapAdmin ? "hover:border-white/20 cursor-pointer" : "cursor-default"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-neutral-400">
-                    <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <Users size={12} className="text-primary" /> Attendees
-                    </span>
-                    {isChapAdmin && <ChevronRight size={12} />}
-                  </div>
-                  <div>
-                    <p className="text-base font-black text-white">
-                      {primaryFocusMeeting ? Object.keys(primaryFocusMeeting.attendance || {}).length : 0} Members Marked
-                    </p>
-                    <p className="text-[10px] text-neutral-400 font-medium">
-                      {isChapAdmin ? "Click to view full roster report" : "Recorded by Chapter Admin"}
-                    </p>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Micro Card 1: Attendees */}
+              <div 
+                onClick={() => {
+                  if (primaryFocusMeeting) {
+                    handleOpenAttendanceReport(primaryFocusMeeting);
+                  }
+                }}
+                className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
+              >
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={12} className="text-primary" /> Attendees
+                  </span>
+                  <ChevronRight size={12} />
                 </div>
-              );
-            })()}
+                <div>
+                  <p className="text-base font-black text-white">
+                    {primaryFocusMeeting ? Object.keys(primaryFocusMeeting.attendance || {}).length : 0} Members Marked
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium">Click to view full roster report</p>
+                </div>
+              </div>
 
-            {/* Micro Card 2: Agenda & Notes */}
-            <div 
-              onClick={() => {
-                if (primaryFocusMeeting) {
-                  setSelectedMeeting(primaryFocusMeeting);
-                  setNotes(primaryFocusMeeting.notes || primaryFocusMeeting.description || '');
-                  setIsNotesModalOpen(true);
-                }
-              }}
-              className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
-            >
-              <div className="flex items-center justify-between text-neutral-400">
-                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText size={12} className="text-primary" /> Agenda & Notes
-                </span>
-                <ChevronRight size={12} />
+              {/* Micro Card 2: Agenda & Notes */}
+              <div 
+                onClick={() => {
+                  if (primaryFocusMeeting) {
+                    setSelectedMeeting(primaryFocusMeeting);
+                    setNotes(primaryFocusMeeting.notes || primaryFocusMeeting.description || '');
+                    setIsNotesModalOpen(true);
+                  }
+                }}
+                className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 hover:border-white/20 transition-all cursor-pointer flex flex-col justify-between h-24"
+              >
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText size={12} className="text-primary" /> Agenda & Notes
+                  </span>
+                  <ChevronRight size={12} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white line-clamp-1">
+                    {primaryFocusMeeting?.description || primaryFocusMeeting?.notes || 'Weekly Chapter Agenda'}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Click to view notes</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-white line-clamp-1">
-                  {primaryFocusMeeting?.description || primaryFocusMeeting?.notes || 'Weekly Chapter Agenda'}
-                </p>
-                <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Click to view notes</p>
-              </div>
-            </div>
 
-            {/* Micro Card 3: Guests */}
-            <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
-              <div className="flex items-center justify-between text-neutral-400">
-                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <UserPlus size={12} className="text-primary" /> Guests
-                </span>
+              {/* Micro Card 3: Guests */}
+              <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <UserPlus size={12} className="text-primary" /> Guests
+                  </span>
+                </div>
+                <div>
+                  <p className="text-base font-black text-white">
+                    {meetingGuests.length} Guests Invited
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium">Chapter guest invitations</p>
+                </div>
               </div>
-              <div>
-                <p className="text-base font-black text-white">
-                  {meetingGuests.length} Guests Invited
-                </p>
-                <p className="text-[10px] text-neutral-400 font-medium">Chapter guest invitations</p>
-              </div>
-            </div>
 
-            {/* Micro Card 4: Documents & Fee */}
-            <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
-              <div className="flex items-center justify-between text-neutral-400">
-                <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                  <Shield size={12} className="text-primary" /> Meeting Fee
-                </span>
-              </div>
-              <div>
-                <p className="text-base font-black text-emerald-400">
-                  ₹{primaryFocusMeeting?.fee || 0}
-                </p>
-                <p className="text-[10px] text-neutral-400 font-medium">Fee configuration</p>
+              {/* Micro Card 4: Documents & Fee */}
+              <div className="p-3.5 bg-[#111827] rounded-[14px] border border-white/5 flex flex-col justify-between h-24">
+                <div className="flex items-center justify-between text-neutral-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Shield size={12} className="text-primary" /> Meeting Fee
+                  </span>
+                </div>
+                <div>
+                  <p className="text-base font-black text-emerald-400">
+                    ₹{primaryFocusMeeting?.fee || 0}
+                  </p>
+                  <p className="text-[10px] text-neutral-400 font-medium">Fee configuration</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* 1. Upcoming Meetings */}
         {scheduledMeetings.length > 0 ? (
@@ -2243,146 +2281,39 @@ export function Meetings() {
 
           {/* Meeting History List */}
           {completedMeetings.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-[#111827] rounded-[18px] border border-white/5 divide-y divide-white/5 overflow-hidden shadow-sm">
               {completedMeetings.map((meeting) => {
                 const chapterName = getChapterName(meeting);
-                const scheduledBy = getScheduledByName(meeting);
-                const meetingTitle = `${chapterName} Meeting`;
-                const meetingStatus = getMeetingStatus(meeting);
+                const meetingTitle = meeting.title || meeting.topic || `${chapterName} Meeting`;
+                const badge = getUserAttendanceBadge(meeting, profile?.uid || profile?.id);
 
-                // Calculate attendance summary for this meeting
-                const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
-                const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
-                const totalMembersCount = chapMembers.length || Object.keys(meeting.attendance || {}).length;
-                const presentCount = chapMembers.filter(m => {
-                  const st = meeting.attendance?.[m.uid];
-                  if (!st) return false;
-                  const uSt = st.toUpperCase();
-                  return uSt === 'PRESENT' || uSt === 'YES' || uSt === 'SUBSTITUTE';
-                }).length;
-                const absentCount = totalMembersCount > presentCount ? totalMembersCount - presentCount : 0;
-                const attendancePct = totalMembersCount > 0 ? Math.round((presentCount / totalMembersCount) * 100) : 0;
+                const meetingDateStr = meeting.date ? format(new Date(meeting.date), 'MMM d, yyyy') : '';
+                const meetingTimeStr = meeting.time ? formatTime12h(meeting.time) : '';
+                const dateTimeCombined = [meetingDateStr, meetingTimeStr].filter(Boolean).join(' · ');
 
                 return (
-                  <div 
-                    key={meeting.id} 
+                  <div
+                    key={meeting.id}
                     onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="bg-[#111827] p-4 rounded-[16px] border border-white/5 hover:border-primary/40 hover:bg-[#1C2538] transition-all flex flex-col justify-between cursor-pointer group shadow-sm"
+                    className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-widest bg-secondary/10 text-secondary border border-secondary/20 flex items-center gap-1">
-                          <Building size={11} />
-                          {chapterName}
-                        </span>
-                        <span className={cn("px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-widest border shrink-0", meetingStatus.color)}>
-                          {meetingStatus.label}
-                        </span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                        <Calendar size={15} className="text-primary" />
                       </div>
-
-                      <h3 className="text-sm font-bold text-white uppercase tracking-tight leading-snug mb-2 group-hover:text-primary transition-colors">
-                        {meetingTitle}
-                      </h3>
-
-                      <div className="space-y-1.5 mb-3 text-[11px] text-neutral-300">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={13} className="text-secondary shrink-0" />
-                          <span className="font-semibold text-white">{format(new Date(meeting.date), 'EEEE, MMM do yyyy')}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock size={13} className="text-secondary shrink-0" />
-                          <span>{formatTime12h(meeting.time || '07:30')}</span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1.5 border-t border-white/5 text-[10px] text-neutral-400">
-                          <Users size={12} className="text-neutral-400 shrink-0" />
-                          <span>Scheduled By: <strong className="text-white font-bold">{scheduledBy}</strong></span>
-                        </div>
-                      </div>
-
-                      {/* Attendance Summary */}
-                      <div className="p-2.5 bg-[#151C2E] rounded-[12px] border border-white/5 mb-3 space-y-1">
-                        <div className="flex items-center justify-between text-[10px] font-bold">
-                          <span className="text-neutral-400 uppercase tracking-wider">Attendance Rate</span>
-                          <span className="text-emerald-400">{attendancePct}%</span>
-                        </div>
-                        <div className="w-full bg-[#111827] h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${attendancePct}%` }} />
-                        </div>
-                        <div className="flex items-center justify-between text-[9px] text-neutral-400 pt-0.5 font-medium">
-                          <span className="text-emerald-400 font-bold">Present: {presentCount}</span>
-                          <span className="text-red-400 font-bold">Absent: {absentCount}</span>
-                          <span>Total: {totalMembersCount}</span>
-                        </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                          {meetingTitle}
+                        </h4>
+                        <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                          {dateTimeCombined}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-white/5">
-                      {isMasterAdmin ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAttendanceReport(meeting);
-                          }}
-                          className="w-full py-2 bg-primary/10 text-primary border border-primary/20 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <FileText size={12} />
-                          View Attendance Report
-                        </button>
-                      ) : canUserUpdateMeeting(meeting) ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMeeting(meeting);
-                              const normalizedAttendance: Record<string, any> = {};
-                              if (meeting.attendance) {
-                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  const v = String(val);
-                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                  else normalizedAttendance[uid] = val;
-                                });
-                              }
-                              setTempAttendance(normalizedAttendance);
-                              setTempAmount(meeting.amountCollected || {});
-                              setTempMemberNotes(meeting.memberNotes || {});
-                              setIsUpdateModalOpen(true);
-                            }}
-                            className="py-1.5 bg-[#151C2E] text-white border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-500/10 hover:text-emerald-400 transition-all flex items-center justify-center gap-1"
-                          >
-                            <Settings size={11} />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenAttendanceReport(meeting);
-                            }}
-                            className="py-1.5 bg-[#151C2E] text-primary border border-white/5 rounded-lg text-[9px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1"
-                          >
-                            <FileText size={11} />
-                            Report
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenAttendanceReport(meeting);
-                          }}
-                          className="w-full py-2 bg-[#151C2E] text-white border border-white/5 rounded-[10px] text-[10px] font-bold uppercase tracking-wider hover:bg-[#1C2538] transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <Info size={12} />
-                          View Details
-                        </button>
-                      )}
-                    </div>
+                    <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", badge.color)}>
+                      {badge.label}
+                    </span>
                   </div>
                 );
               })}
