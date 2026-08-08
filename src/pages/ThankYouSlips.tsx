@@ -99,6 +99,7 @@ export function ThankYouSlips() {
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const currentUserId = String(profile?.id || profile?.uid);
 
   // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
   const fetchConvertedReferrals = useCallback(async () => {
@@ -989,9 +990,11 @@ export function ThankYouSlips() {
                     </div>
 
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Business Amount</p>
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                        {activeTab === 'sent' ? 'Business Received' : 'Business Amount'}
+                      </p>
                       <p className="text-sm font-bold text-emerald-400 tracking-tight">
-                        ₹{slip.businessValue.toLocaleString('en-IN')}
+                        ₹{Number(slip.businessValue || slip.business_value || slip.amount || 0).toLocaleString('en-IN')}
                       </p>
                     </div>
                   </div>
@@ -1219,7 +1222,7 @@ export function ThankYouSlips() {
           const formattedDate = selectedSlipForDetails.createdAt
             ? format(new Date(selectedSlipForDetails.createdAt), 'dd MMM yyyy')
             : 'Unknown Date';
-          const formattedAmount = `₹${Number(selectedSlipForDetails.businessValue || 0).toLocaleString('en-IN')}`;
+          const formattedAmount = `₹${Number(selectedSlipForDetails.businessValue || (selectedSlipForDetails as any).business_value || (selectedSlipForDetails as any).amount || 0).toLocaleString('en-IN')}`;
 
           const showToField = isMasterAdmin || isChapterAdmin;
 
@@ -1240,7 +1243,9 @@ export function ThankYouSlips() {
 
                 {/* Amount */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Amount:</span>
+                  <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{
+                    String(senderId) === String(currentUserId) ? "Business Received:" : "Business Amount:"
+                  }</span>
                   <span className="text-base font-extrabold text-emerald-400">{formattedAmount}</span>
                 </div>
 

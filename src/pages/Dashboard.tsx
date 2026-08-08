@@ -1841,7 +1841,7 @@ export function Analytics() {
           title: slip.customerName || 'Business Given',
           subtitle: norm.includes('sent') ? `To: ${recipientName}` : `From: ${giverName}`,
           icon: <Briefcase size={20} className="text-white/70" />,
-          badgeText: `₹${Number(slip.amount || 0).toLocaleString()}`,
+          badgeText: `₹${Number(slip.businessValue || slip.business_value || slip.amount || 0).toLocaleString()}`,
           badgeColor: 'emerald',
           date: slip.createdAt ? formatDate(slip.createdAt) : null,
           time: slip.createdAt ? formatTimeStr('', slip.createdAt) : null,
