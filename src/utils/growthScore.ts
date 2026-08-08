@@ -286,8 +286,8 @@ export function getWorkspaceChecklistTasks(
         m.member_id === userId || m.receiver_id === userId || (m.participantIds || []).includes(userId)
       );
       if (!isParticipant) return false;
-      const userAtt = (m.attendance || {})[userId];
-      const isCompleted = m.status === 'COMPLETED' || userAtt === 'PRESENT' || userAtt === 'Present' || Boolean(m.completed_at);
+      const o2oUserAtt = (m.attendance || {})[userId];
+      const isCompleted = m.status === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
       return isCompleted && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
     });
     rawTasks.push({

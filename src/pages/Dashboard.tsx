@@ -1729,19 +1729,19 @@ export function Analytics() {
           // If it's just a time like "15:00" or "15:00:00"
           if (timeString.includes(':') && !timeString.includes('T')) {
              const parts = timeString.split(':');
-             const d = new Date();
-             d.setHours(parseInt(parts[0], 10) || 0);
-             d.setMinutes(parseInt(parts[1], 10) || 0);
-             return format(d, 'h:mm a');
+             const timeD = new Date();
+             timeD.setHours(parseInt(parts[0], 10) || 0);
+             timeD.setMinutes(parseInt(parts[1], 10) || 0);
+             return format(timeD, 'h:mm a');
           }
         }
         if (dateString) {
-          const d = new Date(dateString);
-          if (isNaN(d.getTime())) return null;
+          const dateD = new Date(dateString);
+          if (isNaN(dateD.getTime())) return null;
           // check if time is explicitly set and not 00:00:00 (unless actually midnight)
           // Simplified: just return time from the Date object
           if (dateString.includes('T')) {
-            return format(d, 'h:mm a');
+            return format(dateD, 'h:mm a');
           }
         }
         return null;

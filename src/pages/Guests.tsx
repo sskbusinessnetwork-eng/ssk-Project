@@ -191,13 +191,13 @@ export function Guests() {
       let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
 
       if (!resolvedChapterName && userChapterId) {
-        const { data: chap } = await supabase
+        const { data: chapDoc } = await supabase
           .from('chapters')
           .select('chapter_name')
           .eq('id', userChapterId)
           .maybeSingle();
-        if (chap?.chapter_name) {
-          resolvedChapterName = chap.chapter_name;
+        if (chapDoc?.chapter_name) {
+          resolvedChapterName = chapDoc.chapter_name;
         }
       }
 

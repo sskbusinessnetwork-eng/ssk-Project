@@ -364,14 +364,14 @@ export function Referrals() {
       // 2. Lookup current user
       let currentUserQuery = supabase.from('users').select('id, chapter_id, role');
       currentUserQuery = currentUserQuery.eq('id', currentAuthId);
-      const { data: currentUserRecord } = await currentUserQuery.maybeSingle();
+      const { data: dbUserRecord } = await currentUserQuery.maybeSingle();
 
-      const userChapId = currentUserRecord?.chapter_id || profile?.chapter_id || (profile as any)?.chapterId;
+      const userChapId = dbUserRecord?.chapter_id || profile?.chapter_id || (profile as any)?.chapterId;
       if (userChapId) {
         setCurrentUserChapterId(String(userChapId));
       }
 
-      const currentUserId = currentUserRecord?.id || profile?.id;
+      const currentUserId = dbUserRecord?.id || profile?.id;
       const currentUserUid = profile?.uid;
 
       // 3. Query all users from Supabase users table
@@ -556,18 +556,18 @@ export function Referrals() {
 
       // 4. Start Date Filter
       if (masterStartDate) {
-        const rDate = new Date(ref.createdAt);
+        const refStartDate = new Date(ref.createdAt);
         const sDate = new Date(masterStartDate);
         sDate.setHours(0, 0, 0, 0);
-        if (!isNaN(rDate.getTime()) && rDate < sDate) return false;
+        if (!isNaN(refStartDate.getTime()) && refStartDate < sDate) return false;
       }
 
       // 5. End Date Filter
       if (masterEndDate) {
-        const rDate = new Date(ref.createdAt);
+        const refEndDate = new Date(ref.createdAt);
         const eDate = new Date(masterEndDate);
         eDate.setHours(23, 59, 59, 999);
-        if (!isNaN(rDate.getTime()) && rDate > eDate) return false;
+        if (!isNaN(refEndDate.getTime()) && refEndDate > eDate) return false;
       }
 
       return true;

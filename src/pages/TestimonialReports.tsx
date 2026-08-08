@@ -16,8 +16,8 @@ export function TestimonialReports() {
   useEffect(() => {
     // Fetch members for lookup
     const fetchMembers = async () => {
-      const q = query(collection(db, 'users'));
-      const snapshot = await getDocs(q);
+      const membersQuery = query(collection(db, 'users'));
+      const snapshot = await getDocs(membersQuery);
       const membersMap: Record<string, UserProfile> = {};
       snapshot.forEach(doc => {
         membersMap[doc.id] = doc.data() as UserProfile;
@@ -27,8 +27,8 @@ export function TestimonialReports() {
 
     fetchMembers();
 
-    const q = query(collection(db, 'testimonials'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const testimonialsQuery = query(collection(db, 'testimonials'));
+    const unsubscribe = onSnapshot(testimonialsQuery, (snapshot) => {
       const ts = (snapshot?.docs || []).map(doc => ({
         id: doc.id,
         ...doc.data()

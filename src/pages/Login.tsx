@@ -172,8 +172,8 @@ export function Login() {
           createdAt: masterAdmin.created_at
         } as any);
 
-        const dashboardPath = getDashboardPath('MASTER_ADMIN');
-        navigate(dashboardPath, { replace: true });
+        const masterDashboardPath = getDashboardPath('MASTER_ADMIN');
+        navigate(masterDashboardPath, { replace: true });
         return;
       }
 
@@ -317,8 +317,8 @@ export function Login() {
         if (user.must_change_password) {
           navigate('/set-password');
         } else {
-          const dashboardPath = getDashboardPath(user.role || 'MEMBER', user.position);
-          navigate(dashboardPath, { replace: true });
+          const userDashboardPath = getDashboardPath(user.role || 'MEMBER', user.position);
+          navigate(userDashboardPath, { replace: true });
         }
         return;
       }

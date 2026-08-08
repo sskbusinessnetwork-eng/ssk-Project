@@ -14,10 +14,10 @@ export function deduplicateSlips<T extends Record<string, any>>(slips: T[]): T[]
       if (!byReferralMap.has(refId)) {
         byReferralMap.set(refId, s);
       } else {
-        const existing = byReferralMap.get(refId)!;
-        const existingTime = new Date(existing.created_at || existing.createdAt || 0).getTime();
-        const currentTime = new Date(s.created_at || s.createdAt || 0).getTime();
-        if (currentTime >= existingTime) {
+        const refExisting = byReferralMap.get(refId)!;
+        const refExistingTime = new Date(refExisting.created_at || refExisting.createdAt || 0).getTime();
+        const refCurrentTime = new Date(s.created_at || s.createdAt || 0).getTime();
+        if (refCurrentTime >= refExistingTime) {
           byReferralMap.set(refId, s);
         }
       }
@@ -25,10 +25,10 @@ export function deduplicateSlips<T extends Record<string, any>>(slips: T[]): T[]
       if (!byIdMap.has(slipId)) {
         byIdMap.set(slipId, s);
       } else {
-        const existing = byIdMap.get(slipId)!;
-        const existingTime = new Date(existing.created_at || existing.createdAt || 0).getTime();
-        const currentTime = new Date(s.created_at || s.createdAt || 0).getTime();
-        if (currentTime >= existingTime) {
+        const idExisting = byIdMap.get(slipId)!;
+        const idExistingTime = new Date(idExisting.created_at || idExisting.createdAt || 0).getTime();
+        const idCurrentTime = new Date(s.created_at || s.createdAt || 0).getTime();
+        if (idCurrentTime >= idExistingTime) {
           byIdMap.set(slipId, s);
         }
       }

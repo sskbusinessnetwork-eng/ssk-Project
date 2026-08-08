@@ -35,14 +35,14 @@ export function Positions() {
   useEffect(() => {
     const fetchChapters = () => {
       if (isMasterAdmin) {
-        const q = query(collection(db, 'chapters'));
-        getDocs(q).then((snap: any) => {
+        const allChaptersQuery = query(collection(db, 'chapters'));
+        getDocs(allChaptersQuery).then((snap: any) => {
           setChapters((snap?.docs || []).map((d: any) => ({ id: d.id, ...d.data() } as Chapter)));
         });
       } else if (profile?.uid) {
         // For Chapter Admin
-        const q = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
-        getDocs(q).then((snap: any) => {
+        const myChapterQuery = query(collection(db, 'chapters'), where('chapter_admin_id', '==', profile.uid));
+        getDocs(myChapterQuery).then((snap: any) => {
           const found = (snap?.docs || []).map((d: any) => ({ id: d.id, ...d.data() } as Chapter));
           setChapters(found);
           if (found.length > 0 && !selectedChapterId) {
@@ -107,8 +107,8 @@ export function Positions() {
       let errorMsg = '';
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        const { data: sessionResult } = await supabase.auth.getSession();
+        const token = sessionResult?.session?.access_token;
 
         const res = await fetch('/api/admin/update-position', {
           method: 'POST',

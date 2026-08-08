@@ -101,10 +101,10 @@ export function Profile() {
           if (fetchedProfile) {
             setTargetProfile(fetchedProfile);
             chapterId = fetchedProfile.chapter_id || fetchedProfile.adminId || '';
-            const adminId = fetchedProfile.chapter_id || fetchedProfile.adminId;
-            if (fetchedProfile.role === 'MEMBER' && adminId) {
-              const admin = await databaseService.get<UserProfile>('users', adminId);
-              if (admin) setAdminData(admin);
+            const targetAdminId = fetchedProfile.chapter_id || fetchedProfile.adminId;
+            if (fetchedProfile.role === 'MEMBER' && targetAdminId) {
+              const adminUser = await databaseService.get<UserProfile>('users', targetAdminId);
+              if (adminUser) setAdminData(adminUser);
             }
           }
         } else if (currentUserProfile) {
@@ -129,10 +129,10 @@ export function Profile() {
           });
 
           chapterId = currentUserProfile.chapter_id || currentUserProfile.adminId || '';
-          const adminId = currentUserProfile.chapter_id || currentUserProfile.adminId;
-          if (currentUserProfile.role === 'MEMBER' && adminId) {
-            const admin = await databaseService.get<UserProfile>('users', adminId);
-            if (admin) setAdminData(admin);
+          const currentAdminId = currentUserProfile.chapter_id || currentUserProfile.adminId;
+          if (currentUserProfile.role === 'MEMBER' && currentAdminId) {
+            const adminUser = await databaseService.get<UserProfile>('users', currentAdminId);
+            if (adminUser) setAdminData(adminUser);
           }
         }
 

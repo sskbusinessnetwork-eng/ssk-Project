@@ -195,7 +195,7 @@ export function Members() {
     }
   }, [location.pathname]);
 
-  const handleOpenAddModal = () => {
+  function handleOpenAddModal() {
     setError(null);
     setNewMemberData({
       name: '',
@@ -207,7 +207,7 @@ export function Members() {
       subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
     });
     setIsAddModalOpen(true);
-  };
+  }
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();

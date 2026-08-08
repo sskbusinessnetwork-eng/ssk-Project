@@ -1382,11 +1382,11 @@ export function Meetings() {
           tempAmount[guest.id] = finalGAmount;
         }
         for (const guest of meetingGuests) {
-          const gStatus = tempGuestAttendance[guest.id];
-          if (gStatus) {
+          const guestStatus = tempGuestAttendance[guest.id];
+          if (guestStatus) {
             const updatePayload = {
-              status: gStatus,
-              attendance_status: gStatus,
+              status: guestStatus,
+              attendance_status: guestStatus,
               attendance_updated_by: profile?.uid,
               attendance_updated_by_name: profile?.name || profile?.full_name,
               attendance_updated_at: new Date().toISOString(),
@@ -1398,7 +1398,7 @@ export function Meetings() {
               .update(updatePayload)
               .eq('id', guest.id);
               
-            if (gStatus === 'Present' && guest.status !== 'Present' && guest.attendance_status !== 'Present') {
+            if (guestStatus === 'Present' && guest.status !== 'Present' && guest.attendance_status !== 'Present') {
               const inviterId = guest.invited_by;
               if (inviterId) {
                 try {
@@ -1603,10 +1603,6 @@ export function Meetings() {
   const attendancePercentage = userAttendance.length > 0 
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
     : 0;
-
-  const isMeetingDone = (m: Meeting) => {
-    return isMeetingCompleted(m) || isMeetingCancelled(m);
-  };
 
   const getMeetingStatus = (meeting: Meeting) => {
     if (isMeetingCancelled(meeting)) {

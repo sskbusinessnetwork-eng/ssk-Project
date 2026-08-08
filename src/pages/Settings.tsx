@@ -29,11 +29,7 @@ export function Settings() {
   const [saving, setSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  async function loadData() {
     setLoading(true);
     try {
       const currentSettings = await getTopPerformanceSettings();
@@ -48,7 +44,11 @@ export function Settings() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleToggleShow = async (value: boolean) => {
     const updatedSettings = {

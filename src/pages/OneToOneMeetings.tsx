@@ -504,7 +504,7 @@ export function OneToOneMeetings() {
 
   const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
 
-  const handleOpenScheduleModal = () => {
+  function handleOpenScheduleModal() {
     setError(null);
     setFormData({
       title: '',
@@ -516,7 +516,7 @@ export function OneToOneMeetings() {
     });
     setLocationType('Online');
     setIsModalOpen(true);
-  };
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -729,7 +729,7 @@ export function OneToOneMeetings() {
     }
   };
 
-  const handleOpenAttendanceModal = (meeting: OneToOneMeeting) => {
+  function handleOpenAttendanceModal(meeting: OneToOneMeeting) {
     const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
     const isCreator = String(senderId) === String(profile?.id) || String(senderId) === String(profile?.uid) || String(senderId) === String(currentUserRecord?.id) || String(senderId) === String(currentUserRecord?.uid);
 
@@ -998,18 +998,18 @@ export function OneToOneMeetings() {
 
     if (selectedMemberId) {
       // If a member is selected, we show their specific stats
-      const scheduled = filteredMeetings.filter(m => m.creatorId === selectedMemberId).length;
-      const attended = filteredMeetings.filter(m => m.attendance?.[selectedMemberId] === 'PRESENT').length;
-      return { scheduled, attended };
+      const memberScheduled = filteredMeetings.filter(m => m.creatorId === selectedMemberId).length;
+      const memberAttended = filteredMeetings.filter(m => m.attendance?.[selectedMemberId] === 'PRESENT').length;
+      return { scheduled: memberScheduled, attended: memberAttended };
     } else {
       // Overall stats
-      const scheduled = filteredMeetings.length;
+      const totalScheduled = filteredMeetings.length;
       // Total attendance across all meetings
-      const attended = filteredMeetings.reduce((acc, m) => {
+      const totalAttended = filteredMeetings.reduce((acc, m) => {
         const presentCount = Object.values(m.attendance || {}).filter(status => status === 'PRESENT').length;
         return acc + presentCount;
       }, 0);
-      return { scheduled, attended };
+      return { scheduled: totalScheduled, attended: totalAttended };
     }
   }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, members, profile]);
 
