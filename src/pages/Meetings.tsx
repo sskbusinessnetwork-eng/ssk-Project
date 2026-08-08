@@ -301,6 +301,7 @@ export function Meetings() {
   const [searchParams] = useSearchParams();
   const urlMeetingId = searchParams.get('meetingId');
 
+  // --- 1. All State Hooks ---
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
@@ -339,12 +340,59 @@ export function Meetings() {
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
 
+  const [defaultSetupData, setDefaultSetupData] = useState({
+    adminId: '',
+    frequency: 'Weekly' as 'Weekly' | 'Monthly',
+    day: 'Monday',
+    date: 1,
+    time: '',
+    location: '',
+    enabled: false
+  });
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
+
+  const [chaptersMap, setChaptersMap] = useState<Record<string, any>>({});
+  const [chaptersList, setChaptersList] = useState<any[]>([]);
+  const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+
+  const [isAttendanceReportOpen, setIsAttendanceReportOpen] = useState(false);
+  const [reportMeeting, setReportMeeting] = useState<Meeting | null>(null);
+  const [reportGuests, setReportGuests] = useState<any[]>([]);
+
+  const [readOnlyMeeting, setReadOnlyMeeting] = useState<Meeting | null>(null);
+  const [readOnlyGuests, setReadOnlyGuests] = useState<any[]>([]);
+  const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
+
+  // --- 2. Roles & Active Chapter ID ---
   const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
   const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
   const activeChapterId = isMasterAdmin ? selectedAdminId : userChapId;
+
+  // --- 3. Helper Functions ---
+  const getChapterName = (m: Meeting): string => {
+    if (!m) return 'SSK Chapter';
+    const cId = m.chapter_id;
+    if (cId && chaptersMap[cId]?.chapter_name) {
+      return chaptersMap[cId].chapter_name;
+    }
+    const adminUser = m.adminId ? usersMap[m.adminId] : null;
+    if (adminUser?.chapterName) return adminUser.chapterName;
+    if (adminUser?.chapter_id && chaptersMap[adminUser.chapter_id]?.chapter_name) {
+      return chaptersMap[adminUser.chapter_id].chapter_name;
+    }
+    if (cId && usersMap[cId]?.chapterName) return usersMap[cId].chapterName;
+    if (cId) {
+      const matched = allUsers.find(u => u.chapter_id === cId && u.chapterName);
+      if (matched?.chapterName) return matched.chapterName;
+    }
+    return 'SSK Chapter';
+  };
 
   const getMeetingCanonicalChapterKey = (m: Meeting): string => {
     if (m.chapter_id) return m.chapter_id;
@@ -357,6 +405,114 @@ export function Meetings() {
     return m.adminId || 'unassigned';
   };
 
+  const isDefaultSetupComplete = Boolean(
+    defaultSetupData.frequency &&
+    (defaultSetupData.frequency === 'Weekly' ? defaultSetupData.day : defaultSetupData.date) &&
+    defaultSetupData.time &&
+    defaultSetupData.location.trim()
+  );
+
+  const canUserUpdateMeeting = (meeting: Meeting | null): boolean => {
+    if (!profile || !meeting) return false;
+    if (profile.role === 'MASTER_ADMIN') return true;
+
+    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
+    if (!isChapAdminRole) return false;
+
+    const userChap = profile.chapter_id || (profile as any).chapterId;
+    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
+
+    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
+      return true;
+    }
+    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
+      return true;
+    }
+    return false;
+  };
+
+  const canUserViewReport = (meeting: Meeting | null): boolean => {
+    if (!profile || !meeting) return false;
+    if (profile.role === 'MASTER_ADMIN') return true;
+
+    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || (profile as any).chapter_position === 'chapter_admin';
+    if (!isChapAdminRole) return false;
+
+    const userChap = profile.chapter_id || (profile as any).chapterId;
+    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
+
+    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
+      return true;
+    }
+    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
+      return true;
+    }
+    return false;
+  };
+
+  const getMemberPositionLabel = (member: any): string => {
+    if (!member) return 'Member';
+    return getDisplayPosition(member.position || member.chapter_position || member.designation || member.role, member.role);
+  };
+
+  const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
+    if (!userUid || !m.attendance) {
+      return {
+        label: 'PENDING',
+        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+      };
+    }
+
+    let rawStatus = m.attendance[userUid];
+    if (!rawStatus) {
+      const entry = Object.entries(m.attendance).find(([k]) => k.toLowerCase() === userUid.toLowerCase());
+      if (entry) rawStatus = entry[1];
+    }
+
+    if (!rawStatus) {
+      return {
+        label: 'PENDING',
+        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+      };
+    }
+
+    const s = String(rawStatus).toUpperCase().trim();
+    if (s === 'PRESENT' || s === 'YES') {
+      return {
+        label: 'PRESENT',
+        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+      };
+    }
+    if (s === 'ABSENT' || s === 'NO') {
+      return {
+        label: 'ABSENT',
+        color: 'bg-red-500/10 text-red-400 border-red-500/20'
+      };
+    }
+    if (s === 'MEDICAL') {
+      return {
+        label: 'MEDICAL',
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+      };
+    }
+    if (s === 'SUBSTITUTE') {
+      return {
+        label: 'SUBSTITUTE',
+        color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      };
+    }
+
+    return {
+      label: s,
+      color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+    };
+  };
+
+  const getScheduledByName = (m: Meeting): string => {
+    return getChapterName(m);
+  };
+
+  // --- 4. Derived Data Collections ---
   const filteredMeetings = activeChapterId 
     ? meetings.filter(m => {
         const mChap = m.chapter_id || (m as any).chapterId;
@@ -425,131 +581,6 @@ export function Meetings() {
     }
   };
 
-  const [defaultSetupData, setDefaultSetupData] = useState({
-    adminId: '',
-    frequency: 'Weekly' as 'Weekly' | 'Monthly',
-    day: 'Monday',
-    date: 1,
-    time: '',
-    location: '',
-    enabled: false
-  });
-
-  const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
-    if (!userUid || !m.attendance) {
-      return {
-        label: 'PENDING',
-        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
-      };
-    }
-
-    let rawStatus = m.attendance[userUid];
-    if (!rawStatus) {
-      const entry = Object.entries(m.attendance).find(([k]) => k.toLowerCase() === userUid.toLowerCase());
-      if (entry) rawStatus = entry[1];
-    }
-
-    if (!rawStatus) {
-      return {
-        label: 'PENDING',
-        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
-      };
-    }
-
-    const s = String(rawStatus).toUpperCase().trim();
-    if (s === 'PRESENT' || s === 'YES') {
-      return {
-        label: 'PRESENT',
-        color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-      };
-    }
-    if (s === 'ABSENT' || s === 'NO') {
-      return {
-        label: 'ABSENT',
-        color: 'bg-red-500/10 text-red-400 border-red-500/20'
-      };
-    }
-    if (s === 'MEDICAL') {
-      return {
-        label: 'MEDICAL',
-        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-      };
-    }
-    if (s === 'SUBSTITUTE') {
-      return {
-        label: 'SUBSTITUTE',
-        color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-      };
-    }
-
-    return {
-      label: s,
-      color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
-    };
-  };
-
-  const isDefaultSetupComplete = Boolean(
-    defaultSetupData.frequency &&
-    (defaultSetupData.frequency === 'Weekly' ? defaultSetupData.day : defaultSetupData.date) &&
-    defaultSetupData.time &&
-    defaultSetupData.location.trim()
-  );
-
-  const canUserUpdateMeeting = (meeting: Meeting | null): boolean => {
-    if (!profile || !meeting) return false;
-    if (profile.role === 'MASTER_ADMIN') return true;
-
-    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
-    if (!isChapAdminRole) return false;
-
-    const userChap = profile.chapter_id || (profile as any).chapterId;
-    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
-
-    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
-      return true;
-    }
-    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
-      return true;
-    }
-    return false;
-  };
-
-  const canUserViewReport = (meeting: Meeting | null): boolean => {
-    if (!profile || !meeting) return false;
-    if (profile.role === 'MASTER_ADMIN') return true;
-
-    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || (profile as any).chapter_position === 'chapter_admin';
-    if (!isChapAdminRole) return false;
-
-    const userChap = profile.chapter_id || (profile as any).chapterId;
-    const meetingChap = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
-
-    if (userChap && meetingChap && String(userChap).trim() === String(meetingChap).trim()) {
-      return true;
-    }
-    if (meeting.adminId && (profile.uid === meeting.adminId || profile.id === meeting.adminId)) {
-      return true;
-    }
-    return false;
-  };
-
-  const getMemberPositionLabel = (member: any): string => {
-    if (!member) return 'Member';
-    return getDisplayPosition(member.position || member.chapter_position || member.designation || member.role, member.role);
-  };
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [showAllFutureMeetings, setShowAllFutureMeetings] = useState(false);
-
-  const [chaptersMap, setChaptersMap] = useState<Record<string, any>>({});
-  const [chaptersList, setChaptersList] = useState<any[]>([]);
-  const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-
-  const [isAttendanceReportOpen, setIsAttendanceReportOpen] = useState(false);
-  const [reportMeeting, setReportMeeting] = useState<Meeting | null>(null);
-  const [reportGuests, setReportGuests] = useState<any[]>([]);
-
   useEffect(() => {
     const loadChaptersAndUsers = async () => {
       try {
@@ -598,33 +629,6 @@ export function Meetings() {
 
     loadChaptersAndUsers();
   }, []);
-
-  const getChapterName = (m: Meeting): string => {
-    if (!m) return 'SSK Chapter';
-    const cId = m.chapter_id;
-    if (cId && chaptersMap[cId]?.chapter_name) {
-      return chaptersMap[cId].chapter_name;
-    }
-    const adminUser = m.adminId ? usersMap[m.adminId] : null;
-    if (adminUser?.chapterName) return adminUser.chapterName;
-    if (adminUser?.chapter_id && chaptersMap[adminUser.chapter_id]?.chapter_name) {
-      return chaptersMap[adminUser.chapter_id].chapter_name;
-    }
-    if (cId && usersMap[cId]?.chapterName) return usersMap[cId].chapterName;
-    if (cId) {
-      const matched = allUsers.find(u => u.chapter_id === cId && u.chapterName);
-      if (matched?.chapterName) return matched.chapterName;
-    }
-    return 'SSK Chapter';
-  };
-
-  const getScheduledByName = (m: Meeting): string => {
-    return getChapterName(m);
-  };
-
-  const [readOnlyMeeting, setReadOnlyMeeting] = useState<Meeting | null>(null);
-  const [readOnlyGuests, setReadOnlyGuests] = useState<any[]>([]);
-  const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
   const handleOpenReadOnlyMeetingDetails = async (meeting: Meeting) => {
     setReadOnlyMeeting(meeting);
