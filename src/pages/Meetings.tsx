@@ -322,6 +322,7 @@ export function Meetings() {
 
   const [isDefaultSetupOpen, setIsDefaultSetupOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [modalChapterMembers, setModalChapterMembers] = useState<UserProfile[]>([]);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [isMemberHistoryModalOpen, setIsMemberHistoryModalOpen] = useState(false);
@@ -338,21 +339,49 @@ export function Meetings() {
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
 
+  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
+  const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
+
+  const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
+  const activeChapterId = isMasterAdmin ? selectedAdminId : userChapId;
+
+  const getMeetingCanonicalChapterKey = (m: Meeting): string => {
+    if (m.chapter_id) return m.chapter_id;
+    if ((m as any).chapterId) return (m as any).chapterId;
+    const adminUser = m.adminId ? usersMap[m.adminId] : null;
+    if (adminUser?.chapter_id) return adminUser.chapter_id;
+    if (adminUser?.uid) return adminUser.uid;
+    const name = getChapterName(m);
+    if (name && name !== 'SSK Chapter') return name;
+    return m.adminId || 'unassigned';
+  };
+
+  const filteredMeetings = activeChapterId 
+    ? meetings.filter(m => {
+        const mChap = m.chapter_id || (m as any).chapterId;
+        const mAdmin = m.adminId || (m as any).admin_id;
+        const cKey = getMeetingCanonicalChapterKey(m);
+        return mChap === activeChapterId || mAdmin === activeChapterId || cKey === activeChapterId || (profile?.uid && mAdmin === profile.uid);
+      })
+    : meetings;
+
   const primaryFocusMeeting = React.useMemo(() => {
     if (urlMeetingId) {
       const found = meetings.find(m => String(m.id) === String(urlMeetingId));
       if (found) return found;
     }
-    const userChapId = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
-    const chapterMeetings = meetings.filter(m => {
+    const userChapIdStr = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
+    const activeMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
+      if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
       const mChap = String(m.chapter_id || (m as any)?.chapterId || '').trim();
-      return !userChapId || !mChap || mChap === userChapId;
+      return !userChapIdStr || !mChap || mChap === userChapIdStr;
     });
-    if (chapterMeetings.length > 0) {
-      return chapterMeetings[0];
+    if (activeMeetings.length > 0) {
+      return [...activeMeetings].sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime())[0];
     }
-    return meetings[0] || null;
-  }, [meetings, urlMeetingId, profile?.chapter_id, (profile as any)?.chapterId]);
+    return null;
+  }, [meetings, filteredMeetings, urlMeetingId, profile?.chapter_id, isMasterAdmin]);
 
   const handleMarkUserAttendance = async (meeting: Meeting, status: 'Present' | 'Absent') => {
     if (!profile || !meeting) return;
@@ -405,10 +434,6 @@ export function Meetings() {
     location: '',
     enabled: false
   });
-
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
-  const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
-  const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
   const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
     if (!userUid || !m.attendance) {
@@ -1517,24 +1542,25 @@ export function Meetings() {
     }
   };
 
-  const handleCancelMeeting = async () => {
+  const executeCancelMeeting = async () => {
     if (!selectedMeeting || isMasterAdmin) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
       setError("Only the Chapter Admin of this chapter can cancel this meeting.");
       return;
     }
-    if (!window.confirm('Are you sure you want to cancel this meeting?')) return;
     setIsSubmitting(true);
     setError(null);
     try {
+      const meetingId = selectedMeeting.id;
       const { error: dbErr } = await supabase
         .from('meetings')
         .update({
           is_completed: false,
+          is_cancelled: true,
           status: 'CANCELLED',
           updated_at: new Date().toISOString()
         })
-        .eq('id', selectedMeeting.id);
+        .eq('id', meetingId);
 
       if (dbErr) {
         console.error("Error cancelling meeting in Supabase:", dbErr);
@@ -1543,10 +1569,9 @@ export function Meetings() {
         return;
       }
 
-      await databaseService.update('meetings', selectedMeeting.id, {
+      await databaseService.update('meetings', meetingId, {
         isCancelled: true,
         isCompleted: false,
-      createdAt: new Date().toISOString(),
         status: 'CANCELLED',
         updatedAt: new Date().toISOString()
       });
@@ -1554,10 +1579,11 @@ export function Meetings() {
       setSuccess('Meeting cancelled and moved to history.');
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setTimeout(() => {
+        setIsCancelConfirmOpen(false);
         setIsUpdateModalOpen(false);
         setSuccess(null);
         setSelectedMeeting(null);
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       setError('Failed to cancel meeting. Please try again.');
     } finally {
@@ -1594,32 +1620,23 @@ export function Meetings() {
     return { label: 'Upcoming', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
   };
 
-  const userChapId = profile?.chapter_id || (profile as any)?.chapterId;
-  const activeChapterId = isMasterAdmin ? selectedAdminId : userChapId;
-
-  const getMeetingCanonicalChapterKey = (m: Meeting): string => {
-    if (m.chapter_id) return m.chapter_id;
-    if ((m as any).chapterId) return (m as any).chapterId;
-    const adminUser = m.adminId ? usersMap[m.adminId] : null;
-    if (adminUser?.chapter_id) return adminUser.chapter_id;
-    if (adminUser?.uid) return adminUser.uid;
-    const name = getChapterName(m);
-    if (name && name !== 'SSK Chapter') return name;
-    return m.adminId || 'unassigned';
-  };
-
-  const filteredMeetings = activeChapterId 
-    ? meetings.filter(m => {
-        const mChap = m.chapter_id || (m as any).chapterId;
-        const mAdmin = m.adminId || (m as any).admin_id;
-        const cKey = getMeetingCanonicalChapterKey(m);
-        return mChap === activeChapterId || mAdmin === activeChapterId || cKey === activeChapterId || (profile?.uid && mAdmin === profile.uid);
-      })
-    : meetings;
-
   // History: Completed meetings OR Cancelled meetings in reverse chronological order
-  const completedMeetings = [...filteredMeetings.filter(m => isMeetingDone(m))]
-    .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
+  const completedMeetings = React.useMemo(() => {
+    const seenIds = new Set<string>();
+    const rawHistory = (isMasterAdmin ? meetings : filteredMeetings)
+      .filter(m => isMeetingDone(m) || m.isCancelled || m.isCompleted || ['COMPLETED', 'CANCELLED', 'CANCELED', 'DONE'].includes(String(m.status || '').trim().toUpperCase()))
+      .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
+
+    const result: Meeting[] = [];
+    for (const m of rawHistory) {
+      const mId = String(m.id);
+      if (!seenIds.has(mId)) {
+        seenIds.add(mId);
+        result.push(m);
+      }
+    }
+    return result;
+  }, [meetings, filteredMeetings, isMasterAdmin]);
 
   // Render meeting location cleanly with links
   const renderMeetingLocation = (meeting: Meeting) => {
@@ -1684,16 +1701,16 @@ export function Meetings() {
 
   // Deduplicated Upcoming Meetings for table/list view (prevent duplicate rendering)
   const upcomingTableMeetings = React.useMemo(() => {
-    const isPrimaryDisplayed = (isMasterAdmin || isChapterAdmin) && !!primaryFocusMeeting;
-    const primaryId = isPrimaryDisplayed ? String(primaryFocusMeeting.id) : null;
-
     const seenIds = new Set<string>();
-    if (primaryId) {
-      seenIds.add(primaryId);
-    }
 
     const rawUpcoming = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => !isMeetingDone(m) && !m.isCancelled)
+      .filter(m => {
+        if (isMeetingDone(m) || m.isCancelled || m.isCompleted) return false;
+        const st = String(m.status || '').trim().toUpperCase();
+        if (st === 'COMPLETED' || st === 'CANCELLED' || st === 'CANCELED' || st === 'DONE') return false;
+        const dt = getMeetingExactDateTime(m);
+        return dt.getTime() >= Date.now() - 2 * 60 * 60 * 1000;
+      })
       .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
 
     const result: Meeting[] = [];
@@ -1705,7 +1722,7 @@ export function Meetings() {
       }
     }
     return result;
-  }, [meetings, filteredMeetings, primaryFocusMeeting, isMasterAdmin, isChapterAdmin]);
+  }, [meetings, filteredMeetings, isMasterAdmin]);
 
   const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
     const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
@@ -2023,6 +2040,19 @@ export function Meetings() {
                     <Users size={16} className="text-primary" />
                     View Attendance Roster
                   </button>
+                  {canUserUpdateMeeting(primaryFocusMeeting) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMeeting(primaryFocusMeeting);
+                        setIsCancelConfirmOpen(true);
+                      }}
+                      className="px-5 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-[14px] font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <XCircle size={16} />
+                      Cancel Meeting
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -2543,9 +2573,9 @@ export function Meetings() {
             {selectedMeeting && !isMeetingDone(selectedMeeting) && (
               <button
                 type="button"
-                onClick={handleCancelMeeting}
+                onClick={() => setIsCancelConfirmOpen(true)}
                 disabled={isSubmitting}
-                className="px-4 py-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-[12px] font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 uppercase tracking-widest text-xs shrink-0"
+                className="px-4 py-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-[12px] font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 uppercase tracking-widest text-xs shrink-0 cursor-pointer"
               >
                 Cancel Meeting
               </button>
@@ -3440,6 +3470,51 @@ export function Meetings() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Cancel Meeting Confirmation Modal */}
+      <Modal
+        isOpen={isCancelConfirmOpen}
+        onClose={() => {
+          if (!isSubmitting) setIsCancelConfirmOpen(false);
+        }}
+        title="Cancel Meeting"
+      >
+        <div className="space-y-6">
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-[14px] flex items-center gap-3 text-red-400">
+            <AlertCircle size={20} className="shrink-0" />
+            <p className="text-sm font-semibold">
+              Are you sure you want to cancel this meeting?
+            </p>
+          </div>
+
+          <p className="text-xs text-neutral-400">
+            This meeting will be marked as CANCELLED and moved to Meeting History. This record will remain preserved in the system.
+          </p>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setIsCancelConfirmOpen(false)}
+              className="px-4 py-2.5 rounded-[12px] bg-[#151C2E] hover:bg-[#1C2538] text-neutral-300 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              CANCEL
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={executeCancelMeeting}
+              className="px-4 py-2.5 rounded-[12px] bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                'CONFIRM CANCELLATION'
+              )}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
