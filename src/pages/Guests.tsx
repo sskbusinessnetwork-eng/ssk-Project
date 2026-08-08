@@ -37,6 +37,8 @@ export function Guests() {
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState<any | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   useEffect(() => {
     const action = searchParams.get('action');
@@ -369,66 +371,45 @@ SSK Business Network`;
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
           </div>
         ) : invitations.length > 0 ? (
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-                <tr className="bg-[#151C2E]">
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Guest</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Contact</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Category</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Meeting</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest whitespace-nowrap">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {invitations.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-[#1C2538] transition-colors">
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-bold text-white">{inv.guest_name}</p>
-                        <p className="text-[10px] text-neutral-400 mt-1">{format(new Date(inv.created_at), 'dd MMM yyyy')}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-xs text-neutral-300">
-                          <Phone size={12} className="text-primary" />
-                          {inv.guest_phone}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-neutral-300">
-                          <MessageSquare size={12} className="text-emerald-400" />
-                          {inv.guest_whatsapp}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="px-2.5 py-1 bg-[#151C2E] border border-white/5 rounded-full text-[10px] font-bold text-neutral-300">
-                        {inv.business_category}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-xs font-medium text-white">{inv.meeting_title || 'Chapter Meeting'}</p>
-                        <p className="text-[10px] text-neutral-400 mt-1">
-                          {inv.meeting_date ? format(new Date(inv.meeting_date), 'dd MMM yyyy') : 'N/A'} at {inv.meeting_time}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-2">
-                        <span className="px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-bold uppercase tracking-widest inline-block text-center w-fit">
-                          {inv.status || 'Pending'}
-                        </span>
-                        <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                          <CheckCircle2 size={10} />
-                          WhatsApp Sent
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-white/5">
+            {invitations.map((inv) => {
+              const invitedByName = inv.invited_by_name || inv.invited_by_user_name || (profile?.displayName || profile?.name || 'Member');
+              const statusLabel = inv.status || 'Upcoming';
+
+              return (
+                <div
+                  key={inv.id}
+                  onClick={() => {
+                    setSelectedGuest(inv);
+                    setIsDetailModalOpen(true);
+                  }}
+                  className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                      <UserPlus size={15} className="text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                        {inv.guest_name}
+                      </h4>
+                      <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
+                        {inv.business_category || 'Business Guest'} &bull; Invited by {invitedByName}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className={cn(
+                    "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
+                    statusLabel.toLowerCase().includes('attended') 
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                  )}>
+                    {statusLabel}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="p-12 text-center flex flex-col items-center">
@@ -566,6 +547,85 @@ SSK Business Network`;
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+      {/* Guest Detail Modal */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedGuest(null);
+        }}
+        title="Guest Details"
+      >
+        {selectedGuest && (
+          <div className="space-y-4 text-xs text-neutral-300">
+            <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Guest Name</p>
+                  <p className="text-base font-bold text-white mt-0.5">{selectedGuest.guest_name}</p>
+                </div>
+                <span className="px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                  {selectedGuest.status || 'Upcoming'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Phone Number</p>
+                  <a href={`tel:${selectedGuest.guest_phone}`} className="text-sm font-semibold text-white hover:text-primary transition-colors flex items-center gap-1.5 mt-0.5">
+                    <Phone size={12} className="text-primary" />
+                    {selectedGuest.guest_phone}
+                  </a>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">WhatsApp Number</p>
+                  <a href={`https://wa.me/${normalizePhoneNumber(selectedGuest.guest_whatsapp)}`} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-white hover:text-emerald-400 transition-colors flex items-center gap-1.5 mt-0.5">
+                    <MessageSquare size={12} className="text-emerald-400" />
+                    {selectedGuest.guest_whatsapp}
+                  </a>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Business Category</p>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedGuest.business_category || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invited By</p>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedGuest.invited_by_name || selectedGuest.invited_by_user_name || (profile?.displayName || profile?.name || 'Member')}</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Meeting</p>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedGuest.meeting_title || 'Chapter Meeting'}</p>
+                  {selectedGuest.meeting_date && (
+                    <p className="text-[10px] text-neutral-400 mt-0.5">{format(new Date(selectedGuest.meeting_date), 'dd MMM yyyy')} at {selectedGuest.meeting_time || '07:30 AM'}</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invited Date</p>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedGuest.created_at ? format(new Date(selectedGuest.created_at), 'dd MMM yyyy') : 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDetailModalOpen(false);
+                  setSelectedGuest(null);
+                }}
+                className="w-full py-3 bg-[#151C2E] text-white border border-white/10 rounded-[12px] font-bold uppercase tracking-widest text-xs hover:bg-[#1C2538] transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

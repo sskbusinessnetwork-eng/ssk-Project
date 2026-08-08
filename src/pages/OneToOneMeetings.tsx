@@ -1244,51 +1244,35 @@ export function OneToOneMeetings() {
                     const senderName = getUserFullName(sender) || 'Sender';
                     const receiverName = getUserFullName(receiver) || 'Receiver';
 
-                    let locationDisplay = 'Online Meeting';
-                    if (meeting.venue) {
-                      if (meeting.venue.toLowerCase().includes('online')) {
-                        locationDisplay = 'Online Meeting';
-                      } else if (meeting.venue === 'My Address' || meeting.venue.startsWith('My Address')) {
-                        locationDisplay = getUserFullAddress(sender) || 'My Address';
-                      } else if (meeting.venue === 'Member Address' || meeting.venue.includes("Member's Address")) {
-                        locationDisplay = getUserFullAddress(receiver) || "Member's Address";
-                      } else {
-                        locationDisplay = meeting.venue;
-                      }
-                    }
+                    const dateStr = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                    const timeStr = formatTime12h(meeting.time);
 
                     return (
-                      <div key={meeting.id} className="p-3 sm:p-4 hover:bg-[#1C2538] transition-all group">
-                        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 sm:gap-4 items-center">
-                          <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Scheduled By</p>
-                            <p className="text-[10px] sm:text-xs font-bold text-white truncate">{senderName}</p>
-                            <p className="text-[8px] sm:text-[9px] text-neutral-400 truncate">{formatUserRoleOrPosition(sender)}</p>
+                      <div 
+                        key={meeting.id} 
+                        onClick={() => handleOpenAttendanceModal(meeting)}
+                        className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                            <Users size={15} className="text-primary" />
                           </div>
-                          <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Meeting With</p>
-                            <p className="text-[10px] sm:text-xs font-bold text-white truncate">{receiverName}</p>
-                            <p className="text-[8px] sm:text-[9px] text-neutral-400 truncate">{formatUserRoleOrPosition(receiver)}</p>
-                          </div>
-                          <div className="md:col-span-1">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Date & Time</p>
-                            <p className="text-[10px] sm:text-xs font-bold text-white">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
-                            <p className="text-[8px] sm:text-[9px] text-neutral-400 font-medium">{formatTime12h(meeting.time)}</p>
-                          </div>
-                          <div className="md:col-span-2">
-                            <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest mb-0.5 sm:mb-1">Location & Note</p>
-                            <p className="text-[10px] sm:text-xs text-white font-semibold truncate">{locationDisplay}</p>
-                            <p className="text-[8px] sm:text-[9px] text-neutral-400 italic line-clamp-1">{meeting.notes || '-'}</p>
-                          </div>
-                          <div className="col-span-2 md:col-span-1 text-left md:text-right">
-                            <span className={cn(
-                              "inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wider",
-                              meeting.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
-                            )}>
-                              {meeting.status}
-                            </span>
+                          <div className="min-w-0">
+                            <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                              {senderName} &amp; {receiverName}
+                            </h4>
+                            <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                              {dateStr} &bull; {timeStr}
+                            </p>
                           </div>
                         </div>
+
+                        <span className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
+                          meeting.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                        )}>
+                          {meeting.status}
+                        </span>
                       </div>
                     );
                   })
@@ -2045,151 +2029,53 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
   const receiver = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
 
   const senderName = getUserFullName(sender) || 'Sender';
-  const senderRole = formatUserRoleOrPosition(sender);
-  const senderChapter = chapterMap.get(String(sender?.chapter_id)) || sender?.chapter_name || 'Member';
-  const senderPhoto = sender?.photo_url || sender?.photoURL || sender?.avatar_url || sender?.profile_photo;
-
   const receiverName = getUserFullName(receiver) || 'Receiver';
-  const receiverRole = formatUserRoleOrPosition(receiver);
-  const receiverChapter = chapterMap.get(String(receiver?.chapter_id)) || receiver?.chapter_name || 'Member';
-  const receiverPhoto = receiver?.photo_url || receiver?.photoURL || receiver?.avatar_url || receiver?.profile_photo;
 
-  // Location display resolution
-  let locationDisplay = 'Online Meeting';
-  if (meeting.venue) {
-    if (meeting.venue.toLowerCase().includes('online')) {
-      locationDisplay = 'Online Meeting';
-    } else if (meeting.venue === 'My Address' || meeting.venue.startsWith('My Address')) {
-      locationDisplay = getUserFullAddress(sender) || 'My Address';
-    } else if (meeting.venue === 'Member Address' || meeting.venue.includes("Member's Address")) {
-      locationDisplay = getUserFullAddress(receiver) || "Member's Address";
-    } else {
-      locationDisplay = meeting.venue;
-    }
+  let displayPersonName = receiverName;
+  if (!isCreator && !isAdmin) {
+    displayPersonName = senderName;
+  } else if (isAdmin) {
+    displayPersonName = `${senderName} & ${receiverName}`;
   }
 
   const isOverdue = isMeetingOverdue(meeting);
+  const isCompleted = meeting.status === 'COMPLETED';
+
+  const dateStr = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+  const timeStr = formatTime12h(meeting.time);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
+    <div
+      onClick={onUpdate}
       className={cn(
-        "group relative bg-[#111827] p-3.5 sm:p-5 rounded-xl sm:rounded-[16px] border transition-all duration-300 flex flex-col h-full overflow-hidden",
-        isOverdue 
-          ? "border-amber-500/30 shadow-sm bg-amber-500/5" 
-          : "border-white/5 shadow-sm hover:border-white/10 hover:shadow-2xl"
+        "bg-[#111827] px-4 sm:px-5 py-3.5 rounded-[16px] border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
+        isOverdue ? "border-amber-500/30 bg-amber-500/5" : "border-white/5"
       )}
     >
-      <div className={cn(
-        "absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 transition-transform duration-700 group-hover:scale-110 opacity-70",
-        isOverdue ? "bg-amber-500/5" : "bg-primary/5"
-      )} />
-      
-      <div className="relative z-10 flex items-start justify-between mb-3 sm:mb-4">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className={cn(
-            "w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-[12px] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform duration-300",
-            isOverdue ? "bg-amber-500 text-black font-bold" : (isCreator ? "bg-primary text-white" : "bg-[#151C2E] text-white")
-          )}>
-            <Users className="w-4 h-4 sm:w-5.5 sm:h-5.5" strokeWidth={2} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-xs sm:text-[15px] font-semibold text-white tracking-tight leading-tight truncate">
-              {isAdmin ? 'One-to-One Meeting' : (isCreator ? 'Organized by You' : 'Invited to Meeting')}
-            </h3>
-            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
-              Scheduled By: {senderName}
-            </p>
-          </div>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+          <Users size={15} className="text-primary" />
         </div>
-        <div className={cn(
-          "px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider border shrink-0 flex items-center gap-1 sm:gap-1.5",
-          isOverdue 
+        <div className="min-w-0">
+          <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+            {displayPersonName}
+          </h3>
+          <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+            {dateStr} &bull; {timeStr}
+          </p>
+        </div>
+      </div>
+
+      <span className={cn(
+        "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
+        isCompleted
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+          : isOverdue 
             ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
-            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-        )}>
-          {isOverdue ? <AlertTriangle size={12} /> : <Clock size={12} />}
-          {isOverdue ? 'Due' : 'Upcoming'}
-        </div>
-      </div>
-
-      <div className="relative z-10 space-y-2.5 sm:space-y-3 mb-4 sm:mb-5 flex-grow">
-        {/* Participants Section */}
-        <div className="p-2.5 sm:p-3 bg-[#151C2E] rounded-xl sm:rounded-[12px] border border-white/5 space-y-2">
-          <p className="text-[8px] sm:text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Participants</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-            {/* Sender */}
-            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <Avatar src={senderPhoto} name={senderName} size="w-7 h-7 sm:w-8 sm:h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
-              <div className="min-w-0">
-                <p className="text-[7.5px] sm:text-[8px] font-bold text-primary uppercase tracking-wider">Sender (Host)</p>
-                <p className="text-[11px] sm:text-xs font-bold text-white truncate">{senderName}</p>
-                <p className="text-[8.5px] sm:text-[9px] text-neutral-400 font-medium truncate">{senderRole} • {senderChapter}</p>
-              </div>
-            </div>
-
-            {/* Receiver */}
-            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <Avatar src={receiverPhoto} name={receiverName} size="w-7 h-7 sm:w-8 sm:h-8" className="border border-white/10 shrink-0" fallbackClassName="text-xs" />
-              <div className="min-w-0">
-                <p className="text-[7.5px] sm:text-[8px] font-bold text-primary uppercase tracking-wider">Receiver (Participant)</p>
-                <p className="text-[11px] sm:text-xs font-bold text-white truncate">{receiverName}</p>
-                <p className="text-[8.5px] sm:text-[9px] text-neutral-400 font-medium truncate">{receiverRole} • {receiverChapter}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="flex flex-col gap-1 p-2.5 bg-[#151C2E] rounded-[12px] border border-white/5">
-            <Calendar size={12} className="text-primary" />
-            <div className="min-w-0">
-              <p className="text-[7px] font-bold text-neutral-400 uppercase tracking-widest">Date</p>
-              <p className="text-[10px] font-bold text-white uppercase tracking-tight truncate">{format(new Date(meeting.date), 'dd MMM yyyy')}</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 p-2.5 bg-[#151C2E] rounded-[12px] border border-white/5">
-            <Clock size={12} className="text-primary" />
-            <div className="min-w-0">
-              <p className="text-[7px] font-bold text-neutral-400 uppercase tracking-widest">Time</p>
-              <p className="text-[10px] font-bold text-white uppercase tracking-tight truncate">{formatTime12h(meeting.time)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 p-2.5 bg-[#151C2E] rounded-[12px] border border-white/5">
-          <div className="w-6 h-6 bg-[#111827] rounded-lg flex items-center justify-center text-primary shadow-sm shrink-0">
-            <Search size={12} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[7px] font-bold text-neutral-400 uppercase tracking-widest">Meeting Location</p>
-            <p className="text-[10px] font-bold text-white uppercase tracking-tight truncate" title={locationDisplay}>{locationDisplay}</p>
-          </div>
-        </div>
-
-        {meeting.notes && (
-          <div className="p-3 bg-primary/5 rounded-[12px] border border-primary/10 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-10 h-10 bg-primary/5 rounded-full -mr-5 -mt-5" />
-            <p className="text-[7px] text-primary font-bold uppercase tracking-[0.2em] mb-1 relative z-10">Meeting Notes</p>
-            <p className="text-[10px] text-neutral-300 font-medium italic leading-relaxed line-clamp-2 relative z-10">"{meeting.notes}"</p>
-          </div>
-        )}
-      </div>
-
-      <button 
-        onClick={onUpdate}
-        className={cn(
-          "relative z-10 w-full py-3 rounded-[12px] font-bold uppercase tracking-[0.2em] text-[8px] transition-all duration-300 flex items-center justify-center gap-2 mt-auto cursor-pointer",
-          isOverdue 
-            ? "bg-amber-500 hover:bg-amber-400 text-black font-extrabold shadow-lg shadow-amber-500/20" 
-            : "bg-[#151C2E] text-neutral-400 group-hover:bg-primary group-hover:text-white group-hover:shadow-2xl"
-        )}
-      >
-        <span>{isOverdue ? 'Due for Update — Update Now' : 'Update Meeting'}</span>
-        <ChevronRight size={12} className="group-hover:translate-x-1 transition-transform" />
-      </button>
-    </motion.div>
+            : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+      )}>
+        {isCompleted ? 'Completed' : (isOverdue ? 'Due' : 'Scheduled')}
+      </span>
+    </div>
   );
 };

@@ -1332,70 +1332,53 @@ export function Referrals() {
             </div>
           )
         ) : referrals.length > 0 ? (
-          referrals.map((ref, i) => (
-            <motion.div
-              key={ref.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => {
-                setSelectedReferral(ref);
-                setIsDetailModalOpen(true);
-              }}
-              className={cn(
-                "bg-[#111827] p-5 rounded-[16px] shadow-sm border flex flex-col md:flex-row md:items-center justify-between gap-4 group active:scale-[0.99] transition-all duration-300 cursor-pointer relative overflow-hidden",
-                (ref.status === 'PENDING' || ref.status === 'Pending') && filter === 'received' ? "border-amber-900/30 bg-amber-950/10" : "border-white/5"
-              )}
-            >
-              {/* Left: Icon & Details */}
-              <div className="flex items-start gap-4 flex-1 min-w-0">
-                <div className={cn(
-                  "w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative mt-0.5",
-                  ref.status === 'Completed' || ref.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400" : "bg-primary/10 text-primary"
-                )}>
-                  {ref.status === 'Completed' || ref.status === 'COMPLETED' ? <CheckCircle2 size={24} /> : <ArrowRightLeft size={24} />}
-                  {(ref.status === 'Pending' || ref.status === 'PENDING') && filter === 'received' && (
-                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                    </span>
-                  )}
+          referrals.map((ref, i) => {
+            const isSender = filter === 'passed' || String(ref.fromUserId) === String(profile?.id) || String(ref.fromUserId) === String(profile?.uid);
+            const categoryStr = ref.senderCategory || ref.receiverCategory || ref.requirement || 'Business Referral';
+            const sentReceivedTag = isSender ? 'Sent' : 'Received';
+            const statusLabel = (ref.status || 'Pending').replace('_', ' ');
+
+            return (
+              <motion.div
+                key={ref.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+                onClick={() => {
+                  setSelectedReferral(ref);
+                  setIsDetailModalOpen(true);
+                }}
+                className={cn(
+                  "bg-[#111827] px-4 sm:px-5 py-3.5 rounded-[16px] border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
+                  (ref.status === 'PENDING' || ref.status === 'Pending') && filter === 'received' ? "border-amber-900/30 bg-amber-950/10" : "border-white/5"
+                )}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                    <ArrowRightLeft size={15} className="text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                      {ref.contactName || 'Referral Contact'}
+                    </h4>
+                    <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
+                      {categoryStr} &bull; <span className="text-white font-semibold">{sentReceivedTag}</span>
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap text-xs font-bold text-neutral-400 uppercase tracking-wider">
-                    <span>Sender: <strong className="text-white">{ref.senderName}</strong></span>
-                    <span className="text-neutral-600">•</span>
-                    <span>Receiver: <strong className="text-white">{ref.receiverName}</strong></span>
-                  </div>
-
-                  <div className="text-sm font-semibold text-white">
-                    Contact: {ref.contactName} {ref.contactPhone ? `(${ref.contactPhone})` : ''}
-                  </div>
-
-                  <p className="text-xs text-neutral-300 line-clamp-2">
-                    Requirement: {ref.requirement}
-                  </p>
-                </div>
-              </div>
-
-              {/* Right: Date & Status */}
-              <div className="flex md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 border-white/5 pt-3 md:pt-0 shrink-0 gap-1.5">
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-                  {formatDateSafely(ref.createdAt)}
-                </p>
                 <span className={cn(
-                  "text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full",
+                  "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
                   (ref.status === 'Pending' || ref.status === 'PENDING') && "text-amber-400 bg-amber-500/10 border border-amber-500/20",
-                  (ref.status === 'Completed' || ref.status === 'COMPLETED') && "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
+                  (ref.status === 'Completed' || ref.status === 'COMPLETED' || ref.status === 'CONVERTED') && "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20",
                   (ref.status === 'Rejected' || ref.status === 'NOT_CONVERTED') && "text-red-400 bg-red-500/10 border border-red-500/20",
                   (ref.status === 'Accepted' || ref.status === 'CONTACTED') && "text-blue-400 bg-blue-500/10 border border-blue-500/20"
                 )}>
-                  {ref.status.replace('_', ' ')}
+                  {statusLabel}
                 </span>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            );
+          })
         ) : (
           <div className="py-20 text-center bg-[#111827] rounded-[14px] border border-dashed border-white/5">
             <Share2 size={40} className="mx-auto text-neutral-500 mb-3" />

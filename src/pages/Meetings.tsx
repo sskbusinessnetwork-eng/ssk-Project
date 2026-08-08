@@ -2133,158 +2133,70 @@ export function Meetings() {
           </div>
 
           {upcomingTableMeetings.length > 0 ? (
-            <div>
-              {/* Desktop Compact Table */}
-              <div className="hidden md:block overflow-hidden bg-[#111827] rounded-[18px] border border-white/5 shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/5 bg-[#151C2E]/60 text-[10px] font-black uppercase tracking-wider text-neutral-400">
-                      <th className="py-3.5 px-6">Date</th>
-                      <th className="py-3.5 px-6">Time</th>
-                      <th className="py-3.5 px-6">Address / Location</th>
-                      <th className="py-3.5 px-6 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-xs text-neutral-200">
-                    {upcomingTableMeetings.map((meeting) => {
-                      const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
-                      const timeFormatted = formatTime12h(meeting.time || '07:30');
-                      const canUpdate = canUserUpdateMeeting(meeting);
+            <div className="bg-[#111827] rounded-[18px] border border-white/5 divide-y divide-white/5 overflow-hidden shadow-sm">
+              {upcomingTableMeetings.map((meeting) => {
+                const chapterName = getChapterName(meeting);
+                const meetingTitle = meeting.title || meeting.topic || `${chapterName} Meeting`;
+                const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                const timeFormatted = formatTime12h(meeting.time || '07:30');
+                const canUpdate = canUserUpdateMeeting(meeting);
 
-                      return (
-                        <tr 
-                          key={meeting.id} 
-                          className="hover:bg-[#151C2E] transition-colors"
-                        >
-                          <td className="py-3.5 px-6 font-bold text-white whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <Calendar size={14} className="text-primary shrink-0" />
-                              <span>{dateFormatted}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-6 whitespace-nowrap font-medium text-neutral-300">
-                            <div className="flex items-center gap-2">
-                              <Clock size={14} className="text-primary shrink-0" />
-                              <span>{timeFormatted}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-6">
-                            {renderMeetingLocation(meeting)}
-                          </td>
-                          <td className="py-3.5 px-6 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-2">
-                              {canUpdate && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedMeeting(meeting);
-                                    const normalizedAttendance: Record<string, any> = {};
-                                    if (meeting.attendance) {
-                                      Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                        const v = String(val);
-                                        if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                        else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                        else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                        else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                        else normalizedAttendance[uid] = val;
-                                      });
-                                    }
-                                    setTempAttendance(normalizedAttendance);
-                                    setTempAmount(meeting.amountCollected || {});
-                                    setTempMemberNotes(meeting.memberNotes || {});
-                                    setIsUpdateModalOpen(true);
-                                  }}
-                                  className="px-3.5 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  <Settings size={12} />
-                                  Update
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenAttendanceReport(meeting)}
-                                className="px-3.5 py-1.5 bg-[#151C2E] text-white border border-white/10 hover:bg-[#1C2538] hover:border-white/20 rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Eye size={12} className="text-primary" />
-                                View
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Compact Stacked List */}
-              <div className="block md:hidden space-y-2.5">
-                {upcomingTableMeetings.map((meeting) => {
-                  const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
-                  const timeFormatted = formatTime12h(meeting.time || '07:30');
-                  const canUpdate = canUserUpdateMeeting(meeting);
-
-                  return (
-                    <div 
-                      key={meeting.id}
-                      className="bg-[#111827] p-3.5 rounded-[14px] border border-white/5 space-y-2.5 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white pb-2 border-b border-white/5">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={13} className="text-primary" />
-                          <span>{dateFormatted}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-neutral-300 font-medium text-[11px]">
-                          <Clock size={13} className="text-primary" />
-                          <span>{timeFormatted}</span>
-                        </div>
+                return (
+                  <div 
+                    key={meeting.id} 
+                    onClick={() => handleOpenAttendanceReport(meeting)}
+                    className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+                        <Calendar size={15} className="text-primary" />
                       </div>
-
-                      <div className="pt-0.5">
-                        {renderMeetingLocation(meeting)}
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
-                        {canUpdate && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedMeeting(meeting);
-                              const normalizedAttendance: Record<string, any> = {};
-                              if (meeting.attendance) {
-                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  const v = String(val);
-                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                  else normalizedAttendance[uid] = val;
-                                });
-                              }
-                              setTempAttendance(normalizedAttendance);
-                              setTempAmount(meeting.amountCollected || {});
-                              setTempMemberNotes(meeting.memberNotes || {});
-                              setIsUpdateModalOpen(true);
-                            }}
-                            className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
-                          >
-                            <Settings size={12} />
-                            Update
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAttendanceReport(meeting)}
-                          className="px-3 py-1.5 bg-[#151C2E] text-white border border-white/10 hover:bg-[#1C2538] hover:border-white/20 rounded-[8px] text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
-                        >
-                          <Eye size={12} className="text-primary" />
-                          View
-                        </button>
+                      <div className="min-w-0">
+                        <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+                          {meetingTitle}
+                        </h4>
+                        <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
+                          {dateFormatted} &bull; {timeFormatted}
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                        Upcoming
+                      </span>
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMeeting(meeting);
+                            const normalizedAttendance: Record<string, any> = {};
+                            if (meeting.attendance) {
+                              Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                const v = String(val);
+                                if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                else normalizedAttendance[uid] = val;
+                              });
+                            }
+                            setTempAttendance(normalizedAttendance);
+                            setTempAmount(meeting.amountCollected || {});
+                            setTempMemberNotes(meeting.memberNotes || {});
+                            setIsUpdateModalOpen(true);
+                          }}
+                          className="p-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-[8px] text-[10px] font-bold uppercase transition-all flex items-center gap-1 cursor-pointer"
+                          title="Update Meeting Data"
+                        >
+                          <Settings size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="p-8 text-center bg-[#111827] rounded-[20px] border border-dashed border-white/5">
