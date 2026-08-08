@@ -469,92 +469,69 @@ export function getWorkspaceChecklistTasks(
     });
 
 
-    // 8. Give Testimonial Task (Assigned to Referral Sender AFTER Thank You Slip is submitted by Receiver)
+    // 8. Give Testimony Task (Assigned ONLY to the PERSON WHO SENT THE REFERRAL after the referral is updated/processed)
     const sentReferrals = allReferrals.filter(r => {
       const sender = r.fromUserId || r.sender_id || r.from_user_id || r.authorMemberId || r.submitted_by;
-      return String(sender || '') === String(userId) && isDateInRange(r.updated_at || r.updatedAt || r.created_at || r.createdAt || r.date);
+      return String(sender || '').trim() === String(userId || '').trim();
     });
 
-    let createdRefTestimonialTask = false;
-
     sentReferrals.forEach(ref => {
-      // Step 5: ONLY AFTER the Thank You Slip is successfully submitted by Referral Receiver
-      const hasSlip = allSlips.some(s => String(s.referralId || s.referral_id || '') === String(ref.id || ''));
+      // Check if referral has been updated/recorded as completed/processed according to existing referral workflow
+      const statusNorm = String(ref.status || '').toUpperCase().trim();
+      const isProcessed = statusNorm === 'COMPLETED' ||
+                          statusNorm === 'CONVERTED' ||
+                          statusNorm === 'PROCESSED' ||
+                          statusNorm === 'ACCEPTED' ||
+                          statusNorm === 'CONTACTED' ||
+                          statusNorm === 'IN_PROGRESS' ||
+                          ref.isProcessed === true ||
+                          (statusNorm !== '' && statusNorm !== 'PENDING' && statusNorm !== 'NEW');
 
-      if (hasSlip) {
-        createdRefTestimonialTask = true;
+      if (isProcessed) {
         const receiverId = ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId;
         const receiverMember = (allUsers || []).find((u: any) =>
           String(u.id || '').trim() === String(receiverId || '').trim() ||
           String(u.uid || '').trim() === String(receiverId || '').trim()
         );
-        const receiverName = receiverMember?.name || (receiverMember as any)?.full_name || receiverMember?.displayName || ref.toUserName || ref.to_user_name || 'Chapter Member';
-        const contactOrCustomerName = ref.contactName || ref.contact_name || ref.customerName || ref.customer_name || 'Referral';
+        const receiverName = receiverMember?.name || (receiverMember as any)?.full_name || receiverMember?.displayName || ref.toUserName || ref.to_user_name || 'the member you referred';
 
-        // Check if Member A (Referral Sender) has submitted a testimonial for this referral
+        // Check if referral sender (Member A) has submitted a testimonial for this referral
         const hasSubmittedTestimonialForRef = testimonials.some(t => {
-          const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId;
-          if (String(author || '') !== String(userId || '')) return false;
-          const matchRef = String(t.referral_id || t.referralId || '') === String(ref.id || '');
-          const matchReceiver = String(t.receiverMemberId || t.receiver_id || t.toUserId || '') === String(receiverId || '');
-          return matchRef || (matchReceiver && String(t.referral_id || t.referralId || '') === String(ref.id || ''));
+          const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId || t.from_user_id;
+          if (String(author || '').trim() !== String(userId || '').trim()) return false;
+
+          const tRefId = t.referral_id || t.referralId;
+          const tReceiverId = t.receiverMemberId || t.receiver_id || t.toUserId || t.to_user_id;
+
+          const matchRef = tRefId && String(tRefId).trim() === String(ref.id).trim();
+          const matchReceiver = tReceiverId && String(tReceiverId).trim() === String(receiverId).trim();
+
+          return Boolean(matchRef || (matchReceiver && (tRefId === String(ref.id) || !tRefId)));
         });
 
         rawTasks.push({
           key: `task_give_testimonial_ref_${ref.id}_${dateStr}`,
-          label: `Give Testimonial to ${receiverName}`,
-          desc: `Give a testimonial to ${receiverName} for completed referral (${contactOrCustomerName}).`,
+          label: `Give Testimony`,
+          desc: `Share your experience with ${receiverName}.`,
           autoDone: hasSubmittedTestimonialForRef,
           link: hasSubmittedTestimonialForRef ? '/testimonials' : `/testimonials?referralId=${ref.id}&recipientId=${receiverId}&action=new`,
-          linkText: hasSubmittedTestimonialForRef ? 'VIEW' : 'GIVE TESTIMONIAL',
+          linkText: hasSubmittedTestimonialForRef ? 'VIEW' : 'GIVE TESTIMONY',
           iconColor: 'text-indigo-400',
           bgColor: 'bg-indigo-500/10'
         });
       }
     });
 
-    const hasSubmittedTestimonial = testimonials.some(t => {
-      const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId;
-      return String(author || '') === String(userId || '');
-    });
-
-    const completedOneToOnes = oneToOnes.filter(m => {
-      const isParticipant = (
-        String(m.organizer_id || m.creatorId || m.sender_id || m.created_by || m.createdBy) === String(userId) ||
-        String(m.guest_id || m.memberId || m.receiver_id || m.target_user_id || m.withUserId) === String(userId) ||
-        (m.participantIds || []).map(String).includes(String(userId))
-      );
-      if (!isParticipant) return false;
-      const statusNorm = String(m.status || '').toUpperCase();
-      return (statusNorm === 'COMPLETED' || Boolean(m.completed_at)) && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
-    });
-
-    const hasMeetingTrigger = completedOneToOnes.length > 0;
-
-    if (!createdRefTestimonialTask && (hasMeetingTrigger || hasSubmittedTestimonial)) {
-      rawTasks.push({
-        key: `task_testimonial_single_${dateStr}`,
-        label: 'Give Testimonial',
-        desc: 'Submit a testimonial for a chapter member.',
-        autoDone: hasSubmittedTestimonial,
-        link: hasSubmittedTestimonial ? '/testimonials' : '/testimonials?action=new',
-        linkText: hasSubmittedTestimonial ? 'VIEW' : 'GIVE TESTIMONIAL',
-        iconColor: 'text-indigo-400',
-        bgColor: 'bg-indigo-500/10'
-      });
-    }
-
-    // Deduplicate rawTasks by label to guarantee no duplicate tasks exist
+    // Deduplicate rawTasks by key and label
     const deduplicatedRawTasks: typeof rawTasks = [];
-    const seenTaskLabels = new Set<string>();
+    const seenTaskKeys = new Set<string>();
 
     for (const task of rawTasks) {
-      const normLabel = task.label.trim().toLowerCase();
-      if (!seenTaskLabels.has(normLabel)) {
-        seenTaskLabels.add(normLabel);
+      if (!seenTaskKeys.has(task.key)) {
+        seenTaskKeys.add(task.key);
         deduplicatedRawTasks.push(task);
-      } else if (normLabel.includes('give testimonial') && task.autoDone) {
-        const existing = deduplicatedRawTasks.find(t => t.label.trim().toLowerCase() === normLabel);
+      } else if (task.autoDone) {
+        const existing = deduplicatedRawTasks.find(t => t.key === task.key);
         if (existing) {
           existing.autoDone = true;
           existing.linkText = 'VIEW';
