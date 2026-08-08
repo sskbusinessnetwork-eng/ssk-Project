@@ -345,6 +345,8 @@ export function Meetings() {
   const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [upcomingPerPage, setUpcomingPerPage] = useState(10);
 
   const [defaultSetupData, setDefaultSetupData] = useState({
     adminId: '',
@@ -1724,6 +1726,13 @@ export function Meetings() {
     return result;
   }, [meetings, filteredMeetings, isMasterAdmin]);
 
+  const paginatedUpcomingTableMeetings = React.useMemo(() => {
+    const start = (upcomingPage - 1) * upcomingPerPage;
+    return upcomingTableMeetings.slice(start, start + upcomingPerPage);
+  }, [upcomingTableMeetings, upcomingPage, upcomingPerPage]);
+  
+  const totalUpcomingPages = Math.ceil(upcomingTableMeetings.length / upcomingPerPage);
+
   const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
     const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
     const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
@@ -2163,87 +2172,143 @@ export function Meetings() {
           </div>
 
           {upcomingTableMeetings.length > 0 ? (
-            <div className="bg-[#111827] rounded-[18px] border border-white/5 divide-y divide-white/5 overflow-hidden shadow-sm">
-              {upcomingTableMeetings.map((meeting) => {
-                const chapterName = getChapterName(meeting);
-                const meetingTitle = meeting.title || meeting.topic || `${chapterName} Meeting`;
-                const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
-                const timeFormatted = formatTime12h(meeting.time || '07:30');
-                const canUpdate = canUserUpdateMeeting(meeting);
+            <div className="bg-[#111827] rounded-[18px] border border-white/5 overflow-hidden shadow-sm flex flex-col">
+              <div className="overflow-x-auto w-full">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 text-[10px] uppercase tracking-wider text-neutral-400 bg-[#151C2E]/50">
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap">Date & Time</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold">Address</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap">Status</th>
+                      <th className="px-2 sm:px-4 py-2 sm:py-3 font-bold whitespace-nowrap text-right sm:text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {paginatedUpcomingTableMeetings.map((meeting) => {
+                      const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                      const timeFormatted = formatTime12h(meeting.time || '07:30');
+                      const canUpdate = canUserUpdateMeeting(meeting);
+                      const mStatus = getMeetingStatus(meeting);
 
-                return (
-                  <div 
-                    key={meeting.id} 
-                    onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="px-4 sm:px-5 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 hover:bg-[#151C2E] transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-start md:items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 md:w-8.5 md:h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors mt-0.5 md:mt-0">
-                        <Calendar size={15} className="text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-tight line-clamp-2 md:truncate group-hover:text-primary transition-colors leading-tight">
-                          {meetingTitle}
-                        </h4>
-                        <p className="text-[11px] text-neutral-400 font-medium mt-1 md:mt-0.5">
-                          {dateFormatted} &bull; {timeFormatted}
-                        </p>
-                      </div>
-                    </div>
+                      return (
+                        <tr 
+                          key={meeting.id}
+                          onClick={() => handleOpenAttendanceReport(meeting)}
+                          className="hover:bg-[#151C2E]/80 transition-colors group cursor-pointer"
+                        >
+                          {/* Date & Time */}
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
+                            <div className="flex flex-col gap-1 min-w-[100px]">
+                              <div className="flex items-center gap-1.5 text-white font-medium text-xs whitespace-nowrap">
+                                <Calendar size={12} className="text-primary shrink-0" />
+                                <span>{dateFormatted}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-neutral-400 text-[11px] whitespace-nowrap">
+                                <Clock size={12} className="shrink-0" />
+                                <span>{timeFormatted}</span>
+                              </div>
+                            </div>
+                          </td>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-1 md:mt-0 ml-11 md:ml-0 md:shrink-0">
-                      {(() => {
-                        const mStatus = getMeetingStatus(meeting);
-                        return (
-                          <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0", mStatus.color)}>
-                            {mStatus.label}
-                          </span>
-                        );
-                      })()}
-                      {canUpdate && (
-                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMeeting(meeting);
-                              const normalizedAttendance: Record<string, any> = {};
-                              if (meeting.attendance) {
-                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  const v = String(val);
-                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                  else normalizedAttendance[uid] = val;
-                                });
-                              }
-                              setTempAttendance(normalizedAttendance);
-                              setTempAmount(meeting.amountCollected || {});
-                              setTempMemberNotes(meeting.memberNotes || {});
-                              setIsUpdateModalOpen(true);
-                            }}
-                            className="flex-1 sm:flex-none justify-center px-3 py-1.5 bg-[#151C2E] hover:bg-emerald-600/20 text-emerald-400 border border-white/5 hover:border-emerald-500/30 rounded-[8px] text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                          >
-                            Update Meeting
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMeeting(meeting);
-                              setIsCancelConfirmOpen(true);
-                            }}
-                            className="flex-1 sm:flex-none justify-center px-3 py-1.5 bg-[#151C2E] hover:bg-red-500/20 text-red-400 border border-white/5 hover:border-red-500/30 rounded-[8px] text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                          {/* Address */}
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
+                            <div className="flex items-start gap-1.5 max-w-[120px] sm:max-w-[200px] md:max-w-[250px] lg:max-w-[300px]" title={meeting.location || 'N/A'}>
+                              <MapPin size={12} className="text-neutral-400 shrink-0 mt-0.5" />
+                              <span className="text-xs text-neutral-300 truncate leading-snug whitespace-normal line-clamp-2 md:line-clamp-1 md:truncate">
+                                {meeting.location || 'N/A'}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle">
+                            <span className={cn("inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border whitespace-nowrap", mStatus.color)}>
+                              {mStatus.label}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 align-middle text-right sm:text-left">
+                            {canUpdate ? (
+                              <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end sm:justify-start gap-1.5 sm:gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedMeeting(meeting);
+                                    const normalizedAttendance = {};
+                                    if (meeting.attendance) {
+                                      Object.entries(meeting.attendance).forEach(([uid, val]) => {
+                                        const v = String(val);
+                                        if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+                                        else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+                                        else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+                                        else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+                                        else normalizedAttendance[uid] = val;
+                                      });
+                                    }
+                                    setTempAttendance(normalizedAttendance);
+                                    setTempAmount(meeting.amountCollected || {});
+                                    setTempMemberNotes(meeting.memberNotes || {});
+                                    setIsUpdateModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1.5 bg-[#151C2E] hover:bg-emerald-600/20 text-emerald-400 border border-white/5 hover:border-emerald-500/30 rounded-[6px] text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap"
+                                >
+                                  Update
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedMeeting(meeting);
+                                    setIsCancelConfirmOpen(true);
+                                  }}
+                                  className="px-2.5 py-1.5 bg-[#151C2E] hover:bg-red-500/20 text-red-400 border border-white/5 hover:border-red-500/30 rounded-[6px] text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-neutral-500 italic whitespace-nowrap">No actions</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalUpcomingPages > 1 && (
+                <div className="border-t border-white/5 px-4 py-3 flex flex-wrap items-center justify-between gap-3 bg-[#151C2E]/30">
+                  <span className="text-[11px] text-neutral-400">
+                    Showing {(upcomingPage - 1) * upcomingPerPage + 1} to {Math.min(upcomingPage * upcomingPerPage, upcomingTableMeetings.length)} of {upcomingTableMeetings.length} meetings
+                  </span>
+                  
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setUpcomingPage(p => Math.max(1, p - 1))}
+                      disabled={upcomingPage === 1}
+                      className="px-2 py-1 text-[11px] font-medium text-white bg-[#151C2E] border border-white/10 rounded-[6px] hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    
+                    <span className="px-2 py-1 text-[11px] font-bold text-white bg-primary/20 border border-primary/30 rounded-[6px]">
+                      {upcomingPage}
+                    </span>
+
+                    <button
+                      onClick={() => setUpcomingPage(p => Math.min(totalUpcomingPages, p + 1))}
+                      disabled={upcomingPage === totalUpcomingPages}
+                      className="px-2 py-1 text-[11px] font-medium text-white bg-[#151C2E] border border-white/10 rounded-[6px] hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-8 text-center bg-[#111827] rounded-[20px] border border-dashed border-white/5">
