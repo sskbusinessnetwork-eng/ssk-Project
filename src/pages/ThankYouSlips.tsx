@@ -229,7 +229,7 @@ export function ThankYouSlips() {
               fromUserId: from,
               toUserId: to,
               customerName: s.customer_name || s.customerName || s.contact_name || '',
-              businessValue: Number(s.business_value || s.businessValue || 0),
+              businessValue: Number(s.business_value || s.businessValue || s.amount || 0),
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
             };
@@ -252,7 +252,7 @@ export function ThankYouSlips() {
               fromUserId: from,
               toUserId: to,
               customerName: s.customer_name || s.customerName || s.contact_name || '',
-              businessValue: Number(s.business_value || s.businessValue || 0),
+              businessValue: Number(s.business_value || s.businessValue || s.amount || 0),
               notes: s.notes || s.thank_you_message || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
             };
@@ -279,7 +279,7 @@ export function ThankYouSlips() {
                 fromUserId: from,
                 toUserId: to,
                 customerName: s.customer_name || s.customerName || s.contact_name || '',
-                businessValue: Number(s.business_value || s.businessValue || 0),
+                businessValue: Number(s.business_value || s.businessValue || s.amount || 0),
                 notes: s.notes || s.thank_you_message || '',
                 createdAt: s.created_at || s.createdAt || new Date().toISOString()
               };
@@ -614,32 +614,29 @@ export function ThankYouSlips() {
 
   // Business Generated & Business Sent: Total business sent by the user (slips submitted by user)
   const totalBusinessSent = isMasterAdmin 
-    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
-    : allSlips.reduce((acc, slip) => {
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0), 0)
+    : receivedSlips.reduce((acc, slip) => {
         const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
-        const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(slip.toUserId);
-        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value) || 0;
-        return String(senderId) === String(currentUserId) ? acc + val : acc;
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0;
+        return acc + val;
       }, 0);
-  
+
   // Business Generated always equals Business Sent
   const totalBusinessGenerated = totalBusinessSent;
 
   // Business Received: Total business received by the user (slips received where user is toUserId)
   const totalBusinessReceived = isMasterAdmin
-    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
-    : allSlips.reduce((acc, slip) => {
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0), 0)
+    : slips.reduce((acc, slip) => {
         const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
-        const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(slip.fromUserId);
-        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value) || 0;
-        return String(receiverId) === String(currentUserId) ? acc + val : acc;
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0;
+        return acc + val;
       }, 0);
 
   // totalBusinessGenerated is synchronized with totalBusinessSent above
+  const totalBusinessReceivedFiltered = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0), 0);
 
-  const totalBusinessReceivedFiltered = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0);
-
-  const totalNetworkBusiness = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0);
+  const totalNetworkBusiness = filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0), 0);
 
   const downloadReport = () => {
     const dataToExport = isMasterAdmin || activeTab === 'chapter' ? filteredSlips : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips);
@@ -671,7 +668,7 @@ export function ThankYouSlips() {
   };
 
   return (
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-6 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-6 py-2 sm:py-6 md:py-8 space-y-3 sm:space-y-8 overflow-x-hidden">
         {/* Header Section */}
         <header className="relative p-4 sm:p-6 md:p-8 bg-[#111827] border border-white/5 rounded-2xl sm:rounded-[2.5rem] overflow-hidden shadow-2xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -mr-32 -mt-32 blur-3xl animate-pulse" />
@@ -773,7 +770,7 @@ export function ThankYouSlips() {
               </div>
               <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
                 <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
-                  {slips.length} slips submitted
+                  {receivedSlips.length} slips received
                 </span>
               </div>
             </div>
@@ -788,7 +785,7 @@ export function ThankYouSlips() {
               </div>
               <div className="flex flex-col items-center justify-center gap-0.5 w-full mt-0.5">
                 <span className="text-[7.5px] sm:text-[9px] font-bold text-[#9CA3AF] leading-none uppercase truncate w-full">
-                  {receivedSlips.length} slips received
+                  {slips.length} slips submitted
                 </span>
               </div>
             </div>
@@ -885,14 +882,14 @@ export function ThankYouSlips() {
       )}
 
       {/* Slips List */}
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-2 sm:space-y-6 w-full">
         {loading ? (
           <div className="py-16 sm:py-24 text-center">
             <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin mx-auto mb-3 sm:mb-4" />
             <p className="text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-widest">Loading Slips...</p>
           </div>
         ) : (activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <div className="flex flex-col sm:grid sm:grid-cols-1 md:grid-cols-2 gap-0 sm:gap-6 divide-y divide-white/10 sm:divide-y-0 w-full">
             {(activeTab === 'sent' ? slips : activeTab === 'received' ? receivedSlips : filteredSlips).map((slip) => {
               const targetUser = activeTab === 'sent'
                 ? allUsers.find(u => String(u.uid) === String(slip.toUserId) || String(u.id) === String(slip.toUserId))
@@ -905,8 +902,28 @@ export function ThankYouSlips() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   key={slip.id}
-                  className="group bg-[#111827] p-3.5 sm:p-6 rounded-xl sm:rounded-[16px] border border-white/5 shadow-sm hover:border-white/10 transition-all duration-300 space-y-3 sm:space-y-4"
+                  className="group bg-transparent sm:bg-[#111827] rounded-none sm:rounded-[16px] border-none sm:border sm:border-white/5 shadow-none sm:shadow-sm sm:hover:border-white/10 transition-all duration-300"
                 >
+                  {/* MOBILE COMPACT LIST (visible only on mobile) */}
+                  <div 
+                    className="sm:hidden flex items-center justify-between py-3 px-2 cursor-pointer"
+                    onClick={() => setSelectedSlipForDetails(slip)}
+                  >
+                    <div className="flex flex-col truncate pr-2">
+                      <span className="text-[14px] font-bold text-white truncate leading-tight">
+                        {activeTab === 'sent' ? getUserName(slip.toUserId) : activeTab === 'received' ? getUserName(slip.fromUserId) : `${getUserName(slip.fromUserId)} → ${getUserName(slip.toUserId)}`}
+                      </span>
+                      
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-[14px] font-bold text-emerald-400">
+                        ₹{Number(slip.businessValue || slip.business_value || slip.amount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DESKTOP CARD (hidden on mobile, visible on sm and up) */}
+                  <div className="hidden sm:block p-6 space-y-4">
                   {/* Top Bar: Slip Number, Status Badge & Date/Time */}
                   <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-white/5">
                     <div className="flex items-center gap-2">
@@ -1014,6 +1031,7 @@ export function ThankYouSlips() {
                     >
                       View Details <ChevronRight size={14} />
                     </button>
+                  </div>
                   </div>
                 </motion.div>
               );
@@ -1228,17 +1246,17 @@ export function ThankYouSlips() {
 
           return (
             <div className="space-y-4 p-1">
-              <div className="p-5 bg-[#151C2E] rounded-[20px] border border-white/10 space-y-3.5 shadow-xl">
+              <div className="p-4 sm:p-5 bg-[#151C2E] rounded-[16px] sm:rounded-[20px] border border-white/10 space-y-3 shadow-xl w-full max-w-full overflow-hidden">
                 {/* Member */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Member:</span>
-                  <span className="text-sm font-bold text-white">{senderName}</span>
+                  <span className="text-sm font-bold text-white text-right max-w-[60%] break-words">{senderName}</span>
                 </div>
 
                 {/* Date */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Date:</span>
-                  <span className="text-sm font-semibold text-white">{formattedDate}</span>
+                  <span className="text-sm font-semibold text-white text-right max-w-[60%] break-words">{formattedDate}</span>
                 </div>
 
                 {/* Amount */}
@@ -1246,20 +1264,20 @@ export function ThankYouSlips() {
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">{
                     String(senderId) === String(currentUserId) ? "Business Received:" : "Business Amount:"
                   }</span>
-                  <span className="text-base font-extrabold text-emerald-400">{formattedAmount}</span>
+                  <span className="text-base font-extrabold text-emerald-400 text-right max-w-[60%] truncate">{formattedAmount}</span>
                 </div>
 
                 {/* From */}
                 <div className="flex items-center justify-between pb-3 border-b border-white/5">
                   <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">From:</span>
-                  <span className="text-sm font-bold text-white">{senderName}</span>
+                  <span className="text-sm font-bold text-white text-right max-w-[60%] break-words">{senderName}</span>
                 </div>
 
                 {/* To (Only for Master Admin and Chapter Admin) */}
                 {showToField && (
                   <div className="flex items-center justify-between pb-3 border-b border-white/5">
                     <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">To:</span>
-                    <span className="text-sm font-bold text-white">{receiverName}</span>
+                    <span className="text-sm font-bold text-white text-right max-w-[60%] break-words">{receiverName}</span>
                   </div>
                 )}
 
@@ -1271,7 +1289,6 @@ export function ThankYouSlips() {
                   </p>
                 </div>
               </div>
-
               <div className="flex justify-end pt-1">
                 <button
                   type="button"

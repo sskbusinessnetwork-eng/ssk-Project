@@ -1,16 +1,33 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/pages/Dashboard.tsx', 'utf-8');
+let content = fs.readFileSync('src/pages/ThankYouSlips.tsx', 'utf-8');
 
-code = code.replace(/const chapterSlips = useMemo\(\(\) => \{[\s\S]*?\}, \[effectiveSlips, chapterUserIds\]\);/, `const chapterSlips = useMemo(() => {
-    return effectiveSlips.filter(slip => 
-      usePersonalStats ? (userCandidateIds.includes(slip.fromUserId) || userCandidateIds.includes(slip.toUserId)) : (chapterUserIds.includes(slip.fromUserId) || chapterUserIds.includes(slip.toUserId))
-    );
-  }, [effectiveSlips, chapterUserIds, userCandidateIds, usePersonalStats]);`);
+const regex = /\/\/ Business Generated & Business Sent:[\s\S]*?return String\(receiverId\) === String\(currentUserId\) \? acc \+ val : acc;\n      }, 0);/m;
 
-code = code.replace(/const chapterReferralsList = useMemo\(\(\) => \{[\s\S]*?\}, \[effectiveReferrals, chapterUserIds\]\);/, `const chapterReferralsList = useMemo(() => {
-    return effectiveReferrals.filter(ref => 
-      usePersonalStats ? (userCandidateIds.includes(ref.fromUserId) || userCandidateIds.includes(ref.toUserId)) : (chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId))
-    );
-  }, [effectiveReferrals, chapterUserIds, userCandidateIds, usePersonalStats]);`);
+const newTotalCode = `// Business Generated & Business Sent: Total business sent by the user (slips submitted by user)
+  const totalBusinessSent = isMasterAdmin 
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
+    : slips.reduce((acc, slip) => {
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0;
+        return acc + val;
+      }, 0);
 
-fs.writeFileSync('src/pages/Dashboard.tsx', code);
+  // Business Generated always equals Business Sent
+  const totalBusinessGenerated = totalBusinessSent;
+
+  // Business Received: Total business received by the user (slips received where user is toUserId)
+  const totalBusinessReceived = isMasterAdmin
+    ? filteredSlips.reduce((acc, slip) => acc + (Number(slip.businessValue || slip.business_value) || 0), 0)
+    : receivedSlips.reduce((acc, slip) => {
+        const ref = referrals.find(r => String(r.id) === String(slip.referralId || slip.referral_id));
+        const val = ref && (ref as any).business_amount ? Number((ref as any).business_amount) : Number(slip.businessValue || slip.business_value || (slip as any).amount) || 0;
+        return acc + val;
+      }, 0);`;
+
+if (content.match(regex)) {
+  content = content.replace(regex, newTotalCode);
+  fs.writeFileSync('src/pages/ThankYouSlips.tsx', content);
+  console.log("Success");
+} else {
+  console.log("Could not find regex");
+}
