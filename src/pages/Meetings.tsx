@@ -343,6 +343,9 @@ export function Meetings() {
   const [tempAmount, setTempAmount] = useState<Record<string, number>>({});
   const [tempMemberNotes, setTempMemberNotes] = useState<Record<string, string>>({});
   const [tempNotes, setTempNotes] = useState('');
+  const [tempDate, setTempDate] = useState('');
+  const [tempTime, setTempTime] = useState('');
+  const [tempLocation, setTempLocation] = useState('');
   const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
@@ -1351,19 +1354,20 @@ export function Meetings() {
       });
       
       // Perform validation for all members
+      let allMembersFilled = true;
       for (const member of meetingMembers) {
         const status = tempAttendance[member.uid];
         const amount = tempAmount[member.uid];
         
-        // If amount is undefined, we assume it's 0 (as shown in the UI)
+        if (!status || String(status).trim() === '') {
+          allMembersFilled = false;
+          delete tempAttendance[member.uid];
+          delete tempAmount[member.uid];
+          continue;
+        }
+
         const finalAmount = amount === undefined ? 0 : amount;
 
-        if (!status || finalAmount === null || finalAmount === '') {
-          setError(`Please complete all attendance details before updating the meeting.`);
-          setIsSubmitting(false);
-          return;
-        }
-        
         const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'Yes', 'No', 'YES', 'NO'];
         if (!allowedStatuses.includes(status)) {
           setError(`Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`);
@@ -1377,18 +1381,18 @@ export function Meetings() {
 
       // Guest Attendance Save Logic & Validation
       const guestUpdates = [];
+      let allGuestsFilled = true;
       if (meetingGuests.length > 0) {
         for (const guest of meetingGuests) {
           const gStatus = tempGuestAttendance[guest.id];
           const gAmount = tempAmount[guest.id];
           
-          const finalGAmount = gAmount === undefined ? 0 : gAmount;
-          
-          if (!gStatus || finalGAmount === null || finalGAmount === '') {
-            setError(`Please complete all attendance details before updating the meeting.`);
-            setIsSubmitting(false);
-            return;
+          if (!gStatus || String(gStatus).trim() === '') {
+            allGuestsFilled = false;
+            continue;
           }
+
+          const finalGAmount = gAmount === undefined ? 0 : gAmount;
           
           tempAmount[guest.id] = finalGAmount;
           guestUpdates.push({
@@ -1400,6 +1404,8 @@ export function Meetings() {
         }
       }
       
+      const shouldComplete = allMembersFilled && allGuestsFilled && meetingMembers.length > 0;
+
       // Call backend API endpoint to validate and update meeting
       try {
         const callerId = profile?.uid || profile?.id;
@@ -1409,10 +1415,13 @@ export function Meetings() {
           body: JSON.stringify({
             meetingId: selectedMeeting.id,
             callerId,
+            date: tempDate,
+            time: tempTime,
+            location: tempLocation,
             attendance: tempAttendance,
             amountCollected: tempAmount,
             memberNotes: tempMemberNotes,
-            isCompleted: true,
+            isCompleted: shouldComplete,
             guestUpdates
           })
         });
@@ -1454,12 +1463,9 @@ export function Meetings() {
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
-      setSuccess('Meeting attendance & collection updated successfully and moved to history!');
-      setTimeout(() => {
-        setIsUpdateModalOpen(false);
-        setSuccess(null);
-        setSelectedMeeting(null);
-      }, 1500);
+      setIsUpdateModalOpen(false);
+      setSuccess(null);
+      setSelectedMeeting(null);
     } catch (err: any) {
       console.error("Error updating meeting:", err);
       setError("Failed to update meeting attendance. Please try again.");
@@ -1969,6 +1975,9 @@ export function Meetings() {
                       setTempAttendance(normalizedAttendance);
                       setTempAmount(primaryFocusMeeting.amountCollected || {});
                       setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
+                      setTempDate(primaryFocusMeeting.date || '');
+                      setTempTime(primaryFocusMeeting.time || '');
+                      setTempLocation(primaryFocusMeeting.location || '');
                       setIsUpdateModalOpen(true);
                     }}
                     className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
@@ -2175,6 +2184,9 @@ export function Meetings() {
                               setTempAttendance(normalizedAttendance);
                               setTempAmount(meeting.amountCollected || {});
                               setTempMemberNotes(meeting.memberNotes || {});
+                              setTempDate(meeting.date || '');
+                              setTempTime(meeting.time || '');
+                              setTempLocation(meeting.location || '');
                               setIsUpdateModalOpen(true);
                             }}
                             className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
@@ -2370,7 +2382,81 @@ export function Meetings() {
           )}
           <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
             <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Meeting Update</p>
-            <p className="text-sm font-bold text-white">Update attendance and amounts for Members and Guests</p>
+            <p className="text-sm font-bold text-white">Update meeting details, attendance, and amounts</p>
+          </div>
+
+          <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden p-4 space-y-4">
+            <h3 className="text-sm font-bold text-white mb-2">Meeting Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Date</label>
+                <input
+                  type="date"
+                  value={tempDate}
+                  onChange={(e) => setTempDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Time</label>
+                {(() => {
+                  const { time: timePart, ampm: ampmPart } = parseTo12hParts(tempTime || '07:30 AM');
+                  const [selectedHour, selectedMinute] = timePart.split(':');
+                  const hoursList = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+                  const minutesList = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+                  
+                  const handleTimeUpdate = (hour: string, minute: string, ampm: 'AM' | 'PM') => {
+                    setTempTime(`${hour}:${minute} ${ampm}`);
+                  };
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        value={selectedHour}
+                        onChange={(e) => handleTimeUpdate(e.target.value, selectedMinute || '00', (ampmPart as 'AM' | 'PM') || 'AM')}
+                        className="w-full px-2 py-2 rounded-xl border border-white/5 outline-none focus:ring-1 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-[11px]"
+                      >
+                        <option value="" disabled className="bg-[#111827] text-white">HH</option>
+                        {hoursList.map(h => (
+                          <option key={h} value={h} className="bg-[#111827] text-white">{h}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedMinute}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '07', e.target.value, (ampmPart as 'AM' | 'PM') || 'AM')}
+                        className="w-full px-2 py-2 rounded-xl border border-white/5 outline-none focus:ring-1 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-[11px]"
+                      >
+                        <option value="" disabled className="bg-[#111827] text-white">MM</option>
+                        {minutesList.map(m => (
+                          <option key={m} value={m} className="bg-[#111827] text-white">{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={ampmPart}
+                        onChange={(e) => handleTimeUpdate(selectedHour || '07', selectedMinute || '00', e.target.value as 'AM' | 'PM')}
+                        className="w-full px-2 py-2 rounded-xl border border-white/5 outline-none focus:ring-1 focus:ring-emerald-500 font-bold bg-[#151C2E] text-white text-[11px]"
+                      >
+                        <option value="" disabled className="bg-[#111827] text-white">--</option>
+                        <option value="AM" className="bg-[#111827] text-white">AM</option>
+                        <option value="PM" className="bg-[#111827] text-white">PM</option>
+                      </select>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Location</label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                <input
+                  type="text"
+                  placeholder="Enter meeting venue"
+                  value={tempLocation}
+                  onChange={(e) => setTempLocation(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            </div>
           </div>
           
           {/* Members Section */}
@@ -2411,7 +2497,7 @@ export function Meetings() {
 
                     return meetingMembers.map((member) => {
                       const mId = member.id || member.uid;
-                      const attendanceVal = tempAttendance[mId] || 'Present';
+                      const attendanceVal = tempAttendance[mId] || '';
                       const amtVal = tempAmount[mId] || '';
                       
                       const getStatusColor = (status: string) => {
@@ -2437,7 +2523,7 @@ export function Meetings() {
                             <select
                               value={attendanceVal}
                               onChange={(e) => {
-                                setTempAttendance({ ...tempAttendance, [mId]: e.target.value });
+                                setTempAttendance({ ...tempAttendance, [mId]: e.target.value as any });
                                 if (e.target.value === 'Absent' || e.target.value === 'Medical') {
                                   setTempAmount(prev => {
                                     const next = { ...prev };
@@ -2451,6 +2537,7 @@ export function Meetings() {
                                 getStatusColor(attendanceVal)
                               )}
                             >
+                              <option value="" className="bg-[#111827] text-white">Not Marked</option>
                               <option value="Present" className="bg-[#111827] text-white">Present</option>
                               <option value="Absent" className="bg-[#111827] text-white">Absent</option>
                               <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
@@ -2511,7 +2598,7 @@ export function Meetings() {
                             "border-white/5 text-neutral-400 bg-[#151C2E]"
                           )}
                         >
-                          <option value="" className="bg-[#111827] text-white">Select Status</option>
+                          <option value="" className="bg-[#111827] text-white">Not Marked</option>
                           <option value="Present" className="bg-[#111827] text-white">Present</option>
                           <option value="Absent" className="bg-[#111827] text-white">Absent</option>
                         </select>
@@ -2576,7 +2663,7 @@ export function Meetings() {
               disabled={isSubmitting}
               className="flex-1 py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
             >
-              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save & Complete Meeting'}
+              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save Changes'}
             </button>
           </div>
         </div>

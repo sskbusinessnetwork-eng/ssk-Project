@@ -815,7 +815,7 @@ async function startServer() {
   // Meeting Attendance & Collection Update Endpoint
   app.post("/api/meetings/update", async (req, res) => {
     try {
-      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates } = req.body || {};
+      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates, date, time, location } = req.body || {};
       if (!meetingId || !callerId) {
         return res.status(400).json({
           success: false,
@@ -879,12 +879,20 @@ async function startServer() {
       const updatePayload: any = {
         updated_at: new Date().toISOString()
       };
+      
+      if (date) updatePayload.date = date;
+      if (time) updatePayload.time = time;
+      if (location !== undefined) updatePayload.location = location;
+
       if (attendance) updatePayload.attendance = attendance;
       if (amountCollected) updatePayload.amount_collected = amountCollected;
       if (memberNotes) updatePayload.member_notes = memberNotes;
-      if (isCompleted || isCompleted === undefined) {
+      if (isCompleted === true || (isCompleted === undefined && attendance)) {
         updatePayload.is_completed = true;
         updatePayload.status = 'COMPLETED';
+      } else if (isCompleted === false) {
+        updatePayload.is_completed = false;
+        updatePayload.status = 'UPCOMING';
       }
 
       const { error: updateErr } = await adminSupabase

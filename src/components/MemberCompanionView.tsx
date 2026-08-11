@@ -364,18 +364,9 @@ export function MemberCompanionView({
           </span>
         </div>
 
-        {scoreText && (
+        {businessGrowthScore !== undefined && (
           <div className="mb-4 px-3.5 py-2 bg-[#0B1220]/80 border border-white/10 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 text-neutral-300 font-medium shadow-sm">
             <span><strong className="text-emerald-400 font-bold">Growth Score:</strong> <span className="text-white font-extrabold">{businessGrowthScore}%</span></span>
-            <button
-              type="button"
-              onClick={onOpenFilterModal}
-              className="inline-flex items-center gap-1.5 text-purple-400 hover:text-purple-300 font-bold transition-colors cursor-pointer px-2 py-0.5 rounded-md hover:bg-purple-500/10"
-            >
-              <Filter size={13} className="text-purple-400" />
-              <span>Filter</span>
-            </button>
-            <span><strong className="text-blue-400 font-bold">Score:</strong> <span className="text-white font-extrabold">{scoreText}</span></span>
           </div>
         )}
 

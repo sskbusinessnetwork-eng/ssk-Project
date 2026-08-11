@@ -1,30 +1,38 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/pages/Dashboard.tsx', 'utf-8');
+let code = fs.readFileSync('src/utils/growthScore.ts', 'utf8');
 
-code = code.replace(/const chapterGuestsList = useMemo\(\(\) => \{[\s\S]*?\}, \[effectiveGuestInvitations, chapterUserIds, profile, appliedChapterFilter\]\);/, `const chapterGuestsList = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
-      return effectiveGuestInvitations;
-    }
-    const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
-    return effectiveGuestInvitations.filter(g => {
-      const gChapId = String(g.chapter_id || g.chapterId || '').trim();
-      const inviter = String(g.inviterId || g.inviter_id || '');
-      if (usePersonalStats) return userCandidateIds.includes(inviter);
-      return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
-    });
-  }, [effectiveGuestInvitations, chapterUserIds, userCandidateIds, profile, appliedChapterFilter, usePersonalStats]);`);
+const target = `  // Calculate max possible score based on subscription date range
+  let subStartStr = profile.subscriptionStart || profile.subscriptionStartDate || profile.created_at || profile.createdAt;
+  let subEndStr = profile.subscriptionEnd || profile.subscriptionEndDate || profile.current_subscription_end_date;
+  if (subStartStr && !subEndStr) {
+     const sDate = new Date(subStartStr);
+     sDate.setFullYear(sDate.getFullYear() + 1);
+     subEndStr = sDate.toISOString();
+  }
+   
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const effectiveStart = subStartStr ? new Date(subStartStr) : new Date(today);
+  const effectiveEnd = subEndStr ? new Date(subEndStr) : new Date(today);
+   
+  const start = effectiveStart;
+  start.setHours(0,0,0,0);
+  const end = effectiveEnd;
+  end.setHours(23,59,59,999);`;
 
-// Fix oneToOneMeetingsCount which also failed because of hardcoded logic
-code = code.replace(/const oneToOneMeetingsCount = useMemo\(\(\) => \{[\s\S]*?\}, \[effectiveOneToOnes, chapterUserIds, profile\]\);/, `const oneToOneMeetingsCount = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN') {
-      return effectiveOneToOnes.length;
-    }
-    const chapterOneToOnes = effectiveOneToOnes.filter(m => 
-      usePersonalStats 
-        ? (userCandidateIds.includes(m.organizer_id) || userCandidateIds.includes(m.creatorId) || (m.participantIds || []).some((id: string) => userCandidateIds.includes(id)))
-        : (chapterUserIds.includes(m.organizer_id) || chapterUserIds.includes(m.creatorId) || (m.participantIds && m.participantIds.some((pid: string) => chapterUserIds.includes(pid))))
-    );
-    return chapterOneToOnes.length;
-  }, [effectiveOneToOnes, chapterUserIds, userCandidateIds, profile, usePersonalStats]);`);
+const replacement = `  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  const start = input.activeDateRange?.start ? new Date(input.activeDateRange.start) : new Date(today);
+  start.setHours(0,0,0,0);
+  const end = input.activeDateRange?.end ? new Date(input.activeDateRange.end) : new Date(today);
+  end.setHours(23,59,59,999);`;
 
-fs.writeFileSync('src/pages/Dashboard.tsx', code);
+// Replace using simple string replace
+if (code.includes(target)) {
+  code = code.replace(target, replacement);
+  fs.writeFileSync('src/utils/growthScore.ts', code);
+  console.log('done patch4');
+} else {
+  console.log('target not found in patch4');
+}

@@ -285,7 +285,7 @@ export function MyReport() {
     );
   }
 
-  const scoreVal = Math.round(chapterGrowthScoreData.score);
+  const scoreVal = Math.min(100, Math.max(0, Math.round(chapterGrowthScoreData.score)));
 
   return (
     <div className="w-full max-w-[1400px] mx-auto space-y-8 pb-20 relative px-4 sm:px-6">
@@ -360,27 +360,10 @@ export function MyReport() {
           </div>
         </div>
 
-        {/* Global Filter Button beside Score */}
         <div className="flex items-center gap-3">
           <div className="text-xs font-bold text-[#9CA3AF] bg-[#111827]/80 border border-white/10 px-4 py-1.5 rounded-full shadow-sm">
-            Score: <span className="text-white font-extrabold">{scoreVal} / 100</span>
+            Score: <span className="text-white font-extrabold">{scoreVal}%</span>
           </div>
-          
-          <button
-            onClick={() => setIsFilterModalOpen(true)}
-            className={cn(
-              "flex items-center gap-1.5 text-xs font-bold px-4 py-1.5 rounded-full shadow-sm border transition-all cursor-pointer",
-              activeDateRange 
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-                : "bg-[#111827]/80 text-[#9CA3AF] border-white/10 hover:text-white"
-            )}
-          >
-            <Filter size={14} />
-            {activeDateRange ? 'Filtered' : 'Filter'}
-            {activeDateRange && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1" />
-            )}
-          </button>
         </div>
       </motion.div>
 

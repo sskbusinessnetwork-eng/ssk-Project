@@ -628,9 +628,15 @@ export function calculateMemberGrowthScoreData(input: {
   const totalTasksCount = tasks.length;
   const completedTasksCount = tasks.filter(t => t.isDone).length;
   
-  // Calculate total score based on points earned across all tasks
-  const rawScore = tasks.reduce((acc, t) => acc + (t.isDone ? (t.pointsVal || 0) : 0), 0);
-  const todayScore = Math.round(rawScore);
+  // Growth Score = Completed Tasks ÷ Total Available Tasks × 100
+  let rawScore = 0;
+  if (totalTasksCount > 0) {
+    rawScore = (completedTasksCount / totalTasksCount) * 100;
+  }
+  let todayScore = Math.round(rawScore);
+  
+  // Enforce score cap between 0 and 100%
+  todayScore = Math.min(100, Math.max(0, todayScore));
   
   const diffTime = Math.abs(end.getTime() - start.getTime());
   const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
@@ -744,7 +750,7 @@ export function calculateMemberGrowthScoreData(input: {
     analysed_days: analysedDaysCount,
     daysAnalysed: analysedDaysCount,
     daysAnalysedText,
-    scoreText: `${todayScore} / ${maxPossible}`,
+    scoreText: `${todayScore}%`,
     status,
     statusColor,
     tasks
@@ -823,19 +829,14 @@ export function calculateChapterGrowthScoreData(input: {
     totalTasksCount += res.total_tasks;
   }
 
-  const avgScore = Math.round(totalMemberScores / N);
+  let avgScore = 0;
+  if (totalTasksCount > 0) {
+    avgScore = Math.round((totalCompletedTasks / totalTasksCount) * 100);
+  }
+  avgScore = Math.min(100, Math.max(0, avgScore));
   const avgAnalysedDays = Math.max(1, Math.round(totalAnalysedDaysSum / N));
   
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const start = input.activeDateRange?.start ? new Date(input.activeDateRange.start) : new Date(today);
-  start.setHours(0,0,0,0);
-  const end = input.activeDateRange?.end ? new Date(input.activeDateRange.end) : new Date(today);
-  end.setHours(23,59,59,999);
-  
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-  const maxPossible = diffDays * 100;
+  const maxPossible = 100;
 
   let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
   let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
@@ -863,7 +864,7 @@ export function calculateChapterGrowthScoreData(input: {
     membersAnalysed: N,
     daysAnalysed: avgAnalysedDays,
     daysAnalysedText: `${avgAnalysedDays} / 30`,
-    scoreText: `${avgScore} / ${maxPossible}`,
+    scoreText: `${avgScore}%`,
     status,
     statusColor
   };

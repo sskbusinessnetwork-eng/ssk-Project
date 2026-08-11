@@ -82,7 +82,7 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const pattern = new RegExp(escapeRegExp(target1).replace(/\\s\+/g, '\\s+'));
+const pattern = new RegExp(escapeRegExp(target1).replace(/\s+/g, '\\s+'));
 code = code.replace(pattern, replacement1);
 
 fs.writeFileSync('src/utils/growthScore.ts', code);

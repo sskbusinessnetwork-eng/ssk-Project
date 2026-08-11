@@ -1620,7 +1620,7 @@ export function Analytics() {
   }, [profile]);
 
   const growthScoreData = profile?.role === 'MASTER_ADMIN' ? chapterGrowthScoreData : (usePersonalStats ? memberGrowthScoreData : chapterGrowthScoreData);
-  const dynamicGrowthScore = growthScoreData.score;
+  const dynamicGrowthScore = Math.min(100, Math.max(0, Math.round(growthScoreData.score)));
   const growthStatus = growthScoreData.status;
   const growthStatusColor = growthScoreData.statusColor;
 
@@ -2226,16 +2226,7 @@ const getGreeting = () => {
                   <span className="text-neutral-500">•</span>
                 </>
               )}
-              <button
-                type="button"
-                onClick={() => setIsFilterModalOpen(true)}
-                className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer"
-              >
-                <Filter size={12} className="text-emerald-400" />
-                <span>Filter</span>
-              </button>
-              <span className="text-neutral-500">•</span>
-              <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{growthScoreData.scoreText}</span></span>
+              <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{growthScoreData.score}%</span></span>
             </div>
           </div>
 
@@ -2277,7 +2268,7 @@ const getGreeting = () => {
                  strokeWidth="6" 
                  fill="none" 
                  strokeDasharray="276" 
-                 strokeDashoffset={276 - (276 * score) / 100}
+                 strokeDashoffset={276 - (276 * Math.min(100, Math.max(0, score))) / 100}
                  strokeLinecap="round" 
                  className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(229,57,53,0.6)]" 
                />

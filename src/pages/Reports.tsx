@@ -434,7 +434,7 @@ export function Reports() {
       const memberSubRange = (startStr && endStr) ? { start: new Date(startStr), end: new Date(endStr) } : null;
 
       // Formulaic custom Growth Score out of 100 based on Daily Task Workspace
-      const growthScore = calculateMemberGrowthScoreData({
+      let growthScore = calculateMemberGrowthScoreData({
         profile: member,
         activeDateRange: memberSubRange,
         allReferrals: reportsData.referrals,
@@ -442,6 +442,7 @@ export function Reports() {
         meetings: reportsData.meetings,
         guestInvitations: reportsData.guests
       }).score;
+      growthScore = Math.min(100, Math.max(0, Math.round(growthScore)));
 
       // Human-readable position label
       const displayPosition = getDisplayPosition(member.position, member.role);
