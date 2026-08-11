@@ -233,8 +233,9 @@ export function getWorkspaceChecklistTasks(
 
     const hasGuestAuto = guestInvitations.some(g => {
       const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
-      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && (isDateInRange(g.created_at || g.createdAt || g.date) || (!isNaN(new Date(g.created_at || g.createdAt || g.date).getTime()) && Math.abs(new Date().getTime() - new Date(g.created_at || g.createdAt || g.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
+      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && isDateInRange(g.created_at || g.createdAt || g.date);
     });
+
     rawTasks.push({
       key: `task_invite_guest_${dateStr}`,
       label: 'Invite Guest',
@@ -248,8 +249,9 @@ export function getWorkspaceChecklistTasks(
 
     const hasPassRefAuto = allReferrals.some(r => {
       const sender = r.fromUserId || r.sender_id || r.authorMemberId;
-      return sender === userId && (isDateInRange(r.created_at || r.createdAt || r.date) || (!isNaN(new Date(r.created_at || r.createdAt || r.date).getTime()) && Math.abs(new Date().getTime() - new Date(r.created_at || r.createdAt || r.date).getTime()) < 30 * 24 * 60 * 60 * 1000));
+      return sender === userId && isDateInRange(r.created_at || r.createdAt || r.date);
     });
+
     rawTasks.push({
       key: `task_pass_referral_${dateStr}`,
       label: 'Pass Referral',
@@ -274,7 +276,7 @@ export function getWorkspaceChecklistTasks(
       if (!isParticipant) return false;
       const o2oUserAtt = (m.attendance || {})[userId];
       const isCompleted = m.status === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
-      return isCompleted && (isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt) || (!isNaN(new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) && Math.abs(new Date().getTime() - new Date(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000));
+      return isCompleted && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
     });
 
     const isO2ODone = hasScheduleMeetingAuto || has121Auto;
@@ -594,6 +596,26 @@ export function calculateMemberGrowthScoreData(input: {
   }
 
   const userId = profile.uid || profile.id;
+
+  // Calculate max possible score based on subscription date range
+  let subStartStr = profile.subscriptionStart || profile.subscriptionStartDate || profile.created_at || profile.createdAt;
+  let subEndStr = profile.subscriptionEnd || profile.subscriptionEndDate || profile.current_subscription_end_date;
+  if (subStartStr && !subEndStr) {
+     const sDate = new Date(subStartStr);
+     sDate.setFullYear(sDate.getFullYear() + 1);
+     subEndStr = sDate.toISOString();
+  }
+  
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const effectiveStart = subStartStr ? new Date(subStartStr) : new Date(today);
+  const effectiveEnd = subEndStr ? new Date(subEndStr) : new Date(today);
+  
+  const start = effectiveStart;
+  start.setHours(0,0,0,0);
+  const end = effectiveEnd;
+  end.setHours(23,59,59,999);
+
   const tasks = getWorkspaceChecklistTasks(profile, {
     allReferrals,
     oneToOnes,
@@ -602,22 +624,13 @@ export function calculateMemberGrowthScoreData(input: {
     allSlips,
     testimonials,
     allUsers
-  });
-
+  }, { start, end });
   const totalTasksCount = tasks.length;
   const completedTasksCount = tasks.filter(t => t.isDone).length;
   
   // Calculate total score based on points earned across all tasks
   const rawScore = tasks.reduce((acc, t) => acc + (t.isDone ? (t.pointsVal || 0) : 0), 0);
   const todayScore = Math.round(rawScore);
-  
-  // Calculate max possible score based on date range
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const start = input.activeDateRange?.start ? new Date(input.activeDateRange.start) : new Date(today);
-  start.setHours(0,0,0,0);
-  const end = input.activeDateRange?.end ? new Date(input.activeDateRange.end) : new Date(today);
-  end.setHours(23,59,59,999);
   
   const diffTime = Math.abs(end.getTime() - start.getTime());
   const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));

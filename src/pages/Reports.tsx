@@ -424,10 +424,19 @@ export function Reports() {
       // 5. Testimonials Submitted
       const testimonialsSubmitted = reportsData.testimonials.filter(t => t.authorMemberId === member.uid).length;
 
+      let startStr = member.subscriptionStart || member.subscriptionStartDate || member.created_at || member.createdAt;
+      let endStr = member.subscriptionEnd || member.subscriptionEndDate || member.current_subscription_end_date;
+      if (startStr && !endStr) {
+         const sDate = new Date(startStr);
+         sDate.setFullYear(sDate.getFullYear() + 1);
+         endStr = sDate.toISOString();
+      }
+      const memberSubRange = (startStr && endStr) ? { start: new Date(startStr), end: new Date(endStr) } : null;
+
       // Formulaic custom Growth Score out of 100 based on Daily Task Workspace
       const growthScore = calculateMemberGrowthScoreData({
         profile: member,
-        activeDateRange: startDate || endDate ? { startDate, endDate } : null,
+        activeDateRange: memberSubRange,
         allReferrals: reportsData.referrals,
         oneToOnes: reportsData.oneToOnes,
         meetings: reportsData.meetings,
@@ -939,65 +948,7 @@ export function Reports() {
                 </div>
               </div>
             )}
-
-            {/* Start Date */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-[#0B1220] border border-white/10 rounded-[12px] text-xs font-bold text-white px-3 py-2 focus:outline-none focus:border-[#E53935]"
-              />
-            </div>
-
-            {/* End Date */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-[#0B1220] border border-white/10 rounded-[12px] text-xs font-bold text-white px-3 py-2 focus:outline-none focus:border-[#E53935]"
-              />
-            </div>
-
-            {/* Predefined Filter Presets */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Duration Preset</label>
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={() => handlePresetFilter('this-month')}
-                  className="bg-[#0B1220] hover:bg-[#1F2937] border border-white/5 hover:border-white/15 px-3 py-2 rounded-[10px] text-[10px] font-bold text-gray-300 transition-all"
-                >
-                  This Month
-                </button>
-                <button 
-                  onClick={() => handlePresetFilter('last-month')}
-                  className="bg-[#0B1220] hover:bg-[#1F2937] border border-white/5 hover:border-white/15 px-3 py-2 rounded-[10px] text-[10px] font-bold text-gray-300 transition-all"
-                >
-                  Last Month
-                </button>
-                <button 
-                  onClick={() => handlePresetFilter('last-3')}
-                  className="bg-[#0B1220] hover:bg-[#1F2937] border border-white/5 hover:border-white/15 px-3 py-2 rounded-[10px] text-[10px] font-bold text-gray-300 transition-all"
-                >
-                  3 Months
-                </button>
-                <button 
-                  onClick={() => handlePresetFilter('last-6')}
-                  className="bg-[#0B1220] hover:bg-[#1F2937] border border-white/5 hover:border-white/15 px-3 py-2 rounded-[10px] text-[10px] font-bold text-gray-300 transition-all"
-                >
-                  6 Months
-                </button>
-                <button 
-                  onClick={() => handlePresetFilter('lifetime')}
-                  className="bg-[#0B1220] hover:bg-[#1F2937] border border-white/5 hover:border-white/15 px-3 py-2 rounded-[10px] text-[10px] font-bold text-gray-300 transition-all"
-                >
-                  Lifetime
-                </button>
-              </div>
-            </div>
+                      {/* Filters Removed for Growth Score */}
           </div>
         </div>
       </motion.div>

@@ -1376,6 +1376,7 @@ export function Meetings() {
       }
 
       // Guest Attendance Save Logic & Validation
+      const guestUpdates = [];
       if (meetingGuests.length > 0) {
         for (const guest of meetingGuests) {
           const gStatus = tempGuestAttendance[guest.id];
@@ -1390,55 +1391,12 @@ export function Meetings() {
           }
           
           tempAmount[guest.id] = finalGAmount;
-        }
-        for (const guest of meetingGuests) {
-          const guestStatus = tempGuestAttendance[guest.id];
-          if (guestStatus) {
-            const updatePayload = {
-              status: guestStatus,
-              attendance_status: guestStatus,
-              attendance_updated_by: profile?.uid,
-              attendance_updated_by_name: profile?.name || profile?.full_name,
-              attendance_updated_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            
-            await supabase
-              .from('guest_invitations')
-              .update(updatePayload)
-              .eq('id', guest.id);
-              
-            if (guestStatus === 'Present' && guest.status !== 'Present' && guest.attendance_status !== 'Present') {
-              const inviterId = guest.invited_by;
-              if (inviterId) {
-                try {
-                  const { data: inviterData } = await supabase
-                    .from('users')
-                    .select('growth_score, workspace_checklist')
-                    .eq('uid', inviterId)
-                    .single();
-                    
-                  if (inviterData) {
-                    const checklist = inviterData.workspace_checklist || {};
-                    const updatedChecklist = {
-                      ...checklist,
-                      task_invite_guest: true,
-                      'Invite a New Guest': true
-                    };
-                    
-                    await supabase
-                      .from('users')
-                      .update({
-                        workspace_checklist: updatedChecklist
-                      })
-                      .or(`id.eq.${inviterId},uid.eq.${inviterId}`);
-                  }
-                } catch (scoreErr) {
-                  console.error("Failed to update growth score for guest:", scoreErr);
-                }
-              }
-            }
-          }
+          guestUpdates.push({
+            id: guest.id,
+            status: gStatus,
+            wasNotPresent: guest.status !== 'Present' && guest.attendance_status !== 'Present',
+            inviterId: guest.invited_by
+          });
         }
       }
       
@@ -1454,7 +1412,8 @@ export function Meetings() {
             attendance: tempAttendance,
             amountCollected: tempAmount,
             memberNotes: tempMemberNotes,
-            isCompleted: true
+            isCompleted: true,
+            guestUpdates
           })
         });
         const text = await apiRes.text();
@@ -1463,44 +1422,19 @@ export function Meetings() {
           resData = text ? JSON.parse(text) : null;
         } catch (pErr) {
           console.warn("Non-JSON API response for meeting update:", text);
+          throw new Error("Invalid response from server");
         }
-        if (resData && !resData.success) {
-          setError(resData.message || resData.error || "Failed to update meeting.");
+        if (!apiRes.ok || (resData && !resData.success)) {
+          setError(resData?.message || resData?.error || "Failed to update meeting.");
           setIsSubmitting(false);
           return;
         }
-      } catch (apiErr) {
-        console.warn("Notice: API meeting update fetch notice:", apiErr);
-      }
-
-      // Update direct Supabase table first
-      const { error: dbErr } = await supabase
-        .from('meetings')
-        .update({
-          attendance: tempAttendance,
-          amount_collected: tempAmount,
-          member_notes: tempMemberNotes,
-          is_completed: true,
-          status: 'COMPLETED',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedMeeting.id);
-
-      if (dbErr) {
-        console.error("Supabase error updating meeting attendance:", dbErr);
-        setError("Failed to update meeting attendance. Please try again.");
+      } catch (apiErr: any) {
+        console.error("API meeting update failed:", apiErr);
+        setError(apiErr.message || "Failed to update meeting.");
         setIsSubmitting(false);
         return;
       }
-
-      await databaseService.update('meetings', selectedMeeting.id, { 
-        attendance: tempAttendance,
-        amountCollected: tempAmount,
-        memberNotes: tempMemberNotes,
-        isCompleted: true,
-        status: 'COMPLETED',
-        updatedAt: new Date().toISOString()
-      });
 
       // Auto-generate next recurring meeting after completion if setup is enabled
       try {

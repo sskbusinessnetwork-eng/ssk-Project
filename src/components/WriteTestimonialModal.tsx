@@ -94,7 +94,7 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 pb-[calc(92px+env(safe-area-inset-bottom,16px))] sm:pb-6 overflow-hidden">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-6 pb-[calc(92px+env(safe-area-inset-bottom,16px))] sm:pb-6 overflow-hidden">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}

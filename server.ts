@@ -815,7 +815,7 @@ async function startServer() {
   // Meeting Attendance & Collection Update Endpoint
   app.post("/api/meetings/update", async (req, res) => {
     try {
-      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted } = req.body || {};
+      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates } = req.body || {};
       if (!meetingId || !callerId) {
         return res.status(400).json({
           success: false,
@@ -898,6 +898,43 @@ async function startServer() {
           message: "Failed to update meeting in database.",
           error: updateErr.message
         });
+      }
+
+      if (guestUpdates && Array.isArray(guestUpdates)) {
+        for (const guest of guestUpdates) {
+          const payload = {
+            status: guest.status,
+            attendance_status: guest.status,
+            attendance_updated_by: caller.uid || caller.id,
+            attendance_updated_by_name: caller.name || caller.full_name,
+            attendance_updated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          await adminSupabase
+            .from('guest_invitations')
+            .update(payload)
+            .eq('id', guest.id);
+            
+          if (guest.status === 'Present' && guest.wasNotPresent) {
+            const inviterId = guest.inviterId;
+            if (inviterId) {
+               const { data: inviterData } = await adminSupabase
+                 .from('users')
+                 .select('workspace_checklist')
+                 .or(`id.eq.${inviterId},uid.eq.${inviterId}`)
+                 .single();
+                 
+               if (inviterData) {
+                 const checklist = inviterData.workspace_checklist || {};
+                 await adminSupabase
+                   .from('users')
+                   .update({ workspace_checklist: { ...checklist, task_invite_guest: true, 'Invite a New Guest': true } })
+                   .or(`id.eq.${inviterId},uid.eq.${inviterId}`);
+               }
+            }
+          }
+        }
       }
 
       return res.json({

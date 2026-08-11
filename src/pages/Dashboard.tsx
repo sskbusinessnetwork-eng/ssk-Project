@@ -1541,11 +1541,28 @@ export function Analytics() {
 
   const [viewingMeetingDetails, setViewingMeetingDetails] = useState<any | null>(null);
 
+  const growthScoreDateRange = useMemo(() => {
+    if (!profile) return undefined;
+    let startStr = profile.subscriptionStart || profile.subscriptionStartDate || profile.created_at || profile.createdAt;
+    let endStr = profile.subscriptionEnd || profile.subscriptionEndDate || profile.current_subscription_end_date;
+    
+    if (startStr && !endStr) {
+       const sDate = new Date(startStr);
+       sDate.setFullYear(sDate.getFullYear() + 1);
+       endStr = sDate.toISOString();
+    }
+    
+    if (startStr && endStr) {
+      return { start: new Date(startStr), end: new Date(endStr) };
+    }
+    return undefined;
+  }, [profile]);
+
   // Dynamic Growth Score calculation (Member & Chapter)
   const memberGrowthScoreData = useMemo(() => {
     return calculateMemberGrowthScoreData({
       profile,
-      activeDateRange,
+      activeDateRange: growthScoreDateRange,
       allReferrals,
       oneToOnes,
       meetings,
@@ -1554,7 +1571,7 @@ export function Analytics() {
       testimonials: allTestimonials,
       allUsers: allUsersList.length > 0 ? allUsersList : chapterUsers
     });
-  }, [profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, allUsersList, chapterUsers]);
+  }, [profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, allUsersList, chapterUsers]);
 
   // Auto-sync growth score to database when calculated score changes
   useEffect(() => {
@@ -1585,7 +1602,7 @@ export function Analytics() {
       : chapterUsers.filter(u => String(u.chapter_id || u.chapterId || u.adminId) === String(userChapId));
     return calculateChapterGrowthScoreData({
       chapterMembers: chapterMebs,
-      activeDateRange,
+      activeDateRange: growthScoreDateRange,
       allReferrals,
       oneToOnes,
       meetings,
@@ -1593,7 +1610,7 @@ export function Analytics() {
       currentProfile: profile,
       todayTasks
     });
-  }, [chapterUsers, profile, activeDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
+  }, [chapterUsers, profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
 
   const isChapterLeaderRole = useMemo(() => {
     if (!profile) return false;
