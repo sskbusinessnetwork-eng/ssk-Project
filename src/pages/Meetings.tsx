@@ -37,44 +37,38 @@ import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
 import { parseTimeTo24h, formatTime12h, parseTo12hParts } from '../utils/timeUtils';
+import {
+  TIMEZONE_IST,
+  getISTNow,
+  parseMeetingDateParts,
+  calculateNextOccurrence,
+  getMeetingTimestampInIST,
+  isMeetingCompleted,
+  isMeetingCancelled,
+  isMeetingDone,
+  isMeetingInPastInIST,
+  isMeetingUpcomingInIST,
+  isSameMeetingDate,
+  formatMeetingDateDisplay
+} from '../utils/recurringMeetingUtils';
+
+export {
+  isMeetingCompleted,
+  isMeetingCancelled,
+  isMeetingDone,
+  isMeetingInPastInIST,
+  isMeetingUpcomingInIST,
+  isSameMeetingDate,
+  formatMeetingDateDisplay
+};
 
 export function getMeetingExactDateTime(meeting: Meeting): Date {
   if (!meeting || !meeting.date) return new Date();
-  const dateStr = typeof meeting.date === 'string' ? meeting.date.split('T')[0] : '';
-  let year: number, month: number, day: number;
-  if (dateStr && dateStr.includes('-')) {
-    const parts = dateStr.split('-').map(Number);
-    year = parts[0];
-    month = parts[1] - 1;
-    day = parts[2];
-  } else {
-    const d = new Date(meeting.date);
-    year = d.getFullYear();
-    month = d.getMonth();
-    day = d.getDate();
+  const parts = parseMeetingDateParts(meeting.date, meeting.time || '07:30');
+  if (parts) {
+    return new Date(parts.timestampMs);
   }
-  const { hours, minutes } = parseTimeTo24h(meeting.time || '07:30');
-  return new Date(year, month, day, hours, minutes, 0, 0);
-}
-
-export function isMeetingCompleted(m: any): boolean {
-  if (!m) return false;
-  const s = String(m.status || '').trim().toUpperCase();
-  if (['COMPLETED', 'DONE', 'CONCLUDED', 'ENDED'].includes(s)) return true;
-  if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return true;
-  return false;
-}
-
-export function isMeetingCancelled(m: any): boolean {
-  if (!m) return false;
-  const s = String(m.status || '').trim().toUpperCase();
-  if (s === 'CANCELLED' || s === 'CANCELED') return true;
-  if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return true;
-  return false;
-}
-
-export function isMeetingDone(m: any): boolean {
-  return isMeetingCompleted(m) || isMeetingCancelled(m);
+  return new Date();
 }
 
 export function getAttendanceDisplay(status?: string) {
@@ -96,60 +90,14 @@ export function getAttendanceDisplay(status?: string) {
   return { label: status, color: 'bg-[#151C2E] text-neutral-400 border border-white/5' };
 }
 
-const WEEKDAYS: Record<string, number> = {
-  'Sunday': 0,
-  'Monday': 1,
-  'Tuesday': 2,
-  'Wednesday': 3,
-  'Thursday': 4,
-  'Friday': 5,
-  'Saturday': 6
-};
-
 function calculateOccurrences(
   frequency: 'Weekly' | 'Monthly',
   day: string,
   date: number,
   time: string
 ): Date[] {
-  const dates: Date[] = [];
-  const { hours, minutes } = parseTimeTo24h(time || '07:30');
-  const now = new Date();
-  
-  if (frequency === 'Weekly') {
-    const targetDayNum = WEEKDAYS[day] !== undefined ? WEEKDAYS[day] : 1;
-    let checkDate = startOfDay(now);
-    checkDate.setHours(hours, minutes, 0, 0);
-    
-    for (let i = 0; i < 90; i++) {
-      if (checkDate.getDay() === targetDayNum) {
-        if (isAfter(checkDate, now) || isSameDay(checkDate, now)) {
-          dates.push(new Date(checkDate));
-          break; // Requirement 2 & 7: Create only the single first upcoming meeting occurrence
-        }
-      }
-      checkDate = addDays(checkDate, 1);
-    }
-  } else {
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    
-    for (let i = 0; i < 12; i++) {
-      const monthDate = new Date(currentYear, currentMonth + i, 1);
-      const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-      const actualDay = Math.min(date || 1, daysInMonth);
-      
-      monthDate.setDate(actualDay);
-      monthDate.setHours(hours, minutes, 0, 0);
-      
-      if (isAfter(monthDate, now) || isSameDay(monthDate, now)) {
-        dates.push(new Date(monthDate));
-        break; // Requirement 2 & 7: Create only the single first upcoming meeting occurrence
-      }
-    }
-  }
-  
-  return dates;
+  const nextInfo = calculateNextOccurrence(frequency, day, date, time);
+  return [new Date(nextInfo.timestampMs)];
 }
 
 async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
@@ -174,7 +122,10 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   } catch (e) {}
 
   try {
-    const { data: supaMeetings } = await supabase.from('meetings').select('*').or(`chapter_id.eq.${targetChapterId},admin_id.eq.${targetChapterId}${adminId ? `,chapter_id.eq.${adminId},admin_id.eq.${adminId}` : ''}`);
+    const { data: supaMeetings } = await supabase
+      .from('meetings')
+      .select('*')
+      .or(`chapter_id.eq.${targetChapterId},admin_id.eq.${targetChapterId}${adminId ? `,chapter_id.eq.${adminId},admin_id.eq.${adminId}` : ''}`);
     if (supaMeetings && supaMeetings.length > 0) {
       const map = new Map<string, any>();
       allMeetings.forEach(m => map.set(m.id, m));
@@ -192,12 +143,12 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     }
   } catch (e) {}
 
-  const isDone = (m: any) => m.isCompleted === true || String(m.isCompleted) === 'true' || m.status === 'COMPLETED' || m.isCancelled === true || String(m.isCancelled) === 'true' || m.status === 'CANCELLED';
-
-  // Requirement 3: If recurring is disabled, remove all future non-completed recurring meetings
+  // If recurring is disabled:
   if (!setup.enabled) {
+    // Purge only future/upcoming non-completed recurring meetings (preserve past history)
     const toDelete = allMeetings.filter(m => 
-      !isDone(m) && 
+      !isMeetingDone(m) && 
+      !isMeetingInPastInIST(m) &&
       (m.isRecurring || (m as any).is_recurring)
     );
     for (const m of toDelete) {
@@ -211,52 +162,81 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     return;
   }
 
-  const occurrences = calculateOccurrences(setup.frequency, setup.day, setup.date, setup.time);
-  if (occurrences.length === 0) return;
-
-  const occurrenceDate = occurrences[0];
+  // Calculate the upcoming occurrence date in IST strictly based on recurring rule
+  const occurrence = calculateNextOccurrence(setup.frequency, setup.day, setup.date, setup.time);
+  const occurrenceDateString = occurrence.dateString; // YYYY-MM-DD
+  const occurrenceTime = setup.time || occurrence.timeFormatted;
+  const occurrenceLocation = setup.location || '';
   const occurrenceIdsToPreserve = new Set<string>();
 
-  const existingMeeting = allMeetings.find(m => !isDone(m) && (m.isRecurring || (m as any).is_recurring));
+  // Look for any existing meeting on that exact upcoming date (whether recurring or standard)
+  const exactUpcomingMeeting = allMeetings.find(m => 
+    !isMeetingDone(m) && 
+    isSameMeetingDate(m.date, occurrenceDateString)
+  );
 
-  if (existingMeeting) {
+  if (exactUpcomingMeeting) {
+    // Existing record on that exact date -> PRESERVE & UPDATE metadata if needed
     const updatePayload: any = {
-      time: setup.time,
-      location: setup.location,
+      time: occurrenceTime,
+      location: occurrenceLocation,
       isRecurring: true,
       chapter_id: targetChapterId,
-      adminId: adminId || targetChapterId
+      adminId: adminId || targetChapterId,
+      status: 'UPCOMING'
     };
-    if (!existingMeeting.date || !isValid(new Date(existingMeeting.date))) {
-      updatePayload.date = occurrenceDate.toISOString();
-    }
-    await databaseService.update('meetings', existingMeeting.id, updatePayload);
+    await databaseService.update('meetings', exactUpcomingMeeting.id, updatePayload);
     try {
       await supabase.from('meetings').update({
-        ...(updatePayload.date ? { date: updatePayload.date } : {}),
-        time: setup.time,
-        location: setup.location,
+        time: occurrenceTime,
+        location: occurrenceLocation,
         is_recurring: true,
         chapter_id: targetChapterId,
-        admin_id: adminId || targetChapterId
-      }).eq('id', existingMeeting.id);
+        admin_id: adminId || targetChapterId,
+        status: 'UPCOMING'
+      }).eq('id', exactUpcomingMeeting.id);
     } catch (e) {}
-    occurrenceIdsToPreserve.add(existingMeeting.id);
+    occurrenceIdsToPreserve.add(exactUpcomingMeeting.id);
   } else {
-    const sameDateMeeting = allMeetings.find(m => !isDone(m) && m.date && isSameDay(new Date(m.date), occurrenceDate));
-    if (sameDateMeeting) {
-      await databaseService.update('meetings', sameDateMeeting.id, { isRecurring: true });
+    // Check if there is an existing FUTURE non-completed recurring meeting scheduled on an outdated date
+    const otherFutureRecurringMeeting = allMeetings.find(m => 
+      !isMeetingDone(m) && 
+      !isMeetingInPastInIST(m) && 
+      (m.isRecurring || (m as any).is_recurring)
+    );
+
+    if (otherFutureRecurringMeeting) {
+      // Re-align the existing future recurring meeting to the correct upcoming date
+      const updatePayload: any = {
+        date: occurrenceDateString,
+        time: occurrenceTime,
+        location: occurrenceLocation,
+        isRecurring: true,
+        chapter_id: targetChapterId,
+        adminId: adminId || targetChapterId,
+        status: 'UPCOMING'
+      };
+      await databaseService.update('meetings', otherFutureRecurringMeeting.id, updatePayload);
       try {
-        await supabase.from('meetings').update({ is_recurring: true }).eq('id', sameDateMeeting.id);
+        await supabase.from('meetings').update({
+          date: occurrenceDateString,
+          time: occurrenceTime,
+          location: occurrenceLocation,
+          is_recurring: true,
+          chapter_id: targetChapterId,
+          admin_id: adminId || targetChapterId,
+          status: 'UPCOMING'
+        }).eq('id', otherFutureRecurringMeeting.id);
       } catch (e) {}
-      occurrenceIdsToPreserve.add(sameDateMeeting.id);
+      occurrenceIdsToPreserve.add(otherFutureRecurringMeeting.id);
     } else {
+      // Create new upcoming meeting record
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || targetChapterId,
         chapter_id: targetChapterId,
-        date: occurrenceDate.toISOString(),
-        time: setup.time,
-        location: setup.location,
+        date: occurrenceDateString,
+        time: occurrenceTime,
+        location: occurrenceLocation,
         attendance: {},
         amountCollected: {},
         memberNotes: {},
@@ -275,9 +255,9 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
           id: newId,
           admin_id: adminId || targetChapterId,
           chapter_id: targetChapterId,
-          date: occurrenceDate.toISOString(),
-          time: setup.time,
-          location: setup.location,
+          date: occurrenceDateString,
+          time: occurrenceTime,
+          location: occurrenceLocation,
           status: 'UPCOMING',
           is_recurring: true,
           created_at: new Date().toISOString()
@@ -286,14 +266,16 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     }
   }
 
-  // Purge any excess non-completed recurring meetings beyond the single upcoming meeting
-  const obsoleteMeetings = allMeetings.filter(m => 
-    !isDone(m) && 
+  // Purge any excess FUTURE non-completed recurring meetings beyond the single preserved upcoming meeting
+  // (Past meetings are NEVER purged to preserve history & attendance records)
+  const obsoleteFutureMeetings = allMeetings.filter(m => 
+    !isMeetingDone(m) && 
+    !isMeetingInPastInIST(m) &&
     (m.isRecurring || (m as any).is_recurring) && 
     !occurrenceIdsToPreserve.has(m.id)
   );
 
-  for (const m of obsoleteMeetings) {
+  for (const m of obsoleteFutureMeetings) {
     try {
       await supabase.from('meetings').delete().eq('id', m.id);
     } catch (e) {}
@@ -540,13 +522,14 @@ export function Meetings() {
       if (found) return found;
     }
     const userChapIdStr = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
-    const activeMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
+    const upcomingMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
       if (isMeetingDone(m)) return false;
+      if (isMeetingInPastInIST(m)) return false;
       const mChap = String(m.chapter_id || (m as any)?.chapterId || '').trim();
       return !userChapIdStr || !mChap || mChap === userChapIdStr;
     });
-    if (activeMeetings.length > 0) {
-      return [...activeMeetings].sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime())[0];
+    if (upcomingMeetings.length > 0) {
+      return [...upcomingMeetings].sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time))[0];
     }
     return null;
   }, [meetings, filteredMeetings, urlMeetingId, profile?.chapter_id, isMasterAdmin]);
@@ -1606,20 +1589,18 @@ export function Meetings() {
     if (isMeetingCompleted(meeting)) {
       return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     }
-    const now = new Date();
-    const meetingDateTime = getMeetingExactDateTime(meeting);
-    if (meetingDateTime < now) {
+    if (isMeetingInPastInIST(meeting)) {
       return { label: 'UPDATE REQUIRED', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-black' };
     }
     return { label: 'Upcoming', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
   };
 
-  // History: Completed meetings OR Cancelled meetings in reverse chronological order
+  // History: Completed meetings, Cancelled meetings, and Past occurrences in reverse chronological order
   const completedMeetings = React.useMemo(() => {
     const seenIds = new Set<string>();
     const rawHistory = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => isMeetingDone(m))
-      .sort((a, b) => getMeetingExactDateTime(b).getTime() - getMeetingExactDateTime(a).getTime());
+      .filter(m => isMeetingDone(m) || isMeetingInPastInIST(m))
+      .sort((a, b) => getMeetingTimestampInIST(b.date, b.time) - getMeetingTimestampInIST(a.date, a.time));
 
     const result: Meeting[] = [];
     for (const m of rawHistory) {
@@ -1693,13 +1674,13 @@ export function Meetings() {
     );
   };
 
-  // Deduplicated Upcoming & Action Required Meetings for table/list view (prevent duplicate rendering)
+  // Deduplicated Upcoming Meetings for table/list view (strictly future/current occurrences in IST)
   const upcomingTableMeetings = React.useMemo(() => {
     const seenIds = new Set<string>();
 
     const rawUpcoming = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => !isMeetingDone(m))
-      .sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+      .filter(m => !isMeetingDone(m) && !isMeetingInPastInIST(m))
+      .sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time));
 
     const result: Meeting[] = [];
     for (const m of rawUpcoming) {
@@ -1956,7 +1937,7 @@ export function Meetings() {
                   <Calendar size={13} className="text-primary" /> Meeting Date
                 </p>
                 <p className="text-sm font-bold text-white">
-                  {primaryFocusMeeting.date ? format(new Date(primaryFocusMeeting.date), 'EEEE, dd MMM yyyy') : 'N/A'}
+                  {primaryFocusMeeting.date ? formatMeetingDateDisplay(primaryFocusMeeting.date, primaryFocusMeeting.time, 'full') : 'N/A'}
                 </p>
               </div>
 
@@ -2164,7 +2145,7 @@ export function Meetings() {
             <div className="w-full space-y-4">
               <div className="flex flex-col gap-3 sm:gap-4 w-full">
               {paginatedUpcomingTableMeetings.map((meeting) => {
-                const dateFormatted = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
+                const dateFormatted = meeting.date ? formatMeetingDateDisplay(meeting.date, meeting.time, 'standard') : 'N/A';
                 const timeFormatted = formatTime12h(meeting.time || '07:30');
                 const canUpdate = canUserUpdateMeeting(meeting);
                 const mStatus = getMeetingStatus(meeting);
@@ -2367,7 +2348,7 @@ export function Meetings() {
                 const meetingTitle = meeting.title || meeting.topic || `${chapterName} Meeting`;
                 const badge = getUserAttendanceBadge(meeting, profile?.uid || profile?.id);
 
-                const meetingDateStr = meeting.date ? format(new Date(meeting.date), 'MMM d, yyyy') : '';
+                const meetingDateStr = meeting.date ? formatMeetingDateDisplay(meeting.date, meeting.time, 'short') : '';
                 const meetingTimeStr = meeting.time ? formatTime12h(meeting.time) : '';
                 const dateTimeCombined = [meetingDateStr, meetingTimeStr].filter(Boolean).join(' · ');
 
@@ -3251,7 +3232,7 @@ export function Meetings() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] sm:text-sm font-bold text-white truncate">
-                          {format(new Date(meeting.date), 'dd MMM yyyy')} &middot; {formatTime12h(meeting.time || '07:30')}
+                          {formatMeetingDateDisplay(meeting.date, meeting.time, 'standard')} &middot; {formatTime12h(meeting.time || '07:30')}
                         </p>
                         <p className="text-[10px] sm:text-[11px] font-semibold text-neutral-400 mt-0.5 truncate uppercase tracking-wider">
                           {chapterName}
@@ -3336,7 +3317,7 @@ export function Meetings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-neutral-300">
                 <div className="flex items-center gap-2">
                   <Calendar size={14} className="text-primary shrink-0" />
-                  <span>Date: <strong className="text-white">{format(new Date(reportMeeting.date), 'EEEE, MMMM do yyyy')}</strong></span>
+                  <span>Date: <strong className="text-white">{formatMeetingDateDisplay(reportMeeting.date, reportMeeting.time, 'full')}</strong></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock size={14} className="text-primary shrink-0" />
@@ -3485,7 +3466,7 @@ export function Meetings() {
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Date:</span>
-                  <span className="font-bold text-white text-xs">{readOnlyMeeting.date ? format(new Date(readOnlyMeeting.date), 'EEEE, dd MMM yyyy') : 'N/A'}</span>
+                  <span className="font-bold text-white text-xs">{readOnlyMeeting.date ? formatMeetingDateDisplay(readOnlyMeeting.date, readOnlyMeeting.time, 'full') : 'N/A'}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-neutral-400 font-bold uppercase tracking-wider">Meeting Time:</span>
