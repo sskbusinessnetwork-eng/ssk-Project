@@ -1,0 +1,3 @@
+sed -i 's/`Period: ${startDate} to ${endDate}`/`Period: ${startDate ? format(new Date(startDate), '"'"'dd MMM yyyy'"'"') : '"'"'All Time'"'"'} to ${endDate ? format(new Date(endDate), '"'"'dd MMM yyyy'"'"') : '"'"'All Time'"'"'}`/g' src/pages/Reports.tsx
+sed -i 's/`Reporting Period: ${startDate} to ${endDate}`/`Reporting Period: ${startDate ? format(new Date(startDate), '"'"'dd MMM yyyy'"'"') : '"'"'All Time'"'"'} to ${endDate ? format(new Date(endDate), '"'"'dd MMM yyyy'"'"') : '"'"'All Time'"'"'}`/g' src/pages/Reports.tsx
+sed -i 's/_${startDate}_to_${endDate}/_${startDate || '"'"'AllTime'"'"'}_to_${endDate || '"'"'AllTime'"'"'}/g' src/pages/Reports.tsx

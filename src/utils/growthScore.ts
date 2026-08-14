@@ -237,7 +237,7 @@ export function getWorkspaceChecklistTasks(
     allUsers = []
   } = activities;
   const parseISTStrToUTC = (str: string) => {
-    const [y, m, d] = str.split('-').map(Number);
+    if (!str || typeof str !== 'string' || !str.includes('-')) return new Date(); const [y, m, d] = str.split('-').map(Number); if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
     return new Date(Date.UTC(y, m - 1, d));
   };
 
@@ -679,7 +679,7 @@ export function calculateMemberGrowthScoreData(input: {
   }
   
   const parseISTStrToUTC = (str: string) => {
-    const [y, m, d] = str.split('-').map(Number);
+    if (!str || typeof str !== 'string' || !str.includes('-')) return new Date(); const [y, m, d] = str.split('-').map(Number); if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
     return new Date(Date.UTC(y, m - 1, d));
   };
 

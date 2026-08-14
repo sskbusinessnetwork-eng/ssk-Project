@@ -508,7 +508,7 @@ export function Reports() {
     const monthsMap: Record<string, { month: string; referrals: number; attendance: number; meetings: number; business: number }> = {};
     
     // Initialize past 6 months to make chart look complete
-    const tempDate = new Date(parsedEnd);
+    const tempDate = (parsedEnd && !isNaN(new Date(parsedEnd).getTime())) ? new Date(parsedEnd) : new Date();
     for (let i = 5; i >= 0; i--) {
       const targetMonth = subMonths(tempDate, i);
       const key = format(targetMonth, 'MMM yyyy');
@@ -649,7 +649,7 @@ export function Reports() {
     const csvContent = [
       `SSK Business Network - Chapter Performance Report`,
       `Chapter: ${currentChapterName}`,
-      `Period: ${startDate} to ${endDate}`,
+      `Period: ${startDate ? format(new Date(startDate), 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(new Date(endDate), 'dd MMM yyyy') : 'All Time'}`,
       ``,
       headers.join(','),
       ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
@@ -659,7 +659,7 @@ export function Reports() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Roster_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate}_to_${endDate}.csv`);
+    link.setAttribute('download', `Roster_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate || 'AllTime'}_to_${endDate || 'AllTime'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -688,12 +688,12 @@ export function Reports() {
     XLSX.utils.book_append_sheet(wb, ws, 'Roster Performance');
 
     // Add metadata/header rows nicely
-    XLSX.writeFile(wb, `Performance_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate}_to_${endDate}.xlsx`);
+    XLSX.writeFile(wb, `Performance_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate || 'AllTime'}_to_${endDate || 'AllTime'}.xlsx`);
     setShowExportMenu(false);
   };
 
   const exportToPDF = async () => {
-    const { default: jsPDF } = await import("jspdf");
+    const { jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     if (tableData.length === 0) return;
 
@@ -719,7 +719,7 @@ export function Reports() {
     doc.setFont('helvetica', 'bold');
     doc.text(`Chapter Name: ${currentChapterName.toUpperCase()}`, 40, 95);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Reporting Period: ${startDate} to ${endDate}`, 40, 115);
+    doc.text(`Reporting Period: ${startDate ? format(new Date(startDate), 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(new Date(endDate), 'dd MMM yyyy') : 'All Time'}`, 40, 115);
 
     // Key metrics summary section
     doc.setFillColor(243, 244, 246);
@@ -778,7 +778,7 @@ export function Reports() {
       margin: { left: 40, right: 40 },
     });
 
-    doc.save(`Performance_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate}_to_${endDate}.pdf`);
+    doc.save(`Performance_Report_${currentChapterName.replace(/\s+/g, '_')}_${startDate || 'AllTime'}_to_${endDate || 'AllTime'}.pdf`);
     setShowExportMenu(false);
   };
 

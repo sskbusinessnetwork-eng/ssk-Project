@@ -419,7 +419,7 @@ export function MyReport() {
   const handleDownloadPDF = async () => {
     // @ts-ignore
     if (!reportData) return;
-    const { default: jsPDF } = await import("jspdf");
+    const { jsPDF } = await import("jspdf");
     const { default: autoTable } = await import("jspdf-autotable");
     // @ts-ignore
     const doc = new jsPDF();

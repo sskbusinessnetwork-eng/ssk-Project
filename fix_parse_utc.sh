@@ -1,0 +1,1 @@
+sed -i 's/const \[y, m, d\] = str.split('"'"'-'"'"').map(Number);/if (!str || typeof str !== '"'"'string'"'"' || !str.includes('"'"'-'"'"')) return new Date(); const [y, m, d] = str.split('"'"'-'"'"').map(Number); if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();/g' src/utils/growthScore.ts
