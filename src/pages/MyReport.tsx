@@ -10,8 +10,8 @@ import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 
@@ -431,7 +431,7 @@ export function MyReport() {
     doc.setTextColor(40, 40, 40);
     doc.text("MEETING / PERIOD HIGHLIGHTS", 20, 90);
     
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 95,
       head: [['Metric', 'Value']],
       body: [
@@ -448,13 +448,13 @@ export function MyReport() {
       styles: { fontSize: 11, cellPadding: 5 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 160;
+    const finalY = (doc as any).lastAutoTable?.finalY || 160;
 
     doc.setFontSize(14);
     doc.setTextColor(40, 40, 40);
     doc.text("CUMULATIVE ACHIEVEMENTS", 20, finalY + 15);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: finalY + 20,
       head: [['Metric', 'Value']],
       body: [
