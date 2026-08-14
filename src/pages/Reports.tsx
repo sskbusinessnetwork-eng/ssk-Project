@@ -16,7 +16,7 @@ import {
   FileText, Star, X, CheckSquare, Briefcase, BarChart3, TrendingUp, Info
 } from 'lucide-react';
 import { isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths, isValid } from 'date-fns';
-import { safeFormat as format } from '../utils/dateUtils';
+import { safeFormat as format, parseSafeDate } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
 import {
@@ -433,14 +433,13 @@ export function Reports() {
 
       let startStr = member.subscriptionStart || member.subscriptionStartDate || member.created_at || member.createdAt;
       let endStr = member.subscriptionEnd || member.subscriptionEndDate || member.current_subscription_end_date;
-      if (startStr && !endStr) {
-         const sDate = new Date(startStr);
-         if (!isNaN(sDate.getTime())) {
-         sDate.setFullYear(sDate.getFullYear() + 1);
-         endStr = sDate.toISOString();
-         }
+      const sDate = parseSafeDate(startStr);
+      let eDate = parseSafeDate(endStr);
+      if (sDate && !eDate) {
+        eDate = new Date(sDate);
+        eDate.setFullYear(eDate.getFullYear() + 1);
       }
-      const memberSubRange = (startStr && endStr && !isNaN(new Date(startStr).getTime()) && !isNaN(new Date(endStr).getTime())) ? { start: new Date(startStr), end: new Date(endStr) } : null;
+      const memberSubRange = (sDate && eDate) ? { start: sDate, end: eDate } : null;
 
       // Formulaic custom Growth Score out of 100 based on Daily Task Workspace
       let growthScore = calculateMemberGrowthScoreData({
@@ -508,7 +507,7 @@ export function Reports() {
     const monthsMap: Record<string, { month: string; referrals: number; attendance: number; meetings: number; business: number }> = {};
     
     // Initialize past 6 months to make chart look complete
-    const tempDate = (parsedEnd && !isNaN(new Date(parsedEnd).getTime())) ? new Date(parsedEnd) : new Date();
+    const tempDate = (parsedEnd && parseSafeDate(parsedEnd)) ? parseSafeDate(parsedEnd)! : new Date();
     for (let i = 5; i >= 0; i--) {
       const targetMonth = subMonths(tempDate, i);
       const key = format(targetMonth, 'MMM yyyy');
@@ -517,8 +516,11 @@ export function Reports() {
 
     // Accumulate referrals
     reportsData.referrals.forEach(ref => {
-      if (!ref.createdAt) return;
-      const key = format(new Date(ref.createdAt), 'MMM yyyy');
+      const refDate = ref.createdAt || (ref as any).created_at || (ref as any).date;
+      if (!refDate) return;
+      const d = parseSafeDate(refDate);
+      if (!d) return;
+      const key = format(d, 'MMM yyyy');
       if (monthsMap[key]) {
         monthsMap[key].referrals++;
       }
@@ -526,8 +528,11 @@ export function Reports() {
 
     // Accumulate meetings
     reportsData.meetings.forEach(m => {
-      if (!m.date) return;
-      const key = format(new Date(m.date), 'MMM yyyy');
+      const mDate = m.date || (m as any).meeting_date || (m as any).created_at;
+      if (!mDate) return;
+      const d = parseSafeDate(mDate);
+      if (!d) return;
+      const key = format(d, 'MMM yyyy');
       if (monthsMap[key]) {
         monthsMap[key].meetings++;
       }
@@ -535,17 +540,24 @@ export function Reports() {
 
     // Accumulate business (Thank you slips)
     reportsData.slips.forEach(slip => {
-      if (!slip.createdAt) return;
-      const key = format(new Date(slip.createdAt), 'MMM yyyy');
+      const slipDate = slip.createdAt || (slip as any).created_at || (slip as any).date;
+      if (!slipDate) return;
+      const d = parseSafeDate(slipDate);
+      if (!d) return;
+      const key = format(d, 'MMM yyyy');
       if (monthsMap[key]) {
-        monthsMap[key].business += (Number(slip.businessValue) || 0);
+        monthsMap[key].business += (Number(slip.businessValue || (slip as any).business_value) || 0);
       }
     });
 
     // Calculate meeting average attendance per month
     const monthlyMeetings: Record<string, { present: number; total: number }> = {};
     reportsData.meetings.filter(m => m.isCompleted).forEach(m => {
-      const key = format(new Date(m.date), 'MMM yyyy');
+      const mDate = m.date || (m as any).meeting_date || (m as any).created_at;
+      if (!mDate) return;
+      const d = parseSafeDate(mDate);
+      if (!d) return;
+      const key = format(d, 'MMM yyyy');
       if (!monthlyMeetings[key]) {
         monthlyMeetings[key] = { present: 0, total: 0 };
       }
@@ -603,8 +615,8 @@ export function Reports() {
     if (!start || !end) return true; // Include everything if no date filter is applied
     if (!dateVal) return false;
     try {
-      const date = new Date(dateVal);
-      if (isNaN(date.getTime())) return false;
+      const date = parseSafeDate(dateVal);
+      if (!date) return false;
       return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
     } catch {
       return false;
@@ -649,7 +661,7 @@ export function Reports() {
     const csvContent = [
       `SSK Business Network - Chapter Performance Report`,
       `Chapter: ${currentChapterName}`,
-      `Period: ${startDate ? format(new Date(startDate), 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(new Date(endDate), 'dd MMM yyyy') : 'All Time'}`,
+      `Period: ${startDate ? format(startDate, 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(endDate, 'dd MMM yyyy') : 'All Time'}`,
       ``,
       headers.join(','),
       ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
@@ -719,7 +731,7 @@ export function Reports() {
     doc.setFont('helvetica', 'bold');
     doc.text(`Chapter Name: ${currentChapterName.toUpperCase()}`, 40, 95);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Reporting Period: ${startDate ? format(new Date(startDate), 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(new Date(endDate), 'dd MMM yyyy') : 'All Time'}`, 40, 115);
+    doc.text(`Reporting Period: ${startDate ? format(startDate, 'dd MMM yyyy') : 'All Time'} to ${endDate ? format(endDate, 'dd MMM yyyy') : 'All Time'}`, 40, 115);
 
     // Key metrics summary section
     doc.setFillColor(243, 244, 246);

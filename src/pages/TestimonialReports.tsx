@@ -74,7 +74,7 @@ export function TestimonialReports() {
                   <tr key={t.id} className="hover:bg-neutral-50/50 transition-colors">
                     <td className="p-4 text-xs font-mono text-neutral-500 truncate max-w-[100px]">{t.id}</td>
                     <td className="p-4 text-sm text-neutral-900 whitespace-nowrap">
-                      {format(new Date(t.createdAt), 'dd MMM yyyy')}
+                      {format(t.createdAt, 'dd MMM yyyy')}
                     </td>
                     <td className="p-4 text-sm font-medium text-neutral-900">{author}</td>
                     <td className="p-4 text-sm font-medium text-neutral-900">{receiver}</td>

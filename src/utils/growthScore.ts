@@ -1,11 +1,10 @@
 import { supabase } from '../lib/supabaseClient';
 import { calculateProfileCompletion } from './profileUtils';
-
+import { parseSafeDate } from './dateUtils';
 
 export function getISTDayBounds(inputDate: Date | string | number = new Date()) {
   try {
-    let date = new Date(inputDate);
-    if (isNaN(date.getTime())) date = new Date();
+    let date = parseSafeDate(inputDate) || new Date();
     let year, month, day;
     try {
       const formatter = new Intl.DateTimeFormat("en-US", {
@@ -44,8 +43,7 @@ export function getISTDayBounds(inputDate: Date | string | number = new Date()) 
 
 export function getISTDateString(inputDate: Date | string | number = new Date()) {
   try {
-    let date = new Date(inputDate);
-    if (isNaN(date.getTime())) date = new Date();
+    let date = parseSafeDate(inputDate) || new Date();
     try {
       const formatter = new Intl.DateTimeFormat("en-US", {
         timeZone: "Asia/Kolkata",
@@ -151,8 +149,8 @@ export function formatDateKey(dateInput: any): string {
     if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
       return dateInput;
     }
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return '';
+    const d = parseSafeDate(dateInput);
+    if (!d) return '';
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -236,9 +234,10 @@ export function getWorkspaceChecklistTasks(
     testimonials = [],
     allUsers = []
   } = activities;
-  const parseISTStrToUTC = (str: string) => {
-    if (!str || typeof str !== 'string' || !str.includes('-')) return new Date(); const [y, m, d] = str.split('-').map(Number); if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
-    return new Date(Date.UTC(y, m - 1, d));
+  const parseISTStrToUTC = (str: string | Date) => {
+    const d = parseSafeDate(str);
+    if (!d) return new Date();
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   };
 
   const todayStr = getISTDateString(new Date());
@@ -246,7 +245,13 @@ export function getWorkspaceChecklistTasks(
   const endStr = activeDateRange?.end ? getISTDateString(activeDateRange.end) : todayStr;
 
   let startUTC = parseISTStrToUTC(startStr);
-  const endUTC = parseISTStrToUTC(endStr);
+  let endUTC = parseISTStrToUTC(endStr);
+  
+  if (startUTC.getTime() > endUTC.getTime()) {
+    const tmp = startUTC;
+    startUTC = endUTC;
+    endUTC = tmp;
+  }
   
   if (endUTC.getTime() - startUTC.getTime() > 365 * 24 * 60 * 60 * 1000) {
     startUTC = new Date(endUTC.getTime() - 365 * 24 * 60 * 60 * 1000);
@@ -263,7 +268,9 @@ export function getWorkspaceChecklistTasks(
         if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
            return dateInput === currentIST;
         }
-        return getISTDateString(dateInput) === currentIST;
+        const d = parseSafeDate(dateInput);
+        if (!d) return false;
+        return getISTDateString(d) === currentIST;
       } catch {
         return false;
       }
@@ -670,17 +677,17 @@ export function calculateMemberGrowthScoreData(input: {
   // Calculate max possible score based on subscription date range
   let subStartStr = profile.subscriptionStart || profile.subscriptionStartDate || profile.created_at || profile.createdAt;
   let subEndStr = profile.subscriptionEnd || profile.subscriptionEndDate || profile.current_subscription_end_date;
-  if (subStartStr && !subEndStr) {
-     const sDate = new Date(subStartStr);
-     if (!isNaN(sDate.getTime())) {
-     sDate.setFullYear(sDate.getFullYear() + 1);
-     subEndStr = sDate.toISOString();
-     }
+  const parsedSubStart = parseSafeDate(subStartStr);
+  let parsedSubEnd = parseSafeDate(subEndStr);
+  if (parsedSubStart && !parsedSubEnd) {
+    parsedSubEnd = new Date(parsedSubStart);
+    parsedSubEnd.setFullYear(parsedSubEnd.getFullYear() + 1);
   }
   
-  const parseISTStrToUTC = (str: string) => {
-    if (!str || typeof str !== 'string' || !str.includes('-')) return new Date(); const [y, m, d] = str.split('-').map(Number); if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
-    return new Date(Date.UTC(y, m - 1, d));
+  const parseISTStrToUTC = (str: string | Date) => {
+    const d = parseSafeDate(str);
+    if (!d) return new Date();
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   };
 
   const todayStr = getISTDateString(new Date());
@@ -693,8 +700,13 @@ export function calculateMemberGrowthScoreData(input: {
     endStr = getISTDateString(input.activeDateRange.end);
   }
 
-  const start = parseISTStrToUTC(startStr);
-  const end = parseISTStrToUTC(endStr);
+  let start = parseISTStrToUTC(startStr);
+  let end = parseISTStrToUTC(endStr);
+  if (start.getTime() > end.getTime()) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
 
   const tasks = getWorkspaceChecklistTasks(profile, {
     allReferrals,
@@ -733,8 +745,8 @@ export function calculateMemberGrowthScoreData(input: {
   const addDateIfValid = (dateInput: any) => {
     if (!dateInput) return;
     try {
-      const d = new Date(dateInput);
-      if (!isNaN(d.getTime()) && d.getTime() >= thirtyDaysAgoTime) {
+      const d = parseSafeDate(dateInput);
+      if (d && d.getTime() >= thirtyDaysAgoTime) {
         const key = formatDateKey(d);
         if (key) activeDates.add(key);
       }
@@ -986,9 +998,12 @@ export function calculateGrowthTrend(currentVal: number, previousVal: number): G
 export function isDateInRange(dateStrOrObj: any, startDate: Date, endDate: Date): boolean {
   if (!dateStrOrObj) return false;
   try {
-    const d = new Date(dateStrOrObj);
-    if (isNaN(d.getTime())) return false;
-    return d.getTime() >= startDate.getTime() && d.getTime() <= endDate.getTime();
+    const d = parseSafeDate(dateStrOrObj);
+    if (!d) return false;
+    const s = parseSafeDate(startDate);
+    const e = parseSafeDate(endDate);
+    if (!s || !e) return true;
+    return d.getTime() >= s.getTime() && d.getTime() <= e.getTime();
   } catch {
     return false;
   }
