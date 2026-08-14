@@ -506,6 +506,7 @@ async function startServer() {
       }
 
       // 3. Assign target user to selected position/role
+      console.log("UPDATE PAYLOAD:", updatePayload);
       const { error: updateErr } = await adminSupabase
         .from('users')
         .update({ 
@@ -516,6 +517,7 @@ async function startServer() {
         .eq('id', targetUserId);
 
       if (updateErr) {
+        console.error("SUPABASE UPDATE ERROR:", updateErr); console.error("SUPABASE UPDATE ERR:", updateErr);
         console.error("Failed to update target user position:", updateErr);
         return res.status(500).json({ success: false, error: updateErr.message || "Failed to update member position" });
       }
@@ -900,7 +902,7 @@ async function startServer() {
         .update(updatePayload)
         .eq('id', meetingId);
 
-      if (updateErr) {
+      if (updateErr) { console.error("SUPABASE UPDATE ERR:", updateErr);
         return res.status(500).json({
           success: false,
           message: "Failed to update meeting in database.",

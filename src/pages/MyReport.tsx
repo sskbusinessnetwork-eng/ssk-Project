@@ -10,10 +10,19 @@ import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+declare var jsPDF: any;
+declare var autoTable: any;
+declare var XLSX: any;
+declare var Document: any;
+declare var Packer: any;
+declare var Paragraph: any;
+declare var TextRun: any;
+declare var HeadingLevel: any;
+declare var Table: any;
+declare var TableRow: any;
+declare var TableCell: any;
+declare var WidthType: any;
+declare var BorderStyle: any;
 
 export function MyReport() {
   const { profile } = useAuth();
@@ -334,7 +343,7 @@ export function MyReport() {
       let pMembersAttended = 0;
       pMeetings.forEach(m => {
         if (m.attendance) {
-          pMembersAttended += Object.values(m.attendance).filter(status => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(status))).length;
+          pMembersAttended += Object.values(m.attendance || {}).filter(status => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(status))).length;
         }
       });
 
@@ -407,8 +416,12 @@ export function MyReport() {
     }, 800);
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
+    // @ts-ignore
     if (!reportData) return;
+    const { default: jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
+    // @ts-ignore
     const doc = new jsPDF();
     
     doc.setFontSize(20);
@@ -431,6 +444,7 @@ export function MyReport() {
     doc.setTextColor(40, 40, 40);
     doc.text("MEETING / PERIOD HIGHLIGHTS", 20, 90);
     
+    // @ts-ignore
     autoTable(doc, {
       startY: 95,
       head: [['Metric', 'Value']],
@@ -454,6 +468,7 @@ export function MyReport() {
     doc.setTextColor(40, 40, 40);
     doc.text("CUMULATIVE ACHIEVEMENTS", 20, finalY + 15);
 
+    // @ts-ignore
     autoTable(doc, {
       startY: finalY + 20,
       head: [['Metric', 'Value']],
@@ -473,8 +488,9 @@ export function MyReport() {
     doc.save(`SSK_${reportData.chapterName.replace(/\s+/g, '_')}_Impact_Report_${reportData.startDate}_${reportData.endDate}.pdf`);
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     if (!reportData) return;
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     const wsData = [
@@ -511,8 +527,10 @@ export function MyReport() {
     XLSX.writeFile(wb, `SSK_${reportData.chapterName.replace(/\s+/g, '_')}_Impact_Report_${reportData.startDate}_${reportData.endDate}.xlsx`);
   };
 
-  const handleDownloadWord = () => {
+  const handleDownloadWord = async () => {
     if (!reportData) return;
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = await import("docx");
+    // @ts-ignore
     const doc = new Document({
       sections: [{
         properties: {},

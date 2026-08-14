@@ -1,31 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-
-const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY);
+const supabase = createClient('https://wfbkgfotpzscjyaanzpx.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmYmtnZm90cHpzY2p5YWFuenB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MzMzNjEsImV4cCI6MjA5OTUwOTM2MX0.Z_Is7xk8QdTWCTgj-L9X6Bm7s0-RTMBE9DW7o2qSHg4');
 
 async function test() {
-  const { data: meeting } = await supabase.from('meetings').select('id, date, time, location, attendance, amount_collected, is_completed').limit(1).single();
-  if (!meeting) {
-    console.log("No meeting found");
-    return;
-  }
-  
+  const meetingId = '5c951195-1db5-4e89-a0fc-941f921da3c2';
   const updatePayload = {
     updated_at: new Date().toISOString(),
-    date: meeting.date,
-    time: meeting.time,
-    location: meeting.location,
-    attendance: meeting.attendance || {},
-    amount_collected: meeting.amount_collected || {},
-    is_completed: meeting.is_completed,
-    status: 'UPCOMING'
+    location: "Test Updated",
+    date: "10-08-2026", // Check if this is the issue
+    time: "07:00 AM"
   };
-
-  const { error } = await supabase.from('meetings').update(updatePayload).eq('id', meeting.id);
-  if (error) {
-    console.error("Update failed:", error);
-  } else {
-    console.log("Update succeeded");
-  }
+  const { data, error } = await supabase.from('meetings').update(updatePayload).eq('id', meetingId);
+  console.log("Error:", error);
 }
 test();

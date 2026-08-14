@@ -1435,13 +1435,13 @@ export function Meetings() {
           throw new Error("Invalid response from server");
         }
         if (!apiRes.ok || (resData && !resData.success)) {
-          setError(resData?.message || resData?.error || "Failed to update meeting.");
+          setError(resData?.message || resData?.error || `Failed to update meeting. Status: ${apiRes.status}`);
           setIsSubmitting(false);
           return;
         }
       } catch (apiErr: any) {
         console.error("API meeting update failed:", apiErr);
-        setError(apiErr.message || "Failed to update meeting.");
+        setError(apiErr?.message || "Failed to update meeting (Client Error).");
         setIsSubmitting(false);
         return;
       }
@@ -2631,10 +2631,10 @@ export function Meetings() {
             <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
               <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
               <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
-                {Object.values(tempAttendance).filter(s => ['PRESENT', 'PRESENT', 'YES', 'SUBSTITUTE'].includes(String(s).toUpperCase())).length}
-                {Object.values(tempGuestAttendance).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
+                {Object.values(tempAttendance || {}).filter(s => ['PRESENT', 'PRESENT', 'YES', 'SUBSTITUTE'].includes(String(s).toUpperCase())).length}
+                {Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
                   <span className="text-xs text-emerald-400/70 font-medium mb-1">
-                    (+{Object.values(tempGuestAttendance).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
+                    (+{Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
                   </span>
                 )}
               </p>
@@ -2642,7 +2642,7 @@ export function Meetings() {
             <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
               <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
               <p className="text-xl font-bold text-white">
-                ₹{Object.values(tempAmount).reduce((a: number, b: any) => a + (typeof b === 'number' ? b : parseInt(String(b)) || 0), 0).toLocaleString()}
+                ₹{Object.values(tempAmount || {}).reduce((a: number, b: any) => a + (typeof b === 'number' ? b : parseInt(String(b)) || 0), 0).toLocaleString()}
               </p>
             </div>
           </div>

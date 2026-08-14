@@ -1,3 +1,6 @@
+declare var jsPDF: any;
+declare var autoTable: any;
+declare var XLSX: any;
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -16,9 +19,6 @@ import { isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths, isVali
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -656,7 +656,8 @@ export function Reports() {
     setShowExportMenu(false);
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (tableData.length === 0) return;
 
     const dataForSheet = tableData.map(r => ({
@@ -681,7 +682,9 @@ export function Reports() {
     setShowExportMenu(false);
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
     if (tableData.length === 0) return;
 
     const doc = new jsPDF('landscape', 'pt', 'a4');

@@ -26,7 +26,26 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    try {
+      const userStr = localStorage.getItem('user');
+      const parsedUser = userStr ? JSON.parse(userStr) : null;
+      const uid = parsedUser?.uid || parsedUser?.id || parsedUser?.profile?.id || 'Unknown';
+      const role = parsedUser?.role || parsedUser?.profile?.role || 'Unknown';
+      
+      console.error('--- APP CRASH REPORT ---');
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Component Stack:', errorInfo.componentStack);
+      console.error('Route:', window.location.pathname + window.location.search);
+      console.error('User ID:', uid);
+      console.error('User Role:', role);
+      console.error('Device/Browser:', navigator.userAgent);
+      console.error('Window Size:', `${window.innerWidth}x${window.innerHeight}`);
+      console.error('Time:', new Date().toISOString());
+      console.error('------------------------');
+    } catch (e) {
+      console.error('Uncaught error (with failed enrichment):', error, errorInfo);
+    }
   }
 
   public render() {

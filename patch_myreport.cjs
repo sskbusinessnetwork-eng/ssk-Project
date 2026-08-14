@@ -1,10 +1,16 @@
 const fs = require('fs');
-const file = 'src/pages/MyReport.tsx';
-let content = fs.readFileSync(file, 'utf8');
+let code = fs.readFileSync('src/pages/MyReport.tsx', 'utf8');
 
-// 1. Initial State
-content = content.replace(
-  `const [filterStartDate, setFilterStartDate] = useState('');`,
-  `const [filterStartDate, setFilterStartDate] = useState('');`
-);
-// Wait, filterStartDate was already initialized to '' in MyReport! Let's check what it actually is in MyReport.tsx.
+// handleDownloadPDF
+code = code.replace(/const handleDownloadPDF = \(\) => {/, 'const handleDownloadPDF = async () => {');
+code = code.replace(/const doc = new jsPDF\(\);/, 'const { default: jsPDF } = await import("jspdf");\n    const { default: autoTable } = await import("jspdf-autotable");\n    const doc = new jsPDF();');
+
+// handleDownloadExcel
+code = code.replace(/const handleDownloadExcel = \(\) => {/, 'const handleDownloadExcel = async () => {');
+code = code.replace(/const wb = XLSX\.utils\.book_new\(\);/, 'const XLSX = await import("xlsx");\n    const wb = XLSX.utils.book_new();');
+
+// handleDownloadWord
+code = code.replace(/const handleDownloadWord = \(\) => {/, 'const handleDownloadWord = async () => {');
+code = code.replace(/const doc = new Document\({/, 'const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = await import("docx");\n    const doc = new Document({');
+
+fs.writeFileSync('src/pages/MyReport.tsx', code);

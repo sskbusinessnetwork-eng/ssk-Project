@@ -21,7 +21,7 @@ export function Layout() {
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(() => {
     try {
       const saved = localStorage.getItem('sidebar_collapsed');
-      return saved ? JSON.parse(saved) : false;
+      try { return saved ? JSON.parse(saved) : false; } catch (e) { return false; }
     } catch (e) {
       return false;
     }

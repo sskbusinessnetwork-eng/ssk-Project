@@ -928,7 +928,7 @@ export function Analytics() {
 
     completedMeetings.forEach(m => {
       if (m.attendance) {
-        Object.values(m.attendance).forEach(status => {
+        Object.values(m.attendance || {}).forEach(status => {
           totalRecords++;
           if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(status))) {
             totalPresent++;
