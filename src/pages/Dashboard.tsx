@@ -802,8 +802,41 @@ export function Analytics() {
   }, [effectiveOneToOnes, userCandidateIds, profile]);
 
   const visitorsAttendedCount = useMemo(() => {
-    return chapterGuestsList.filter(g => g.status === 'Present' || g.attendance_status === 'Present' || g.status === 'Attended').length || 0;
-  }, [chapterGuestsList]);
+    let list = guestInvitations.filter(g => {
+      const st = String(g.status || g.attendance_status || '').toLowerCase();
+      return st === 'present' || st === 'attended';
+    });
+
+    if (activeDateRange) {
+      list = list.filter(g => {
+        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        return isDateInRange(d, activeDateRange.start, activeDateRange.end);
+      });
+    }
+
+    if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        list = list.filter(g => g.chapter_id === appliedChapterFilter || g.chapterId === appliedChapterFilter);
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(g => g.createdBy === appliedMemberFilter || g.userId === appliedMemberFilter);
+      }
+    }
+
+    if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
+      return list.length;
+    }
+
+    const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+    list = list.filter(g => {
+      const gChapId = String(g.chapter_id || g.chapterId || '').trim();
+      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+      if (usePersonalStats) return userCandidateIds.includes(inviter);
+      return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
+    });
+
+    return list.length || 0;
+  }, [guestInvitations, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, chapterUserIds, userCandidateIds, usePersonalStats]);
 
   const thankYouSlipsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -2453,7 +2486,6 @@ const getGreeting = () => {
             meetingsAttendedCount={userMeetingsAttended}
             oneToOneScheduledCount={userOneToOnesScheduled}
             oneToOneCompletedCount={userOneToOnesCompleted}
-            guestsJoinedCount={userGuestsJoined}
             onCardClick={(label) => {
               setAnalyticsModalCategory(label);
               setAnalyticsLoading(true);

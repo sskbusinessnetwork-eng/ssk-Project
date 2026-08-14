@@ -953,7 +953,7 @@ async function startServer() {
       console.error("Error in /api/meetings/update:", err);
       return res.status(500).json({
         success: false,
-        message: "Failed to update meeting.",
+        message: "Backend Crash: " + (err.stack || err.message || "Unknown error"),
         error: err.message || "Server error"
       });
     }

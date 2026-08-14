@@ -36,7 +36,6 @@ interface StatGridProps {
   meetingsAttendedCount?: number;
   oneToOneScheduledCount?: number;
   oneToOneCompletedCount?: number;
-  guestsJoinedCount?: number;
   onCardClick?: (label: string) => void;
 }
 
@@ -74,7 +73,6 @@ export default function StatGrid({
   meetingsAttendedCount = 0,
   oneToOneScheduledCount = 0,
   oneToOneCompletedCount = 0,
-  guestsJoinedCount = 0,
   onCardClick,
 }: StatGridProps) {
   const formatValue = (label: string, val: any) => {
@@ -160,7 +158,7 @@ export default function StatGrid({
           bg: 'bg-pink-950/80 border-pink-500/30 text-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.2)]',
           rows: [
             { label: 'Invited', value: String(guestsInvitedCount ?? 0) },
-            { label: 'Joined', value: String(guestsJoinedCount ?? visitorsAttendedCount ?? 0) },
+            { label: 'Visitor Attended', value: String(visitorsAttendedCount ?? 0) },
           ]
         },
         /* {

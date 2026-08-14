@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, Activity, Trophy, Users, UserCheck, Building2, Filter } from 'lucide-react';
+import { ChevronLeft, Activity, Trophy, Users, UserCheck, Building2, Filter, FileText, Download, FileSpreadsheet, FileIcon, MessageCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import StatGrid from '../components/StatGrid';
@@ -10,6 +10,10 @@ import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 
 export function MyReport() {
   const { profile } = useAuth();
@@ -28,6 +32,13 @@ export function MyReport() {
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
   const [activeDateRange, setActiveDateRange] = useState<{ start: Date; end: Date } | null>(null);
+
+  // Report generation state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState<string>('');
+  const [reportEndDate, setReportEndDate] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [reportData, setReportData] = useState<any>(null);
 
 
 
@@ -260,7 +271,19 @@ export function MyReport() {
     return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
   });
   const guestsInvitedCount = chapterGuests.length;
-  const guestsJoinedCount = chapterGuests.filter(g => g.status === 'JOINED' || g.status === 'ATTENDED').length; // Added Joined metric
+  
+  const visitorsAttendedCount = guestInvitations.filter(g => {
+    const st = String(g.status || g.attendance_status || '').toLowerCase();
+    if (st !== 'present' && st !== 'attended') return false;
+    
+    if (activeDateRange) {
+      const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+      if (!isDateInRange(d, activeDateRange.start, activeDateRange.end)) return false;
+    }
+    
+    const inviter = chapterUsers.find(u => (u.id || u.uid) === (g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id));
+    return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
+  }).length;
   
   const thankYouSlipsSentCount = businessReceivedCount;
   const thankYouSlipsReceivedCount = businessSentCount;
@@ -275,6 +298,280 @@ export function MyReport() {
     const rec = chapterUsers.find(u => (u.id || u.uid) === (t.receiverMemberId || t.receiver_id));
     return rec && String(rec.chapter_id || rec.chapterId) === String(userChapterId);
   }).length;
+
+  const handleGenerateReportData = () => {
+    if (!reportStartDate || !reportEndDate) {
+      alert("Please select both Start Date and End Date.");
+      return;
+    }
+    
+    setIsGenerating(true);
+    setTimeout(() => {
+      const start = new Date(reportStartDate);
+      const end = new Date(reportEndDate);
+      end.setHours(23, 59, 59, 999);
+      start.setHours(0, 0, 0, 0);
+
+      const isInChapter = (id: any) => {
+        const u = chapterUsers.find(user => String(user.id || user.uid) === String(id));
+        return u && String(u.chapter_id || u.chapterId) === String(userChapterId);
+      };
+
+      const calcSlipsValue = (slips: any[], refs: any[]) => {
+        return slips.reduce((sum, s) => {
+          const ref = refs.find(r => String(r.id) === String(s.referralId || s.referral_id));
+          const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.amount || 0);
+          return sum + val;
+        }, 0);
+      };
+
+      // Period Data
+      const pReferrals = allReferrals.filter(r => isDateInRange(r.created_at || r.createdAt, start, end) && isInChapter(r.fromUserId || r.sender_id));
+      const pTestimonials = testimonials.filter(t => isDateInRange(t.created_at || t.createdAt, start, end) && isInChapter(t.authorMemberId || t.author_id));
+      const pOneToOnes = oneToOnes.filter(m => isDateInRange(m.created_at || m.createdAt || m.meeting_date, start, end) && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
+      const pMeetings = meetings.filter(m => isDateInRange(m.date || m.meeting_date || m.createdAt, start, end) && String(m.chapter_id || m.chapterId) === String(userChapterId));
+      
+      let pMembersAttended = 0;
+      pMeetings.forEach(m => {
+        if (m.attendance) {
+          pMembersAttended += Object.values(m.attendance).filter(status => ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(status))).length;
+        }
+      });
+
+      const pGuestInvitations = guestInvitations.filter(g => {
+        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        return isDateInRange(d, start, end) && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
+      });
+
+      const pSlips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt || s.date, start, end) && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
+      const pBusinessSlips = pSlips.filter(s => {
+        const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
+        return isInChapter(senderId);
+      });
+      const pBusinessGenerated = calcSlipsValue(pBusinessSlips, allReferrals);
+
+      const pGrowthScoreData = calculateChapterGrowthScoreData({
+        chapterMembers: chapterUsers,
+        activeDateRange: { start, end },
+        allReferrals,
+        oneToOnes,
+        meetings,
+        guestInvitations,
+        testimonials,
+        allSlips
+      });
+      const pScoreVal = Math.min(100, Math.max(0, Math.round(pGrowthScoreData.score)));
+
+      // Cumulative Data
+      const cReferrals = allReferrals.filter(r => new Date(r.created_at || r.createdAt) <= end && isInChapter(r.fromUserId || r.sender_id));
+      const cTestimonials = testimonials.filter(t => new Date(t.created_at || t.createdAt) <= end && isInChapter(t.authorMemberId || t.author_id));
+      const cOneToOnes = oneToOnes.filter(m => new Date(m.created_at || m.createdAt || m.meeting_date) <= end && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
+      
+      const cGuestInvitations = guestInvitations.filter(g => {
+        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        return d <= end && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
+      });
+
+      const cSlips = allSlips.filter(s => new Date(s.created_at || s.createdAt || s.date) <= end && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
+      const cBusinessSlips = cSlips.filter(s => {
+        const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
+        return isInChapter(senderId);
+      });
+      const cBusinessGenerated = calcSlipsValue(cBusinessSlips, allReferrals);
+
+      setReportData({
+        chapterName: formattedChapterTitle,
+        startDate: start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+        endDate: end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+        generatedDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+        
+        pMembersAttended: pMembersAttended.toString().padStart(2, '0'),
+        pVisitorsInvited: pGuestInvitations.length.toString().padStart(2, '0'),
+        pReferralsShared: pReferrals.length.toString().padStart(2, '0'),
+        pBusinessGenerated: `₹${pBusinessGenerated.toLocaleString('en-IN')}/-`,
+        pOneToOnes: pOneToOnes.filter(m => m.status === 'COMPLETED').length.toString().padStart(2, '0'),
+        pTestimonialsPassed: pTestimonials.length.toString().padStart(2, '0'),
+        pThankYouSlips: pSlips.length.toString().padStart(2, '0'),
+        pGrowthScore: pScoreVal,
+
+        cBusinessGenerated: `₹${cBusinessGenerated.toLocaleString('en-IN')}/-`,
+        cReferralsShared: cReferrals.length,
+        cVisitorsHosted: cGuestInvitations.length,
+        cOneToOnes: cOneToOnes.filter(m => m.status === 'COMPLETED').length,
+        cTestimonialsPassed: cTestimonials.length,
+        cThankYouSlips: cSlips.length,
+      });
+      setIsGenerating(false);
+    }, 800);
+  };
+
+  const handleDownloadPDF = () => {
+    if (!reportData) return;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(20);
+    doc.setTextColor(229, 57, 53);
+    doc.text("SSK BUSINESS NETWORK", 105, 20, { align: "center" });
+    doc.setFontSize(14);
+    doc.setTextColor(40, 40, 40);
+    doc.text("CHAPTER IMPACT REPORT", 105, 28, { align: "center" });
+    
+    doc.setFontSize(11);
+    doc.text(`Chapter: ${reportData.chapterName}`, 20, 40);
+    doc.text(`Report Period: ${reportData.startDate} - ${reportData.endDate}`, 20, 47);
+    doc.text(`Generated On: ${reportData.generatedDate}`, 20, 54);
+    
+    doc.setFontSize(14);
+    doc.setTextColor(229, 57, 53);
+    doc.text(`CHAPTER GROWTH SCORE: ${reportData.pGrowthScore}%`, 105, 70, { align: "center" });
+    
+    doc.setFontSize(14);
+    doc.setTextColor(40, 40, 40);
+    doc.text("MEETING / PERIOD HIGHLIGHTS", 20, 90);
+    
+    (doc as any).autoTable({
+      startY: 95,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Members Attended', reportData.pMembersAttended],
+        ['Visitors Hosted (Attended)', reportData.pVisitorsInvited],
+        ['Referrals Shared', reportData.pReferralsShared],
+        ['Business Generated', reportData.pBusinessGenerated],
+        ['One-to-One Meetings', reportData.pOneToOnes],
+        ['Testimonials Passed', reportData.pTestimonialsPassed],
+        ['Thank You Slips', reportData.pThankYouSlips]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [229, 57, 53] },
+      styles: { fontSize: 11, cellPadding: 5 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 160;
+
+    doc.setFontSize(14);
+    doc.setTextColor(40, 40, 40);
+    doc.text("CUMULATIVE ACHIEVEMENTS", 20, finalY + 15);
+
+    (doc as any).autoTable({
+      startY: finalY + 20,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Business Generated', reportData.cBusinessGenerated],
+        ['Total Referrals Shared', reportData.cReferralsShared],
+        ['Total Visitors Hosted', reportData.cVisitorsHosted],
+        ['Total One-to-One Meetings', reportData.cOneToOnes],
+        ['Total Testimonials Passed', reportData.cTestimonialsPassed],
+        ['Total Thank You Slips', reportData.cThankYouSlips]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [229, 57, 53] },
+      styles: { fontSize: 11, cellPadding: 5 }
+    });
+    
+    doc.save(`SSK_${reportData.chapterName.replace(/\s+/g, '_')}_Impact_Report_${reportData.startDate}_${reportData.endDate}.pdf`);
+  };
+
+  const handleDownloadExcel = () => {
+    if (!reportData) return;
+    const wb = XLSX.utils.book_new();
+    
+    const wsData = [
+      ["SSK BUSINESS NETWORK"],
+      ["CHAPTER IMPACT REPORT"],
+      [],
+      ["Chapter", reportData.chapterName],
+      ["Report Period", `${reportData.startDate} - ${reportData.endDate}`],
+      ["Generated On", reportData.generatedDate],
+      ["Chapter Growth Score", `${reportData.pGrowthScore}%`],
+      [],
+      ["MEETING / PERIOD HIGHLIGHTS"],
+      ["Metric", "Value"],
+      ["Members Attended", reportData.pMembersAttended],
+      ["Visitors Hosted (Attended)", reportData.pVisitorsInvited],
+      ["Referrals Shared", reportData.pReferralsShared],
+      ["Business Generated", reportData.pBusinessGenerated],
+      ["One-to-One Meetings", reportData.pOneToOnes],
+      ["Testimonials Passed", reportData.pTestimonialsPassed],
+      ["Thank You Slips", reportData.pThankYouSlips],
+      [],
+      ["CUMULATIVE ACHIEVEMENTS"],
+      ["Metric", "Value"],
+      ["Total Business Generated", reportData.cBusinessGenerated],
+      ["Total Referrals Shared", reportData.cReferralsShared],
+      ["Total Visitors Hosted", reportData.cVisitorsHosted],
+      ["Total One-to-One Meetings", reportData.cOneToOnes],
+      ["Total Testimonials Passed", reportData.cTestimonialsPassed],
+      ["Total Thank You Slips", reportData.cThankYouSlips]
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, "Impact Report");
+    XLSX.writeFile(wb, `SSK_${reportData.chapterName.replace(/\s+/g, '_')}_Impact_Report_${reportData.startDate}_${reportData.endDate}.xlsx`);
+  };
+
+  const handleDownloadWord = () => {
+    if (!reportData) return;
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({ text: "SSK BUSINESS NETWORK", heading: HeadingLevel.TITLE, alignment: "center" }),
+          new Paragraph({ text: "CHAPTER IMPACT REPORT", heading: HeadingLevel.HEADING_1, alignment: "center" }),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: `Chapter: ${reportData.chapterName}` }),
+          new Paragraph({ text: `Report Period: ${reportData.startDate} - ${reportData.endDate}` }),
+          new Paragraph({ text: `Generated On: ${reportData.generatedDate}` }),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: `CHAPTER GROWTH SCORE: ${reportData.pGrowthScore}%`, heading: HeadingLevel.HEADING_2 }),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: "MEETING / PERIOD HIGHLIGHTS", heading: HeadingLevel.HEADING_2 }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Members Attended")] }), new TableCell({ children: [new Paragraph(String(reportData.pMembersAttended))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Visitors Hosted (Attended)")] }), new TableCell({ children: [new Paragraph(String(reportData.pVisitorsInvited))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Referrals Shared")] }), new TableCell({ children: [new Paragraph(String(reportData.pReferralsShared))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Business Generated")] }), new TableCell({ children: [new Paragraph(String(reportData.pBusinessGenerated))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("One-to-One Meetings")] }), new TableCell({ children: [new Paragraph(String(reportData.pOneToOnes))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Testimonials Passed")] }), new TableCell({ children: [new Paragraph(String(reportData.pTestimonialsPassed))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Thank You Slips")] }), new TableCell({ children: [new Paragraph(String(reportData.pThankYouSlips))] })] }),
+            ]
+          }),
+          new Paragraph({ text: "" }),
+          new Paragraph({ text: "CUMULATIVE ACHIEVEMENTS", heading: HeadingLevel.HEADING_2 }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total Business Generated")] }), new TableCell({ children: [new Paragraph(String(reportData.cBusinessGenerated))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total Referrals Shared")] }), new TableCell({ children: [new Paragraph(String(reportData.cReferralsShared))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total Visitors Hosted")] }), new TableCell({ children: [new Paragraph(String(reportData.cVisitorsHosted))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total One-to-One Meetings")] }), new TableCell({ children: [new Paragraph(String(reportData.cOneToOnes))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total Testimonials Passed")] }), new TableCell({ children: [new Paragraph(String(reportData.cTestimonialsPassed))] })] }),
+              new TableRow({ children: [new TableCell({ children: [new Paragraph("Total Thank You Slips")] }), new TableCell({ children: [new Paragraph(String(reportData.cThankYouSlips))] })] }),
+            ]
+          })
+        ]
+      }]
+    });
+    
+    Packer.toBlob(doc).then((blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SSK_${reportData.chapterName.replace(/\s+/g, '_')}_Impact_Report_${reportData.startDate}_${reportData.endDate}.docx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    });
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!reportData) return;
+    const text = `*𝐒𝐒𝐊 𝐁𝐔𝐒𝐈𝐍𝐄𝐒𝐒 𝐍𝐄𝐓𝐖𝐎𝐑𝐊 | 𝐂𝐇𝐀𝐏𝐓𝐄𝐑 𝐈𝐌𝐏𝐀𝐂𝐓 𝐑𝐄𝐏𝐎𝐑𝐓* 🌟\n\n📅 Report Period:\n${reportData.startDate} – ${reportData.endDate}\n\n*𝐌𝐄𝐄𝐓𝐈𝐍𝐆 / 𝐏𝐄𝐑𝐈𝐎𝐃 𝐇𝐈𝐆𝐇𝐋𝐈𝐆𝐇𝐓𝐒*\n\n👥 Members Attended: *${reportData.pMembersAttended}*\n🙋 Visitors Hosted: *${reportData.pVisitorsInvited}*\n🤝 Referrals Shared: *${reportData.pReferralsShared}*\n💰 Business Generated: *${reportData.pBusinessGenerated}*\n☕ One-to-One Meetings: *${reportData.pOneToOnes}*\n🌟 Testimonials Passed: *${reportData.pTestimonialsPassed}*\n📄 Thank You Slips: *${reportData.pThankYouSlips}*\n\n*𝐂𝐔𝐌𝐔𝐋𝐀𝐓𝐈𝐕𝐄 𝐀𝐂𝐇𝐈𝐄𝐕𝐄𝐌𝐄𝐍𝐓𝐒*\n\n💼 Total Business Generated: *${reportData.cBusinessGenerated}*\n🤝 Total Referrals Shared: *${reportData.cReferralsShared}*\n👥 Total Visitors Hosted: *${reportData.cVisitorsHosted}*\n☕ Total One-to-One Meetings: *${reportData.cOneToOnes}*\n🌟 Total Testimonials Passed: *${reportData.cTestimonialsPassed}*\n📄 Total Thank You Slips: *${reportData.cThankYouSlips}*\n\n📊 *Chapter Growth Score: ${reportData.pGrowthScore}%*\n\n📎 Detailed report attached/shared separately.`;
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+  };
 
   if (loading) {
     return (
@@ -291,10 +588,24 @@ export function MyReport() {
     <div className="w-full max-w-[1400px] mx-auto space-y-8 pb-20 relative px-4 sm:px-6">
       {/* Top Header Section */}
       <div className="flex flex-col items-center text-center space-y-2 border-b border-white/5 pb-6">
-        <div className="w-full flex justify-start">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-white uppercase tracking-widest transition-colors mb-2">
+        <div className="w-full flex justify-between items-center mb-2">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-white uppercase tracking-widest transition-colors">
             <ChevronLeft size={14} /> Back To Dashboard
           </Link>
+          {profile?.role === 'CHAPTER_ADMIN' && (
+            <button
+              onClick={() => {
+                setReportData(null);
+                setReportStartDate('');
+                setReportEndDate('');
+                setIsReportModalOpen(true);
+              }}
+              className="bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 border border-white/10 transition-colors"
+            >
+              <FileText size={14} />
+              REPORT
+            </button>
+          )}
         </div>
 
         <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-white tracking-tight uppercase flex items-center justify-center gap-2 sm:gap-3 flex-wrap text-center leading-tight">
@@ -443,13 +754,110 @@ export function MyReport() {
           meetingsCount={meetingsCount}
           upcomingSyncsCount={upcomingSyncsCount}
           guestsInvitedCount={guestsInvitedCount}
-          guestsJoinedCount={guestsJoinedCount}
+          visitorsAttendedCount={visitorsAttendedCount}
           thankYouSlipsSentCount={thankYouSlipsSentCount}
           thankYouSlipsReceivedCount={thankYouSlipsReceivedCount}
           testimonialsGivenCount={testimonialsGivenCount}
           testimonialsReceivedCount={testimonialsReceivedCount}
         />
       </div>
+
+      {/* Report Generation Modal */}
+      <Modal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        title="Generate Impact Report"
+      >
+        <div className="space-y-6">
+          {!reportData ? (
+            <>
+              <p className="text-sm text-neutral-400">
+                Select a date range to generate the Chapter Impact Report.
+              </p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reportStartDate}
+                      onChange={(e) => setReportStartDate(e.target.value)}
+                      className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={reportEndDate}
+                      onChange={(e) => setReportEndDate(e.target.value)}
+                      className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 pt-4 border-t border-white/10 flex-col sm:flex-row">
+                <button
+                  onClick={() => setIsReportModalOpen(false)}
+                  className="w-full sm:w-1/2 bg-[#111827] hover:bg-neutral-800 text-white font-bold py-3 rounded-xl transition-all text-sm border border-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateReportData}
+                  disabled={isGenerating}
+                  className="w-full sm:w-1/2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-lg shadow-red-900/20 disabled:opacity-50"
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Report'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl text-center">
+                <FileText className="h-10 w-10 text-emerald-400 mx-auto mb-2" />
+                <h3 className="text-emerald-400 font-bold text-lg mb-1">Report Generated</h3>
+                <p className="text-emerald-400/80 text-xs">
+                  Your report for {reportData.startDate} to {reportData.endDate} is ready.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button onClick={handleDownloadPDF} className="flex flex-col items-center justify-center gap-2 bg-[#1F2937]/80 hover:bg-[#1F2937] text-white p-4 rounded-xl border border-white/10 transition-all group">
+                  <FileIcon className="h-6 w-6 text-red-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold">PDF</span>
+                </button>
+                <button onClick={handleDownloadExcel} className="flex flex-col items-center justify-center gap-2 bg-[#1F2937]/80 hover:bg-[#1F2937] text-white p-4 rounded-xl border border-white/10 transition-all group">
+                  <FileSpreadsheet className="h-6 w-6 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold">Excel</span>
+                </button>
+                <button onClick={handleDownloadWord} className="flex flex-col items-center justify-center gap-2 bg-[#1F2937]/80 hover:bg-[#1F2937] text-white p-4 rounded-xl border border-white/10 transition-all group">
+                  <FileText className="h-6 w-6 text-blue-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold">Word</span>
+                </button>
+              </div>
+
+              <div className="pt-2">
+                <button onClick={handleShareWhatsApp} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-lg shadow-emerald-900/20">
+                  <MessageCircle size={18} />
+                  SHARE ON WHATSAPP
+                </button>
+              </div>
+
+              <button
+                onClick={() => setReportData(null)}
+                className="w-full mt-2 bg-[#111827] hover:bg-neutral-800 text-neutral-400 hover:text-white font-bold py-3 rounded-xl transition-all text-sm border border-white/10"
+              >
+                Back to Date Selection
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Filter Modal */}
       <Modal

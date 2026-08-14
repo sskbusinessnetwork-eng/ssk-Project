@@ -1356,13 +1356,14 @@ export function Meetings() {
       // Perform validation for all members
       let allMembersFilled = true;
       for (const member of meetingMembers) {
-        const status = tempAttendance[member.uid];
-        const amount = tempAmount[member.uid];
+        const mId = member.id || member.uid;
+        const status = tempAttendance[mId];
+        const amount = tempAmount[mId];
         
         if (!status || String(status).trim() === '') {
           allMembersFilled = false;
-          delete tempAttendance[member.uid];
-          delete tempAmount[member.uid];
+          delete tempAttendance[mId];
+          delete tempAmount[mId];
           continue;
         }
 
@@ -1376,7 +1377,7 @@ export function Meetings() {
         }
         
         // Save the assumed 0 back to tempAmount so it gets persisted correctly
-        tempAmount[member.uid] = finalAmount;
+        tempAmount[mId] = finalAmount;
       }
 
       // Guest Attendance Save Logic & Validation
@@ -1508,8 +1509,6 @@ export function Meetings() {
       const { error: dbErr } = await supabase
         .from('meetings')
         .update({
-          is_completed: false,
-          is_cancelled: true,
           status: 'CANCELLED',
           updated_at: new Date().toISOString()
         })
