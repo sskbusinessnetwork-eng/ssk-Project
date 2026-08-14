@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Plus, Shield, Phone, PhoneCall, Edit2, Trash2, Search, Lock, UserPlus, Check, X, Mail, ChevronRight, Building2, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { format } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
 import { UserProfile } from '../types';

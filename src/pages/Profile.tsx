@@ -417,8 +417,8 @@ export function Profile() {
     try {
       setIsUpdatingSubscription(true);
       await databaseService.update('users', targetProfile.uid, {
-        subscriptionEnd: new Date(newSubscriptionEnd).toISOString(),
-        membershipStatus: new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED'
+        subscriptionEnd: (!isNaN(new Date(newSubscriptionEnd).getTime()) ? new Date(newSubscriptionEnd).toISOString() : targetProfile.subscriptionEnd),
+        membershipStatus: (!isNaN(new Date(newSubscriptionEnd).getTime()) ? (new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED') : targetProfile.membershipStatus)
       });
       
       // Notify the member
@@ -431,8 +431,8 @@ export function Profile() {
       
       setTargetProfile(prev => prev ? {
         ...prev,
-        subscriptionEnd: new Date(newSubscriptionEnd).toISOString(),
-        membershipStatus: new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED'
+        subscriptionEnd: (!isNaN(new Date(newSubscriptionEnd).getTime()) ? new Date(newSubscriptionEnd).toISOString() : targetProfile.subscriptionEnd),
+        membershipStatus: (!isNaN(new Date(newSubscriptionEnd).getTime()) ? (new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED') : targetProfile.membershipStatus)
       } : null);
       
       alert("Subscription updated successfully.");

@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc, o
 import { useAuth } from '../hooks/useAuth';
 import { User, Phone, PhoneCall, Mail, CheckCircle, X, Search, ShieldAlert, KeyRound, Check, RefreshCw, Trash2, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { format } from 'date-fns';
+import { safeFormat as format } from '../utils/dateUtils';
 import { UserProfile, ChapterPosition, Category } from '../types';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { supabase } from '../lib/supabaseClient';

@@ -435,10 +435,12 @@ export function Reports() {
       let endStr = member.subscriptionEnd || member.subscriptionEndDate || member.current_subscription_end_date;
       if (startStr && !endStr) {
          const sDate = new Date(startStr);
+         if (!isNaN(sDate.getTime())) {
          sDate.setFullYear(sDate.getFullYear() + 1);
          endStr = sDate.toISOString();
+         }
       }
-      const memberSubRange = (startStr && endStr) ? { start: new Date(startStr), end: new Date(endStr) } : null;
+      const memberSubRange = (startStr && endStr && !isNaN(new Date(startStr).getTime()) && !isNaN(new Date(endStr).getTime())) ? { start: new Date(startStr), end: new Date(endStr) } : null;
 
       // Formulaic custom Growth Score out of 100 based on Daily Task Workspace
       let growthScore = calculateMemberGrowthScoreData({

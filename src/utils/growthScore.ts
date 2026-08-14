@@ -236,24 +236,6 @@ export function getWorkspaceChecklistTasks(
     testimonials = [],
     allUsers = []
   } = activities;
-
-  const getISTDateString = (d: Date) => {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    const parts = formatter.formatToParts(d);
-    let year, month, day;
-    for (const p of parts) {
-      if (p.type === 'year') year = p.value;
-      if (p.type === 'month') month = p.value;
-      if (p.type === 'day') day = p.value;
-    }
-    return `${year}-${month}-${day}`;
-  };
-
   const parseISTStrToUTC = (str: string) => {
     const [y, m, d] = str.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d));
@@ -690,27 +672,12 @@ export function calculateMemberGrowthScoreData(input: {
   let subEndStr = profile.subscriptionEnd || profile.subscriptionEndDate || profile.current_subscription_end_date;
   if (subStartStr && !subEndStr) {
      const sDate = new Date(subStartStr);
+     if (!isNaN(sDate.getTime())) {
      sDate.setFullYear(sDate.getFullYear() + 1);
      subEndStr = sDate.toISOString();
+     }
   }
   
-  const getISTDateString = (d: Date) => {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    const parts = formatter.formatToParts(d);
-    let year, month, day;
-    for (const p of parts) {
-      if (p.type === 'year') year = p.value;
-      if (p.type === 'month') month = p.value;
-      if (p.type === 'day') day = p.value;
-    }
-    return `${year}-${month}-${day}`;
-  };
-
   const parseISTStrToUTC = (str: string) => {
     const [y, m, d] = str.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d));

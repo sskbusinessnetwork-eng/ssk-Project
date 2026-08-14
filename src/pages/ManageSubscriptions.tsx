@@ -598,7 +598,7 @@ export function ManageSubscriptions() {
                 onClick={() => {
                   setEditForm({
                     ...editForm,
-                    subscriptionEnd: format(addYears(new Date(editForm.subscriptionEnd), 1), 'yyyy-MM-dd'),
+                    subscriptionEnd: (editForm.subscriptionEnd && !isNaN(new Date(editForm.subscriptionEnd).getTime())) ? format(addYears(new Date(editForm.subscriptionEnd), 1), 'yyyy-MM-dd') : format(addYears(new Date(), 1), 'yyyy-MM-dd'),
                     subscriptionStatus: 'Active',
                     membershipStatus: 'ACTIVE'
                   });

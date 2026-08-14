@@ -1580,12 +1580,16 @@ export function Analytics() {
     
     if (startStr && !endStr) {
        const sDate = new Date(startStr);
+       if (!isNaN(sDate.getTime())) {
        sDate.setFullYear(sDate.getFullYear() + 1);
        endStr = sDate.toISOString();
+       }
     }
     
     if (startStr && endStr) {
-      return { start: new Date(startStr), end: new Date(endStr) };
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) { return { start, end }; }
     }
     return undefined;
   }, [profile]);

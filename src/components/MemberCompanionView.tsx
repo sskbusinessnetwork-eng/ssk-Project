@@ -673,7 +673,14 @@ export function MemberCompanionView({
       {/* 5. Membership Subscription Status Card */}
       {(() => {
         const { endDateStr } = getSubscriptionDates(profile);
-        const resolvedEndDate = endDateStr || (profile?.createdAt ? new Date(new Date(profile.createdAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString() : new Date(new Date().getTime() + 300 * 24 * 60 * 60 * 1000).toISOString());
+        let resolvedEndDate = endDateStr;
+        if (!resolvedEndDate) {
+          if (profile?.createdAt && !isNaN(new Date(profile.createdAt).getTime())) {
+            resolvedEndDate = new Date(new Date(profile.createdAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+          } else {
+            resolvedEndDate = new Date(new Date().getTime() + 300 * 24 * 60 * 60 * 1000).toISOString();
+          }
+        }
         const { daysRemaining, monthsRemaining } = calculateSubscriptionDetails(resolvedEndDate);
         
         const subStatus = getSubscriptionStatus(profile);
