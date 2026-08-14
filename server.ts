@@ -830,7 +830,7 @@ async function startServer() {
         .from('users')
         .select('*')
         .or(`id.eq.${callerId},uid.eq.${callerId}`)
-        .single();
+        .maybeSingle();
 
       if (callerErr || !caller) {
         return res.status(403).json({
@@ -840,7 +840,19 @@ async function startServer() {
         });
       }
 
-      const isChapAdmin = caller.role === 'CHAPTER_ADMIN' || caller.role === 'MASTER_ADMIN' || caller.position === 'chapter_admin';
+      const role = String(caller.role || '').toUpperCase();
+      const pos = String(caller.position || '').toLowerCase();
+      const isChapAdmin = 
+        role === 'CHAPTER_ADMIN' || 
+        role === 'MASTER_ADMIN' || 
+        role === 'ADMIN' || 
+        pos === 'chapter_admin' ||
+        pos === 'president' ||
+        pos === 'vice_president' ||
+        pos === 'treasurer' ||
+        pos === 'secretary' ||
+        pos === 'coordinator';
+
       if (!isChapAdmin) {
         return res.status(403).json({
           success: false,
