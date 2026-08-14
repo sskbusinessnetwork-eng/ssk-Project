@@ -1,6 +1,39 @@
 import { supabase } from '../lib/supabaseClient';
 import { calculateProfileCompletion } from './profileUtils';
 
+
+export function getISTDayBounds(inputDate: Date | string | number = new Date()) {
+  const date = new Date(inputDate);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  
+  const start = new Date(`${year}-${month}-${day}T00:00:00+05:30`);
+  const end = new Date(`${year}-${month}-${day}T23:59:59.999+05:30`);
+  return { start, end };
+}
+
+export function getISTDateString(inputDate: Date | string | number = new Date()) {
+  const date = new Date(inputDate);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  return `${year}-${month}-${day}`;
+}
 export interface MemberActivitiesInput {
   attendancePercent?: number;
   completedOneToOnes?: number;
@@ -169,49 +202,58 @@ export function getWorkspaceChecklistTasks(
     allUsers = []
   } = activities;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const getISTDateString = (d: Date) => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(d);
+    let year, month, day;
+    for (const p of parts) {
+      if (p.type === 'year') year = p.value;
+      if (p.type === 'month') month = p.value;
+      if (p.type === 'day') day = p.value;
+    }
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseISTStrToUTC = (str: string) => {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  };
+
+  const todayStr = getISTDateString(new Date());
+  const startStr = activeDateRange?.start ? getISTDateString(activeDateRange.start) : todayStr;
+  const endStr = activeDateRange?.end ? getISTDateString(activeDateRange.end) : todayStr;
+
+  let startUTC = parseISTStrToUTC(startStr);
+  const endUTC = parseISTStrToUTC(endStr);
   
-  let start = activeDateRange?.start ? new Date(activeDateRange.start) : new Date(today);
-  start.setHours(0, 0, 0, 0);
-  
-  let end = activeDateRange?.end ? new Date(activeDateRange.end) : new Date(today);
-  end.setHours(23, 59, 59, 999);
-  
-  if (end.getTime() - start.getTime() > 365 * 24 * 60 * 60 * 1000) {
-    start = new Date(end.getTime() - 365 * 24 * 60 * 60 * 1000);
+  if (endUTC.getTime() - startUTC.getTime() > 365 * 24 * 60 * 60 * 1000) {
+    startUTC = new Date(endUTC.getTime() - 365 * 24 * 60 * 60 * 1000);
   }
 
   const allTasks: WorkspaceTask[] = [];
 
-  for (let current = new Date(start); current <= end; current.setDate(current.getDate() + 1)) {
-    const dStart = new Date(current);
-    dStart.setHours(0, 0, 0, 0);
-    const dEnd = new Date(current);
-    dEnd.setHours(23, 59, 59, 999);
+  for (let currentUTC = new Date(startUTC); currentUTC <= endUTC; currentUTC.setUTCDate(currentUTC.getUTCDate() + 1)) {
+    const currentIST = currentUTC.toISOString().split('T')[0];
     
     const isDateInRange = (dateInput: any) => {
       if (!dateInput) return false;
       try {
-        let d = new Date(dateInput);
         if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-          const [year, month, day] = dateInput.split('-').map(Number);
-          d = new Date(year, month - 1, day);
+           return dateInput === currentIST;
         }
-        if (isNaN(d.getTime())) return false;
-        
-        const dLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-        const currentLocal = new Date(current.getTime() - current.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-        if (dLocal === currentLocal) return true;
-
-        return d.getTime() >= dStart.getTime() && d.getTime() <= dEnd.getTime();
+        return getISTDateString(dateInput) === currentIST;
       } catch {
         return false;
       }
     };
 
     const rawTasks: any[] = [];
-    const dateStr = formatDateKey(dStart);
+    const dateStr = formatDateKey(currentIST);
 
     const isProfileCompleteAuto = calculateProfileCompletion(profile).isComplete;
     
@@ -329,40 +371,19 @@ export function getWorkspaceChecklistTasks(
       isAbsent: boolean;
     } | null = null;
 
-    const nowMs = new Date().getTime();
-
     for (const m of userChapterMeetings) {
+      // Task belongs ONLY to the day the meeting actually occurred
+      const isMeetingOnThisDay = isDateInRange(m.date || m.meeting_date || m.created_at || m.createdAt);
+      if (!isMeetingOnThisDay) continue;
+
       const attMap = m.attendance || {};
       const userAtt = String(attMap[userId] || m.attendance_status || '').trim();
       const isPresent = ['Present', 'PRESENT', 'Yes', 'YES', 'Substitute', 'SUBSTITUTE'].includes(userAtt);
       const isAbsent = ['Absent', 'ABSENT', 'No', 'NO'].includes(userAtt);
       const isMarked = isPresent || isAbsent;
 
-      const meetingStartMs = getMeetingStartTimeMs(m);
-      const windowStartMs = meetingStartMs > 0 ? meetingStartMs - (24 * 60 * 60 * 1000) : 0;
-      const windowEndMs = meetingStartMs > 0 ? meetingStartMs + (12 * 60 * 60 * 1000) : 0;
-
-      let taskIsVisible = false;
-      let taskIsCompleted = false;
-
-      if (isMarked) {
-        taskIsVisible = true;
-        taskIsCompleted = true;
-      } else if (meetingStartMs > 0) {
-        if (nowMs >= windowStartMs && nowMs <= windowEndMs) {
-          taskIsVisible = true;
-          taskIsCompleted = false;
-        } else if (nowMs > windowEndMs && (nowMs - windowEndMs) < 7 * 24 * 60 * 60 * 1000) {
-          taskIsVisible = true;
-          taskIsCompleted = false;
-        } else {
-          taskIsVisible = false;
-          taskIsCompleted = false;
-        }
-      } else if (m.id) {
-        taskIsVisible = true;
-        taskIsCompleted = false;
-      }
+      const taskIsVisible = true;
+      const taskIsCompleted = isMarked;
 
       if (taskIsVisible) {
         if (!meetingTaskToRender || (!meetingTaskToRender.taskIsCompleted && taskIsCompleted)) {
@@ -606,15 +627,42 @@ export function calculateMemberGrowthScoreData(input: {
      subEndStr = sDate.toISOString();
   }
   
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  const effectiveStart = subStartStr ? new Date(subStartStr) : new Date(today);
-  const effectiveEnd = subEndStr ? new Date(subEndStr) : new Date(today);
+  const getISTDateString = (d: Date) => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(d);
+    let year, month, day;
+    for (const p of parts) {
+      if (p.type === 'year') year = p.value;
+      if (p.type === 'month') month = p.value;
+      if (p.type === 'day') day = p.value;
+    }
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseISTStrToUTC = (str: string) => {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  };
+
+  const todayStr = getISTDateString(new Date());
   
-  const start = effectiveStart;
-  start.setHours(0,0,0,0);
-  const end = effectiveEnd;
-  end.setHours(23,59,59,999);
+  let startStr = todayStr;
+  let endStr = todayStr;
+
+  if (input.activeDateRange) {
+    startStr = getISTDateString(input.activeDateRange.start);
+    endStr = getISTDateString(input.activeDateRange.end);
+  } else if (subStartStr) {
+    startStr = getISTDateString(subStartStr);
+  }
+
+  const start = parseISTStrToUTC(startStr);
+  const end = parseISTStrToUTC(endStr);
 
   const tasks = getWorkspaceChecklistTasks(profile, {
     allReferrals,
@@ -643,9 +691,9 @@ export function calculateMemberGrowthScoreData(input: {
   const maxPossible = diffDays * 100;
 
   // Days Analysed Logic (Last 30 calendar days)
-  const todayKey = formatDateKey(new Date());
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const todayKey = getISTDateString(new Date());
+  const thirtyDaysAgo = parseISTStrToUTC(todayKey);
+  thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
   const thirtyDaysAgoTime = thirtyDaysAgo.getTime();
 
   const activeDates = new Set<string>();
@@ -912,4 +960,14 @@ export function isDateInRange(dateStrOrObj: any, startDate: Date, endDate: Date)
   } catch {
     return false;
   }
+}
+
+export function calculateGrowthScoreTrend(currentVal: number, previousVal: number): GrowthTrendResult {
+  const diff = Math.round(currentVal - previousVal);
+  return {
+    percentage: diff,
+    formatted: diff > 0 ? `+${diff} percentage points` : diff < 0 ? `${diff} percentage points` : "0 percentage points",
+    isPositive: diff > 0,
+    isNegative: diff < 0
+  };
 }

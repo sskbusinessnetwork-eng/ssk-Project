@@ -262,7 +262,9 @@ export function MemberCompanionView({
   
   const displayTasks = (todayTasks || []).filter((t: any) => !t.isHidden);
   const completedCount = displayTasks.filter(t => t.isDone).length;
-  const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 100;
+  const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 0;
+
+  const isChapterLeader = profile?.role === 'CHAPTER_ADMIN' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(profile?.position?.toLowerCase() || '');
 
   const operations = [
     { icon: Share2, label: 'Pass Referral', desc: 'Generate leads', path: '/refer', color: 'text-red-500', bg: 'bg-red-500/10' },
@@ -270,6 +272,13 @@ export function MemberCompanionView({
     { icon: UserPlus, label: 'Invite Member', desc: 'Grow your network', path: '/guests', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { icon: Users, label: 'Find Members', desc: 'Explore directory', path: '/directory', color: 'text-orange-400', bg: 'bg-orange-500/10' }
   ];
+
+  if (isChapterLeader) {
+    operations.push(
+      { icon: Calendar, label: 'Start Meeting', desc: 'Organize logs', path: '/meetings', color: 'text-purple-500', bg: 'bg-purple-500/10' },
+      { icon: CheckCircle2, label: 'Attendance', desc: 'Verify rosters', path: '/meetings', color: 'text-indigo-500', bg: 'bg-indigo-500/10' }
+    );
+  }
 
   return (
     <div className="space-y-8 sm:space-y-10">

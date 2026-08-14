@@ -14,7 +14,6 @@ import { cn } from '../lib/utils';
 import {  where  } from '../lib/database';
 import { databaseService } from '../services/databaseService';
 import { MemberCompanionView } from '../components/MemberCompanionView';
-import { ChapterAdminCompanionView } from '../components/ChapterAdminCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
 import StatGrid from '../components/StatGrid';
 import { Modal } from '../components/Modal';
@@ -22,7 +21,7 @@ import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { calculateProfileCompletion } from '../utils/profileUtils';
-import { calculateMemberGrowthScore, calculateGrowthTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 
@@ -1619,7 +1618,7 @@ export function Analytics() {
     return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
   }, [profile]);
 
-  const growthScoreData = profile?.role === 'MASTER_ADMIN' ? chapterGrowthScoreData : (usePersonalStats ? memberGrowthScoreData : chapterGrowthScoreData);
+  const growthScoreData = profile?.role === 'MASTER_ADMIN' ? chapterGrowthScoreData : memberGrowthScoreData;
   const dynamicGrowthScore = Math.min(100, Math.max(0, Math.round(growthScoreData.score)));
   const growthStatus = growthScoreData.status;
   const growthStatusColor = growthScoreData.statusColor;
@@ -1632,38 +1631,42 @@ export function Analytics() {
     const startOfMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const startOfPrevMonth = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    const countActivities = (start: Date, end: Date) => {
-      let refs = allReferrals.filter(r => isDateInRange(r.created_at || r.createdAt, start, end));
-      let slips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt, start, end));
-      let otos = oneToOnes.filter(m => isDateInRange(m.created_at || m.createdAt || m.date, start, end));
-      let guests = guestInvitations.filter(g => isDateInRange(g.created_at || g.createdAt, start, end));
-      let tests = allTestimonials.filter(t => isDateInRange(t.created_at || t.createdAt, start, end));
-
-      if (profile?.role === 'MEMBER' && profile?.position !== 'president' && profile?.position !== 'vice_president' && profile?.position !== 'treasurer' && profile?.position !== 'chapter_admin') {
-        refs = refs.filter(r => (r.fromUserId || r.sender_id) === profile.uid || (r.toUserId || r.receiver_id) === profile.uid);
-        slips = slips.filter(s => (s.fromUserId || s.sender_id) === profile.uid || (s.toUserId || s.receiver_id) === profile.uid);
-        otos = otos.filter(m => [m.organizer_id, m.creatorId, m.member_id].includes(profile.uid));
-        guests = guests.filter(g => (g.createdBy || g.user_id) === profile.uid);
-        tests = tests.filter(t => (t.authorMemberId || t.author_id) === profile.uid);
-      } else if (profile?.role !== 'MASTER_ADMIN' && profile?.chapter_id) {
-        refs = refs.filter(r => r.chapter_id === profile.chapter_id || r.chapterId === profile.chapter_id);
-        slips = slips.filter(s => s.chapter_id === profile.chapter_id || s.chapterId === profile.chapter_id);
-        otos = otos.filter(m => m.chapter_id === profile.chapter_id || m.chapterId === profile.chapter_id);
-        guests = guests.filter(g => g.chapter_id === profile.chapter_id || g.chapterId === profile.chapter_id);
-        tests = tests.filter(t => t.chapter_id === profile.chapter_id || t.chapterId === profile.chapter_id);
+    const getScoreForRange = (start: Date, end: Date) => {
+      if (profile?.role === 'MASTER_ADMIN') {
+        const data = calculateChapterGrowthScoreData({
+          chapterMembers: chapterUsers,
+          allReferrals,
+          oneToOnes,
+          meetings,
+          guestInvitations,
+          allSlips,
+          testimonials: allTestimonials,
+          activeDateRange: { start, end },
+          currentProfile: profile
+        });
+        return data.score;
       }
-
-      return refs.length + slips.length + otos.length + guests.length + tests.length;
+      const data = calculateMemberGrowthScoreData({
+        profile,
+        allReferrals,
+        oneToOnes,
+        meetings,
+        guestInvitations,
+        allSlips,
+        testimonials: allTestimonials,
+        activeDateRange: { start, end }
+      });
+      return data.score;
     };
 
-    const currentWeekAct = countActivities(startOfWeek, now);
-    const prevWeekAct = countActivities(startOfPrevWeek, startOfWeek);
-    const currentMonthAct = countActivities(startOfMonth, now);
-    const prevMonthAct = countActivities(startOfPrevMonth, startOfMonth);
+    const currentWeekAct = getScoreForRange(startOfWeek, now);
+    const prevWeekAct = getScoreForRange(startOfPrevWeek, new Date(startOfWeek.getTime() - 1));
+    const currentMonthAct = getScoreForRange(startOfMonth, now);
+    const prevMonthAct = getScoreForRange(startOfPrevMonth, new Date(startOfMonth.getTime() - 1));
 
     return {
-      weeklyGrowth: calculateGrowthTrend(currentWeekAct, prevWeekAct),
-      monthlyGrowth: calculateGrowthTrend(currentMonthAct, prevMonthAct)
+      weeklyGrowth: calculateGrowthScoreTrend(currentWeekAct, prevWeekAct),
+      monthlyGrowth: calculateGrowthScoreTrend(currentMonthAct, prevMonthAct)
     };
   }, [allReferrals, allSlips, oneToOnes, guestInvitations, allTestimonials, profile]);
 
@@ -2195,7 +2198,7 @@ const getGreeting = () => {
                   >
                     <Rocket size={16} />
                   </motion.div>
-                  Grow Your Score
+                  Grow Your Business
                 </motion.button>
                 
                 <Link to="/member/my-report" className="w-full sm:w-auto">
@@ -2281,7 +2284,8 @@ const getGreeting = () => {
                </div>
              </div>
              
-             {/* Trend Indicators (Right Side Desktop Sync) */}
+             {/* Trend Indicators (Right Side Desktop Sync) - Hidden per user request */}
+             {/* 
              <div className="absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col gap-3.5 hidden md:flex">
                 <div className="flex flex-col">
                   <div className={cn("flex items-center gap-1 font-bold text-[11px]", weeklyGrowth.isPositive ? "text-emerald-400" : weeklyGrowth.isNegative ? "text-red-400" : "text-[#9CA3AF]")}>
@@ -2300,6 +2304,7 @@ const getGreeting = () => {
                   <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Monthly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last month</span></span>
                 </div>
              </div>
+             */}
           </div>
         </div>
 
@@ -2496,21 +2501,7 @@ const getGreeting = () => {
       )}
  
       
-      {(profile?.role === 'CHAPTER_ADMIN' || profile?.position === 'chapter_admin') && (
-        <ChapterAdminCompanionView
-          profile={profile}
-          chapterHealthScore={chapterGrowthScoreData.score}
-          membersAnalysed={chapterGrowthScoreData.membersAnalysed}
-          daysAnalysedText={chapterGrowthScoreData.daysAnalysedText}
-          scoreText={chapterGrowthScoreData.scoreText}
-          onOpenFilterModal={() => setIsFilterModalOpen(true)}
-          chapterMemberCount={totalMembersCount}
-          chapterReferrals={referralsPassedCount}
-          chapterBusiness={businessGeneratedTotal}
-          finalRecentActivities={filteredRecentActivities}
-          tasks={chapterAdminTasks}
-        />
-      )}
+
       
       {profile?.role === 'MASTER_ADMIN' && (
         <MasterAdminCompanionView
