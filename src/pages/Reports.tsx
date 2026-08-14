@@ -8,7 +8,7 @@ import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
-import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData } from '../utils/growthScore';
+import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getISTDayBounds } from '../utils/growthScore';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
@@ -203,8 +203,14 @@ export function Reports() {
   };
 
   // Safe Date parsing helper
-  const parsedStart = useMemo(() => new Date(startDate + 'T00:00:00'), [startDate]);
-  const parsedEnd = useMemo(() => new Date(endDate + 'T23:59:59'), [endDate]);
+  const parsedStart = useMemo(() => {
+    if (!startDate) return null;
+    return getISTDayBounds(startDate).start;
+  }, [startDate]);
+  const parsedEnd = useMemo(() => {
+    if (!endDate) return null;
+    return getISTDayBounds(endDate).end;
+  }, [endDate]);
 
   // Available members for dropdown based on selected chapter
   const availableMemberOptions = useMemo(() => {
@@ -266,7 +272,8 @@ export function Reports() {
     });
 
     const filteredOneToOnes = oneToOnes.filter(m => {
-      const isDateValid = isWithinDateRange(m.date, parsedStart, parsedEnd);
+      const meetingDate = m.date || m.meeting_date || m.scheduled_date || (m as any).scheduledDate || m.createdAt;
+      const isDateValid = isWithinDateRange(meetingDate, parsedStart, parsedEnd);
       let isScopeValid = true;
       if (selectedChapterId && selectedChapterId !== 'ALL') {
         const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
@@ -332,7 +339,7 @@ export function Reports() {
   const chapterGrowthScoreData = useMemo(() => {
     return calculateChapterGrowthScoreData({
       chapterMembers: currentChapterMemberIds.map(id => users.find(u => u.uid === id || u.id === id)).filter(Boolean),
-      activeDateRange: startDate && endDate ? { startDate, endDate } : null,
+      activeDateRange: parsedStart && parsedEnd ? { start: parsedStart, end: parsedEnd } : null,
       allReferrals: referrals,
       oneToOnes: oneToOnes,
       meetings: meetings,
@@ -340,7 +347,7 @@ export function Reports() {
       currentProfile: profile,
       todayTasks: []
     });
-  }, [currentChapterMemberIds, users, startDate, endDate, referrals, oneToOnes, meetings, guestInvitations, profile]);
+  }, [currentChapterMemberIds, users, parsedStart, parsedEnd, referrals, oneToOnes, meetings, guestInvitations, profile]);
 
   const statsSummary = useMemo(() => {
     // Total Revenue
@@ -590,12 +597,13 @@ export function Reports() {
   };
 
   // Safe date checker
-  function isWithinDateRange(dateVal: any, start: Date, end: Date): boolean {
+  function isWithinDateRange(dateVal: any, start: Date | null, end: Date | null): boolean {
+    if (!start || !end) return true; // Include everything if no date filter is applied
     if (!dateVal) return false;
     try {
       const date = new Date(dateVal);
       if (isNaN(date.getTime())) return false;
-      return date >= start && date <= end;
+      return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
     } catch {
       return false;
     }

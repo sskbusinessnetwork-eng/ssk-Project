@@ -5,7 +5,7 @@ import { ChevronLeft, Activity, Trophy, Users, UserCheck, Building2, Filter, Fil
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import StatGrid from '../components/StatGrid';
-import { calculateChapterGrowthScoreData, isDateInRange } from '../utils/growthScore';
+import { calculateChapterGrowthScoreData, isDateInRange, getISTDayBounds } from '../utils/growthScore';
 import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
@@ -98,8 +98,8 @@ export function MyReport() {
   const handleApplyFilter = () => {
     if (filterStartDate && filterEndDate) {
       setActiveDateRange({
-        start: new Date(filterStartDate),
-        end: new Date(filterEndDate),
+        start: getISTDayBounds(filterStartDate).start,
+        end: getISTDayBounds(filterEndDate).end,
       });
     }
     setIsFilterModalOpen(false);
@@ -172,12 +172,12 @@ export function MyReport() {
 
   const effectiveSlips = useMemo(() => {
     if (!activeDateRange) return allSlips;
-    return allSlips.filter(s => isDateInRange(s.created_at || s.createdAt || s.date, activeDateRange.start, activeDateRange.end));
+    return allSlips.filter(s => isDateInRange(s.created_at || s.createdAt, activeDateRange.start, activeDateRange.end));
   }, [allSlips, activeDateRange]);
   
   const effectiveOneToOnes = useMemo(() => {
     if (!activeDateRange) return oneToOnes;
-    return oneToOnes.filter(m => isDateInRange(m.created_at || m.createdAt || m.meeting_date, activeDateRange.start, activeDateRange.end));
+    return oneToOnes.filter(m => isDateInRange(m.date || m.meeting_date || (m as any).scheduled_date || m.created_at || m.createdAt, activeDateRange.start, activeDateRange.end));
   }, [oneToOnes, activeDateRange]);
   
   const effectiveMeetings = useMemo(() => {
@@ -187,7 +187,7 @@ export function MyReport() {
   
   const effectiveGuests = useMemo(() => {
     if (!activeDateRange) return guestInvitations;
-    return guestInvitations.filter(g => isDateInRange(g.visitDate || g.created_at || g.createdAt, activeDateRange.start, activeDateRange.end));
+    return guestInvitations.filter(g => isDateInRange(g.created_at || g.createdAt, activeDateRange.start, activeDateRange.end));
   }, [guestInvitations, activeDateRange]);
 
   const effectiveTestimonials = useMemo(() => {
@@ -337,7 +337,7 @@ export function MyReport() {
       // Period Data
       const pReferrals = allReferrals.filter(r => isDateInRange(r.created_at || r.createdAt, start, end) && isInChapter(r.fromUserId || r.sender_id));
       const pTestimonials = testimonials.filter(t => isDateInRange(t.created_at || t.createdAt, start, end) && isInChapter(t.authorMemberId || t.author_id));
-      const pOneToOnes = oneToOnes.filter(m => isDateInRange(m.created_at || m.createdAt || m.meeting_date, start, end) && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
+      const pOneToOnes = oneToOnes.filter(m => isDateInRange(m.date || m.meeting_date || (m as any).scheduled_date || m.created_at || m.createdAt, start, end) && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
       const pMeetings = meetings.filter(m => isDateInRange(m.date || m.meeting_date || m.createdAt, start, end) && String(m.chapter_id || m.chapterId) === String(userChapterId));
       
       let pMembersAttended = 0;
@@ -348,11 +348,11 @@ export function MyReport() {
       });
 
       const pGuestInvitations = guestInvitations.filter(g => {
-        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        const d = new Date(g.created_at || g.createdAt);
         return isDateInRange(d, start, end) && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
       });
 
-      const pSlips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt || s.date, start, end) && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
+      const pSlips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt, start, end) && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
       const pBusinessSlips = pSlips.filter(s => {
         const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
         const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
@@ -375,14 +375,14 @@ export function MyReport() {
       // Cumulative Data
       const cReferrals = allReferrals.filter(r => new Date(r.created_at || r.createdAt) <= end && isInChapter(r.fromUserId || r.sender_id));
       const cTestimonials = testimonials.filter(t => new Date(t.created_at || t.createdAt) <= end && isInChapter(t.authorMemberId || t.author_id));
-      const cOneToOnes = oneToOnes.filter(m => new Date(m.created_at || m.createdAt || m.meeting_date) <= end && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
+      const cOneToOnes = oneToOnes.filter(m => new Date(m.date || m.meeting_date || (m as any).scheduled_date || m.created_at || m.createdAt) <= end && (isInChapter(m.organizer_id || m.creatorId) || isInChapter(m.member_id)));
       
       const cGuestInvitations = guestInvitations.filter(g => {
-        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        const d = new Date(g.created_at || g.createdAt);
         return d <= end && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
       });
 
-      const cSlips = allSlips.filter(s => new Date(s.created_at || s.createdAt || s.date) <= end && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
+      const cSlips = allSlips.filter(s => new Date(s.created_at || s.createdAt) <= end && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
       const cBusinessSlips = cSlips.filter(s => {
         const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
         const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
