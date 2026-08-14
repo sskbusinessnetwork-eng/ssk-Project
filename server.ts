@@ -506,7 +506,6 @@ async function startServer() {
       }
 
       // 3. Assign target user to selected position/role
-      console.log("UPDATE PAYLOAD:", updatePayload);
       const { error: updateErr } = await adminSupabase
         .from('users')
         .update({ 
