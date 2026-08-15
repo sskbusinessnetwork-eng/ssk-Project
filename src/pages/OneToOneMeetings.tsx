@@ -1140,49 +1140,6 @@ export function OneToOneMeetings() {
               ))}
             </select>
           </div>
-
-          {/* Analytics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-2 gap-2.5 sm:gap-6">
-            <button
-              onClick={() => {
-                setHistoryType('scheduled');
-                setIsHistoryModalOpen(true);
-              }}
-              className="group relative bg-[#0F172A] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-              <div className="relative z-10">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-[16px] flex items-center justify-center text-primary mb-2 sm:mb-6">
-                  <Calendar className="w-4 h-4 sm:w-6 sm:h-6" />
-                </div>
-                <p className="text-[8.5px] sm:text-[10px] font-bold text-neutral-300 uppercase tracking-wider sm:tracking-[0.2em] mb-1 sm:mb-2 truncate">Meetings Scheduled</p>
-                <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">{stats?.scheduled}</h2>
-                <p className="text-[8px] sm:text-[10px] font-bold text-primary uppercase tracking-widest mt-2 sm:mt-4 flex items-center gap-1 sm:gap-2 truncate">
-                  <span>View History</span> <ChevronRight className="w-3 h-3" />
-                </p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
-                setHistoryType('attended');
-                setIsHistoryModalOpen(true);
-              }}
-              className="group relative bg-[#111827] p-3.5 sm:p-6 rounded-2xl sm:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden text-left transition-all hover:scale-[1.02]"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl" />
-              <div className="relative z-10">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-primary/10 rounded-xl sm:rounded-[16px] flex items-center justify-center text-primary mb-2 sm:mb-6">
-                  <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6" />
-                </div>
-                <p className="text-[8.5px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-wider sm:tracking-[0.2em] mb-1 sm:mb-2 truncate">Meetings Attended</p>
-                <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">{stats?.attended}</h2>
-                <p className="text-[8px] sm:text-[10px] font-bold text-primary uppercase tracking-widest mt-2 sm:mt-4 flex items-center gap-1 sm:gap-2 truncate">
-                  <span>View History</span> <ChevronRight className="w-3 h-3" />
-                </p>
-              </div>
-            </button>
-          </div>
         </div>
       )}
 
@@ -1220,6 +1177,47 @@ export function OneToOneMeetings() {
             )}
           </div>
         </section>
+
+        {(isAdmin || isChapterAdmin) && (
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-6 mt-2">
+            <button
+              onClick={() => {
+                setHistoryType('scheduled');
+                setIsHistoryModalOpen(true);
+              }}
+              className="group relative bg-[#0F172A] p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] border border-white/5 shadow-sm text-left transition-all hover:scale-[1.02]"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full -mr-12 -mt-12 blur-2xl" />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                  <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-wider truncate">Scheduled</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">{stats?.scheduled}</h2>
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setHistoryType('attended');
+                setIsHistoryModalOpen(true);
+              }}
+              className="group relative bg-[#111827] p-4 sm:p-5 rounded-[16px] sm:rounded-[20px] border border-white/5 shadow-sm text-left transition-all hover:scale-[1.02]"
+            >
+              <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 blur-2xl" />
+              <div className="relative z-10 flex items-center gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary shrink-0">
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div>
+                  <p className="text-[9px] sm:text-[10px] font-bold text-neutral-400 uppercase tracking-wider truncate">Attended</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">{stats?.attended}</h2>
+                </div>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Meeting History */}
         <section className="space-y-3 sm:space-y-4">
@@ -2051,9 +2049,19 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
           {isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : (isOverdue ? 'Due' : 'Scheduled')}
         </span>
         
-        <button className="text-[10px] sm:text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors border border-primary/20">
-          VIEW
-        </button>
+        <div className="flex items-center gap-2">
+          {!isCompleted && !isCancelled && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onUpdate?.(); }}
+              className="text-[10px] sm:text-xs font-bold text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors border border-white/10"
+            >
+              UPDATE MEETING
+            </button>
+          )}
+          <button className="text-[10px] sm:text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors border border-primary/20">
+            VIEW
+          </button>
+        </div>
       </div>
     </div>
   );
