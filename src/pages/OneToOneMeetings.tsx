@@ -1067,7 +1067,12 @@ export function OneToOneMeetings() {
 
   const pastMeetings = meetings
     .filter(m => {
-      if (m.status !== 'COMPLETED' && m.status !== 'CANCELLED' && m.status !== 'NOT_COMPLETED') return false;
+      const statusUpper = String(m.status || '').trim().toUpperCase();
+      const isActuallyCompleted = statusUpper === 'COMPLETED' || m.isCompleted === true || (m.isCompleted as any) === 'true' || (m as any).is_completed === true || (m as any).is_completed === 'true';
+      const isActuallyCancelled = statusUpper === 'CANCELLED' || m.isCancelled === true || (m.isCancelled as any) === 'true' || (m as any).is_cancelled === true || (m as any).is_cancelled === 'true';
+      const isActuallyNotCompleted = statusUpper === 'NOT_COMPLETED';
+
+      if (!isActuallyCompleted && !isActuallyCancelled && !isActuallyNotCompleted) return false;
       if (isChapterAdmin) {
         const chapterMemberIds = members.map(mem => mem.uid);
         if (profile?.uid) chapterMemberIds.push(profile.uid);
@@ -1191,9 +1196,9 @@ export function OneToOneMeetings() {
             <h2 className="text-base sm:text-xl font-bold text-white uppercase tracking-tight">Upcoming Meetings</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div className="flex flex-col gap-3">
             {upcomingMeetings.length > 0 ? (
-              upcomingMeetings.slice(0, 1).map((meeting) => (
+              upcomingMeetings.map((meeting) => (
                 <MeetingCard 
                   key={meeting.id} 
                   meeting={meeting} 
@@ -1209,7 +1214,7 @@ export function OneToOneMeetings() {
                 />
               ))
             ) : (
-              <div className="col-span-full p-8 sm:p-12 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-dashed border-white/5">
+              <div className="p-8 sm:p-12 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-dashed border-white/5">
                 <p className="text-neutral-400 font-medium italic text-[10px] sm:text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
               </div>
             )}
@@ -1225,62 +1230,31 @@ export function OneToOneMeetings() {
             <h2 className="text-base sm:text-xl font-bold text-white uppercase tracking-tight">Meeting History</h2>
           </div>
           
-          <div className="bg-[#111827] rounded-xl sm:rounded-[24px] border border-white/5 shadow-sm overflow-hidden">
-            <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
-              <div className="divide-y divide-white/5">
-                {pastMeetings.length > 0 ? (
-                  pastMeetings.map((meeting) => {
-                    const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
-                    const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
-
-                    const sender = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
-                    const receiver = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
-
-                    const senderName = getUserFullName(sender) || 'Sender';
-                    const receiverName = getUserFullName(receiver) || 'Receiver';
-
-                    const dateStr = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
-                    const timeStr = formatTime12h(meeting.time);
-
-                    return (
-                      <div 
-                        key={meeting.id} 
-                        onClick={() => handleOpenAttendanceModal(meeting)}
-                        className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#151C2E] transition-colors cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
-                            <Users size={15} className="text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
-                              {senderName} &amp; {receiverName}
-                            </h4>
-                            <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
-                              {dateStr} &bull; {timeStr}
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
-                          meeting.status === 'COMPLETED' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        )}>
-                          {meeting.status}
-                        </span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="py-20 text-center">
-                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-500">
-                      <History size={32} />
-                    </div>
-                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">No meeting history found.</p>
-                  </div>
-                )}
+          <div className="flex flex-col gap-3">
+            {pastMeetings.length > 0 ? (
+              pastMeetings.map((meeting) => (
+                <MeetingCard 
+                  key={meeting.id} 
+                  meeting={meeting} 
+                  allUsersList={allUsersList}
+                  chapterMap={chapterMap}
+                  isCreator={
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.id) ||
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.uid) ||
+                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(currentUserRecord?.id)
+                  }
+                  isAdmin={isAdmin}
+                  onUpdate={() => handleOpenAttendanceModal(meeting)}
+                />
+              ))
+            ) : (
+              <div className="py-20 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-white/5 shadow-sm">
+                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-500">
+                  <History size={32} />
+                </div>
+                <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">No meeting history found.</p>
               </div>
-            </div>
+            )}
           </div>
         </section>
       </div>
@@ -2034,7 +2008,9 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
   }
 
   const isOverdue = isMeetingOverdue(meeting);
-  const isCompleted = meeting.status === 'COMPLETED';
+  const statusUpper = String(meeting.status || '').trim().toUpperCase();
+  const isCompleted = statusUpper === 'COMPLETED' || meeting.isCompleted === true || String(meeting.isCompleted) === 'true';
+  const isCancelled = statusUpper === 'CANCELLED' || meeting.isCancelled === true || String(meeting.isCancelled) === 'true';
 
   const dateStr = meeting.date ? format(new Date(meeting.date), 'dd MMM yyyy') : 'N/A';
   const timeStr = formatTime12h(meeting.time);
@@ -2043,34 +2019,42 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
     <div
       onClick={onUpdate}
       className={cn(
-        "bg-[#111827] px-4 sm:px-5 py-3.5 rounded-[16px] border transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
-        isOverdue ? "border-amber-500/30 bg-amber-500/5" : "border-white/5"
+        "bg-[#111827] px-4 py-3 sm:px-5 sm:py-3.5 rounded-[12px] border transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
+        isOverdue && !isCompleted && !isCancelled ? "border-amber-500/30 bg-amber-500/5" : "border-white/5"
       )}
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-8.5 h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors">
+      <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+        <div className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full bg-[#151C2E] group-hover:bg-primary/20 border border-white/5 flex items-center justify-center shrink-0 transition-colors hidden sm:flex">
           <Users size={15} className="text-primary" />
         </div>
-        <div className="min-w-0">
-          <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
+        <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+          <h3 className="text-sm sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
             {displayPersonName}
           </h3>
-          <p className="text-[11px] text-neutral-400 font-medium mt-0.5">
-            {dateStr} &bull; {timeStr}
+          <p className="text-xs text-neutral-400 font-medium whitespace-nowrap">
+            {dateStr} <span className="hidden sm:inline">&bull;</span> {timeStr}
           </p>
         </div>
       </div>
 
-      <span className={cn(
-        "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
-        isCompleted
-          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-          : isOverdue 
-            ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
-            : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-      )}>
-        {isCompleted ? 'Completed' : (isOverdue ? 'Due' : 'Scheduled')}
-      </span>
+      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-0 border-white/5">
+        <span className={cn(
+          "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shrink-0",
+          isCompleted
+            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+            : isCancelled
+               ? "bg-red-500/10 text-red-400 border-red-500/20"
+               : isOverdue
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+        )}>
+          {isCompleted ? 'Completed' : isCancelled ? 'Cancelled' : (isOverdue ? 'Due' : 'Scheduled')}
+        </span>
+        
+        <button className="text-[10px] sm:text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors border border-primary/20">
+          VIEW
+        </button>
+      </div>
     </div>
   );
 };
