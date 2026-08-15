@@ -107,7 +107,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   time: string;
   location: string;
   enabled: boolean;
-}) {
+}, forceDateUpdate: boolean = false) {
   const targetChapterId = chapterId || adminId;
   if (!targetChapterId) return;
 
@@ -163,11 +163,33 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   }
 
   // Calculate the upcoming occurrence date in IST strictly based on recurring rule
-  const occurrence = calculateNextOccurrence(setup.frequency, setup.day, setup.date, setup.time);
-  const occurrenceDateString = occurrence.dateString; // YYYY-MM-DD
-  const occurrenceTime = setup.time || occurrence.timeFormatted;
-  const occurrenceLocation = setup.location || '';
+  let occurrence = calculateNextOccurrence(setup.frequency, setup.day, setup.date, setup.time);
+  let occurrenceDateString = occurrence.dateString; // YYYY-MM-DD
+  let occurrenceTime = setup.time || occurrence.timeFormatted;
+  let occurrenceLocation = setup.location || '';
   const occurrenceIdsToPreserve = new Set<string>();
+
+  // Loop to find the next valid occurrence date that isn't already "done" (completed or cancelled)
+  let safetyCounter = 0;
+  while (safetyCounter < 5) {
+    const existingDoneMeeting = allMeetings.find(m => 
+      isMeetingDone(m) && 
+      (m.isRecurring || (m as any).is_recurring) &&
+      isSameMeetingDate(m.date, occurrenceDateString)
+    );
+    
+    if (existingDoneMeeting) {
+      // This occurrence was already generated and completed/cancelled.
+      // Move baseDate forward by 1 day and calculate again.
+      const nextBase = new Date(occurrence.timestampMs + 24 * 60 * 60 * 1000);
+      occurrence = calculateNextOccurrence(setup.frequency, setup.day, setup.date, setup.time, nextBase);
+      occurrenceDateString = occurrence.dateString;
+      occurrenceTime = setup.time || occurrence.timeFormatted;
+      safetyCounter++;
+    } else {
+      break;
+    }
+  }
 
   // Look for any existing meeting on that exact upcoming date (whether recurring or standard)
   const exactUpcomingMeeting = allMeetings.find(m => 
@@ -178,23 +200,30 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   if (exactUpcomingMeeting) {
     // Existing record on that exact date -> PRESERVE & UPDATE metadata if needed
     const updatePayload: any = {
-      time: occurrenceTime,
-      location: occurrenceLocation,
       isRecurring: true,
       chapter_id: targetChapterId,
       adminId: adminId || targetChapterId,
       status: 'UPCOMING'
     };
+    
+    if (forceDateUpdate) {
+      updatePayload.time = occurrenceTime;
+      updatePayload.location = occurrenceLocation;
+    }
+    
     await databaseService.update('meetings', exactUpcomingMeeting.id, updatePayload);
     try {
-      await supabase.from('meetings').update({
-        time: occurrenceTime,
-        location: occurrenceLocation,
+      const supabaseUpdatePayload: any = {
         is_recurring: true,
         chapter_id: targetChapterId,
         admin_id: adminId || targetChapterId,
         status: 'UPCOMING'
-      }).eq('id', exactUpcomingMeeting.id);
+      };
+      if (forceDateUpdate) {
+        supabaseUpdatePayload.time = occurrenceTime;
+        supabaseUpdatePayload.location = occurrenceLocation;
+      }
+      await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', exactUpcomingMeeting.id);
     } catch (e) {}
     occurrenceIdsToPreserve.add(exactUpcomingMeeting.id);
   } else {
@@ -208,25 +237,32 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     if (otherFutureRecurringMeeting) {
       // Re-align the existing future recurring meeting to the correct upcoming date
       const updatePayload: any = {
-        date: occurrenceDateString,
-        time: occurrenceTime,
-        location: occurrenceLocation,
         isRecurring: true,
         chapter_id: targetChapterId,
         adminId: adminId || targetChapterId,
         status: 'UPCOMING'
       };
+      
+      if (forceDateUpdate) {
+        updatePayload.date = occurrenceDateString;
+        updatePayload.time = occurrenceTime;
+        updatePayload.location = occurrenceLocation;
+      }
+      
       await databaseService.update('meetings', otherFutureRecurringMeeting.id, updatePayload);
       try {
-        await supabase.from('meetings').update({
-          date: occurrenceDateString,
-          time: occurrenceTime,
-          location: occurrenceLocation,
+        const supabaseUpdatePayload: any = {
           is_recurring: true,
           chapter_id: targetChapterId,
           admin_id: adminId || targetChapterId,
           status: 'UPCOMING'
-        }).eq('id', otherFutureRecurringMeeting.id);
+        };
+        if (forceDateUpdate) {
+          supabaseUpdatePayload.date = occurrenceDateString;
+          supabaseUpdatePayload.time = occurrenceTime;
+          supabaseUpdatePayload.location = occurrenceLocation;
+        }
+        await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', otherFutureRecurringMeeting.id);
       } catch (e) {}
       occurrenceIdsToPreserve.add(otherFutureRecurringMeeting.id);
     } else {
@@ -1301,7 +1337,7 @@ export function Meetings() {
       } catch (e) {}
 
       const targetChapterId = activeChapterId || adminId;
-      await syncDefaultMeetings(adminId, targetChapterId, enabledSetupDoc);
+      await syncDefaultMeetings(adminId, targetChapterId, enabledSetupDoc, true);
 
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
@@ -1476,18 +1512,20 @@ export function Meetings() {
       }
 
       // Auto-generate next recurring meeting after completion if setup is enabled
-      try {
-        const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || profile?.chapter_id;
-        const meetingAdminId = selectedMeeting.adminId || profile?.uid || '';
-        if (meetingAdminId) {
-          const adminProf = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', meetingAdminId);
-          const setupObj = adminProf?.defaultMeetingSetup;
-          if (setupObj && setupObj.enabled) {
-            await syncDefaultMeetings(meetingAdminId, meetingChapId || meetingAdminId, setupObj);
+      if (shouldComplete) {
+        try {
+          const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || profile?.chapter_id;
+          const meetingAdminId = selectedMeeting.adminId || profile?.uid || '';
+          if (meetingAdminId) {
+            const adminProf = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', meetingAdminId);
+            const setupObj = adminProf?.defaultMeetingSetup;
+            if (setupObj && setupObj.enabled) {
+              await syncDefaultMeetings(meetingAdminId, meetingChapId || meetingAdminId, setupObj);
+            }
           }
+        } catch (autoErr) {
+          console.error("Error generating next recurring meeting after completion:", autoErr);
         }
-      } catch (autoErr) {
-        console.error("Error generating next recurring meeting after completion:", autoErr);
       }
 
       if (refreshProfile) await refreshProfile();
@@ -1556,6 +1594,21 @@ export function Meetings() {
         status: 'CANCELLED',
         updatedAt: new Date().toISOString()
       });
+
+      // Auto-generate next recurring meeting after cancellation if setup is enabled
+      try {
+        const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || profile?.chapter_id;
+        const meetingAdminId = selectedMeeting.adminId || profile?.uid || '';
+        if (meetingAdminId) {
+          const adminProf = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', meetingAdminId);
+          const setupObj = adminProf?.defaultMeetingSetup;
+          if (setupObj && setupObj.enabled) {
+            await syncDefaultMeetings(meetingAdminId, meetingChapId || meetingAdminId, setupObj);
+          }
+        }
+      } catch (autoErr) {
+        console.error("Error generating next recurring meeting after cancellation:", autoErr);
+      }
 
       setSuccess('Meeting cancelled and moved to history.');
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
