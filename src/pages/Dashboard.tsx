@@ -1598,16 +1598,16 @@ export function Analytics() {
   const memberGrowthScoreData = useMemo(() => {
     return calculateMemberGrowthScoreData({
       profile,
-      activeDateRange: growthScoreDateRange,
+      activeDateRange: undefined,
       allReferrals,
       oneToOnes,
       meetings,
       guestInvitations,
-      allSlips: effectiveSlips,
+      allSlips: allSlips,
       testimonials: allTestimonials,
       allUsers: allUsersList.length > 0 ? allUsersList : chapterUsers
     });
-  }, [profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, allUsersList, chapterUsers]);
+  }, [profile, allReferrals, oneToOnes, meetings, guestInvitations, allSlips, allTestimonials, allUsersList, chapterUsers]);
 
   // Auto-sync growth score to database when calculated score changes
   useEffect(() => {
@@ -1643,10 +1643,12 @@ export function Analytics() {
       oneToOnes,
       meetings,
       guestInvitations,
+      allSlips: effectiveSlips,
+      testimonials: allTestimonials,
       currentProfile: profile,
       todayTasks
     });
-  }, [chapterUsers, profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, todayTasks]);
+  }, [chapterUsers, profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, todayTasks]);
 
   const isChapterLeaderRole = useMemo(() => {
     if (!profile) return false;
@@ -1655,7 +1657,8 @@ export function Analytics() {
     return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
   }, [profile]);
 
-  const growthScoreData = profile?.role === 'MASTER_ADMIN' ? chapterGrowthScoreData : memberGrowthScoreData;
+  const showChapterScoreGauge = profile?.role === 'MASTER_ADMIN';
+  const growthScoreData = showChapterScoreGauge ? chapterGrowthScoreData : memberGrowthScoreData;
   const dynamicGrowthScore = Math.min(100, Math.max(0, Math.round(growthScoreData.score)));
   const growthStatus = growthScoreData.status;
   const growthStatusColor = growthScoreData.statusColor;
@@ -2260,12 +2263,16 @@ const getGreeting = () => {
 
             {/* Growth Score Analytics Metadata Badge */}
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#0B1220]/80 border border-white/10 rounded-xl px-3.5 py-1.5 shadow-md w-fit">
-              {!usePersonalStats && (
+              {showChapterScoreGauge && (
                 <>
                   <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{growthScoreData.membersAnalysed}</span></span>
                   <span className="text-neutral-500">•</span>
                 </>
               )}
+              <span className="text-emerald-400 font-bold">Completed: <span className="text-white font-extrabold">{growthScoreData.completed_tasks}</span></span>
+              <span className="text-neutral-500">•</span>
+              <span className="text-amber-400 font-bold">Total: <span className="text-white font-extrabold">{growthScoreData.total_tasks}</span></span>
+              <span className="text-neutral-500">•</span>
               <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{growthScoreData.score}%</span></span>
             </div>
           </div>
@@ -2315,7 +2322,7 @@ const getGreeting = () => {
              </svg>
              <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
                <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{usePersonalStats ? 'Personal Growth' : 'Chapter Growth'}</span>
+               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{showChapterScoreGauge ? 'GLOBAL SCORE' : 'MY GROWTH SCORE'}</span>
                <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
                  {growthStatus}
                </div>

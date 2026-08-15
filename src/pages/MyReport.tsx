@@ -155,10 +155,12 @@ export function MyReport() {
       oneToOnes,
       meetings,
       guestInvitations,
+      allSlips,
+      testimonials,
       currentProfile: profile,
       todayTasks: []
     });
-  }, [chapterUsers, allReferrals, oneToOnes, meetings, guestInvitations, profile, activeDateRange]);
+  }, [chapterUsers, allReferrals, oneToOnes, meetings, guestInvitations, allSlips, testimonials, profile, activeDateRange]);
 
   const totalMembersCount = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN').length;
   const activePartnersCount = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN' && isMemberActive(u)).length;
@@ -681,7 +683,7 @@ export function MyReport() {
               {scoreVal}%
             </span>
             <span className="text-[8px] sm:text-[9px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-1">
-              CHAPTER GROWTH
+              CHAPTER GROWTH SCORE
             </span>
             <div className={cn("mt-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wider border", chapterGrowthScoreData.statusColor)}>
               {chapterGrowthScoreData.status}
@@ -689,9 +691,15 @@ export function MyReport() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-bold text-[#9CA3AF] bg-[#111827]/80 border border-white/10 px-4 py-1.5 rounded-full shadow-sm">
-            Score: <span className="text-white font-extrabold">{scoreVal}%</span>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-[#D1D5DB] font-semibold bg-[#111827]/80 border border-white/10 rounded-xl px-4 py-2 shadow-sm w-fit">
+            <span className="text-purple-400 font-bold">Members Analysed: <span className="text-white font-extrabold">{chapterGrowthScoreData.membersAnalysed}</span></span>
+            <span className="text-neutral-500">•</span>
+            <span className="text-emerald-400 font-bold">Completed: <span className="text-white font-extrabold">{chapterGrowthScoreData.completed_tasks}</span></span>
+            <span className="text-neutral-500">•</span>
+            <span className="text-amber-400 font-bold">Total: <span className="text-white font-extrabold">{chapterGrowthScoreData.total_tasks}</span></span>
+            <span className="text-neutral-500">•</span>
+            <span className="text-blue-400 font-bold">Score: <span className="text-white font-extrabold">{scoreVal}%</span></span>
           </div>
         </div>
       </motion.div>

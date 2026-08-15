@@ -1,0 +1,17 @@
+import { calculateMemberGrowthScoreData, getWorkspaceChecklistTasks } from './src/utils/growthScore.ts';
+
+const profile = {
+  uid: 'test1',
+  role: 'MEMBER',
+  subscriptionStart: '2026-08-01',
+  subscriptionEnd: '2030-08-01',
+};
+
+const data = calculateMemberGrowthScoreData({
+  profile,
+  activeDateRange: undefined, // Let it fallback to sub date
+});
+
+console.log('Total tasks:', data.total_tasks);
+console.log('Completed tasks:', data.completed_tasks);
+console.log('Score:', data.score);

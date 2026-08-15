@@ -698,14 +698,58 @@ export function calculateMemberGrowthScoreData(input: {
   if (input.activeDateRange) {
     startStr = getISTDateString(input.activeDateRange.start);
     endStr = getISTDateString(input.activeDateRange.end);
+  } else if (parsedSubStart) {
+    startStr = getISTDateString(parsedSubStart);
+    if (parsedSubEnd) {
+      endStr = getISTDateString(parsedSubEnd);
+    }
   }
 
   let start = parseISTStrToUTC(startStr);
   let end = parseISTStrToUTC(endStr);
+
+  if (input.allUsers && input.allUsers.length > 0) {
+    let chapterCreatedAt = new Date();
+    for (const u of input.allUsers) {
+      const cd = parseSafeDate(u.chapter_createdAt || u.created_at || u.createdAt || u.subscriptionStart);
+      if (cd && cd.getTime() < chapterCreatedAt.getTime()) {
+        chapterCreatedAt = cd;
+      }
+    }
+    const chapterCreatedUTC = parseISTStrToUTC(chapterCreatedAt);
+    if (chapterCreatedUTC.getTime() > start.getTime()) {
+      start = chapterCreatedUTC;
+    }
+  }
+  
+  // MIN(today, end)
+  const todayUTC = parseISTStrToUTC(todayStr);
+  if (end.getTime() > todayUTC.getTime()) {
+    end = todayUTC;
+  }
+  
+  // If subscription hasn't started yet, or start > end
   if (start.getTime() > end.getTime()) {
-    const tmp = start;
-    start = end;
-    end = tmp;
+    // Return early with 0 score
+    return {
+      score: 0,
+      totalEarned: 0,
+      maxPossible: 100,
+      daily_score: 0,
+      daily_max_score: 100,
+      monthly_score: 0,
+      monthly_max_score: 3000,
+      growth_score: 0,
+      completed_tasks: 0,
+      total_tasks: 0,
+      analysed_days: 1,
+      daysAnalysed: 1,
+      daysAnalysedText: '1 / 30',
+      scoreText: '0 / 100',
+      status: 'Needs Action',
+      statusColor: 'bg-red-500/20 text-red-400 border-red-500/10',
+      tasks: []
+    };
   }
 
   const tasks = getWorkspaceChecklistTasks(profile, {
@@ -874,7 +918,15 @@ export function calculateChapterGrowthScoreData(input: {
     testimonials = []
   } = input;
 
-  const applicableMembers = chapterMembers.filter(u => (u.role || '').toUpperCase() !== 'MASTER_ADMIN');
+  const applicableMembersRaw = chapterMembers.filter(u => (u.role || '').toUpperCase() !== 'MASTER_ADMIN');
+  const applicableMembersMap = new Map();
+  for (const m of applicableMembersRaw) {
+    const id = m.id || m.uid;
+    if (id && !applicableMembersMap.has(id)) {
+      applicableMembersMap.set(id, m);
+    }
+  }
+  const applicableMembers = Array.from(applicableMembersMap.values());
   const N = applicableMembers.length;
 
   if (N === 0) {
@@ -899,64 +951,97 @@ export function calculateChapterGrowthScoreData(input: {
     };
   }
 
-  let totalMemberScores = 0;
-  let totalAnalysedDaysSum = 0;
+  // 1. Determine Chapter Creation Date
+  let chapterCreatedAt = new Date();
+  for (const u of chapterMembers) {
+    const cd = parseSafeDate(u.chapter_createdAt || u.created_at || u.createdAt || u.subscriptionStart);
+    if (cd && cd.getTime() < chapterCreatedAt.getTime()) {
+      chapterCreatedAt = cd;
+    }
+  }
+
+  const todayStr = getISTDateString(new Date());
+  
+  const parseISTStrToUTC = (str: string | Date) => {
+    const d = parseSafeDate(str);
+    if (!d) return new Date();
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  };
+  
+  const todayUTC = parseISTStrToUTC(todayStr);
+
   let totalCompletedTasks = 0;
   let totalTasksCount = 0;
 
   for (const m of applicableMembers) {
-    const res = calculateMemberGrowthScoreData({
-      profile: m,
+    // 2. Member subscription start
+    let subStart = parseSafeDate(m.subscriptionStart || m.subscriptionStartDate || m.created_at || m.createdAt);
+    if (!subStart) subStart = chapterCreatedAt;
+
+    // MAX(chapter_created_at, subscription_start)
+    let startDate = new Date(Math.max(chapterCreatedAt.getTime(), subStart.getTime()));
+
+    // 3. Member subscription end
+    let subEnd = parseSafeDate(m.subscriptionEnd || m.subscriptionEndDate || m.current_subscription_end_date);
+
+    // MIN(today, subscription_end)
+    let endDate = todayUTC;
+    if (subEnd && subEnd.getTime() < endDate.getTime()) {
+      endDate = subEnd;
+    }
+
+    if (startDate.getTime() > endDate.getTime()) {
+      continue;
+    }
+
+    // 4. Calculate tasks for this specific eligible period
+    const tasks = getWorkspaceChecklistTasks(m, {
       allReferrals,
       oneToOnes,
       meetings,
       guestInvitations,
       allSlips,
       testimonials,
-      activeDateRange: input.activeDateRange
-    });
-    totalMemberScores += res.score;
-    totalAnalysedDaysSum += res.analysed_days;
-    totalCompletedTasks += res.completed_tasks;
-    totalTasksCount += res.total_tasks;
+      allUsers: chapterMembers
+    }, { start: startDate, end: endDate });
+
+    totalTasksCount += tasks.length;
+    totalCompletedTasks += tasks.filter(t => t.isDone).length;
   }
 
-  let avgScore = 0;
+  let chapterScore = 0;
   if (totalTasksCount > 0) {
-    avgScore = Math.round((totalCompletedTasks / totalTasksCount) * 100);
+    chapterScore = Math.round((totalCompletedTasks / totalTasksCount) * 100);
   }
-  avgScore = Math.min(100, Math.max(0, avgScore));
-  const avgAnalysedDays = Math.max(1, Math.round(totalAnalysedDaysSum / N));
-  
-  const maxPossible = 100;
+  chapterScore = Math.min(100, Math.max(0, chapterScore));
 
   let status: 'Needs Action' | 'On Track' | 'Excellent' = 'Needs Action';
   let statusColor = 'bg-red-500/20 text-red-400 border-red-500/10';
 
-  if (avgScore >= 75) {
+  if (chapterScore >= 75) {
     status = 'Excellent';
     statusColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/10';
-  } else if (avgScore >= 50) {
+  } else if (chapterScore >= 50) {
     status = 'On Track';
     statusColor = 'bg-amber-500/20 text-amber-400 border-amber-500/10';
   }
 
   return {
-    score: avgScore,
+    score: chapterScore,
     totalEarned: totalCompletedTasks,
-    maxPossible: maxPossible,
-    daily_score: avgScore,
-    daily_max_score: maxPossible,
-    monthly_score: Math.min(3000, avgScore * avgAnalysedDays),
-    monthly_max_score: 3000,
-    growth_score: avgScore,
+    maxPossible: 100,
+    daily_score: chapterScore,
+    daily_max_score: 100,
+    monthly_score: chapterScore, // unused mostly for chapter
+    monthly_max_score: 100,
+    growth_score: chapterScore,
     completed_tasks: totalCompletedTasks,
     total_tasks: totalTasksCount,
-    analysed_days: avgAnalysedDays,
+    analysed_days: 1,
     membersAnalysed: N,
-    daysAnalysed: avgAnalysedDays,
-    daysAnalysedText: `${avgAnalysedDays} / 30`,
-    scoreText: `${avgScore}%`,
+    daysAnalysed: 1,
+    daysAnalysedText: 'Lifetime',
+    scoreText: `${chapterScore}%`,
     status,
     statusColor
   };

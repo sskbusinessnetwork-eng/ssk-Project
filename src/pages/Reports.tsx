@@ -344,10 +344,12 @@ export function Reports() {
       oneToOnes: oneToOnes,
       meetings: meetings,
       guestInvitations: guestInvitations,
+      allSlips: thankYouSlips,
+      testimonials: testimonials,
       currentProfile: profile,
       todayTasks: []
     });
-  }, [currentChapterMemberIds, users, parsedStart, parsedEnd, referrals, oneToOnes, meetings, guestInvitations, profile]);
+  }, [currentChapterMemberIds, users, parsedStart, parsedEnd, referrals, oneToOnes, meetings, guestInvitations, thankYouSlips, testimonials, profile]);
 
   const statsSummary = useMemo(() => {
     // Total Revenue
