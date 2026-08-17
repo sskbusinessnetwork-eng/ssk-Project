@@ -2595,7 +2595,7 @@ export function Meetings() {
                               {member.name || member.displayName || 'Unknown Member'}
                             </h4>
                             <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
-                              {member.position || member.chapter_position || 'Member'}
+                              Member{member.position || member.chapter_position ? ` • ${member.position || member.chapter_position}` : ''}
                             </p>
                           </div>
                           <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
@@ -2663,7 +2663,7 @@ export function Meetings() {
                           {guest.guest_name}
                         </p>
                         <p className="text-[10px] sm:text-[11px] text-neutral-400 truncate mt-0.5 font-semibold uppercase tracking-wider">
-                          Invited by {inviter?.name || guest.invited_by_name || 'Member'}{guest.invited_by_role ? ` (${guest.invited_by_role})` : inviter?.position ? ` (${inviter.position})` : ''} • {guest.business_category || 'Guest'}
+                          Guest • {status === 'Present' ? 'Attended' : 'Visitor'}
                         </p>
                       </div>
                       <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
@@ -3452,10 +3452,10 @@ export function Meetings() {
                     <div key={g.id || g.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-secondary transition-colors">
-                          {g.name || 'Guest'}
+                          {g.guest_name || g.name || 'Guest'}
                         </h4>
                         <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
-                          {g.businessCategory || g.category || 'N/A'} • Inv: {g.invitedBy || 'Member'}
+                          Guest • Attended
                         </p>
                       </div>
                       <div className="flex items-center justify-start sm:justify-end gap-2 w-full sm:w-auto mt-1 sm:mt-0">

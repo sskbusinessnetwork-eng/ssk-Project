@@ -19,6 +19,7 @@ import { TopPerformingMembersSection } from '../components/TopPerformingMembersS
 import {  where, orderBy, limit  } from '../lib/database';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
+import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
 
 // Reusable animation variants
 const fadeUp = {
@@ -211,10 +212,56 @@ export function LandingPage() {
         throw new Error('Please select a Chapter.');
       }
 
+      const rawPhone = formData.phone.trim();
+      const phoneDigits = normalizePhoneDigits(rawPhone);
+      if (phoneDigits.length < 10) {
+        throw new Error('Please enter a valid 10-digit phone number.');
+      }
+
+      // Check if phone belongs to an existing member / position holder
+      const { data: existingUsers } = await supabase.from('users').select('*');
+      if (existingUsers && existingUsers.length > 0) {
+        for (const u of existingUsers) {
+          const userPhones = [
+            u.phone,
+            u.mobile,
+            u.phoneNumber,
+            u.phone_number,
+            u.whatsapp,
+            u.whatsapp_number,
+            u.contactPhone
+          ];
+          if (u.profile_photo && typeof u.profile_photo === 'string' && u.profile_photo.includes('|||')) {
+            try {
+              const extra = JSON.parse(u.profile_photo.split('|||')[1] || '{}');
+              if (extra.phone) userPhones.push(extra.phone);
+              if (extra.mobile) userPhones.push(extra.mobile);
+              if (extra.whatsapp) userPhones.push(extra.whatsapp);
+            } catch (e) {}
+          }
+          if (userPhones.some(p => isSamePhoneNumber(p, rawPhone))) {
+            const memberName = u.name || u.full_name || 'Member';
+            const memberPos = u.position || u.chapter_position || u.role || 'Member';
+            throw new Error(`${memberName} is already a member (${memberPos}) and cannot be registered as a guest.`);
+          }
+        }
+      }
+
       const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
       const chapterId = selectedChapter?.chapterId || formData.adminId;
       const chapterAdminId = selectedChapter?.adminId || formData.adminId;
       const chapterName = selectedChapter?.chapterName || 'Chapter';
+
+      // Check duplicate guest for meeting if meeting selected
+      if (selectedMeeting?.id) {
+        const { data: dupInv } = await supabase
+          .from('guest_invitations')
+          .select('guest_phone, guest_whatsapp')
+          .eq('meeting_id', selectedMeeting.id);
+        if (dupInv && dupInv.some((g: any) => isSamePhoneNumber(g.guest_phone, rawPhone) || isSamePhoneNumber(g.guest_whatsapp, rawPhone))) {
+          throw new Error('This guest has already been registered for this meeting.');
+        }
+      }
 
       const guestPayload = {
         guest_name: formData.fullName.trim(),

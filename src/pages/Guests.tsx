@@ -21,7 +21,7 @@ import { Modal } from '../components/Modal';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { db } from '../lib/database';
-import { normalizePhoneNumber } from '../utils/phoneUtils';
+import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
 
 export function Guests() {
@@ -31,6 +31,9 @@ export function Guests() {
   const [invitations, setInvitations] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [matchedMember, setMatchedMember] = useState<{ name: string; position: string; phone: string } | null>(null);
+  const [duplicateMeetingError, setDuplicateMeetingError] = useState<string | null>(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<any | null>(null);
@@ -56,6 +59,83 @@ export function Guests() {
     meetingId: ''
   });
 
+  const getFormattedRole = (user: any): string => {
+    const pos = user.position ? String(user.position).trim() : (user.chapter_position ? String(user.chapter_position).trim() : '');
+    if (pos) {
+      const pLower = pos.toLowerCase();
+      if (pLower === 'president') return 'President';
+      if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+      if (pLower === 'treasurer') return 'Treasurer';
+      if (pLower === 'secretary') return 'Secretary';
+      if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+      if (pLower === 'member') return 'Member';
+      return pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+    if (user.role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (user.role === 'MASTER_ADMIN') return 'Master Admin';
+    return 'Member';
+  };
+
+  const validatePhone = (phoneInput: string, meetingIdInput?: string, userList?: any[], invList?: any[]) => {
+    const users = userList || allUsers;
+    const invs = invList || invitations;
+    const digits = normalizePhoneDigits(phoneInput);
+
+    if (!phoneInput || digits.length < 10) {
+      setMatchedMember(null);
+      setDuplicateMeetingError(null);
+      return null;
+    }
+
+    // 1. Check if phone matches any registered Member, Chapter Admin, President, VP, Treasurer, Secretary, Position Holder
+    for (const u of users) {
+      const userPhones: any[] = [
+        u.phone,
+        u.mobile,
+        u.phoneNumber,
+        u.phone_number,
+        u.whatsapp,
+        u.whatsapp_number,
+        u.contactPhone
+      ];
+      if (u.profile_photo && typeof u.profile_photo === 'string' && u.profile_photo.includes('|||')) {
+        try {
+          const extra = JSON.parse(u.profile_photo.split('|||')[1] || '{}');
+          if (extra.phone) userPhones.push(extra.phone);
+          if (extra.mobile) userPhones.push(extra.mobile);
+          if (extra.whatsapp) userPhones.push(extra.whatsapp);
+        } catch (e) {}
+      }
+
+      const isMatch = userPhones.some(p => isSamePhoneNumber(p, phoneInput));
+      if (isMatch) {
+        const mName = u.name || u.full_name || u.displayName || `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Member';
+        const mPos = getFormattedRole(u);
+        const memberInfo = { name: mName, position: mPos, phone: phoneInput };
+        setMatchedMember(memberInfo);
+        setDuplicateMeetingError(null);
+        return { type: 'MEMBER_EXISTS', member: memberInfo };
+      }
+    }
+    setMatchedMember(null);
+
+    // 2. Check if already invited for the selected meeting
+    const targetMeetingId = meetingIdInput || formData.meetingId;
+    if (targetMeetingId && invs && invs.length > 0) {
+      const isDup = invs.some((inv: any) => 
+        (inv.meeting_id === targetMeetingId || inv.meetingId === targetMeetingId) &&
+        (isSamePhoneNumber(inv.guest_phone, phoneInput) || isSamePhoneNumber(inv.guest_whatsapp, phoneInput) || isSamePhoneNumber(inv.phone, phoneInput))
+      );
+      if (isDup) {
+        const dupMsg = "This guest has already been invited to this meeting.";
+        setDuplicateMeetingError(dupMsg);
+        return { type: 'DUPLICATE_GUEST', message: dupMsg };
+      }
+    }
+    setDuplicateMeetingError(null);
+    return null;
+  };
+
   const fetchInitialData = async () => {
     if (!profile) return;
     setLoading(true);
@@ -70,7 +150,19 @@ export function Guests() {
       const userChapterId = profile.chapter_id || (profile as any).chapterId;
       const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || profile.role === 'MASTER_ADMIN';
 
-      // 2. Fetch Upcoming Meetings for user's chapter
+      // 2. Fetch Directory of Users / Members for validation
+      let fetchedUsers: any[] = [];
+      try {
+        const { data: uData } = await supabase.from('users').select('*');
+        if (uData) {
+          fetchedUsers = uData;
+          setAllUsers(uData);
+        }
+      } catch (uErr) {
+        console.warn("User directory fetch notice:", uErr);
+      }
+
+      // 3. Fetch Upcoming Meetings for user's chapter
       if (userChapterId) {
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: fetchedMeetings } = await supabase
@@ -97,7 +189,7 @@ export function Guests() {
         }
       }
       
-      // 3. Fetch Guest Invitations History
+      // 4. Fetch Guest Invitations History
       let invsQuery = supabase.from('guest_invitations').select('*');
       if (profile.role === 'MASTER_ADMIN') {
         // Master Admin sees all in system view
@@ -155,6 +247,17 @@ export function Guests() {
       return;
     }
 
+    // Run phone validation
+    const valResult = validatePhone(formData.guestPhone, formData.meetingId);
+    if (valResult?.type === 'MEMBER_EXISTS') {
+      setError(`${valResult.member.name} is already a member (${valResult.member.position}) and cannot be added as a guest.`);
+      return;
+    }
+    if (valResult?.type === 'DUPLICATE_GUEST') {
+      setError("This guest has already been invited to this meeting.");
+      return;
+    }
+
     const userId = profile.id || profile.uid;
     const userChapterId = profile.chapter_id || (profile as any).chapterId;
 
@@ -172,21 +275,6 @@ export function Guests() {
       if (selectedMeeting.chapter_id && userChapterId && String(selectedMeeting.chapter_id).trim() !== String(userChapterId).trim()) {
         throw new Error("You can only invite guests to meetings belonging to your own chapter.");
       }
-
-      const getFormattedRole = (user: any): string => {
-        const pos = user.position ? String(user.position).trim() : '';
-        if (pos) {
-          const pLower = pos.toLowerCase();
-          if (pLower === 'president') return 'President';
-          if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
-          if (pLower === 'treasurer') return 'Treasurer';
-          if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
-          if (pLower === 'member') return 'Member';
-          return pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-        }
-        if (user.role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-        return 'Member';
-      };
 
       // Fetch dynamic Chapter Name
       let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
@@ -232,57 +320,46 @@ export function Guests() {
         updated_at: new Date().toISOString()
       };
 
-      let insertSuccess = false;
+      // Call Backend API first for authoritative server validation
+      let resData: any = null;
+      let resStatus = 200;
       try {
-        const { data, error: insertError } = await supabase
-          .from('guest_invitations')
-          .insert([newInvitation])
-          .select();
-
-        if (!insertError && data && data.length > 0) {
-          insertSuccess = true;
-        }
-      } catch (dbErr) {
-        console.warn("Direct Supabase guest invitation insert notice:", dbErr);
-      }
-
-      if (!insertSuccess) {
-        let resData: any = null;
+        const res = await fetch('/api/guests/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newInvitation,
+            callerId: userId
+          })
+        });
+        resStatus = res.status;
+        const text = await res.text();
         try {
-          const res = await fetch('/api/guests/invite', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              newInvitation,
-              callerId: userId
-            })
-          });
-          const text = await res.text();
-          try {
-            resData = text ? JSON.parse(text) : null;
-          } catch (pErr) {
-            console.warn("Raw response text from /api/guests/invite was not JSON:", text);
-          }
-        } catch (fetchErr) {
-          console.warn("Fetch error for /api/guests/invite:", fetchErr);
+          resData = text ? JSON.parse(text) : null;
+        } catch (pErr) {
+          console.warn("Raw response text from /api/guests/invite was not JSON:", text);
         }
-
-        if (resData && resData.success) {
-          insertSuccess = true;
-        } else {
-          // Local databaseService fallback
-          try {
-            await databaseService.create('guest_invitations', newInvitation);
-            insertSuccess = true;
-          } catch (localDbErr) {
-            console.error("Local database fallback save error:", localDbErr);
-            throw new Error(resData?.error || resData?.message || "Failed to save guest invitation.");
-          }
-        }
+      } catch (fetchErr) {
+        console.warn("Fetch error for /api/guests/invite:", fetchErr);
       }
 
-      if (!insertSuccess) {
-        throw new Error("Failed to save guest invitation.");
+      if (resStatus === 409 || resData?.error === 'MEMBER_CANNOT_BE_GUEST') {
+        const errMemberName = resData?.memberName || formData.guestName;
+        const errMemberPos = resData?.memberPosition || 'Member';
+        setMatchedMember({ name: errMemberName, position: errMemberPos, phone: formData.guestPhone });
+        setError(resData?.message || `${errMemberName} is already a member (${errMemberPos}) and cannot be added as a guest.`);
+        return;
+      }
+
+      if (resStatus === 409 || resData?.error === 'GUEST_ALREADY_INVITED') {
+        const dupMsg = resData?.message || "This guest has already been invited to this meeting.";
+        setDuplicateMeetingError(dupMsg);
+        setError(dupMsg);
+        return;
+      }
+
+      if (!resData || !resData.success) {
+        throw new Error(resData?.error || resData?.message || "Failed to send guest invitation. Please check the details.");
       }
 
       // Refresh list
@@ -321,6 +398,8 @@ SSK Business Network`;
         guestBusiness: '',
         meetingId: ''
       });
+      setMatchedMember(null);
+      setDuplicateMeetingError(null);
       
       // Broadcast events so Growth Score, My Analytics, Chapter Analytics, and My Chapter Report update instantly
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
@@ -384,8 +463,8 @@ SSK Business Network`;
                       <h4 className="text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
                         {inv.guest_name}
                       </h4>
-                      <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
-                        {inv.business_category || 'Business Guest'}
+                      <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate uppercase tracking-wider">
+                        Guest • {statusLabel.toLowerCase().includes('attended') ? 'Attended' : 'Visitor'}
                       </p>
                     </div>
                     <span className={cn(
@@ -456,10 +535,42 @@ SSK Business Network`;
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
+            {error && !matchedMember && !duplicateMeetingError && (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-[12px] flex items-start gap-3">
                 <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={18} />
                 <p className="text-sm text-red-400 font-medium">{error}</p>
+              </div>
+            )}
+
+            {matchedMember && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-[12px] space-y-2">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                  <AlertCircle size={18} className="shrink-0" />
+                  <span>Already a Member</span>
+                </div>
+                <div className="text-xs text-neutral-300 space-y-1.5 pl-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-neutral-400">Name:</span>
+                    <span className="font-bold text-white">{matchedMember.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-neutral-400">Position:</span>
+                    <span className="font-semibold text-primary">{matchedMember.position}</span>
+                  </div>
+                  <p className="text-red-400 font-medium pt-1">
+                    {matchedMember.name} is already a member ({matchedMember.position}) and cannot be added as a guest.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {duplicateMeetingError && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-[12px] flex items-start gap-3">
+                <AlertCircle className="text-amber-400 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <p className="text-sm text-amber-400 font-bold">Already Invited</p>
+                  <p className="text-xs text-amber-300 mt-0.5">{duplicateMeetingError}</p>
+                </div>
               </div>
             )}
             
@@ -477,14 +588,38 @@ SSK Business Network`;
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Guest Phone <span className="text-red-400">*</span></label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Guest Phone <span className="text-red-400">*</span></label>
+                  {matchedMember && (
+                    <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Member Detected</span>
+                  )}
+                </div>
                 <input
                   required
                   type="tel"
                   value={formData.guestPhone}
-                  onChange={(e) => setFormData({ ...formData, guestPhone: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const prevPhone = formData.guestPhone;
+                    setFormData(prev => ({
+                      ...prev,
+                      guestPhone: val,
+                      guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? val : prev.guestWhatsapp
+                    }));
+                    validatePhone(val, formData.meetingId);
+                  }}
+                  onBlur={() => {
+                    validatePhone(formData.guestPhone, formData.meetingId);
+                  }}
                   placeholder="e.g. +91 9876543210"
-                  className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-neutral-600 font-medium text-sm"
+                  className={cn(
+                    "w-full px-4 py-3 bg-[#151C2E] text-white border rounded-[12px] outline-none transition-all placeholder:text-neutral-600 font-medium text-sm",
+                    matchedMember 
+                      ? "border-red-500/60 focus:ring-2 focus:ring-red-500" 
+                      : duplicateMeetingError
+                        ? "border-amber-500/60 focus:ring-2 focus:ring-amber-500"
+                        : "border-white/5 focus:ring-2 focus:ring-primary"
+                  )}
                 />
               </div>
               
@@ -517,7 +652,11 @@ SSK Business Network`;
               <select
                 required
                 value={formData.meetingId}
-                onChange={(e) => setFormData({ ...formData, meetingId: e.target.value })}
+                onChange={(e) => {
+                  const mId = e.target.value;
+                  setFormData({ ...formData, meetingId: mId });
+                  validatePhone(formData.guestPhone, mId);
+                }}
                 className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all font-medium text-sm"
               >
                 <option value="" className="bg-[#111827] text-white">Select Upcoming Meeting</option>
@@ -538,8 +677,8 @@ SSK Business Network`;
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 bg-primary text-white rounded-[12px] font-bold uppercase tracking-widest text-xs hover:bg-primary/90 transition-all disabled:opacity-50"
+                disabled={isSubmitting || Boolean(matchedMember) || Boolean(duplicateMeetingError)}
+                className="w-full py-4 bg-primary text-white rounded-[12px] font-bold uppercase tracking-widest text-xs hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isSubmitting ? 'Sending...' : 'Send Invitation'}
               </button>

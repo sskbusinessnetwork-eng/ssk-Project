@@ -1631,11 +1631,11 @@ export function OneToOneMeetings() {
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-white uppercase tracking-widest">Attendance</h4>
 
-                {/* Creator (Logged-in Member) */}
+                {/* Creator */}
                 <div className="p-4 bg-[#151C2E] rounded-[14px] border border-white/5 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-white">Creator (Logged-in Member)</p>
-                    <p className="text-[10px] text-neutral-400 font-medium">{senderName}</p>
+                    <p className="text-sm font-bold text-white">{senderName}</p>
+                    <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Creator{senderRecord ? ` • ${formatUserRoleOrPosition(senderRecord)}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">
@@ -1663,11 +1663,11 @@ export function OneToOneMeetings() {
                   </div>
                 </div>
 
-                {/* Receiver (Meeting Member) */}
+                {/* Receiver */}
                 <div className="p-4 bg-[#151C2E] rounded-[14px] border border-white/5 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-white">Receiver (Meeting Member)</p>
-                    <p className="text-[10px] text-neutral-400 font-medium">{receiverName}</p>
+                    <p className="text-sm font-bold text-white">{receiverName}</p>
+                    <p className="text-[10px] text-neutral-400 font-medium mt-0.5">Receiver{receiverRecord ? ` • ${formatUserRoleOrPosition(receiverRecord)}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-white">

@@ -30,6 +30,7 @@ export function Positions() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
     // Load chapters
   useEffect(() => {
@@ -91,71 +92,76 @@ export function Positions() {
 
   const handleAssignPosition = async (userId: string, newPosition: ChapterPosition) => {
     if (!isMasterAdmin) {
-      alert("Only the Master Admin can assign or change positions.");
+      setError("Only the Master Admin can assign or change positions.");
       return;
     }
 
     if (!selectedChapterId || !profile) {
-      alert("Please select a chapter first.");
+      setError("Please select a chapter first.");
       return;
     }
 
     setUpdatingId(userId);
+    setError(null);
 
     try {
-      let success = false;
-      let errorMsg = '';
+      const updatePromise = (async () => {
+        let success = false;
+        
+        try {
+          const { data: sessionResult } = await supabase.auth.getSession();
+          const token = sessionResult?.session?.access_token;
 
-      try {
-        const { data: sessionResult } = await supabase.auth.getSession();
-        const token = sessionResult?.session?.access_token;
+          const res = await fetch('/api/admin/update-position', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              targetUserId: userId,
+              newPosition: newPosition,
+              chapterId: selectedChapterId,
+              callerId: profile.id || profile.uid
+            })
+          });
 
-        const res = await fetch('/api/admin/update-position', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({
-            targetUserId: userId,
-            newPosition: newPosition,
-            chapterId: selectedChapterId,
-            callerId: profile.id || profile.uid
-          })
-        });
-
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/json')) {
-          const data = await res.json();
-          if (data.success) {
-            success = true;
-          } else {
-            errorMsg = data.error || 'Failed to update position';
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.success) {
+              success = true;
+            } else {
+              throw new Error(data.error || 'Failed to update position via API');
+            }
           }
-        } else {
-          // Endpoint returned 404 or HTML error - fall back to direct Supabase update
-          console.warn("API route unavailable or non-JSON response, using direct database update...");
+        } catch (err: any) {
+          console.warn("API fetch failed or returned error, trying direct database update:", err);
         }
-      } catch (err: any) {
-        console.warn("API fetch failed, trying direct database update:", err);
-      }
 
-      if (!success) {
-        // Direct Supabase update fallback
-        await updateMemberPositionDirectly(
-          userId,
-          newPosition,
-          selectedChapterId,
-          profile.id || profile.uid
-        );
-      }
+        if (!success) {
+          // Direct Supabase update fallback
+          await updateMemberPositionDirectly(
+            userId,
+            newPosition,
+            selectedChapterId,
+            profile.id || profile.uid
+          );
+        }
+      })();
+
+      // Prevent infinite loading with a timeout
+      await Promise.race([
+        updatePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Update request timed out after 10 seconds')), 10000))
+      ]);
 
       // Trigger realtime updates across all pages
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       window.dispatchEvent(new CustomEvent('users-updated'));
     } catch (error: any) {
       console.error("Error updating position:", error);
-      alert(error.message || "Failed to update position");
+      setError(error.message || "Failed to update position. Please try again.");
     } finally {
       setUpdatingId(null);
     }
@@ -172,6 +178,12 @@ export function Positions() {
         
         {/* Top Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
+          {error && (
+            <div className="w-full bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm font-semibold flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
+            </div>
+          )}
           {isMasterAdmin && (
             <div className="flex-1">
               <label className="text-xs font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 mb-2 block">Select Chapter</label>
@@ -281,7 +293,7 @@ export function Positions() {
                               );
                             })}
                           </select>
-                          {updatingId === member.uid && (
+                          {updatingId === (member.uid || member.id) && (
                             <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                           )}
                         </div>

@@ -213,6 +213,7 @@ async function startServer() {
           if (pLower === 'president') return 'President';
           if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
           if (pLower === 'treasurer') return 'Treasurer';
+          if (pLower === 'secretary') return 'Secretary';
           if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
           if (pLower === 'member') return 'Member';
           return pos.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
@@ -222,6 +223,98 @@ async function startServer() {
       };
 
       const callerRole = formatRole(caller.position, caller.role);
+
+      // Phone Normalization and Member Verification
+      const normalizeDigits = (p?: string | null) => {
+        if (!p) return '';
+        const str = String(p).replace(/\D/g, '');
+        return str.length >= 10 ? str.slice(-10) : str;
+      };
+
+      const isSamePhoneServer = (p1?: string | null, p2?: string | null) => {
+        const d1 = normalizeDigits(p1);
+        const d2 = normalizeDigits(p2);
+        return Boolean(d1 && d2 && d1.length >= 10 && d2.length >= 10 && d1 === d2);
+      };
+
+      const rawGuestPhone = newInvitation.guest_phone || newInvitation.phone || newInvitation.mobile;
+      const guestDigits = normalizeDigits(rawGuestPhone);
+
+      if (!guestDigits || guestDigits.length < 10) {
+        return res.status(400).json({
+          success: false,
+          error: "INVALID_PHONE_NUMBER",
+          message: "Please provide a valid 10-digit phone number for the guest."
+        });
+      }
+
+      // 1. Check all member types (Regular Member, Chapter Admin, President, Vice President, Treasurer, Secretary, Position Holders)
+      try {
+        const { data: uList } = await adminSupabase.from('users').select('*');
+        if (uList && uList.length > 0) {
+          for (const u of uList) {
+            const userPhones: any[] = [
+              u.phone,
+              u.mobile,
+              u.phoneNumber,
+              u.phone_number,
+              u.whatsapp,
+              u.whatsapp_number,
+              u.contactPhone
+            ];
+
+            if (u.profile_photo && typeof u.profile_photo === 'string' && u.profile_photo.includes('|||')) {
+              try {
+                const extra = JSON.parse(u.profile_photo.split('|||')[1] || '{}');
+                if (extra.phone) userPhones.push(extra.phone);
+                if (extra.mobile) userPhones.push(extra.mobile);
+                if (extra.whatsapp) userPhones.push(extra.whatsapp);
+              } catch (e) {}
+            }
+
+            const isMemberMatch = userPhones.some(p => isSamePhoneServer(p, rawGuestPhone));
+            if (isMemberMatch) {
+              const memberName = u.name || u.full_name || u.displayName || `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Member';
+              const memberPosition = formatRole(u.position || u.chapter_position || u.role, u.role);
+              
+              return res.status(409).json({
+                success: false,
+                error: "MEMBER_CANNOT_BE_GUEST",
+                message: `${memberName} is already a member (${memberPosition}) and cannot be added as a guest.`,
+                memberName,
+                memberPosition
+              });
+            }
+          }
+        }
+      } catch (uErr) {
+        console.warn("Users lookup for guest validation notice:", uErr);
+      }
+
+      // 2. Duplicate guest check for same meeting
+      if (newInvitation.meeting_id) {
+        try {
+          const { data: existingGuests } = await adminSupabase
+            .from('guest_invitations')
+            .select('id, guest_phone, guest_whatsapp, meeting_id')
+            .eq('meeting_id', newInvitation.meeting_id);
+            
+          if (existingGuests && existingGuests.length > 0) {
+            const isDuplicate = existingGuests.some((g: any) => 
+              isSamePhoneServer(g.guest_phone, rawGuestPhone) || isSamePhoneServer(g.guest_whatsapp, rawGuestPhone)
+            );
+            if (isDuplicate) {
+              return res.status(409).json({
+                success: false,
+                error: "GUEST_ALREADY_INVITED",
+                message: "This guest has already been invited to this meeting."
+              });
+            }
+          }
+        } catch (gErr) {
+          console.warn("Guest duplicate check notice:", gErr);
+        }
+      }
 
       // 3. Prepare sanitized invitation payload
       const invitePayload = {
