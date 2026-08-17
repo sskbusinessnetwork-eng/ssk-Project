@@ -10,6 +10,7 @@ import { Modal } from '../components/Modal';
 import { notificationService } from '../services/notificationService';
 import { isMemberActive, getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
 import { subscriptionService } from '../services/subscriptionService';
+import { showError, showSuccess, scrollToError } from '../services/toastService';
 
 const formatDateForStorage = (dateStr: string) => {
   if (!dateStr) return '';
@@ -293,9 +294,13 @@ export function ManageSubscriptions() {
       
       setEditModalOpen(false);
       setSelectedUser(null);
+      showSuccess('Subscription details updated successfully.');
     } catch (err: any) {
       console.error("Subscription update error:", err);
-      setError(err.message || 'Failed to save subscription details. Please try again.');
+      const errMsg = err.message || 'Failed to save subscription details. Please try again.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setSaving(false);
     }

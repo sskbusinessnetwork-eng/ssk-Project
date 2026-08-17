@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { cn, getMemberPositionKey } from '../../lib/utils';
 import { Search, X, User } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
+import { showError, showSuccess, scrollToError } from '../../services/toastService';
 
 interface PositionManagementProps {
   chapterAdminId?: string;
@@ -50,7 +51,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
         if (list.length > 0 && !selectedAdminId) {
           setSelectedAdminId(list[0].id);
         }
-      });
+      }).catch(err => console.warn("PositionManagement load chapters notice:", err));
     }
   }, [isMasterAdmin]);
 
@@ -84,6 +85,15 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
         
         setMembers(unique);
         setLoading(false);
+      }).catch(err => {
+        console.warn("PositionManagement load admin notice:", err);
+        const membersData = (snap1?.docs || []).map((d: any) => {
+          const data = d.data();
+          const uId = d.id || data.id || data.uid;
+          return { ...data, id: uId, uid: uId } as UserProfile;
+        });
+        setMembers(membersData);
+        setLoading(false);
       });
     });
 
@@ -92,12 +102,16 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
 
   const handleAssignPosition = async (userId: string, positionName: ChapterPosition) => {
     if (!isMasterAdmin) {
-      alert("Only the Master Admin can assign or change positions.");
+      const msg = "Only the Master Admin can assign or change positions.";
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!effectiveAdminId) {
-      alert("Please select a chapter first.");
+      const msg = "Please select a chapter first.";
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -151,6 +165,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
         );
       }
 
+      showSuccess('Position updated successfully.');
       setIsModalOpen(false);
       setModalPosition(null);
       setSearchTerm('');
@@ -160,7 +175,9 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
       window.dispatchEvent(new CustomEvent('users-updated'));
     } catch (error: any) {
       console.error("Error updating position:", error);
-      alert(error.message || "Failed to update position");
+      const errMsg = error.message || "Failed to update position";
+      showError(errMsg);
+      scrollToError();
     } finally {
       setUpdatingId(null);
     }

@@ -25,6 +25,7 @@ import {  where, orderBy  } from '../lib/database';
 import { cn } from '../lib/utils';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 import { notificationService } from '../services/notificationService';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function ThankYouSlips() {
   const { profile } = useAuth();
@@ -328,12 +329,15 @@ export function ThankYouSlips() {
           if (u.id) names[String(u.id)] = name;
         });
         setMemberNames(prev => ({ ...prev, ...names }));
-      });
+      }).catch(err => console.warn("ThankYouSlips load users notice:", err));
 
       // Fetch categories
-      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
-        if (data) setAllCategories(data as unknown as Category[]);
-      });
+      supabase.from('categories').select('id, name').order('name').then(
+        ({ data }) => {
+          if (data) setAllCategories(data as unknown as Category[]);
+        },
+        err => console.warn("ThankYouSlips load categories notice:", err)
+      );
     }
 
     // Fetch members to show names
@@ -345,29 +349,32 @@ export function ThankYouSlips() {
         if (u.id) names[String(u.id)] = name;
       });
       setMemberNames(prev => ({ ...prev, ...names }));
-    });
+    }).catch(err => console.warn("ThankYouSlips load members notice:", err));
 
     // Also fetch users from Supabase for complete name resolution
-    supabase.from('users').select('*').then(({ data: sbUsers }) => {
-      if (sbUsers) {
-        setAllUsers(prev => {
-          const combined = [...prev];
-          sbUsers.forEach((u: any) => {
-            if (!combined.some(existing => String(existing.id) === String(u.id) || String(existing.uid) === String(u.id) || (u.uid && String(existing.uid) === String(u.uid)))) {
-              combined.push(u as unknown as UserProfile);
-            }
+    supabase.from('users').select('*').then(
+      ({ data: sbUsers }) => {
+        if (sbUsers) {
+          setAllUsers(prev => {
+            const combined = [...prev];
+            sbUsers.forEach((u: any) => {
+              if (!combined.some(existing => String(existing.id) === String(u.id) || String(existing.uid) === String(u.id) || (u.uid && String(existing.uid) === String(u.uid)))) {
+                combined.push(u as unknown as UserProfile);
+              }
+            });
+            return combined;
           });
-          return combined;
-        });
-        const sbNames: Record<string, string> = {};
-        sbUsers.forEach((u: any) => {
-          const name = u.name || u.full_name || u.displayName || 'Unknown Member';
-          if (u.uid) sbNames[String(u.uid)] = name;
-          if (u.id) sbNames[String(u.id)] = name;
-        });
-        setMemberNames(prev => ({ ...prev, ...sbNames }));
-      }
-    });
+          const sbNames: Record<string, string> = {};
+          sbUsers.forEach((u: any) => {
+            const name = u.name || u.full_name || u.displayName || 'Unknown Member';
+            if (u.uid) sbNames[String(u.uid)] = name;
+            if (u.id) sbNames[String(u.id)] = name;
+          });
+          setMemberNames(prev => ({ ...prev, ...sbNames }));
+        }
+      },
+      err => console.warn("ThankYouSlips load sbUsers notice:", err)
+    );
 
     return () => {
       unsubscribeSent();
@@ -429,12 +436,18 @@ export function ThankYouSlips() {
 
     const selectedReferral = referrals.find(r => String(r.id) === String(formData.referralId));
     if (!selectedReferral) {
-      setError("Please select an eligible referral.");
+      const msg = "Please select an eligible referral.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!formData.businessValue || Number(formData.businessValue) <= 0) {
-      setError("Please enter a valid business transaction value.");
+      const msg = "Please enter a valid business transaction value.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -561,6 +574,7 @@ export function ThankYouSlips() {
       setTestimonialReceiver(receiver);
 
       setShowSuccess(true);
+      triggerSuccessToast('Thank You Slip submitted successfully!');
       setFormData({
         referralId: '',
         customerName: '',
@@ -579,7 +593,10 @@ export function ThankYouSlips() {
       }, 2000);
     } catch (err: any) {
       console.error("Error submitting thank you slip:", err);
-      setError(err?.message || "Failed to submit thank you slip.");
+      const errMsg = err?.message || "Failed to submit thank you slip.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }

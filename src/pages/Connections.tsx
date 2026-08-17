@@ -31,6 +31,7 @@ import { cn } from '../lib/utils';
 import { databaseService } from '../services/databaseService';
 import { Modal } from '../components/Modal';
 import { Avatar } from '../components/Avatar';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function Connections() {
   const { profile } = useAuth();
@@ -218,7 +219,7 @@ export function Connections() {
 
       if (error) throw error;
       
-      alert("Referral submitted successfully.");
+      triggerSuccessToast(`Referral sent to ${selectedMember.name} successfully!`);
       setSuccessMessage(`Referral sent to ${selectedMember.name} successfully!`);
       setIsModalOpen(false);
       setReferralForm({
@@ -236,9 +237,9 @@ export function Connections() {
       if (error?.code === '42501') {
         mainMsg = "Insert blocked by Row Level Security.";
       }
-      const alertMsg = `${mainMsg}\n\nCode: ${error?.code || 'N/A'}\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`;
-      alert(alertMsg);
-      setErrorMessage(alertMsg);
+      showError(mainMsg);
+      scrollToError();
+      setErrorMessage(mainMsg);
     } finally {
       setReferringId(null);
     }

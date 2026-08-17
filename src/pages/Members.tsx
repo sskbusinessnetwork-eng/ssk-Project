@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { databaseService } from '../services/databaseService';
 import { subscriptionService } from '../services/subscriptionService';
@@ -111,12 +112,19 @@ export function Members() {
     });
 
     if (profile.role === 'MASTER_ADMIN' || isChapterAdminUser) {
-      supabase.from('categories').select('id, name').order('name').then(({ data }) => {
-        if (data) setCategories(data as unknown as Category[]);
-      });
-      supabase.from('chapters').select('id, chapter_name').then(({data}) => {
-        if (data) setChapters(data);
-      });
+      supabase.from('categories').select('id, name').order('name').then(
+        ({ data }) => {
+          if (data) setCategories(data as unknown as Category[]);
+        },
+        err => console.warn("Members load categories notice:", err)
+      );
+
+      supabase.from('chapters').select('id, chapter_name').then(
+        ({data}) => {
+          if (data) setChapters(data);
+        },
+        err => console.warn("Members load chapters notice:", err)
+      );
       
       // Fetch all admins for the adminMap
       const adminsQuery = query(collection(db, 'users'), where('role', '==', 'MASTER_ADMIN'));
@@ -131,6 +139,8 @@ export function Members() {
           }
         });
         setAllAdmins(combined);
+      }).catch(err => {
+        console.warn("Members load admins notice:", err);
       });
 
       // Fetch member invites for Chapter Admin
@@ -241,17 +251,26 @@ export function Members() {
     }
     
     if (newMemberData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      const msg = 'Password must be at least 6 characters long';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!newMemberData.subscriptionStart || !newMemberData.subscriptionEnd) {
-      setError('Subscription start and end dates are required');
+      const msg = 'Subscription start and end dates are required';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (new Date(newMemberData.subscriptionEnd) <= new Date(newMemberData.subscriptionStart)) {
-      setError('Subscription end date must be after start date');
+      const msg = 'Subscription end date must be after start date';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -298,7 +317,10 @@ export function Members() {
 
       if (checkPhoneError) throw checkPhoneError;
       if (existingUserByPhone && existingUserByPhone.length > 0) {
-        setError("This mobile number is already registered. Please use a different mobile number.");
+        const msg = "This mobile number is already registered. Please use a different mobile number.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -313,7 +335,10 @@ export function Members() {
 
         if (checkWhatsappError) throw checkWhatsappError;
         if (existingUserByWhatsapp && existingUserByWhatsapp.length > 0) {
-          setError("This WhatsApp number is already registered. Please use a different WhatsApp number.");
+          const msg = "This WhatsApp number is already registered. Please use a different WhatsApp number.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -413,6 +438,7 @@ export function Members() {
       window.dispatchEvent(new Event('members-refresh'));
 
       setSuccessMessage('Member created successfully!');
+      triggerSuccessToast('Member created successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
 
       setNewMemberData({
@@ -426,7 +452,10 @@ export function Members() {
       });
     } catch (err: any) {
       console.error("Create Member Error:", err);
-      setError(err.message || "Failed to create member");
+      const errMsg = err.message || "Failed to create member";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -469,10 +498,14 @@ export function Members() {
       setSelectedMember(null);
       window.dispatchEvent(new Event('dashboard-refresh'));
       setSuccessMessage('Member updated successfully!');
+      triggerSuccessToast('Member updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error('Error updating member:', err);
-      alert(`Failed to update member: ${err.message}`);
+      const errMsg = `Failed to update member: ${err.message || 'Unknown error'}`;
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -540,10 +573,14 @@ export function Members() {
 
       setIsSubModalOpen(false);
       setSuccessMessage('Subscription updated successfully!');
+      triggerSuccessToast('Subscription updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Error updating subscription:", err);
-      setError("Failed to save subscription details. Please try again.");
+      const errMsg = "Failed to save subscription details. Please try again.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     }
   };
 
@@ -551,7 +588,10 @@ export function Members() {
     e.preventDefault();
     if (!resetPasswordMember) return;
     if (resetPasswordVal.length < 6) {
-      alert('Password must be at least 6 characters long.');
+      const msg = 'Password must be at least 6 characters long.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -570,10 +610,14 @@ export function Members() {
       setResetPasswordMember(null);
       setResetPasswordVal('');
       setSuccessMessage('Password reset successfully!');
+      triggerSuccessToast('Password reset successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error('Error resetting password:', err);
-      alert(`Failed to reset password: ${err.message}`);
+      const errMsg = `Failed to reset password: ${err.message || 'Unknown error'}`;
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsResettingPassword(false);
     }
@@ -583,10 +627,13 @@ export function Members() {
     try {
       await databaseService.update('users', uid, { membershipStatus });
       setSuccessMessage(`Status updated to ${membershipStatus} successfully!`);
+      triggerSuccessToast(`Status updated to ${membershipStatus} successfully!`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Error updating status:", err);
-      setError("Failed to update status.");
+      const errMsg = "Failed to update status.";
+      setError(errMsg);
+      showError(errMsg);
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -601,7 +648,9 @@ export function Members() {
     }
 
     if (!memberUid || !adminUid) {
-      alert("Error: Missing user identification. Please refresh and try again.");
+      const msg = "Error: Missing user identification. Please refresh and try again.";
+      setError(msg);
+      showError(msg);
       return;
     }
 
@@ -610,8 +659,11 @@ export function Members() {
       /* Deleted via DB directly below */
 
       setDeleteConfirmMember(null);
+      triggerSuccessToast('Member deleted successfully.');
     } catch (err: any) {
-      alert(err.message);
+      const errMsg = err.message || "Failed to delete member.";
+      setError(errMsg);
+      showError(errMsg);
     } finally {
       setDeleting(false);
     }

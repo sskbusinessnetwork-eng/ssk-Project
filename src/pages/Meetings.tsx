@@ -36,6 +36,7 @@ import { startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDat
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { parseTimeTo24h, formatTime12h, parseTo12hParts } from '../utils/timeUtils';
 import {
   TIMEZONE_IST,
@@ -843,7 +844,9 @@ export function Meetings() {
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN') {
-      databaseService.list<UserProfile>('users', [where('position', '==', 'chapter_admin')]).then(setAdminAdmins);
+      databaseService.list<UserProfile>('users', [where('position', '==', 'chapter_admin')])
+        .then(setAdminAdmins)
+        .catch(err => console.warn("Meetings load chapter admins notice:", err));
     } else if (isChapterAdmin) {
       setAdminAdmins([profile]);
     } else if (profile?.role === 'MEMBER' && profile.chapter_id) {
@@ -856,11 +859,13 @@ export function Meetings() {
           setAdminAdmins(admins);
         } else {
           // Fallback to old field
-          databaseService.get<UserProfile>('users', profile.chapter_id).then(admin => {
-            if (admin) setAdminAdmins([admin]);
-          });
+          databaseService.get<UserProfile>('users', profile.chapter_id)
+            .then(admin => {
+              if (admin) setAdminAdmins([admin]);
+            })
+            .catch(err => console.warn("Meetings fallback load admin notice:", err));
         }
-      });
+      }).catch(err => console.warn("Meetings load chapter admin notice:", err));
     }
   }, [profile, isChapterAdmin]);
 
@@ -1013,7 +1018,7 @@ export function Meetings() {
           adminId: chapterId || profile?.chapter_id || '',
           location: venue
         }));
-      });
+      }).catch(err => console.warn("Meetings fetch venue notice:", err));
     }
   }, [isScheduleModalOpen, isMasterAdmin, selectedAdminId, profile?.chapter_id]);
 
@@ -1035,16 +1040,24 @@ export function Meetings() {
     
     if (!isMasterAdmin && !chapterId) {
       // Attempt to resolve chapterId if not on profile
-      supabase.from('users').select('chapter_id').eq('id', profile.uid).maybeSingle().then(({ data: uData }) => {
-        const resolvedId = uData?.chapter_id;
-        if (resolvedId) {
-          if (refreshProfile) refreshProfile();
-        } else {
+      supabase.from('users').select('chapter_id').eq('id', profile.uid).maybeSingle().then(
+        ({ data: uData }) => {
+          const resolvedId = uData?.chapter_id;
+          if (resolvedId) {
+            if (refreshProfile) refreshProfile();
+          } else {
+            setMeetings([]);
+            setLoading(false);
+            clearTimeout(timeoutId);
+          }
+        },
+        (err) => {
+          console.warn("Meetings resolve chapter notice:", err);
           setMeetings([]);
           setLoading(false);
           clearTimeout(timeoutId);
         }
-      });
+      );
     }
 
     const targetChapterId = chapterId || userChapId;
@@ -1130,14 +1143,20 @@ export function Meetings() {
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isMasterAdmin) {
-      setError('Master Admin has view-only access to meetings.');
+      const msg = 'Master Admin has view-only access to meetings.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     const adminId = profile?.uid || scheduleData.adminId;
     const activeChapterId = profile?.chapter_id || (profile as any)?.chapterId || (isMasterAdmin ? selectedAdminId : '');
     
     if (!adminId && !activeChapterId) {
-      setError('Please select or assign an admin or chapter before scheduling a meeting.');
+      const msg = 'Please select or assign an admin or chapter before scheduling a meeting.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     
@@ -1177,13 +1196,17 @@ export function Meetings() {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       setSuccess('Meeting scheduled successfully!');
+      triggerSuccessToast('Meeting scheduled successfully!');
       setTimeout(() => {
         setIsScheduleModalOpen(false);
         setSuccess(null);
       }, 1500);
     } catch (err: any) {
       console.error('Error scheduling meeting:', err);
-      setError(err.message || 'Failed to schedule meeting. Please try again.');
+      const errMsg = err.message || 'Failed to schedule meeting. Please try again.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -1310,7 +1333,10 @@ export function Meetings() {
 
       // Turn ON or Update Recurring
       if (!defaultSetupData.time || !defaultSetupData.location.trim()) {
-        setError('Please complete all required fields (time and location).');
+        const msg = 'Please complete all required fields (time and location).';
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -1343,13 +1369,17 @@ export function Meetings() {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       setSuccess('Default setup saved successfully!');
+      triggerSuccessToast('Default setup saved successfully!');
       setTimeout(() => {
         setIsDefaultSetupOpen(false);
         setSuccess(null);
       }, 1200);
     } catch (err: any) {
       console.error('Error updating default meeting setup:', err);
-      setError(err.message || 'Failed to update default setup.');
+      const errMsg = err.message || 'Failed to update default setup.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -1358,7 +1388,10 @@ export function Meetings() {
   const handleSaveUpdate = async () => {
     if (!selectedMeeting) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
-      setError("Only the Chapter Admin of this chapter can update this meeting.");
+      const msg = "Only the Chapter Admin of this chapter can update this meeting.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     setIsSubmitting(true);
@@ -1390,7 +1423,10 @@ export function Meetings() {
 
         const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'Yes', 'No', 'YES', 'NO'];
         if (!allowedStatuses.includes(status)) {
-          setError(`Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`);
+          const msg = `Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`;
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -1473,7 +1509,10 @@ export function Meetings() {
         if (apiRes.ok && resData && resData.success) {
           apiSuccess = true;
         } else if (resData && resData.error && apiRes.status === 403) {
-          setError(resData.message || resData.error);
+          const errMsg = resData.message || resData.error;
+          setError(errMsg);
+          showError(errMsg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -1531,12 +1570,16 @@ export function Meetings() {
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
+      triggerSuccessToast('Meeting attendance updated successfully!');
       setIsUpdateModalOpen(false);
       setSuccess(null);
       setSelectedMeeting(null);
     } catch (err: any) {
       console.error("Error updating meeting:", err);
-      setError("Failed to update meeting attendance. Please try again.");
+      const errMsg = "Failed to update meeting attendance. Please try again.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -1551,13 +1594,17 @@ export function Meetings() {
         updatedAt: new Date().toISOString()
       });
       setSuccess('Meeting notes updated!');
+      triggerSuccessToast('Meeting notes updated!');
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setTimeout(() => {
         setIsNotesModalOpen(false);
         setSuccess(null);
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to update meeting notes.');
+      const errMsg = err.message || 'Failed to update meeting notes.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -1566,7 +1613,10 @@ export function Meetings() {
   const executeCancelMeeting = async () => {
     if (!selectedMeeting || isMasterAdmin) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
-      setError("Only the Chapter Admin of this chapter can cancel this meeting.");
+      const msg = "Only the Chapter Admin of this chapter can cancel this meeting.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     setIsSubmitting(true);
@@ -1583,7 +1633,10 @@ export function Meetings() {
 
       if (dbErr) {
         console.error("Error cancelling meeting in Supabase:", dbErr);
-        setError("Failed to cancel meeting. Please try again.");
+        const errMsg = "Failed to cancel meeting. Please try again.";
+        setError(errMsg);
+        showError(errMsg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -1611,6 +1664,7 @@ export function Meetings() {
       }
 
       setSuccess('Meeting cancelled and moved to history.');
+      triggerSuccessToast('Meeting cancelled successfully.');
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       setTimeout(() => {
         setIsCancelConfirmOpen(false);
@@ -1619,7 +1673,10 @@ export function Meetings() {
         setSelectedMeeting(null);
       }, 1200);
     } catch (err: any) {
-      setError('Failed to cancel meeting. Please try again.');
+      const errMsg = 'Failed to cancel meeting. Please try again.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }

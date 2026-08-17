@@ -9,6 +9,7 @@ import { Search, User, Phone, PhoneCall, Mail, Clock, ArrowRight, ChevronDown } 
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { supabase } from '../lib/supabaseClient';
+import { showError, showSuccess, scrollToError } from '../services/toastService';
 
 const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'member', label: 'Member' },
@@ -39,6 +40,8 @@ export function Positions() {
         const allChaptersQuery = query(collection(db, 'chapters'));
         getDocs(allChaptersQuery).then((snap: any) => {
           setChapters((snap?.docs || []).map((d: any) => ({ id: d.id, ...d.data() } as Chapter)));
+        }).catch(err => {
+          console.warn("Positions load all chapters notice:", err);
         });
       } else if (profile?.uid) {
         // For Chapter Admin
@@ -49,6 +52,8 @@ export function Positions() {
           if (found.length > 0 && !selectedChapterId) {
             setSelectedChapterId(found[0].id);
           }
+        }).catch(err => {
+          console.warn("Positions load my chapter notice:", err);
         });
       }
     };
@@ -92,12 +97,18 @@ export function Positions() {
 
   const handleAssignPosition = async (userId: string, newPosition: ChapterPosition) => {
     if (!isMasterAdmin) {
-      setError("Only the Master Admin can assign or change positions.");
+      const msg = "Only the Master Admin can assign or change positions.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!selectedChapterId || !profile) {
-      setError("Please select a chapter first.");
+      const msg = "Please select a chapter first.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -156,12 +167,16 @@ export function Positions() {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Update request timed out after 10 seconds')), 10000))
       ]);
 
+      showSuccess('Position updated successfully.');
       // Trigger realtime updates across all pages
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       window.dispatchEvent(new CustomEvent('users-updated'));
     } catch (error: any) {
       console.error("Error updating position:", error);
-      setError(error.message || "Failed to update position. Please try again.");
+      const errMsg = error.message || "Failed to update position. Please try again.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setUpdatingId(null);
     }

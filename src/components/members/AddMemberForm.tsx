@@ -7,6 +7,7 @@ import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
 import { supabase } from '../../lib/supabaseClient';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../../services/toastService';
 
 
 const formatDateForStorage = (dateStr: string) => {
@@ -101,12 +102,10 @@ export function AddMemberForm() {
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setLoading(false);
-      
-      // Scroll to the first field with an error
-      const firstErrorField = document.querySelector(`[name="${Object.keys(newErrors)[0]}"]`);
-      if (firstErrorField) {
-        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      const firstErrMsg = Object.values(newErrors)[0];
+      setError(firstErrMsg);
+      showError(firstErrMsg);
+      scrollToError();
       return;
     } else {
       setErrors({});
@@ -220,6 +219,7 @@ export function AddMemberForm() {
       });
       setIsSuccessOpen(true);
       setSuccess('Member account created successfully!');
+      triggerSuccessToast('Member account created successfully!');
 
       // 6. Reset Form
       setFormData({
@@ -234,7 +234,10 @@ export function AddMemberForm() {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
     } catch (err: any) {
-      setError(err.message || 'An error occurred while creating member.');
+      const errMsg = err.message || 'An error occurred while creating member.';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setLoading(false);
     }

@@ -764,7 +764,10 @@ export async function deleteDoc(docRef: any) {
 
 export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
   const fetchAndCallback = () => {
-    getDocs(queryRef).then(callback);
+    getDocs(queryRef).then(callback).catch(err => {
+      console.warn("onSnapshot fetch error:", err);
+      callback({ docs: [], empty: true, forEach: () => {} });
+    });
   };
   
   fetchAndCallback();

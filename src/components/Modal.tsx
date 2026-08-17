@@ -46,7 +46,11 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar text-text-primary">
+            <div 
+              data-modal-content="true"
+              data-scroll-container="true"
+              className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar text-text-primary"
+            >
               {children}
             </div>
           </motion.div>

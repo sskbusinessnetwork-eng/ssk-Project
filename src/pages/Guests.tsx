@@ -23,6 +23,7 @@ import { safeFormat as format } from '../utils/dateUtils';
 import { db } from '../lib/database';
 import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function Guests() {
   const { profile } = useAuth();
@@ -238,23 +239,35 @@ export function Guests() {
     
     // Validation
     if (!formData.guestName || !formData.guestPhone || !formData.guestWhatsapp || !formData.guestBusiness || !formData.meetingId) {
-      setError("Please fill all required fields.");
+      const msg = "Please fill all required fields.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (profile.role === 'MASTER_ADMIN') {
-      setError("Master Admin cannot invite guests.");
+      const msg = "Master Admin cannot invite guests.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     // Run phone validation
     const valResult = validatePhone(formData.guestPhone, formData.meetingId);
     if (valResult?.type === 'MEMBER_EXISTS') {
-      setError(`${valResult.member.name} is already a member (${valResult.member.position}) and cannot be added as a guest.`);
+      const msg = `${valResult.member.name} is already a member (${valResult.member.position}) and cannot be added as a guest.`;
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     if (valResult?.type === 'DUPLICATE_GUEST') {
-      setError("This guest has already been invited to this meeting.");
+      const msg = "This guest has already been invited to this meeting.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -262,7 +275,10 @@ export function Guests() {
     const userChapterId = profile.chapter_id || (profile as any).chapterId;
 
     if (!userChapterId) {
-      setError("You must belong to a chapter to invite guests.");
+      const msg = "You must belong to a chapter to invite guests.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -347,7 +363,10 @@ export function Guests() {
         const errMemberName = resData?.memberName || formData.guestName;
         const errMemberPos = resData?.memberPosition || 'Member';
         setMatchedMember({ name: errMemberName, position: errMemberPos, phone: formData.guestPhone });
-        setError(resData?.message || `${errMemberName} is already a member (${errMemberPos}) and cannot be added as a guest.`);
+        const errorMsg = resData?.message || `${errMemberName} is already a member (${errMemberPos}) and cannot be added as a guest.`;
+        setError(errorMsg);
+        showError(errorMsg);
+        scrollToError();
         return;
       }
 
@@ -355,15 +374,21 @@ export function Guests() {
         const dupMsg = resData?.message || "This guest has already been invited to this meeting.";
         setDuplicateMeetingError(dupMsg);
         setError(dupMsg);
+        showError(dupMsg);
+        scrollToError();
         return;
       }
 
       if (!resData || !resData.success) {
-        throw new Error(resData?.error || resData?.message || "Failed to send guest invitation. Please check the details.");
+        const failedMsg = resData?.error || resData?.message || "Failed to send guest invitation. Please check the details.";
+        showError(failedMsg);
+        scrollToError();
+        throw new Error(failedMsg);
       }
 
       // Refresh list
       fetchInitialData();
+      triggerSuccessToast("Guest invited successfully!");
 
       const venue = selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall';
       const locationLink = selectedMeeting.location_link || selectedMeeting.locationLink || selectedMeeting.location_url || (selectedMeeting.location && selectedMeeting.location.startsWith('http') ? selectedMeeting.location : '') || selectedMeeting.location || 'N/A';
@@ -406,7 +431,10 @@ SSK Business Network`;
       window.dispatchEvent(new CustomEvent('profile-updated'));
     } catch (error: any) {
       console.error("Error sending invitation:", error);
-      setError(error.message || "Failed to send invitation. Please try again.");
+      const errMsg = error.message || "Failed to send invitation. Please try again.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }

@@ -10,6 +10,7 @@ import { cn } from '../lib/utils';
 import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 declare var jsPDF: any;
 declare var autoTable: any;
 declare var XLSX: any;
@@ -312,7 +313,8 @@ export function MyReport() {
 
   const handleGenerateReportData = () => {
     if (!reportStartDate || !reportEndDate) {
-      alert("Please select both Start Date and End Date.");
+      showError("Please select both Start Date and End Date.");
+      scrollToError();
       return;
     }
     

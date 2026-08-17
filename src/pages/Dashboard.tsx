@@ -353,27 +353,30 @@ export function Analytics() {
     const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
 
     // Fetch thank_you_slips from Supabase as well
-    supabase.from('thank_you_slips').select('*').then(({ data: sbSlips }) => {
-      if (sbSlips && sbSlips.length > 0) {
-        const mappedSbSlips = sbSlips.map((s: any) => {
-          const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
-          const slipReceiver = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== slipSender ? s.receiver_id : (s.sender_id && String(s.sender_id) !== slipSender ? s.sender_id : '')) || '');
-          return {
-            id: String(s.id),
-            referralId: String(s.referral_id || s.referralId || ''),
-            fromUserId: slipSender,
-            toUserId: slipReceiver,
-            customerName: s.customer_name || s.customerName || '',
-            businessValue: Number(s.business_value || s.businessValue || 0),
-            notes: s.notes || '',
-            createdAt: s.created_at || s.createdAt || new Date().toISOString()
-          };
-        });
-        setAllSlips(prev => {
-          return deduplicateSlips([...prev, ...mappedSbSlips]);
-        });
-      }
-    });
+    supabase.from('thank_you_slips').select('*').then(
+      ({ data: sbSlips }) => {
+        if (sbSlips && sbSlips.length > 0) {
+          const mappedSbSlips = sbSlips.map((s: any) => {
+            const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
+            const slipReceiver = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== slipSender ? s.receiver_id : (s.sender_id && String(s.sender_id) !== slipSender ? s.sender_id : '')) || '');
+            return {
+              id: String(s.id),
+              referralId: String(s.referral_id || s.referralId || ''),
+              fromUserId: slipSender,
+              toUserId: slipReceiver,
+              customerName: s.customer_name || s.customerName || '',
+              businessValue: Number(s.business_value || s.businessValue || 0),
+              notes: s.notes || '',
+              createdAt: s.created_at || s.createdAt || new Date().toISOString()
+            };
+          });
+          setAllSlips(prev => {
+            return deduplicateSlips([...prev, ...mappedSbSlips]);
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load slips notice:", err)
+    );
 
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {

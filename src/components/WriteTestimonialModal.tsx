@@ -4,6 +4,7 @@ import { X, Star, MessageSquare, Sparkles } from 'lucide-react';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { UserProfile } from '../types';
+import { showError, showSuccess, scrollToError } from '../services/toastService';
 
 interface WriteTestimonialModalProps {
   isOpen: boolean;
@@ -77,16 +78,19 @@ export function WriteTestimonialModal({ isOpen, onClose, author, receiver, refer
       }
 
       setSuccess(true);
+      showSuccess('Testimonial submitted successfully!');
       setTimeout(() => {
         setSuccess(false);
         setTestimonial('');
         setTitle('');
         setRating(5);
         onClose();
-      }, 2000);
+      }, 1500);
     } catch (error: any) {
       console.error('Error creating testimonial', error);
-      alert('Failed to submit testimonial: ' + (error?.message || 'Server error'));
+      const errMsg = 'Failed to submit testimonial: ' + (error?.message || 'Server error');
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }

@@ -27,6 +27,7 @@ import { notificationService } from '../services/notificationService';
 import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { getCleanFullName } from '../utils/authUtils';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 const getUserFullName = (user: any): string => {
   if (!user) return '';
@@ -630,6 +631,8 @@ export function Referrals() {
           validationMsg = "Receiver not selected.";
         }
         setErrorMessage(validationMsg);
+        showError(validationMsg);
+        scrollToError();
         return;
       }
     }
@@ -764,6 +767,7 @@ export function Referrals() {
       }
       setFormData({ toUserId: '', contactName: '', contactPhone: '', requirement: '', notes: '' });
       setSuccessMessage("Referral submitted successfully.");
+      triggerSuccessToast("Referral submitted successfully.");
       setTimeout(() => setSuccessMessage(null), 4000);
 
       await fetchReferrals();
@@ -772,6 +776,8 @@ export function Referrals() {
       console.error("Referral submission error:", error);
       const fullErrorMsg = error?.message || (typeof error === 'string' ? error : "Database error occurred.");
       setErrorMessage(fullErrorMsg);
+      showError(fullErrorMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -782,7 +788,10 @@ export function Referrals() {
     if (!profile || !selectedReferral || isSubmitting) return;
 
     if (!thankYouData.businessValue) {
-      setErrorMessage("Please enter the business value.");
+      const msg = "Please enter the business value.";
+      setErrorMessage(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -875,6 +884,7 @@ export function Referrals() {
       }
 
       setSuccessMessage("Thank You Slip submitted successfully!");
+      triggerSuccessToast("Thank You Slip submitted successfully!");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsThankYouModalOpen(false);
       setThankYouData({ businessValue: '', notes: '' });
@@ -882,7 +892,10 @@ export function Referrals() {
       await fetchReferrals();
     } catch (error: any) {
       console.error("Error submitting thank you slip:", error);
-      setErrorMessage(error?.message || "Failed to submit thank you slip.");
+      const errMsg = error?.message || "Failed to submit thank you slip.";
+      setErrorMessage(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -921,6 +934,7 @@ export function Referrals() {
           console.warn("Notification error:", nErr);
         }
       }
+      triggerSuccessToast("Referral marked as lost.");
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsNotConvertedModalOpen(false);
       setNotConvertedReason('');
@@ -928,7 +942,10 @@ export function Referrals() {
       await fetchReferrals();
     } catch (error: any) {
       console.error("Error updating status:", error);
-      setErrorMessage(error?.message || "Failed to update referral status.");
+      const errMsg = error?.message || "Failed to update referral status.";
+      setErrorMessage(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -995,6 +1012,7 @@ export function Referrals() {
       }
 
       setSuccessMessage('Status updated successfully!');
+      triggerSuccessToast('Status updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
       setIsUpdateStatusModalOpen(false);
       
@@ -1009,7 +1027,10 @@ export function Referrals() {
       await fetchReferrals();
     } catch (error: any) {
       console.error("Error updating status:", error);
-      setErrorMessage(error?.message || "Failed to update referral status.");
+      const errMsg = error?.message || "Failed to update referral status.";
+      setErrorMessage(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }

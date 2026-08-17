@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, MessageCircle, Copy, X } from 'lucide-react';
+import { showSuccess } from '../../services/toastService';
 
 interface MemberSuccessPopupProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ Welcome aboard, and we wish you great success! 🚀`;
          .then(() => {
            setCopied(true);
            setTimeout(() => setCopied(false), 2000);
-           alert("Message copied successfully.");
+           showSuccess("Message copied successfully.");
          })
          .catch(err => console.error("Failed to copy:", err));
     }
@@ -58,6 +59,7 @@ Welcome aboard, and we wish you great success! 🚀`;
     try {
       await navigator.clipboard.writeText(`Mobile: ${memberData.phone}\nTemporary Password: ${tempPassword}`);
       setCopied(true);
+      showSuccess("Credentials copied to clipboard.");
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);

@@ -11,6 +11,7 @@ import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { supabase } from '../lib/supabaseClient';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { databaseService } from '../services/databaseService';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function OnboardMember() {
   const { profile } = useAuth();
@@ -48,14 +49,18 @@ export function OnboardMember() {
     
     // Fetch chapters (chapter admins)
     getDocs(query(collection(db, 'users'), where('position', '==', 'chapter_admin')))
-      .then((snap: any) => setChapters((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile))));
+      .then((snap: any) => setChapters((snap?.docs || []).map((d: any) => ({ uid: d.id, ...d.data() } as UserProfile))))
+      .catch(err => console.warn("OnboardMember fetch chapter admins notice:", err));
       
     // Fetch categories
-    supabase.from('categories').select('id, name').order('name').then(({ data, error }) => {
-      if (data && !error) {
-        setDbCategories(data as unknown as Category[]);
-      }
-    });
+    supabase.from('categories').select('id, name').order('name').then(
+      ({ data, error }) => {
+        if (data && !error) {
+          setDbCategories(data as unknown as Category[]);
+        }
+      },
+      err => console.warn("OnboardMember fetch categories notice:", err)
+    );
       
     // Subscribe to all members (for simplicity, getting all users)
     const unsub = onSnapshot(collection(db, 'users'), snap => {
@@ -177,10 +182,10 @@ export function OnboardMember() {
         password: bcrypt.hashSync('Welcometosskbusiness', 10) 
       });
       
-      alert('Password reset successfully to default.');
-    } catch (err) {
+      triggerSuccessToast('Password reset successfully to default.');
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to reset password.');
+      showError(err?.message || 'Failed to reset password.');
     }
   };
 
@@ -189,10 +194,10 @@ export function OnboardMember() {
     
     try {
       await deleteDoc(doc(db, 'users', uid));
-      
-    } catch (err) {
+      triggerSuccessToast('Member deleted successfully.');
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to delete member.');
+      showError(err?.message || 'Failed to delete member.');
     }
   };
   
@@ -200,8 +205,10 @@ export function OnboardMember() {
     const newStatus = member.membershipStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
     try {
       await updateDoc(doc(db, 'users', member.uid), { membershipStatus: newStatus });
-    } catch (err) {
+      triggerSuccessToast(`Member status changed to ${newStatus}.`);
+    } catch (err: any) {
       console.error(err);
+      showError(err?.message || 'Failed to update member status.');
     }
   };
 

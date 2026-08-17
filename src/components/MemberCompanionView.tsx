@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { 
   Share2, Handshake, UserPlus, Users, Clock, Calendar, 
   Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown,
-  Loader2, CheckCircle2, Filter
+  Loader2, CheckCircle2, Filter, MessageSquare
 } from 'lucide-react';
 import { Meeting, UserProfile } from '../types';
 import { cn } from '../lib/utils';
@@ -16,6 +16,11 @@ import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
+import { PassReferralModal } from './modals/PassReferralModal';
+import { ScheduleOneToOneModal } from './modals/ScheduleOneToOneModal';
+import { InviteGuestModal } from './modals/InviteGuestModal';
+import { GiveTestimonialModal } from './modals/GiveTestimonialModal';
+import { SubmitThankYouSlipModal } from './modals/SubmitThankYouSlipModal';
 
 interface MemberCompanionViewProps {
   profile: UserProfile | null;
@@ -76,6 +81,13 @@ export function MemberCompanionView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [showAllTasks, setShowAllTasks] = useState(false);
+
+  // Core Operations Modal States
+  const [isPassReferralOpen, setIsPassReferralOpen] = useState(false);
+  const [isScheduleOneToOneOpen, setIsScheduleOneToOneOpen] = useState(false);
+  const [isInviteGuestOpen, setIsInviteGuestOpen] = useState(false);
+  const [isGiveTestimonialOpen, setIsGiveTestimonialOpen] = useState(false);
+  const [isSubmitSlipOpen, setIsSubmitSlipOpen] = useState(false);
 
   const formatRevenueLabel = (val: number) => {
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
@@ -267,18 +279,106 @@ export function MemberCompanionView({
   const isChapterLeader = profile?.role === 'CHAPTER_ADMIN' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(profile?.position?.toLowerCase() || '');
 
   const operations = [
-    { icon: Share2, label: 'Pass Referral', desc: 'Generate leads', path: '/refer', color: 'text-red-500', bg: 'bg-red-500/10' },
-    { icon: Calendar, label: 'Book 1-to-1', desc: 'Schedule sync', path: '/one-to-one', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { icon: UserPlus, label: 'Invite Member', desc: 'Grow your network', path: '/guests', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { icon: Users, label: 'Find Members', desc: 'Explore directory', path: '/directory', color: 'text-orange-400', bg: 'bg-orange-500/10' }
+    { 
+      icon: Share2, 
+      label: 'Pass Referral', 
+      desc: 'Generate leads', 
+      action: () => setIsPassReferralOpen(true), 
+      color: 'text-red-500', 
+      bg: 'bg-red-500/10' 
+    },
+    { 
+      icon: Calendar, 
+      label: 'Schedule 1-to-1', 
+      desc: 'Book member sync', 
+      action: () => setIsScheduleOneToOneOpen(true), 
+      color: 'text-blue-500', 
+      bg: 'bg-blue-500/10' 
+    },
+    { 
+      icon: UserPlus, 
+      label: 'Invite Guest', 
+      desc: 'Grow your network', 
+      action: () => setIsInviteGuestOpen(true), 
+      color: 'text-emerald-400', 
+      bg: 'bg-emerald-500/10' 
+    },
+    { 
+      icon: Star, 
+      label: 'Give Testimonial', 
+      desc: 'Commend a peer', 
+      action: () => setIsGiveTestimonialOpen(true), 
+      color: 'text-amber-400', 
+      bg: 'bg-amber-500/10' 
+    },
+    { 
+      icon: Award, 
+      label: 'Thank You Slip', 
+      desc: 'Report closed deal', 
+      action: () => setIsSubmitSlipOpen(true), 
+      color: 'text-purple-400', 
+      bg: 'bg-purple-500/10' 
+    },
+    { 
+      icon: Users, 
+      label: 'Find Members', 
+      desc: 'Explore directory', 
+      action: () => navigate('/directory'), 
+      color: 'text-orange-400', 
+      bg: 'bg-orange-500/10' 
+    }
   ];
 
   if (isChapterLeader) {
     operations.push(
-      { icon: Calendar, label: 'Start Meeting', desc: 'Organize logs', path: '/meetings', color: 'text-purple-500', bg: 'bg-purple-500/10' },
-      { icon: CheckCircle2, label: 'Attendance', desc: 'Verify rosters', path: '/meetings', color: 'text-indigo-500', bg: 'bg-indigo-500/10' }
+      { 
+        icon: Calendar, 
+        label: 'Start Meeting', 
+        desc: 'Organize logs', 
+        action: () => navigate('/meetings'), 
+        color: 'text-indigo-400', 
+        bg: 'bg-indigo-500/10' 
+      },
+      { 
+        icon: CheckCircle2, 
+        label: 'Attendance', 
+        desc: 'Verify rosters', 
+        action: () => navigate('/meetings'), 
+        color: 'text-emerald-500', 
+        bg: 'bg-emerald-500/10' 
+      }
     );
   }
+
+  const handleTaskClick = (task: any) => {
+    const key = String(task.key || '').toLowerCase();
+    const label = String(task.label || '').toLowerCase();
+    const link = String(task.link || '').toLowerCase();
+
+    if (key.includes('refer') || label.includes('refer') || link.includes('refer')) {
+      setIsPassReferralOpen(true);
+      return;
+    }
+    if (key.includes('one_to_one') || key.includes('onetoone') || label.includes('1-to-1') || label.includes('one-to-one') || link.includes('one-to-one')) {
+      setIsScheduleOneToOneOpen(true);
+      return;
+    }
+    if (key.includes('guest') || label.includes('guest') || link.includes('guest')) {
+      setIsInviteGuestOpen(true);
+      return;
+    }
+    if (key.includes('testimonial') || label.includes('testimonial') || link.includes('testimonial')) {
+      setIsGiveTestimonialOpen(true);
+      return;
+    }
+    if (key.includes('slip') || label.includes('thank you') || label.includes('slip') || link.includes('thank-you')) {
+      setIsSubmitSlipOpen(true);
+      return;
+    }
+    if (task.link) {
+      navigate(task.link);
+    }
+  };
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -302,7 +402,7 @@ export function MemberCompanionView({
           <h3 className="text-[17px] font-bold text-white tracking-tight">Core Operations</h3>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 relative z-10 w-full">
           {operations.map((op, idx) => (
             <motion.div
               key={idx}
@@ -310,30 +410,31 @@ export function MemberCompanionView({
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05, duration: 0.4 }}
               whileHover={{ 
-                y: -5, 
+                y: -4, 
                 scale: 1.02, 
                 boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                borderColor: "rgba(255, 255, 255, 0.1)"
+                borderColor: "rgba(255, 255, 255, 0.15)"
               }}
             >
-              <Link 
-                to={op.path} 
-                className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] h-[72px] px-4 flex items-center justify-between transition-colors duration-300 group cursor-pointer w-full"
+              <button 
+                type="button"
+                onClick={op.action} 
+                className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] h-[74px] px-3.5 flex items-center justify-between transition-all duration-300 group cursor-pointer w-full text-left hover:bg-[#151C2E]"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 overflow-hidden">
                   <motion.div 
                     whileHover={{ rotate: [0, 8, -8, 0] }}
                     className={`w-10 h-10 rounded-[12px] ${op.bg} ${op.color} flex items-center justify-center border border-white/5 shadow-sm shrink-0`}
                   >
                     <op.icon size={18} />
                   </motion.div>
-                  <div>
-                    <h4 className="text-[13px] font-bold text-white">{op.label}</h4>
-                    <p className="text-[11px] text-[#9CA3AF] font-medium">{op.desc}</p>
+                  <div className="min-w-0">
+                    <h4 className="text-[13px] font-bold text-white truncate">{op.label}</h4>
+                    <p className="text-[11px] text-[#9CA3AF] font-medium truncate">{op.desc}</p>
                   </div>
                 </div>
-                <ChevronRight size={16} className="text-[#4B5563] group-hover:text-white group-hover:translate-x-1 transition-all" />
-              </Link>
+                <ChevronRight size={16} className="text-[#4B5563] group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+              </button>
             </motion.div>
           ))}
         </div>
@@ -396,9 +497,7 @@ export function MemberCompanionView({
                 transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
                 whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
                 className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] cursor-pointer"
-                onClick={() => {
-                  if (task.link) navigate(task.link);
-                }}
+                onClick={() => handleTaskClick(task)}
               >
                 {/* Left Column: Title only */}
                 <div className="flex flex-col flex-1 min-w-0 pr-2">
@@ -423,7 +522,7 @@ export function MemberCompanionView({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (task.link) navigate(task.link);
+                      handleTaskClick(task);
                     }}
                     className="h-9 sm:h-10 w-full flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0 cursor-pointer"
                   >
@@ -793,6 +892,32 @@ export function MemberCompanionView({
           </motion.div>
         );
       })()}
+
+      {/* Core Operations Modals */}
+      <PassReferralModal
+        isOpen={isPassReferralOpen}
+        onClose={() => setIsPassReferralOpen(false)}
+      />
+
+      <ScheduleOneToOneModal
+        isOpen={isScheduleOneToOneOpen}
+        onClose={() => setIsScheduleOneToOneOpen(false)}
+      />
+
+      <InviteGuestModal
+        isOpen={isInviteGuestOpen}
+        onClose={() => setIsInviteGuestOpen(false)}
+      />
+
+      <GiveTestimonialModal
+        isOpen={isGiveTestimonialOpen}
+        onClose={() => setIsGiveTestimonialOpen(false)}
+      />
+
+      <SubmitThankYouSlipModal
+        isOpen={isSubmitSlipOpen}
+        onClose={() => setIsSubmitSlipOpen(false)}
+      />
 
     </div>
   );

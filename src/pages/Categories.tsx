@@ -5,6 +5,7 @@ import { databaseService } from '../services/databaseService';
 import { Category } from '../types';
 import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -117,6 +118,7 @@ export function Categories() {
         }
 
         setSuccess('Category updated successfully and propagated to members!');
+        triggerSuccessToast('Category updated successfully and propagated to members!');
       } else {
         await databaseService.create('categories', { 
           name: cleanName,
@@ -125,6 +127,7 @@ export function Categories() {
           updatedAt: nowStr
         });
         setSuccess('Category created successfully!');
+        triggerSuccessToast('Category created successfully!');
       }
 
       setCategoryName('');
@@ -133,7 +136,10 @@ export function Categories() {
         setSuccess(null);
       }, 1500);
     } catch (err: any) {
-      setError(err.message || 'Failed to save category');
+      const errMsg = err.message || 'Failed to save category';
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -143,7 +149,8 @@ export function Categories() {
     // "Prevent deleting a category that is assigned to one or more members."
     const assignedCount = categoryMemberCounts[cat.name.trim()] || 0;
     if (assignedCount > 0) {
-      alert(`Cannot delete category "${cat.name}" because it is currently assigned to ${assignedCount} member(s). Please reassign or remove these members first.`);
+      const msg = `Cannot delete category "${cat.name}" because it is currently assigned to ${assignedCount} member(s). Please reassign or remove these members first.`;
+      showError(msg);
       return;
     }
 
@@ -158,10 +165,12 @@ export function Categories() {
       if (deleteError) throw deleteError;
 
       setSuccess('Category deleted successfully.');
+      triggerSuccessToast('Category deleted successfully.');
       await fetchCategories();
       setTimeout(() => setSuccess(null), 1500);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete category.');
+      const errMsg = err.message || 'Failed to delete category.';
+      showError(errMsg);
     }
   };
 
@@ -173,8 +182,9 @@ export function Categories() {
         status: newStatus,
         updatedAt: new Date().toISOString()
       });
+      triggerSuccessToast(`Category status changed to ${newStatus}.`);
     } catch (err: any) {
-      alert(err.message || 'Failed to update category status');
+      showError(err.message || 'Failed to update category status');
     }
   };
 

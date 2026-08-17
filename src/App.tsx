@@ -31,15 +31,64 @@ import { ManageSubscriptions } from './pages/ManageSubscriptions';
 import { Settings } from './pages/Settings';
 
 
+import { GlobalToast } from './components/GlobalToast';
+import { showError } from './services/toastService';
 import { AuthProvider } from './contexts/AuthContext';
 
 export default function App() {
   useEffect(() => {
-    // Promise.resolve(true);
+    // Global uncaught error and rejection listeners
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Prevent browser default logging if already handled or empty
+      if (!event.reason) {
+        event.preventDefault?.();
+        return;
+      }
+      
+      const reasonMsg = event.reason?.message || event.reason?.error || (typeof event.reason === 'string' ? event.reason : '');
+      const isIgnorable = !reasonMsg || 
+        reasonMsg.includes('ResizeObserver') || 
+        reasonMsg.includes('canceled') || 
+        reasonMsg.includes('aborted') || 
+        reasonMsg.includes('AbortError');
+
+      if (!isIgnorable) {
+        console.warn('Handled rejection:', event.reason);
+        showError(reasonMsg);
+      }
+      event.preventDefault?.();
+    };
+
+    const handleGlobalError = (event: ErrorEvent) => {
+      if (!event.error && !event.message) {
+        event.preventDefault?.();
+        return;
+      }
+      const msg = event.message || event.error?.message || '';
+      const isIgnorable = !msg || 
+        msg.includes('ResizeObserver') || 
+        msg.includes('Script error') || 
+        msg.includes('canceled');
+
+      if (!isIgnorable) {
+        console.warn('Handled global error:', event.error || msg);
+        showError(msg);
+      }
+      event.preventDefault?.();
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('error', handleGlobalError);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('error', handleGlobalError);
+    };
   }, []);
 
   return (
     <ErrorBoundary>
+      <GlobalToast />
       <AuthProvider>
         <Router>
           <Routes>

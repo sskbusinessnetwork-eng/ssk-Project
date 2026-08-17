@@ -52,7 +52,9 @@ export function Notifications() {
     notificationService.runAutomatedReminders(profile);
 
     // Load task checklist
-    notificationService.getTodayTaskChecklist(userId, profile).then(setTasks);
+    notificationService.getTodayTaskChecklist(userId, profile)
+      .then(setTasks)
+      .catch(err => console.warn("Notifications load task checklist notice:", err));
 
     // Subscribe to notifications table
     const unsubscribe = notificationService.subscribeUserNotifications(

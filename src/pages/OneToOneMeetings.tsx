@@ -30,6 +30,8 @@ import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { formatTime12h, parseTo12hParts, parseTimeTo24h } from '../utils/timeUtils';
 import { getCleanFullName } from '../utils/authUtils';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { isMemberActive } from '../utils/memberStatus';
 
 const WEEKDAYS: Record<string, number> = {
   'Sunday': 0,
@@ -252,13 +254,22 @@ export function OneToOneMeetings() {
         const memberList = processedUsers
           .filter((m: any) => {
             if (m.role === 'MASTER_ADMIN') return false;
-            if (m.status && m.status.toUpperCase() === 'INACTIVE') return false;
-            if (memberTab === 'my_chapter' && currentChapterId && profile?.role !== 'MASTER_ADMIN') {
+            if (!isMemberActive(m)) return false;
+            const statusUpper = String(m.membership_status || m.membershipStatus || m.status || '').trim().toUpperCase();
+            if (statusUpper === 'INACTIVE' || statusUpper === 'SUSPENDED') return false;
+            if (currentChapterId && profile?.role !== 'MASTER_ADMIN') {
               return String(m.chapter_id) === String(currentChapterId);
             }
             return true;
           })
-          .map((doc: any) => ({ uid: doc.id, ...doc } as UserProfile));
+          .map((doc: any) => {
+            const cleanName = getUserFullName(doc) || doc.name || doc.displayName || 'Member';
+            return {
+              uid: doc.id,
+              ...doc,
+              name: cleanName
+            } as UserProfile;
+          });
 
         setMembers(memberList);
       }
@@ -348,7 +359,7 @@ export function OneToOneMeetings() {
     );
 
     return () => unsubscribe();
-  }, [profile, isAdmin, isChapterAdmin, memberTab]);
+  }, [profile, isAdmin, isChapterAdmin]);
 
   // Listen for profile-updated and dashboard-refresh events
   useEffect(() => {
@@ -384,39 +395,100 @@ export function OneToOneMeetings() {
       .select('*')
       .eq('id', currentAuthId)
       .maybeSingle()
-      .then(({ data, error }) => {
-        if (data && !error) {
-          let photo = data.profile_photo || data.photo_url || data.photoURL || '';
-          let extraData: any = {};
-          if (typeof photo === 'string' && photo.includes('|||')) {
-            const parts = photo.split('|||');
-            photo = parts[0];
-            try {
-              extraData = JSON.parse(parts[1] || '{}');
-            } catch (e) {}
-          }
-          const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
-          setAllUsersList(prev => {
-            const idx = prev.findIndex(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = { ...next[idx], ...updatedUser };
-              return next;
+      .then(
+        ({ data, error }) => {
+          if (data && !error) {
+            let photo = data.profile_photo || data.photo_url || data.photoURL || '';
+            let extraData: any = {};
+            if (typeof photo === 'string' && photo.includes('|||')) {
+              const parts = photo.split('|||');
+              photo = parts[0];
+              try {
+                extraData = JSON.parse(parts[1] || '{}');
+              } catch (e) {}
             }
-            return [...prev, updatedUser];
-          });
-        }
-      });
+            const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+            setAllUsersList(prev => {
+              const idx = prev.findIndex(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...next[idx], ...updatedUser };
+                return next;
+              }
+              return [...prev, updatedUser];
+            });
+          }
+        },
+        (err) => console.warn("OneToOneMeetings current user sync notice:", err)
+      );
   }, [currentAuthId]);
 
   const currentUserId = currentUserRecord?.id || profile?.id;
   const currentUserChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
+
+  // Memoized eligible active members for the "Filter by Member" dropdown and analytics filtering
+  const memberFilterOptions = useMemo(() => {
+    const seenIds = new Set<string>();
+    const validMembers: UserProfile[] = [];
+    const currentChapterId = profile?.chapter_id || profile?.chapterId;
+
+    for (const u of allUsersList) {
+      const uid = String(u.id || u.uid || '').trim();
+      if (!uid || seenIds.has(uid)) continue;
+
+      // 1. Exclude pure MASTER_ADMIN
+      if (u.role === 'MASTER_ADMIN') continue;
+
+      // 2. Validate member eligibility (MEMBER, CHAPTER_ADMIN, or position holders like President, VP, Treasurer, etc.)
+      const isPositionHolder = Boolean(u.position || u.chapter_position || u.chapterPosition);
+      const isMemberOrChapterAdmin = u.role === 'MEMBER' || u.role === 'CHAPTER_ADMIN' || u.user_type === 'MEMBER' || u.member_type === 'MEMBER';
+      if (!isMemberOrChapterAdmin && !isPositionHolder && u.is_member === false) {
+        continue;
+      }
+
+      // 3. Active member validation
+      if (!isMemberActive(u)) {
+        const statusUpper = String(u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
+        if (statusUpper === 'INACTIVE' || statusUpper === 'SUSPENDED') {
+          continue;
+        }
+      }
+
+      // 4. Chapter scoping for Chapter Admin
+      if (isChapterAdmin && !isAdmin) {
+        const uChapId = String(u.chapter_id || u.chapterId || '').trim();
+        const myChapId = String(currentChapterId || '').trim();
+        if (myChapId && uChapId && uChapId !== myChapId && uid !== String(profile?.uid || profile?.id)) {
+          continue;
+        }
+      }
+
+      // 5. Must have a member name (not a business)
+      const memberName = getUserFullName(u) || u.name || u.displayName || u.full_name || '';
+      if (!memberName.trim()) continue;
+
+      seenIds.add(uid);
+      validMembers.push({
+        ...u,
+        uid,
+        name: memberName.trim()
+      } as UserProfile);
+    }
+
+    return validMembers.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [allUsersList, isChapterAdmin, isAdmin, profile]);
 
   // Derive Available Members based on Tab (My Chapter Members vs All Members)
   const availableMembers = useMemo(() => {
     return allUsersList.filter(u => {
       // Exclude MASTER_ADMIN
       if (u.role === 'MASTER_ADMIN') return false;
+
+      // Validate active member
+      if (!isMemberActive(u)) {
+        const statusUpper = String(u.membership_status || u.membershipStatus || u.status || '').trim().toUpperCase();
+        if (statusUpper === 'INACTIVE' || statusUpper === 'SUSPENDED') return false;
+      }
 
       // Exclude logged in user
       if (currentUserId && (String(u.id) === String(currentUserId) || String(u.uid) === String(currentUserId))) {
@@ -438,7 +510,7 @@ export function OneToOneMeetings() {
 
       return true; // 'all' members
     });
-  }, [allUsersList, memberTab, currentUserChapterId, currentUserId, currentAuthId]);
+  }, [allUsersList, memberTab, currentUserChapterId, currentUserId, currentAuthId, profile]);
 
   // Search Filtered Members
   const filteredMembers = useMemo(() => {
@@ -448,13 +520,11 @@ export function OneToOneMeetings() {
     return availableMembers.filter(m => {
       const fullName = (getUserFullName(m) || m.name || m.full_name || '').toLowerCase();
       const phone = (m.phone || m.contact_phone || m.whatsappNumber || m.mobile || '').toLowerCase();
-      const category = (m.category || m.business_category || m.businessName || m.business_name || '').toLowerCase();
       const chapterName = (chapterMap.get(String(m.chapter_id)) || m.chapter_name || '').toLowerCase();
 
       return (
         fullName.includes(q) ||
         phone.includes(q) ||
-        category.includes(q) ||
         chapterName.includes(q)
       );
     });
@@ -477,29 +547,32 @@ export function OneToOneMeetings() {
       .select('*')
       .eq('id', pid)
       .maybeSingle()
-      .then(({ data, error }) => {
-        if (data && !error) {
-          let photo = data.profile_photo || data.photo_url || data.photoURL || '';
-          let extraData: any = {};
-          if (typeof photo === 'string' && photo.includes('|||')) {
-            const parts = photo.split('|||');
-            photo = parts[0];
-            try {
-              extraData = JSON.parse(parts[1] || '{}');
-            } catch (e) {}
-          }
-          const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
-          setAllUsersList(prev => {
-            const idx = prev.findIndex(u => String(u.id) === String(pid) || String(u.uid) === String(pid));
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = { ...next[idx], ...updatedUser };
-              return next;
+      .then(
+        ({ data, error }) => {
+          if (data && !error) {
+            let photo = data.profile_photo || data.photo_url || data.photoURL || '';
+            let extraData: any = {};
+            if (typeof photo === 'string' && photo.includes('|||')) {
+              const parts = photo.split('|||');
+              photo = parts[0];
+              try {
+                extraData = JSON.parse(parts[1] || '{}');
+              } catch (e) {}
             }
-            return [...prev, updatedUser];
-          });
-        }
-      });
+            const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+            setAllUsersList(prev => {
+              const idx = prev.findIndex(u => String(u.id) === String(pid) || String(u.uid) === String(pid));
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...next[idx], ...updatedUser };
+                return next;
+              }
+              return [...prev, updatedUser];
+            });
+          }
+        },
+        (err) => console.warn("OneToOneMeetings participant sync notice:", err)
+      );
   }, [formData.participantId]);
 
   const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
@@ -523,17 +596,26 @@ export function OneToOneMeetings() {
     if (!profile) return;
 
     if (!formData.participantId) {
-      setError('Please select a member.');
+      const msg = 'Please select a member.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!formData.date) {
-      setError('Please select a meeting date.');
+      const msg = 'Please select a meeting date.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
     if (!formData.time) {
-      setError('Please select a meeting time.');
+      const msg = 'Please select a meeting time.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -577,7 +659,10 @@ export function OneToOneMeetings() {
       }
 
       if (!senderRecord || !senderRecord.id) {
-        setError("Your account record was not found in the users table. Please contact your Chapter Admin.");
+        const msg = "Your account record was not found in the users table. Please contact your Chapter Admin.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -599,7 +684,10 @@ export function OneToOneMeetings() {
       }
 
       if (!receiverRecord || !receiverRecord.id) {
-        setError("Selected member not found in users table.");
+        const msg = "Selected member not found in users table.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -608,13 +696,19 @@ export function OneToOneMeetings() {
 
       // Validate both IDs exist in users table
       if (!sender_id) {
-        setError("Sender account not found in users table.");
+        const msg = "Sender account not found in users table.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
 
       if (!receiver_id) {
-        setError("Selected member not found in users table.");
+        const msg = "Selected member not found in users table.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
         setIsSubmitting(false);
         return;
       }
@@ -630,7 +724,10 @@ export function OneToOneMeetings() {
       if (locationType === 'My Address') {
         finalLocationType = "My Address";
         if (!senderFullAddress) {
-          setError("Address not available. Please update your profile.");
+          const msg = "Address not available. Please update your profile.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -638,7 +735,10 @@ export function OneToOneMeetings() {
       } else if (locationType === 'Member Address') {
         finalLocationType = "Member's Address";
         if (!receiverFullAddress) {
-          setError("Address not available. Please update your profile.");
+          const msg = "Address not available. Please update your profile.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -712,6 +812,7 @@ export function OneToOneMeetings() {
       setLocationType('Online');
       setSearchTerm('');
 
+      triggerSuccessToast('One-to-One Meeting scheduled successfully!');
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
@@ -719,11 +820,15 @@ export function OneToOneMeetings() {
 
     } catch (err: any) {
       console.error("Error creating one-to-one meeting:", err);
+      let errMsg = "";
       if (err?.message?.includes('row-level security') || err?.message?.includes('RLS') || err?.message?.includes('violates row-level security policy')) {
-        setError("Database Security Error: Row-Level Security (RLS) is restricting creation of meetings. Please run the provided SQL script in your Supabase SQL Editor to allow insertions.");
+        errMsg = "Database Security Error: Row-Level Security (RLS) is restricting creation of meetings. Please run the provided SQL script in your Supabase SQL Editor to allow insertions.";
       } else {
-        setError(err.message || "Failed to schedule meeting. Please try again.");
+        errMsg = err.message || "Failed to schedule meeting. Please try again.";
       }
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -796,11 +901,15 @@ export function OneToOneMeetings() {
       await fetchMeetingsAndUsers();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
+      triggerSuccessToast('Meeting marked as completed.');
       setIsAttendanceModalOpen(false);
       setUpdatingMeeting(null);
     } catch (err: any) {
       console.error("Error marking meeting as completed:", err);
-      setError(err.message || "Failed to mark as completed.");
+      const errMsg = err.message || "Failed to mark as completed.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -838,11 +947,15 @@ export function OneToOneMeetings() {
       await fetchMeetingsAndUsers();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
+      triggerSuccessToast('Meeting marked as not completed.');
       setIsAttendanceModalOpen(false);
       setUpdatingMeeting(null);
     } catch (err: any) {
       console.error("Error setting meeting as not completed:", err);
-      setError(err.message || "Failed to update meeting status.");
+      const errMsg = err.message || "Failed to update meeting status.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -872,11 +985,15 @@ export function OneToOneMeetings() {
       await fetchMeetingsAndUsers();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
+      triggerSuccessToast('Meeting cancelled successfully.');
       setIsAttendanceModalOpen(false);
       setUpdatingMeeting(null);
     } catch (err: any) {
       console.error("Error cancelling meeting:", err);
-      setError(err.message || "Failed to cancel meeting.");
+      const errMsg = err.message || "Failed to cancel meeting.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -885,11 +1002,17 @@ export function OneToOneMeetings() {
   const handleSaveReschedule = async () => {
     if (!updatingMeeting || !updatingMeeting.id) return;
     if (!rescheduleDate) {
-      setError("Please select a meeting date.");
+      const msg = "Please select a meeting date.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
     if (!rescheduleTime) {
-      setError("Please select a meeting time.");
+      const msg = "Please select a meeting time.";
+      setError(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -909,14 +1032,20 @@ export function OneToOneMeetings() {
       let finalLocation = 'Online Meeting';
       if (rescheduleLocationOption === 'My Address') {
         if (!senderFullAddress) {
-          setError("Address not available. Please update your profile.");
+          const msg = "Address not available. Please update your profile.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
         finalLocation = senderFullAddress;
       } else if (rescheduleLocationOption === 'Selected Member Address') {
         if (!receiverFullAddress) {
-          setError("Address not available. Please update your profile.");
+          const msg = "Address not available. Please update your profile.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
           setIsSubmitting(false);
           return;
         }
@@ -968,11 +1097,15 @@ export function OneToOneMeetings() {
       await fetchMeetingsAndUsers();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
+      triggerSuccessToast('Meeting rescheduled successfully.');
       setIsRescheduleModalOpen(false);
       setUpdatingMeeting(null);
     } catch (err: any) {
       console.error("Error rescheduling meeting:", err);
-      setError(err.message || "Failed to reschedule meeting.");
+      const errMsg = err.message || "Failed to reschedule meeting.";
+      setError(errMsg);
+      showError(errMsg);
+      scrollToError();
     } finally {
       setIsSubmitting(false);
     }
@@ -986,19 +1119,26 @@ export function OneToOneMeetings() {
     
     // For Chapter Admin, we only care about meetings involving their chapter members
     if (isChapterAdmin) {
-      const chapterMemberIds = members.map(m => m.uid);
+      const chapterMemberIds = memberFilterOptions.map(m => m.uid);
       // Include the chapter admin themselves in the IDs to check
-      chapterMemberIds.push(profile!.uid);
+      if (profile?.uid) chapterMemberIds.push(profile.uid);
+      if (profile?.id) chapterMemberIds.push(profile.id);
       
       filteredMeetings = meetings.filter(m => 
         chapterMemberIds.includes(m.creatorId) || 
+        chapterMemberIds.includes(m.organizer_id) || 
+        chapterMemberIds.includes(m.sender_id) || 
         m.participantIds.some(id => chapterMemberIds.includes(id))
       );
     }
 
     if (selectedMemberId) {
       // If a member is selected, we show their specific stats
-      const memberScheduled = filteredMeetings.filter(m => m.creatorId === selectedMemberId).length;
+      const memberScheduled = filteredMeetings.filter(m => 
+        m.creatorId === selectedMemberId || 
+        m.organizer_id === selectedMemberId || 
+        m.sender_id === selectedMemberId
+      ).length;
       const memberAttended = filteredMeetings.filter(m => m.attendance?.[selectedMemberId] === 'PRESENT').length;
       return { scheduled: memberScheduled, attended: memberAttended };
     } else {
@@ -1011,7 +1151,7 @@ export function OneToOneMeetings() {
       }, 0);
       return { scheduled: totalScheduled, attended: totalAttended };
     }
-  }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, members, profile]);
+  }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, memberFilterOptions, profile]);
 
   const historyMeetings = React.useMemo(() => {
     if (!isAdmin && !isChapterAdmin) return [];
@@ -1020,25 +1160,39 @@ export function OneToOneMeetings() {
 
     // For Chapter Admin, filter by chapter members
     if (isChapterAdmin) {
-      const chapterMemberIds = members.map(m => m.uid);
-      chapterMemberIds.push(profile!.uid);
+      const chapterMemberIds = memberFilterOptions.map(m => m.uid);
+      if (profile?.uid) chapterMemberIds.push(profile.uid);
+      if (profile?.id) chapterMemberIds.push(profile.id);
       filtered = meetings.filter(m => 
         chapterMemberIds.includes(m.creatorId) || 
+        chapterMemberIds.includes(m.organizer_id) || 
+        chapterMemberIds.includes(m.sender_id) || 
         m.participantIds.some(id => chapterMemberIds.includes(id))
       );
     }
 
     if (selectedMemberId) {
       if (historyType === 'scheduled') {
-        filtered = filtered.filter(m => m.creatorId === selectedMemberId);
+        filtered = filtered.filter(m => 
+          m.creatorId === selectedMemberId || 
+          m.organizer_id === selectedMemberId || 
+          m.sender_id === selectedMemberId
+        );
       } else if (historyType === 'attended') {
         filtered = filtered.filter(m => m.attendance?.[selectedMemberId] === 'PRESENT');
       } else {
-        filtered = filtered.filter(m => m.creatorId === selectedMemberId || m.participantIds.includes(selectedMemberId));
+        filtered = filtered.filter(m => 
+          m.creatorId === selectedMemberId || 
+          m.organizer_id === selectedMemberId || 
+          m.sender_id === selectedMemberId || 
+          m.participantIds.includes(selectedMemberId) || 
+          m.member_id === selectedMemberId || 
+          m.receiver_id === selectedMemberId
+        );
       }
     }
     return filtered;
-  }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, historyType, members, profile]);
+  }, [isAdmin, isChapterAdmin, meetings, selectedMemberId, historyType, memberFilterOptions, profile]);
 
   const upcomingMeetings = useMemo(() => {
     const rawUpcoming = meetings.filter(m => {
@@ -1048,7 +1202,7 @@ export function OneToOneMeetings() {
       if (m.isCancelled === true || (m.isCancelled as any) === 'true' || (m as any).is_cancelled === true || (m as any).is_cancelled === 'true') return false;
 
       if (isChapterAdmin) {
-        const chapterMemberIds = members.map(mem => mem.uid);
+        const chapterMemberIds = memberFilterOptions.map(mem => mem.uid);
         if (profile?.uid) chapterMemberIds.push(profile.uid);
         if (profile?.id) chapterMemberIds.push(profile.id);
         return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds?.some(id => chapterMemberIds.includes(id));
@@ -1063,7 +1217,7 @@ export function OneToOneMeetings() {
     });
 
     return rawUpcoming.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
-  }, [meetings, isChapterAdmin, members, profile, isAdmin]);
+  }, [meetings, isChapterAdmin, memberFilterOptions, profile, isAdmin]);
 
   const pastMeetings = meetings
     .filter(m => {
@@ -1074,7 +1228,7 @@ export function OneToOneMeetings() {
 
       if (!isActuallyCompleted && !isActuallyCancelled && !isActuallyNotCompleted) return false;
       if (isChapterAdmin) {
-        const chapterMemberIds = members.map(mem => mem.uid);
+        const chapterMemberIds = memberFilterOptions.map(mem => mem.uid);
         if (profile?.uid) chapterMemberIds.push(profile.uid);
         if (profile?.id) chapterMemberIds.push(profile.id);
         return chapterMemberIds.includes(m.creatorId) || chapterMemberIds.includes(m.organizer_id) || chapterMemberIds.includes(m.sender_id) || m.participantIds?.some(id => chapterMemberIds.includes(id));
@@ -1135,8 +1289,8 @@ export function OneToOneMeetings() {
               className="flex-1 px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-[12px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-xs sm:text-sm bg-[#151C2E] text-white"
             >
               <option value="" className="bg-[#111827] text-white">All Members (Overall Analytics)</option>
-              {members.sort((a, b) => a.name.localeCompare(b.name)).map(m => (
-                <option key={m.uid} value={m.uid} className="bg-[#111827] text-white">{m.name} ({m.businessName || 'No Business'})</option>
+              {memberFilterOptions.map(m => (
+                <option key={m.uid} value={m.uid} className="bg-[#111827] text-white">{m.name}</option>
               ))}
             </select>
           </div>

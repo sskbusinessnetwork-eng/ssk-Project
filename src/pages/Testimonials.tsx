@@ -12,6 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { Modal } from '../components/Modal';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
+import { showError, showSuccess as triggerSuccessToast } from '../services/toastService';
 
 import { getDisplayPosition as formatPosition } from "../utils/authUtils";
 
@@ -160,10 +161,11 @@ export function Testimonials() {
     if (window.confirm('Are you sure you want to delete this testimonial?')) {
       try {
         await databaseService.delete('testimonials', id);
+        triggerSuccessToast('Testimonial deleted successfully.');
         window.dispatchEvent(new CustomEvent('testimonials-updated'));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Delete error", error);
-        alert('Failed to delete.');
+        showError(error?.message || 'Failed to delete testimonial.');
       }
     }
   };

@@ -37,6 +37,7 @@ import { cn } from '../lib/utils';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { MemberTestimonials } from '../components/MemberTestimonials';
+import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function Profile() {
   const { profile: currentUserProfile, refreshProfile } = useAuth();
@@ -435,11 +436,11 @@ export function Profile() {
         membershipStatus: (!isNaN(new Date(newSubscriptionEnd).getTime()) ? (new Date(newSubscriptionEnd) > new Date() ? 'ACTIVE' : 'EXPIRED') : targetProfile.membershipStatus)
       } : null);
       
-      alert("Subscription updated successfully.");
+      triggerSuccessToast("Subscription updated successfully.");
       setNewSubscriptionEnd('');
     } catch (error) {
       console.error("Error updating subscription:", error);
-      alert("Failed to update subscription.");
+      showError("Failed to update subscription.");
     } finally {
       setIsUpdatingSubscription(false);
     }
@@ -497,7 +498,7 @@ export function Profile() {
 
       if (error) throw error;
       
-      alert("Referral submitted successfully.");
+      triggerSuccessToast(`Referral sent to ${targetProfile.name} successfully!`);
       setSuccessMessage(`Referral sent to ${targetProfile.name} successfully!`);
       setIsModalOpen(false);
       setReferralForm({
@@ -515,7 +516,8 @@ export function Profile() {
       if (error?.code === '42501') {
         mainMsg = "Insert blocked by Row Level Security.";
       }
-      alert(`${mainMsg}\n\nCode: ${error?.code || 'N/A'}\nDetails: ${error?.details || 'N/A'}\nHint: ${error?.hint || 'N/A'}`);
+      showError(mainMsg);
+      scrollToError();
     } finally {
       setIsReferring(false);
     }
@@ -527,7 +529,10 @@ export function Profile() {
 
     const targetUserId = currentUserProfile.id || currentUserProfile.uid;
     if (!targetUserId) {
-      setErrorMessage("Failed to identify user ID. Please try logging in again.");
+      const msg = "Failed to identify user ID. Please try logging in again.";
+      setErrorMessage(msg);
+      showError(msg);
+      scrollToError();
       return;
     }
 
@@ -568,6 +573,7 @@ export function Profile() {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
       setSuccessMessage("Profile updated successfully.");
+      triggerSuccessToast("Profile updated successfully.");
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
@@ -575,11 +581,13 @@ export function Profile() {
       }, 3000);
     } catch (error: any) {
       console.error("Complete Supabase profile update error:", error);
+      let errMsg = "Failed to update profile. Please try again.";
       if (error?.message === "You can only edit your own profile.") {
-        setErrorMessage("You can only edit your own profile.");
-      } else {
-        setErrorMessage("Failed to update profile. Please try again.");
+        errMsg = "You can only edit your own profile.";
       }
+      setErrorMessage(errMsg);
+      showError(errMsg);
+      scrollToError();
       setTimeout(() => setErrorMessage(null), 5000);
     } finally {
       setIsSaving(false);
