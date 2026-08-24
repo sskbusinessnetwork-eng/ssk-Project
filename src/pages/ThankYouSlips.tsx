@@ -16,7 +16,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
-import { ThankYouSlip, Referral, UserProfile, Category } from '../types';
+import { ThankYouSlip, Referral, UserProfile, Category, isOfflineReferral, isNormalReferral } from '../types';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { isValid } from 'date-fns';
@@ -146,6 +146,7 @@ export function ThankYouSlips() {
 
     if (rawRefs && rawRefs.length > 0) {
       const converted = rawRefs.filter((r: any) => {
+        if (isOfflineReferral(r)) return false;
         const sUpper = String(r.status || '').toUpperCase();
         const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
         const receiverId = String(r.receiver_id || r.to_user_id || r.toUserId || '');
@@ -171,6 +172,7 @@ export function ThankYouSlips() {
         where('toUserId', '==', currentUid)
       ]).then(list => {
         setReferrals(list.filter(r => {
+          if (isOfflineReferral(r)) return false;
           const sUpper = String(r.status || '').toUpperCase();
           const isConverted = sUpper === 'COMPLETED' || sUpper === 'CONVERTED' || sUpper === 'CONVERTED TO BUSINESS' || sUpper === 'GOT THE BUSINESS' || (r.status as string) === 'Completed';
           return isConverted && !existingSlipReferralIds.has(String(r.id));
@@ -493,7 +495,7 @@ export function ThankYouSlips() {
         customerName = customerName || 'Offline Customer';
         businessRequirement = businessRequirement || 'Offline Referral';
 
-        // Create a real completed referral record in the database so it counts in all analytics, totals, and reports
+        // Create an explicit Offline Referral record in the database
         const offlineRefPayload = {
           from_user_id: targetSenderId,
           sender_id: targetSenderId,
@@ -503,10 +505,10 @@ export function ThankYouSlips() {
           customer_name: customerName,
           contact_phone: contactPhone,
           customer_mobile: contactPhone,
-          requirement: businessRequirement,
-          business_requirement: businessRequirement,
-          notes: formData.notes?.trim() || 'Offline Referral',
-          status: 'Completed',
+          requirement: 'Offline Referral',
+          business_requirement: 'Offline Referral',
+          notes: formData.notes?.trim() ? `[Offline Referral] ${formData.notes.trim()}` : '[Offline Referral] Direct offline referral',
+          status: 'Offline',
           chapter_id: profile.chapter_id || (profile as any).chapterId || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

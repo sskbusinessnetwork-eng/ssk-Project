@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { calculateProfileCompletion } from './profileUtils';
 import { parseSafeDate } from './dateUtils';
+import { isNormalReferral } from '../types';
 
 export function getISTDayBounds(inputDate: Date | string | number = new Date()) {
   try {
@@ -314,6 +315,7 @@ export function getWorkspaceChecklistTasks(
     });
 
     const hasPassRefAuto = allReferrals.some(r => {
+      if (!isNormalReferral(r)) return false;
       const sender = r.fromUserId || r.sender_id || r.authorMemberId;
       return sender === userId && isDateInRange(r.created_at || r.createdAt || r.date);
     });
@@ -447,6 +449,7 @@ export function getWorkspaceChecklistTasks(
 
     // 7. Referral Conversion & Thank You Slip Workflow
     const userReceivedReferrals = allReferrals.filter(r => {
+      if (!isNormalReferral(r)) return false;
       const receiver = r.toUserId || r.receiver_id || r.to_user_id || r.receiverMemberId;
       return String(receiver || '') === String(userId);
     });

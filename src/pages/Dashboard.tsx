@@ -24,6 +24,7 @@ import { calculateProfileCompletion } from '../utils/profileUtils';
 import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
+import { isOfflineReferral, isNormalReferral } from '../types';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -576,7 +577,7 @@ export function Analytics() {
 
   const chapterReferralsList = useMemo(() => {
     return effectiveReferrals.filter(ref => 
-      usePersonalStats ? (userCandidateIds.includes(ref.fromUserId) || userCandidateIds.includes(ref.toUserId)) : (chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId))
+      isNormalReferral(ref) && (usePersonalStats ? (userCandidateIds.includes(ref.fromUserId) || userCandidateIds.includes(ref.toUserId)) : (chapterUserIds.includes(ref.fromUserId) || chapterUserIds.includes(ref.toUserId)))
     );
   }, [effectiveReferrals, chapterUserIds, userCandidateIds, usePersonalStats]);
 
@@ -612,9 +613,10 @@ export function Analytics() {
 
   const referralsSentList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
-      return effectiveReferrals.filter(r => String(r.fromUserId || r.sender_id || r.from_user_id || '') === String(appliedMemberFilter));
+      return effectiveReferrals.filter(r => isNormalReferral(r) && String(r.fromUserId || r.sender_id || r.from_user_id || '') === String(appliedMemberFilter));
     }
     return effectiveReferrals.filter(r => {
+      if (!isNormalReferral(r)) return false;
       const senderId = String(r.fromUserId || r.sender_id || r.from_user_id || '');
       return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
     });
@@ -624,9 +626,10 @@ export function Analytics() {
 
   const referralsReceivedList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
-      return effectiveReferrals.filter(r => String(r.toUserId || r.receiver_id || r.to_user_id || '') === String(appliedMemberFilter));
+      return effectiveReferrals.filter(r => isNormalReferral(r) && String(r.toUserId || r.receiver_id || r.to_user_id || '') === String(appliedMemberFilter));
     }
     return effectiveReferrals.filter(r => {
+      if (!isNormalReferral(r)) return false;
       const receiverId = String(r.toUserId || r.receiver_id || r.to_user_id || '');
       return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
     });
@@ -693,7 +696,7 @@ export function Analytics() {
   };
 
   const referralsPassedCount = useMemo(() => {
-    const isCompleted = (r: any) => ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
+    const isCompleted = (r: any) => isNormalReferral(r) && ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
     if (profile?.role === 'MASTER_ADMIN') {
       return effectiveReferrals.filter(isCompleted).length || 0;
     }
@@ -1912,7 +1915,7 @@ export function Analytics() {
         };
       });
     } else if (norm.includes('referral')) {
-      let list = effectiveReferrals;
+      let list = effectiveReferrals.filter(isNormalReferral);
       const uid = String(profile?.id || profile?.uid);
       const isGlobal = profile?.role === 'MASTER_ADMIN';
 

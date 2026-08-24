@@ -11,6 +11,7 @@ import { isMemberActive } from '../utils/memberStatus';
 import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { isNormalReferral } from '../types';
 declare var jsPDF: any;
 declare var autoTable: any;
 declare var XLSX: any;
@@ -200,6 +201,7 @@ export function MyReport() {
 
 
   const chapterReferrals = effectiveReferrals.filter(r => {
+    if (!isNormalReferral(r)) return false;
     const sender = chapterUsers.find(u => (u.id || u.uid) === (r.fromUserId || r.sender_id));
     const receiver = chapterUsers.find(u => (u.id || u.uid) === (r.toUserId || r.receiver_id));
     return (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) ||

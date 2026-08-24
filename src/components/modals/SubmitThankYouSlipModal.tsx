@@ -8,6 +8,7 @@ import { IndianRupee, AlertCircle, CheckCircle2, Award, FileText, User, Calendar
 import { showError, showSuccess, scrollToError } from '../../services/toastService';
 import { safeFormat as format } from '../../utils/dateUtils';
 import { cn } from '../../lib/utils';
+import { isOfflineReferral } from '../../types';
 
 interface SubmitThankYouSlipModalProps {
   isOpen: boolean;
@@ -91,7 +92,7 @@ export function SubmitThankYouSlipModal({
 
         if (isMounted && refData) {
           const eligible = refData
-            .filter((r: any) => !thankedRefIds.has(String(r.id)))
+            .filter((r: any) => !thankedRefIds.has(String(r.id)) && !isOfflineReferral(r))
             .map((r: any) => {
               const sId = r.sender_id || r.from_user_id || '';
               const senderObj = uMap[String(sId).toLowerCase()];
@@ -205,7 +206,7 @@ export function SubmitThankYouSlipModal({
         customerName = customerName || 'Offline Customer';
         businessRequirement = businessRequirement || 'Offline Referral';
 
-        // 1. Create completed referral record in database
+        // 1. Create offline referral record in database
         const offlineRefPayload = {
           from_user_id: targetReferrerId,
           sender_id: targetReferrerId,
@@ -215,10 +216,10 @@ export function SubmitThankYouSlipModal({
           customer_name: customerName,
           contact_phone: contactPhone,
           customer_mobile: contactPhone,
-          requirement: businessRequirement,
-          business_requirement: businessRequirement,
-          notes: formData.notes?.trim() || 'Offline Referral',
-          status: 'Completed',
+          requirement: 'Offline Referral',
+          business_requirement: 'Offline Referral',
+          notes: formData.notes?.trim() ? `[Offline Referral] ${formData.notes.trim()}` : '[Offline Referral] Direct offline referral',
+          status: 'Offline',
           chapter_id: profile.chapter_id || (profile as any).chapterId || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

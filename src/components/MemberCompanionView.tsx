@@ -6,7 +6,7 @@ import {
   Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown,
   Loader2, CheckCircle2, Filter, MessageSquare
 } from 'lucide-react';
-import { Meeting, UserProfile } from '../types';
+import { Meeting, UserProfile, isNormalReferral } from '../types';
 import { cn } from '../lib/utils';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
@@ -109,6 +109,7 @@ export function MemberCompanionView({
       return userCandidateIds.includes(from) || userCandidateIds.includes(to);
     });
     const userRefs = allReferrals.filter(r => {
+      if (!isNormalReferral(r)) return false;
       const from = String(r.fromUserId || r.from_user_id || r.sender_id || '');
       const to = String(r.toUserId || r.to_user_id || r.receiver_id || '');
       return userCandidateIds.includes(from) || userCandidateIds.includes(to);

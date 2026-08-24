@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
 import { where } from '../lib/database';
-import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter } from '../types';
+import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter, isOfflineReferral, isNormalReferral } from '../types';
 import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getISTDayBounds } from '../utils/growthScore';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { 
@@ -247,6 +247,7 @@ export function Reports() {
 
   const reportsData = useMemo(() => {
     const filteredRefs = referrals.filter(ref => {
+      if (!isNormalReferral(ref)) return false;
       const isDateValid = isWithinDateRange(ref.createdAt, parsedStart, parsedEnd);
       let isScopeValid = true;
       if (selectedChapterId && selectedChapterId !== 'ALL') {

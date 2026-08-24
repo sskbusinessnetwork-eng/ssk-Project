@@ -1,6 +1,6 @@
 export type UserRole = 'MASTER_ADMIN' | 'CHAPTER_ADMIN' | 'MEMBER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING';
-export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED';
+export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED' | 'Offline' | 'OFFLINE';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'Present' | 'Absent' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE';
 
 export type ChapterPosition = 'member' | 'chapter_admin' | 'president' | 'vice_president' | 'treasurer' | string;
@@ -106,7 +106,35 @@ export interface Referral {
   notConvertedReason?: string;
   createdAt: string;
   updatedAt?: string;
+  is_offline?: boolean;
+  isOffline?: boolean;
+  referral_source?: string;
+  referralSource?: string;
+  referral_type?: 'normal' | 'offline' | string;
 }
+
+/**
+ * Single source of truth to check if a referral record is an Offline Referral.
+ * Offline Referrals are manual/offline referrals recorded directly via Thank You Slips
+ * and must NOT be treated as normal passed referrals or counted under Referral Sent/Passed.
+ */
+export const isOfflineReferral = (r: any): boolean => {
+  if (!r) return false;
+  if (r.is_offline === true || r.isOffline === true) return true;
+  if (r.referral_type === 'offline' || r.referral_source === 'offline') return true;
+  const statusStr = String(r.status || '').toUpperCase();
+  if (statusStr === 'OFFLINE') return true;
+  const reqStr = String(r.requirement || r.business_requirement || '').trim().toLowerCase();
+  if (reqStr === 'offline referral') return true;
+  if (typeof r.notes === 'string' && (r.notes.includes('[Offline Referral]') || r.notes.trim().toLowerCase() === 'offline referral')) return true;
+  if (typeof r.id === 'string' && r.id.startsWith('offline_')) return true;
+  return false;
+};
+
+/**
+ * Returns true if the referral is a normal / in-app passed referral.
+ */
+export const isNormalReferral = (r: any): boolean => !isOfflineReferral(r);
 
 export interface ThankYouSlip {
   id: string;

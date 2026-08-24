@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
-import { Referral, UserProfile, ThankYouSlip } from '../types';
+import { Referral, UserProfile, ThankYouSlip, isOfflineReferral } from '../types';
 import { Modal } from '../components/Modal';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
@@ -243,6 +243,9 @@ export function Referrals() {
       const formattedList: Referral[] = [];
 
       for (const r of refRows) {
+        if (isOfflineReferral(r)) {
+          continue;
+        }
         const senderIdRaw = r.sender_id || r.from_user_id || '';
         const receiverIdRaw = r.receiver_id || r.to_user_id || '';
         const senderKey = String(senderIdRaw).trim().toLowerCase();
