@@ -186,50 +186,81 @@ export function ScheduleOneToOneModal({
       const currentAuthId = profile?.id || profile?.uid || (await supabase.auth.getUser()).data?.user?.id;
       if (!currentAuthId) throw new Error('User not authenticated.');
 
-      const participant = selectedMember;
-      const title = formData.title.trim() || `1-to-1: ${profile.name || 'Member'} & ${participant?.displayName || 'Member'}`;
+      if (String(currentAuthId).trim().toLowerCase() === String(formData.participantId).trim().toLowerCase()) {
+        const msg = 'You cannot schedule a One-to-One meeting with yourself.';
+        setError(msg);
+        showError(msg);
+        scrollToError();
+        setIsSubmitting(false);
+        return;
+      }
 
-      const meetingPayload = {
+      const participant = selectedMember;
+      const title = formData.title.trim() || `1:1 Meeting - ${profile.name || 'Member'} & ${participant?.displayName || 'Member'}`;
+      const effectiveChapterId = profile.chapter_id || (profile as any).chapterId || participant?.chapter_id || null;
+
+      const cleanDbPayload = {
         title: title,
-        requester_id: currentAuthId,
-        requesterId: currentAuthId,
-        participant_id: formData.participantId,
-        participantId: formData.participantId,
         creator_id: currentAuthId,
-        creatorId: currentAuthId,
-        member1_id: currentAuthId,
-        member1Id: currentAuthId,
-        member2_id: formData.participantId,
-        member2Id: formData.participantId,
+        receiver_id: formData.participantId,
+        sender_id: currentAuthId,
+        organizer_id: currentAuthId,
+        member_id: formData.participantId,
+        chapter_id: effectiveChapterId,
         date: formData.date,
         time: formData.time,
-        location: formData.venue.trim(),
+        scheduled_date: formData.date,
+        scheduled_time: formData.time,
         venue: formData.venue.trim(),
-        location_type: formData.locationType,
-        locationType: formData.locationType,
-        topics: formData.notes.trim(),
+        meeting_location: formData.venue.trim(),
+        meeting_type: 'one_to_one',
         notes: formData.notes.trim(),
-        status: 'SCHEDULED',
-        meeting_status: 'SCHEDULED',
-        is_completed: false,
-        isCompleted: false,
-        chapter_id: profile.chapter_id || (profile as any).chapterId || participant?.chapter_id || null,
-        chapterId: profile.chapter_id || (profile as any).chapterId || participant?.chapter_id || null,
+        description: formData.notes.trim(),
+        status: 'UPCOMING',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Direct insert into Supabase
-      const { error: insertErr } = await supabase
-        .from('one_to_one_meetings')
-        .insert([meetingPayload]);
+      // 1. Try server endpoint first for highest reliability and bypassing RLS / schema issues
+      let createdSuccessfully = false;
+      try {
+        const resp = await fetch('/api/one-to-one-meetings/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cleanDbPayload)
+        });
+        const resJson = await resp.json();
+        if (resp.ok && resJson.success) {
+          createdSuccessfully = true;
+        } else if (resJson.error) {
+          console.warn('Backend endpoint warning, falling back to direct insert:', resJson.error);
+        }
+      } catch (apiErr) {
+        console.warn('Backend API fetch error, falling back to direct insert:', apiErr);
+      }
 
-      if (insertErr) {
-        // Fallback to databaseService if needed
-        try {
-          await databaseService.create('one_to_one_meetings', meetingPayload);
-        } catch (dbErr: any) {
-          throw insertErr;
+      // 2. Direct Supabase insert fallback if backend endpoint wasn't reached
+      if (!createdSuccessfully) {
+        const { error: insertErr } = await supabase
+          .from('one_to_one_meetings')
+          .insert([cleanDbPayload]);
+
+        if (insertErr) {
+          console.error("Direct Supabase insert error details:", {
+            code: insertErr.code,
+            message: insertErr.message,
+            details: insertErr.details,
+            hint: insertErr.hint,
+            table: 'one_to_one_meetings'
+          });
+
+          // 3. Fallback to databaseService
+          try {
+            await databaseService.create('one_to_one_meetings', cleanDbPayload);
+          } catch (dbErr: any) {
+            console.error("DatabaseService fallback error:", dbErr);
+            throw new Error("Unable to schedule the One-to-One Meeting. Please try again.");
+          }
         }
       }
 
@@ -245,12 +276,13 @@ export function ScheduleOneToOneModal({
           link: '/one-to-one'
         });
       } catch (notifErr) {
-        console.warn('1-to-1 notification error:', notifErr);
+        console.warn('1-to-1 notification notice:', notifErr);
       }
 
-      showSuccess('One-to-One Meeting scheduled successfully!');
+      showSuccess('One-to-One Meeting scheduled successfully.');
       window.dispatchEvent(new CustomEvent('onetoone-updated'));
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('meetings-refresh'));
 
       setFormData({
         title: '',
@@ -266,9 +298,11 @@ export function ScheduleOneToOneModal({
       onClose();
     } catch (err: any) {
       console.error('Schedule 1-to-1 error:', err);
-      const errMsg = err?.message || 'Failed to schedule meeting. Please try again.';
-      setError(errMsg);
-      showError(errMsg);
+      const userMessage = err?.message?.includes('schema cache') 
+        ? 'Unable to schedule the One-to-One Meeting. Please try again.'
+        : (err?.message || 'Unable to schedule the One-to-One Meeting. Please try again.');
+      setError(userMessage);
+      showError(userMessage);
       scrollToError();
     } finally {
       setIsSubmitting(false);

@@ -118,6 +118,12 @@ export interface ThankYouSlip {
   notes: string;
   createdAt: string;
   chapter_id?: string;
+  referral_source?: string;
+  referralSource?: string;
+  business_requirement?: string;
+  businessRequirement?: string;
+  amount?: number;
+  business_value?: number;
 }
 
 export interface GuestInvitation {

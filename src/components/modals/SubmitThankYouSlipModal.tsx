@@ -26,6 +26,7 @@ export function SubmitThankYouSlipModal({
   const currentUserId = profile?.uid || (profile as any)?.id;
 
   const [referrals, setReferrals] = useState<any[]>([]);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [usersMap, setUsersMap] = useState<Record<string, any>>({});
   const [formData, setFormData] = useState({
     referralId: initialReferralId || '',
@@ -39,6 +40,8 @@ export function SubmitThankYouSlipModal({
     notes: ''
   });
 
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineMemberId, setOfflineMemberId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +61,7 @@ export function SubmitThankYouSlipModal({
         const { data: usersData } = await supabase.from('users').select('*');
         const uMap: Record<string, any> = {};
         if (usersData) {
+          setAllUsersList(usersData);
           usersData.forEach((u: any) => {
             if (u.id) uMap[String(u.id).toLowerCase()] = u;
             if (u.uid) uMap[String(u.uid).toLowerCase()] = u;
@@ -66,7 +70,7 @@ export function SubmitThankYouSlipModal({
         if (isMounted) setUsersMap(uMap);
 
         // Fetch existing slips to exclude already thanked referrals
-        const { data: slipsData } = await supabase.from('thank_you_slips').select('referral_id, referralId');
+        const { data: slipsData } = await supabase.from('thank_you_slips').select('referral_id');
         const thankedRefIds = new Set<string>();
         if (slipsData) {
           slipsData.forEach((s: any) => {
@@ -159,10 +163,18 @@ export function SubmitThankYouSlipModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmitting) return;
 
-    if (!formData.referralId) {
-      const msg = 'Please select a converted referral.';
+    if (!isOffline && !formData.referralId) {
+      const msg = 'Please select an eligible referral.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
+      return;
+    }
+
+    if (isOffline && !offlineMemberId) {
+      const msg = 'Please select the member who provided the offline referral.';
       setError(msg);
       showError(msg);
       scrollToError();
@@ -181,25 +193,68 @@ export function SubmitThankYouSlipModal({
     setError(null);
 
     try {
-      const currentAuthId = profile?.uid || profile?.id || (await supabase.auth.getUser()).data?.user?.id;
-      const targetReferrerId = String(formData.senderId || '');
+      const currentAuthId = String(profile?.uid || profile?.id || '');
+      let targetReferrerId = '';
+      let effectiveReferralId = '';
+      let customerName = formData.customerName?.trim() || '';
+      let contactPhone = formData.contactPhone?.trim() || '';
+      let businessRequirement = formData.businessRequirement?.trim() || '';
+
+      if (isOffline) {
+        targetReferrerId = String(offlineMemberId);
+        customerName = customerName || 'Offline Customer';
+        businessRequirement = businessRequirement || 'Offline Referral';
+
+        // 1. Create completed referral record in database
+        const offlineRefPayload = {
+          from_user_id: targetReferrerId,
+          sender_id: targetReferrerId,
+          to_user_id: currentAuthId,
+          receiver_id: currentAuthId,
+          contact_name: customerName,
+          customer_name: customerName,
+          contact_phone: contactPhone,
+          customer_mobile: contactPhone,
+          requirement: businessRequirement,
+          business_requirement: businessRequirement,
+          notes: formData.notes?.trim() || 'Offline Referral',
+          status: 'Completed',
+          chapter_id: profile.chapter_id || (profile as any).chapterId || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: createdRef, error: refInsertErr } = await supabase
+          .from('referrals')
+          .insert([offlineRefPayload])
+          .select()
+          .maybeSingle();
+
+        if (refInsertErr) {
+          console.warn("Notice inserting offline referral:", refInsertErr);
+        }
+
+        effectiveReferralId = createdRef?.id ? String(createdRef.id) : `offline_${Date.now()}`;
+      } else {
+        effectiveReferralId = String(formData.referralId);
+        targetReferrerId = String(formData.senderId || '');
+      }
 
       const cleanDbPayload = {
-        referral_id: String(formData.referralId),
-        referralId: String(formData.referralId),
+        referral_id: effectiveReferralId,
         sender_id: currentAuthId,
         receiver_id: targetReferrerId || null,
         submitted_by: currentAuthId,
         from_user_id: currentAuthId,
         to_user_id: targetReferrerId || null,
-        customer_name: formData.customerName || '',
+        contact_name: customerName,
+        customer_name: customerName,
+        contact_phone: contactPhone,
+        business_requirement: businessRequirement,
         business_value: Number(formData.businessValue),
         notes: formData.notes ? formData.notes.trim() : '',
         thank_you_message: formData.notes ? formData.notes.trim() : '',
-        chapter_id: profile.chapter_id || (profile as any).chapterId || null,
-        chapterId: profile.chapter_id || (profile as any).chapterId || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
 
       const { error: directSlipErr } = await supabase
@@ -213,14 +268,16 @@ export function SubmitThankYouSlipModal({
         throw directSlipErr;
       }
 
-      // Update referral status to Completed
-      await supabase
-        .from('referrals')
-        .update({
-          status: 'Completed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', formData.referralId);
+      if (!isOffline && formData.referralId) {
+        // Update referral status to Completed
+        await supabase
+          .from('referrals')
+          .update({
+            status: 'Completed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', formData.referralId);
+      }
 
       // Send notification to referrer
       if (targetReferrerId) {
@@ -229,7 +286,7 @@ export function SubmitThankYouSlipModal({
             userId: targetReferrerId,
             role: 'MEMBER',
             type: 'THANKYOU',
-            title: 'Thank You Slip Received',
+            title: isOffline ? 'Thank You Slip Received (Offline Referral)' : 'Thank You Slip Received',
             message: `You received a Thank You Slip of ₹${Number(formData.businessValue).toLocaleString('en-IN')} from ${profile.name || 'a member'}.`,
             relatedUserId: currentAuthId,
             link: '/thank-you-slips'
@@ -255,6 +312,8 @@ export function SubmitThankYouSlipModal({
         businessValue: '',
         notes: ''
       });
+      setIsOffline(false);
+      setOfflineMemberId('');
 
       if (onSuccess) onSuccess();
       onClose();
@@ -268,6 +327,14 @@ export function SubmitThankYouSlipModal({
       setIsSubmitting(false);
     }
   };
+
+  const eligibleMembersList = useMemo(() => {
+    const currentUid = String(profile?.uid || profile?.id || '');
+    return allUsersList.filter(u => {
+      const uId = String(u.uid || u.id || '');
+      return uId && uId !== currentUid;
+    });
+  }, [allUsersList, profile]);
 
   return (
     <Modal
@@ -287,17 +354,67 @@ export function SubmitThankYouSlipModal({
 
         {/* Referral Selection */}
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
-            Select Converted Referral <span className="text-red-400">*</span>
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+              Select Converted Referral {!isOffline && <span className="text-red-400">*</span>}
+            </label>
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none px-2.5 py-1 rounded-lg bg-[#151C2E] border border-white/10 hover:border-primary/40 transition-all">
+              <input
+                type="checkbox"
+                checked={isOffline}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsOffline(checked);
+                  if (checked) {
+                    setFormData(prev => ({
+                      ...prev,
+                      referralId: '',
+                      businessRequirement: 'Offline Referral',
+                      customerName: prev.customerName || '',
+                      senderName: prev.senderName || '',
+                      referralDate: format(new Date(), 'dd MMM yyyy')
+                    }));
+                  } else {
+                    setFormData(prev => ({
+                      ...prev,
+                      referralId: '',
+                      businessRequirement: '',
+                      customerName: '',
+                      contactPhone: '',
+                      senderName: '',
+                      senderId: '',
+                      referralDate: ''
+                    }));
+                    setOfflineMemberId('');
+                  }
+                }}
+                className="w-4 h-4 rounded border-white/20 bg-black/40 text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer accent-[#E53935]"
+              />
+              <span className={cn(
+                "text-xs font-semibold transition-colors",
+                isOffline ? "text-primary font-bold" : "text-neutral-300"
+              )}>
+                Offline Referral
+              </span>
+            </label>
+          </div>
+
           <select
-            required
+            required={!isOffline}
+            disabled={isOffline}
             value={formData.referralId}
             onChange={(e) => handleReferralSelect(e.target.value)}
-            className="w-full px-3.5 py-3 rounded-xl border border-white/10 bg-[#151C2E] text-white focus:ring-2 focus:ring-primary outline-none transition-all text-sm font-medium"
+            className={cn(
+              "w-full px-3.5 py-3 rounded-xl border transition-all text-sm font-medium",
+              isOffline
+                ? "border-white/5 bg-[#111827]/60 text-neutral-500 cursor-not-allowed"
+                : "border-white/10 bg-[#151C2E] text-white focus:ring-2 focus:ring-primary outline-none"
+            )}
           >
-            <option value="" className="bg-[#111827]">Choose an eligible converted referral...</option>
-            {referrals.map((r) => {
+            <option value="" className="bg-[#111827]">
+              {isOffline ? "Offline Referral selected (no referral required)" : "Choose an eligible converted referral..."}
+            </option>
+            {!isOffline && referrals.map((r) => {
               const dateStr = r.createdAt ? format(new Date(r.createdAt), 'dd MMM yyyy') : '';
               return (
                 <option key={r.id} value={r.id} className="bg-[#111827]">
@@ -306,13 +423,90 @@ export function SubmitThankYouSlipModal({
               );
             })}
           </select>
-          <p className="text-[11px] text-neutral-400">
-            Only referrals received by you that haven't received a slip will appear here.
-          </p>
+          {!isOffline && (
+            <p className="text-[11px] text-neutral-400">
+              Only referrals received by you that haven't received a slip will appear here.
+            </p>
+          )}
         </div>
 
-        {/* Auto-filled details */}
-        {formData.referralId && (
+        {/* Offline Referral Inputs */}
+        {isOffline && (
+          <div className="p-4 rounded-xl bg-[#151C2E]/90 border border-primary/20 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <p className="text-[11px] font-bold text-primary uppercase tracking-wider">
+                Offline Referral Details
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="sm:col-span-2 space-y-1">
+                <label className="text-neutral-400 block text-[10px] uppercase font-semibold">
+                  Referral Given By (Member) <span className="text-red-400">*</span>
+                </label>
+                <select
+                  required
+                  value={offlineMemberId}
+                  onChange={(e) => {
+                    const mId = e.target.value;
+                    setOfflineMemberId(mId);
+                    const mObj = allUsersList.find(u => String(u.uid || u.id) === String(mId));
+                    const mName = mObj?.name || mObj?.displayName || mObj?.full_name || 'Member';
+                    setFormData(prev => ({
+                      ...prev,
+                      senderName: mName,
+                      senderId: mId
+                    }));
+                  }}
+                  className="w-full px-3 py-2.5 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary font-medium"
+                >
+                  <option value="" className="bg-[#111827]">Select member who gave the referral...</option>
+                  {eligibleMembersList.map((m) => (
+                    <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
+                      {m.name || m.displayName || m.full_name} ({m.category || m.businessCategory || m.companyName || 'Member'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-neutral-400 block text-[10px] uppercase font-semibold">Customer Name</label>
+                <input
+                  type="text"
+                  value={formData.customerName}
+                  onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                  placeholder="e.g. Client Name"
+                  className="w-full px-3 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-neutral-400 block text-[10px] uppercase font-semibold">Customer Mobile</label>
+                <input
+                  type="text"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                  placeholder="e.g. +91 98765 43210"
+                  className="w-full px-3 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-1">
+                <label className="text-neutral-400 block text-[10px] uppercase font-semibold">Business Requirement</label>
+                <input
+                  type="text"
+                  value={formData.businessRequirement}
+                  onChange={(e) => setFormData({ ...formData, businessRequirement: e.target.value })}
+                  placeholder="e.g. Offline Client Project"
+                  className="w-full px-3 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-filled details (Normal Mode) */}
+        {!isOffline && formData.referralId && (
           <div className="p-3.5 rounded-xl bg-[#151C2E]/80 border border-white/10 space-y-3">
             <p className="text-[11px] font-bold text-primary uppercase tracking-wider">
               Referral Information

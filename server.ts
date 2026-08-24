@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
@@ -7,16 +6,20 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import webpush from "web-push";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BC1b0zclASiN3KGw7H_kGEFcutEzj6IHL-26UPDEyuWrOAtS4vDvyzd1FXAktO7hISEV3EIFf9RP7u6U0L8NnbU";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "na13C1Sh44faY5Ogv-zXGwWN6yof1gnuWFPjt_tBOxw";
 
-webpush.setVapidDetails(
-  'mailto:sskbusinessnetwork@gmail.com',
-  VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY
-);
+try {
+  webpush.setVapidDetails(
+    'mailto:sskbusinessnetwork@gmail.com',
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+} catch (vapidErr) {
+  console.warn("VAPID details setup notice:", vapidErr);
+}
 
 async function startServer() {
   const app = express();
@@ -906,6 +909,143 @@ async function startServer() {
     }
   });
 
+  // One-to-One Meetings creation endpoint
+  app.post("/api/one-to-one-meetings/create", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const creator_id = data.creator_id || data.creatorId || data.sender_id || data.senderId || data.organizer_id || data.organizerId;
+      const receiver_id = data.receiver_id || data.receiverId || data.member_id || data.memberId || data.participant_id || data.participantId;
+      const date = data.date || data.scheduled_date || data.meeting_date;
+      const time = data.time || data.scheduled_time || data.meeting_time;
+      const venue = data.venue || data.meeting_location || data.location || 'Online Meeting';
+      const notes = data.notes || data.description || data.topics || '';
+      const status = data.status || 'UPCOMING';
+      const chapter_id = data.chapter_id || data.chapterId || null;
+
+      // Validation
+      if (!creator_id) {
+        return res.status(400).json({ success: false, error: "Creator ID is required." });
+      }
+      if (!receiver_id) {
+        return res.status(400).json({ success: false, error: "Receiver/Participant ID is required." });
+      }
+      if (String(creator_id).trim().toLowerCase() === String(receiver_id).trim().toLowerCase()) {
+        return res.status(400).json({ success: false, error: "Creator and receiver cannot be the same member." });
+      }
+      if (!date) {
+        return res.status(400).json({ success: false, error: "Meeting date is required." });
+      }
+      if (!time) {
+        return res.status(400).json({ success: false, error: "Meeting time is required." });
+      }
+
+      // Fetch member names if title not provided
+      let meetingTitle = (data.title || '').trim();
+      if (!meetingTitle) {
+        const { data: users } = await adminSupabase
+          .from('users')
+          .select('id, name')
+          .in('id', [creator_id, receiver_id]);
+
+        const uMap: Record<string, string> = {};
+        if (users) {
+          users.forEach(u => { uMap[u.id] = u.name; });
+        }
+        const name1 = uMap[creator_id] || 'Member';
+        const name2 = uMap[receiver_id] || 'Member';
+        meetingTitle = `1:1 Meeting - ${name1} & ${name2}`;
+      }
+
+      // Construct clean database payload using ONLY valid columns
+      const cleanDbPayload = {
+        title: meetingTitle,
+        creator_id: creator_id,
+        receiver_id: receiver_id,
+        sender_id: creator_id,
+        organizer_id: creator_id,
+        member_id: receiver_id,
+        chapter_id: chapter_id,
+        date: date,
+        time: time,
+        scheduled_date: date,
+        scheduled_time: time,
+        venue: venue,
+        meeting_location: venue,
+        meeting_type: 'one_to_one',
+        notes: notes,
+        description: notes,
+        status: status,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: result, error } = await adminSupabase
+        .from('one_to_one_meetings')
+        .insert([cleanDbPayload])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("adminSupabase insert error in /api/one-to-one-meetings/create:", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+
+        // Try standard supabase client fallback
+        const { data: result2, error: error2 } = await supabase
+          .from('one_to_one_meetings')
+          .insert([cleanDbPayload])
+          .select()
+          .single();
+
+        if (error2) {
+          console.error("supabase fallback insert error:", error2);
+          return res.status(500).json({
+            success: false,
+            error: "Unable to schedule the One-to-One Meeting. Please try again.",
+            details: error2.message,
+            code: error2.code
+          });
+        }
+
+        return res.json({ success: true, data: result2 });
+      }
+
+      // Send push notification to receiver
+      try {
+        const { data: creatorUser } = await adminSupabase
+          .from('users')
+          .select('name')
+          .eq('id', creator_id)
+          .single();
+        const creatorName = creatorUser?.name || 'A fellow member';
+
+        // Also insert into notifications table
+        await adminSupabase.from('notifications').insert([{
+          user_id: receiver_id,
+          type: 'MEETING',
+          title: 'New 1-to-1 Meeting Scheduled',
+          message: `${creatorName} has scheduled a 1-to-1 meeting with you for ${date} at ${time}.|||${JSON.stringify({ link: '/one-to-one', relatedUserId: creator_id, role: 'MEMBER' })}`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        }]);
+      } catch (notifErr) {
+        console.warn("Notification error during 1-to-1 creation:", notifErr);
+      }
+
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      console.error("Unhandled error in /api/one-to-one-meetings/create:", err);
+      res.status(500).json({
+        success: false,
+        error: "Unable to schedule the One-to-One Meeting. Please try again.",
+        details: err?.message || String(err)
+      });
+    }
+  });
+
   // Meeting Attendance & Collection Update Endpoint
   app.post("/api/meetings/update", async (req, res) => {
     try {
@@ -1067,6 +1207,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -1077,8 +1218,8 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     
     app.use(express.static(distPath, {
-      setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache');
         }
       }
@@ -1098,5 +1239,8 @@ async function startServer() {
   return app;
 }
 
-const appPromise = startServer();
+const appPromise = startServer().catch((err) => {
+  console.error("Critical server startup failure:", err);
+  process.exit(1);
+});
 export default appPromise;

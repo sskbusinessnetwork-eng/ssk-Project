@@ -224,7 +224,7 @@ export async function getDocs(queryRef: any) {
         if (!hasSingleIdFilter) {
           builder = builder.eq('chapter_id', userChapterId).neq('role', 'MASTER_ADMIN');
         }
-      } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations', 'one_to_one_meetings'].includes(collectionPath)) {
+      } else if (['meetings', 'testimonials', 'guest_invitations', 'guest_registrations'].includes(collectionPath)) {
         builder = builder.eq('chapter_id', userChapterId);
       }
     }
@@ -428,7 +428,7 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
 
 export async function getDoc(docRef: any) {
   const { path, id } = docRef;
-  const { data, error } = await supabase.from(path).select('*').eq('id', id).single();
+  const { data, error } = await supabase.from(path).select('*').eq('id', id).maybeSingle();
   if (error || !data) return { exists: () => false, data: () => ({}), id };
   
   const camelData = keysToCamel(data);
@@ -544,8 +544,75 @@ export async function addDoc(collectionRef: any, data: any) {
   let participantIds: string[] | undefined = undefined;
   let cleanData = { ...data };
   if (collectionPath === 'one_to_one_meetings') {
-    participantIds = cleanData.participantIds;
+    participantIds = cleanData.participantIds || (cleanData.participantId ? [cleanData.participantId] : undefined);
     delete cleanData.participantIds;
+    delete cleanData.participantId;
+
+    const cleanOneToOnePayload = {
+      title: (cleanData.title || '').trim() || '1:1 Meeting',
+      creator_id: cleanData.creator_id || cleanData.creatorId || cleanData.sender_id || cleanData.senderId || cleanData.organizer_id || cleanData.organizerId || null,
+      receiver_id: cleanData.receiver_id || cleanData.receiverId || cleanData.member_id || cleanData.memberId || (participantIds && participantIds[0]) || null,
+      sender_id: cleanData.creator_id || cleanData.creatorId || cleanData.sender_id || cleanData.senderId || cleanData.organizer_id || cleanData.organizerId || null,
+      organizer_id: cleanData.creator_id || cleanData.creatorId || cleanData.sender_id || cleanData.senderId || cleanData.organizer_id || cleanData.organizerId || null,
+      member_id: cleanData.receiver_id || cleanData.receiverId || cleanData.member_id || cleanData.memberId || (participantIds && participantIds[0]) || null,
+      chapter_id: cleanData.chapter_id || cleanData.chapterId || null,
+      date: cleanData.date || cleanData.scheduled_date || cleanData.scheduledDate || '',
+      time: cleanData.time || cleanData.scheduled_time || cleanData.scheduledTime || '',
+      scheduled_date: cleanData.scheduled_date || cleanData.scheduledDate || cleanData.date || '',
+      scheduled_time: cleanData.scheduled_time || cleanData.scheduledTime || cleanData.time || '',
+      venue: cleanData.venue || cleanData.meeting_location || cleanData.meetingLocation || cleanData.location || 'Online Meeting',
+      meeting_location: cleanData.meeting_location || cleanData.meetingLocation || cleanData.venue || cleanData.location || 'Online Meeting',
+      meeting_type: 'one_to_one',
+      notes: cleanData.notes || cleanData.description || cleanData.topics || '',
+      description: cleanData.description || cleanData.notes || cleanData.topics || '',
+      status: cleanData.status || 'UPCOMING',
+      created_at: cleanData.created_at || cleanData.createdAt || new Date().toISOString(),
+      updated_at: cleanData.updated_at || cleanData.updatedAt || new Date().toISOString()
+    };
+
+    if (cleanData.attendance) {
+      (cleanOneToOnePayload as any).attendance = cleanData.attendance;
+    }
+
+    const { data: meetingResult, error: meetingError } = await supabase
+      .from('one_to_one_meetings')
+      .insert([cleanOneToOnePayload])
+      .select()
+      .single();
+
+    if (!meetingError && meetingResult) {
+      const newId = meetingResult.id;
+      if (participantIds && participantIds.length > 0) {
+        try {
+          const inserts = participantIds.map(uid => ({ meeting_id: newId, user_id: uid }));
+          await supabase.from('meeting_participants').insert(inserts);
+        } catch (pErr) {
+          console.warn("Participant insert notice:", pErr);
+        }
+      }
+      return { id: newId };
+    }
+
+    console.warn("addDoc direct Supabase one_to_one_meetings insert warning, trying /api/one-to-one-meetings/create fallback:", meetingError);
+    try {
+      const resp = await fetch('/api/one-to-one-meetings/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanOneToOnePayload)
+      });
+      const json = await resp.json();
+      if (json && json.data && json.data.id) {
+        return { id: json.data.id };
+      }
+    } catch (apiErr) {
+      console.warn("API fallback error for one_to_one_meetings:", apiErr);
+    }
+
+    if (meetingError) {
+      throw new Error(meetingError.message || 'Failed to schedule One-to-One Meeting.');
+    }
+
+    return { id: Math.random().toString(36).substring(2, 15) };
   }
 
   if (collectionPath === 'users') {
@@ -690,8 +757,52 @@ export async function updateDoc(docRef: any, partialData: any) {
   let participantIds: string[] | undefined = undefined;
   let cleanData = { ...partialData };
   if (path === 'one_to_one_meetings') {
-    participantIds = cleanData.participantIds;
+    participantIds = cleanData.participantIds || (cleanData.participantId ? [cleanData.participantId] : undefined);
     delete cleanData.participantIds;
+    delete cleanData.participantId;
+
+    const sanitizedUpdate: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (cleanData.title !== undefined) sanitizedUpdate.title = (cleanData.title || '').trim();
+    if (cleanData.status !== undefined) sanitizedUpdate.status = cleanData.status;
+    if (cleanData.attendance !== undefined) sanitizedUpdate.attendance = cleanData.attendance;
+    if (cleanData.date || cleanData.scheduled_date || cleanData.scheduledDate) {
+      const d = cleanData.date || cleanData.scheduled_date || cleanData.scheduledDate;
+      sanitizedUpdate.date = d;
+      sanitizedUpdate.scheduled_date = d;
+    }
+    if (cleanData.time || cleanData.scheduled_time || cleanData.scheduledTime) {
+      const t = cleanData.time || cleanData.scheduled_time || cleanData.scheduledTime;
+      sanitizedUpdate.time = t;
+      sanitizedUpdate.scheduled_time = t;
+    }
+    if (cleanData.venue || cleanData.meeting_location || cleanData.meetingLocation || cleanData.location) {
+      const v = cleanData.venue || cleanData.meeting_location || cleanData.meetingLocation || cleanData.location;
+      sanitizedUpdate.venue = v;
+      sanitizedUpdate.meeting_location = v;
+    }
+    if (cleanData.notes !== undefined || cleanData.description !== undefined || cleanData.topics !== undefined) {
+      const n = cleanData.notes !== undefined ? cleanData.notes : (cleanData.description !== undefined ? cleanData.description : cleanData.topics);
+      sanitizedUpdate.notes = n;
+      sanitizedUpdate.description = n;
+    }
+
+    const { error: updateError } = await supabase.from(path).update(sanitizedUpdate).eq('id', id);
+    if (updateError) {
+      console.error("updateDoc one_to_one_meetings error:", updateError);
+      throw new Error(updateError.message || 'Database update failed');
+    }
+
+    if (participantIds !== undefined) {
+      await supabase.from('meeting_participants').delete().eq('meeting_id', id);
+      if (participantIds.length > 0) {
+        const inserts = participantIds.map(uid => ({ meeting_id: id, user_id: uid }));
+        await supabase.from('meeting_participants').insert(inserts);
+      }
+    }
+    return;
   }
 
   if (path === 'testimonials') {

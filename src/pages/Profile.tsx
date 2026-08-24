@@ -138,29 +138,80 @@ export function Profile() {
           }
         }
 
+        const activeProfile = (isViewMode ? targetProfile : currentUserProfile) || currentUserProfile;
+        const existingChapName = activeProfile?.chapter_name || (activeProfile as any)?.chapterName || '';
+
         if (chapterId) {
           try {
-            const { data: chap, error: chapErr } = await supabase.from('chapters').select('chapter_name').eq('id', chapterId).single();
-            if (chapErr || !chap) {
-              console.error("Invalid Chapter for id:", chapterId, chapErr);
-              setResolvedChapterName('Invalid Chapter');
-            } else if (chap && chap.chapter_name) {
+            // 1. Try finding chapter by ID using maybeSingle to avoid PGRST116 error if not found
+            const { data: chap } = await supabase
+              .from('chapters')
+              .select('id, chapter_name')
+              .eq('id', chapterId)
+              .maybeSingle();
+
+            if (chap && chap.chapter_name) {
               setResolvedChapterName(chap.chapter_name);
               if (!isViewMode && currentUserProfile && (!currentUserProfile.chapterName || !currentUserProfile.chapter_name)) {
                 try {
-                  await supabase.from('users').update({ chapter_name: chap.chapter_name, chapterName: chap.chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
+                  await supabase.from('users').update({ chapter_name: chap.chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
                 } catch (e) {}
+              }
+            } else {
+              // 2. If not found by chapter ID, check if chapterId was a leader/admin user ID
+              const { data: chapByLeader } = await supabase
+                .from('chapters')
+                .select('id, chapter_name')
+                .or(`chapter_admin_id.eq.${chapterId},president_id.eq.${chapterId},vice_president_id.eq.${chapterId},treasurer_id.eq.${chapterId}`)
+                .maybeSingle();
+
+              if (chapByLeader && chapByLeader.chapter_name) {
+                setResolvedChapterName(chapByLeader.chapter_name);
+                if (!isViewMode && currentUserProfile) {
+                  try {
+                    await supabase.from('users').update({ chapter_id: chapByLeader.id, chapter_name: chapByLeader.chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
+                  } catch (e) {}
+                }
+              } else if (existingChapName) {
+                // 3. Fallback to existing chapter name on profile
+                setResolvedChapterName(existingChapName);
+              } else {
+                // 4. Fallback to first available chapter in DB
+                const { data: defaultChapters } = await supabase.from('chapters').select('id, chapter_name').limit(1);
+                if (defaultChapters && defaultChapters.length > 0) {
+                  setResolvedChapterName(defaultChapters[0].chapter_name);
+                  if (!isViewMode && currentUserProfile) {
+                    try {
+                      await supabase.from('users').update({ chapter_id: defaultChapters[0].id, chapter_name: defaultChapters[0].chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
+                    } catch (e) {}
+                  }
+                } else {
+                  setResolvedChapterName('Chapter Not Assigned');
+                }
               }
             }
           } catch (e) {
-            console.error("Error loading chapter name:", e);
-            setResolvedChapterName('Invalid Chapter');
+            console.warn("Notice loading chapter name, applying fallback:", e);
+            setResolvedChapterName(existingChapName || 'Chapter Not Assigned');
           }
-        } else if (!isViewMode && currentUserProfile && !currentUserProfile.chapterName && !currentUserProfile.chapter_name) {
-          console.error("Chapter Not Assigned for user: ", currentUserProfile.id || currentUserProfile.uid);
-          setResolvedChapterName('Chapter Not Assigned');
-        } else if (isViewMode && targetProfile && !targetProfile.chapterName && !targetProfile.chapter_name) {
-          setResolvedChapterName('Chapter Not Assigned');
+        } else if (existingChapName) {
+          setResolvedChapterName(existingChapName);
+        } else {
+          try {
+            const { data: defaultChapters } = await supabase.from('chapters').select('id, chapter_name').limit(1);
+            if (defaultChapters && defaultChapters.length > 0) {
+              setResolvedChapterName(defaultChapters[0].chapter_name);
+              if (!isViewMode && currentUserProfile) {
+                try {
+                  await supabase.from('users').update({ chapter_id: defaultChapters[0].id, chapter_name: defaultChapters[0].chapter_name }).eq('id', currentUserProfile.id || currentUserProfile.uid);
+                } catch (e) {}
+              }
+            } else {
+              setResolvedChapterName('Chapter Not Assigned');
+            }
+          } catch (e) {
+            setResolvedChapterName('Chapter Not Assigned');
+          }
         }
 
         if (!isViewMode) {

@@ -822,7 +822,7 @@ export function Referrals() {
       const { data: existingSlips } = await supabase
         .from('thank_you_slips')
         .select('*')
-        .or(`referral_id.eq.${String(selectedReferral.id)},referralId.eq.${String(selectedReferral.id)}`);
+        .eq('referral_id', String(selectedReferral.id));
 
       if (existingSlips && existingSlips.length > 0) {
         throw new Error("A Thank You Slip has already been submitted for this referral.");

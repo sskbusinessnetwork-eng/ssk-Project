@@ -753,40 +753,59 @@ export function OneToOneMeetings() {
 
       const dbPayload = {
         title: meetingTitle,
-        sender_id: sender_id,
+        creator_id: sender_id,
         receiver_id: receiver_id,
+        sender_id: sender_id,
         organizer_id: sender_id,
         member_id: receiver_id,
         chapter_id: chapter_id,
         meeting_location: finalLocation,
         venue: finalLocation,
-        meeting_type: finalLocationType,
+        meeting_type: 'one_to_one',
         scheduled_date: formData.date,
         date: formData.date,
         scheduled_time: formData.time,
         time: formData.time,
         notes: formData.notes || '',
+        description: formData.notes || '',
         status: status,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      const { error: dbErr } = await supabase
-        .from('one_to_one_meetings')
-        .insert([dbPayload]);
-
-      if (dbErr) {
-        console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
-        await databaseService.create('one_to_one_meetings', {
-          ...dbPayload,
-          creatorId: sender_id,
-          participantIds: [receiver_id]
+      let createdSuccessfully = false;
+      try {
+        const resp = await fetch('/api/one-to-one-meetings/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dbPayload)
         });
+        const resJson = await resp.json();
+        if (resp.ok && resJson.success) {
+          createdSuccessfully = true;
+        } else if (resJson.error) {
+          console.warn('API endpoint error in OneToOneMeetings.tsx:', resJson.error);
+        }
+      } catch (apiErr) {
+        console.warn('API fetch error in OneToOneMeetings.tsx:', apiErr);
+      }
+
+      if (!createdSuccessfully) {
+        const { error: dbErr } = await supabase
+          .from('one_to_one_meetings')
+          .insert([dbPayload]);
+
+        if (dbErr) {
+          console.warn("Direct insert error in one_to_one_meetings, trying databaseService fallback:", dbErr);
+          await databaseService.create('one_to_one_meetings', dbPayload);
+        }
       }
 
       try {
         const senderName = profile?.name || currentUserRecord?.name || 'A member';
         await notificationService.sendNotification({
           userId: receiver_id,
+          role: 'MEMBER',
           type: 'MEETING',
           title: 'One-to-One Meeting Scheduled',
           message: `Your One-to-One Meeting with ${senderName} is scheduled for ${formData.date} at ${formData.time}.`,
@@ -794,10 +813,12 @@ export function OneToOneMeetings() {
           link: '/one-to-one'
         });
       } catch (nErr) {
-        console.warn("Notification error:", nErr);
+        console.warn("Notification notice:", nErr);
       }
 
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('onetoone-updated'));
+      window.dispatchEvent(new CustomEvent('meetings-refresh'));
       await fetchMeetingsAndUsers();
 
       setShowSuccess(true);
@@ -806,25 +827,27 @@ export function OneToOneMeetings() {
         participantId: '', 
         date: '', 
         time: '', 
-        venue: '',
+        venue: '', 
         notes: '' 
       });
       setLocationType('Online');
       setSearchTerm('');
 
-      triggerSuccessToast('One-to-One Meeting scheduled successfully!');
+      triggerSuccessToast('One-to-One Meeting scheduled successfully.');
       setTimeout(() => {
         setIsModalOpen(false);
         setShowSuccess(false);
-      }, 1500);
+      }, 1200);
 
     } catch (err: any) {
       console.error("Error creating one-to-one meeting:", err);
       let errMsg = "";
       if (err?.message?.includes('row-level security') || err?.message?.includes('RLS') || err?.message?.includes('violates row-level security policy')) {
         errMsg = "Database Security Error: Row-Level Security (RLS) is restricting creation of meetings. Please run the provided SQL script in your Supabase SQL Editor to allow insertions.";
+      } else if (err?.message?.includes('schema cache')) {
+        errMsg = "Unable to schedule the One-to-One Meeting. Please try again.";
       } else {
-        errMsg = err.message || "Failed to schedule meeting. Please try again.";
+        errMsg = err.message || "Unable to schedule the One-to-One Meeting. Please try again.";
       }
       setError(errMsg);
       showError(errMsg);
