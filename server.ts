@@ -142,7 +142,7 @@ async function startServer() {
       try {
         const { data: c1 } = await adminSupabase
           .from('users')
-          .select('id, role, position, chapter_id, status, name')
+          .select('*')
           .eq('id', callerId)
           .maybeSingle();
         if (c1) {
@@ -150,7 +150,7 @@ async function startServer() {
         } else {
           const { data: c2 } = await adminSupabase
             .from('users')
-            .select('id, role, position, chapter_id, status, name')
+            .select('*')
             .eq('uid', callerId)
             .maybeSingle();
           if (c2) caller = c2;
@@ -187,6 +187,8 @@ async function startServer() {
         };
       }
 
+      const callerChapId = caller.chapter_id || caller.chapterId || caller.adminId || newInvitation.chapter_id || newInvitation.invited_by_chapter;
+
       // 2. Verify selected meeting
       let meeting: any = null;
       if (newInvitation.meeting_id) {
@@ -202,7 +204,7 @@ async function startServer() {
         }
       }
 
-      if (meeting && meeting.chapter_id && caller.chapter_id && String(meeting.chapter_id).trim() !== String(caller.chapter_id).trim()) {
+      if (meeting && meeting.chapter_id && callerChapId && String(meeting.chapter_id).trim() !== String(callerChapId).trim() && caller.role !== 'MASTER_ADMIN') {
         return res.status(403).json({
           success: false,
           message: "You can only invite guests to meetings belonging to your own chapter.",

@@ -380,10 +380,21 @@ export function Guests() {
       }
 
       if (!resData || !resData.success) {
-        const failedMsg = resData?.error || resData?.message || "Failed to send guest invitation. Please check the details.";
-        showError(failedMsg);
-        scrollToError();
-        throw new Error(failedMsg);
+        // Direct insert fallback to existing guest_invitations Supabase table
+        const { error: directErr } = await supabase
+          .from('guest_invitations')
+          .insert([newInvitation]);
+
+        if (directErr) {
+          try {
+            await databaseService.create('guest_invitations', newInvitation);
+          } catch (dbErr: any) {
+            const failedMsg = resData?.error || resData?.message || directErr?.message || "Failed to send guest invitation. Please check the details.";
+            showError(failedMsg);
+            scrollToError();
+            throw new Error(failedMsg);
+          }
+        }
       }
 
       // Refresh list

@@ -93,8 +93,8 @@ export function InviteGuestModal({
 
         // 4. Existing guests for duplicate meeting check
         const { data: guestsData } = await supabase
-          .from('guests')
-          .select('id, guest_phone, phone, meeting_id, meetingId, guest_name, name');
+          .from('guest_invitations')
+          .select('id, guest_phone, guest_whatsapp, meeting_id, guest_name');
         if (isMounted && guestsData) setExistingGuests(guestsData);
 
       } catch (err: any) {
@@ -132,9 +132,10 @@ export function InviteGuestModal({
     // Duplicate guest in same meeting check
     if (meetingId) {
       const foundGuest = existingGuests.find(g => {
-        const p = String(g.guest_phone || g.phone || '').replace(/\D/g, '');
-        const m = String(g.meeting_id || g.meetingId || '');
-        return p && p.slice(-10) === last10 && m === String(meetingId);
+        const p1 = String(g.guest_phone || '').replace(/\D/g, '');
+        const p2 = String(g.guest_whatsapp || '').replace(/\D/g, '');
+        const m = String(g.meeting_id || '');
+        return ((p1 && p1.slice(-10) === last10) || (p2 && p2.slice(-10) === last10)) && m === String(meetingId);
       });
 
       if (foundGuest) {
@@ -206,41 +207,157 @@ export function InviteGuestModal({
       const normPhone = normalizePhoneNumber(formData.guestPhone) || formData.guestPhone.trim();
       const normWhatsapp = normalizePhoneNumber(formData.guestWhatsapp) || formData.guestWhatsapp.trim() || normPhone;
 
-      const guestPayload = {
-        name: formData.guestName.trim(),
+      const selectedMeeting = upcomingMeetings.find(m => m.id === formData.meetingId) || {};
+      
+      const formatRole = (pos?: string, role?: string) => {
+        if (pos && typeof pos === 'string' && pos.trim()) {
+          const pLower = pos.trim().toLowerCase();
+          if (pLower === 'president') return 'President';
+          if (pLower === 'vice_president' || pLower === 'vice president') return 'Vice President';
+          if (pLower === 'treasurer') return 'Treasurer';
+          if (pLower === 'secretary') return 'Secretary';
+          if (pLower === 'chapter_admin' || pLower === 'chapter admin') return 'Chapter Admin';
+          if (pLower === 'member') return 'Member';
+          return pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+        if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+        if (role === 'MASTER_ADMIN') return 'Master Admin';
+        return 'Member';
+      };
+
+      const invitedByName = profile.name || (profile as any).full_name || (profile as any).displayName || 'Member';
+      const invitedByRole = formatRole(profile.position || (profile as any).chapter_position, profile.role);
+      
+      let resolvedChapterName = profile.chapter_name || (profile as any).chapterName || selectedMeeting.chapter_name || selectedMeeting.chapterName || '';
+      if (!resolvedChapterName && (userChapId || selectedMeeting.chapter_id)) {
+        try {
+          const { data: chapDoc } = await supabase
+            .from('chapters')
+            .select('chapter_name')
+            .eq('id', userChapId || selectedMeeting.chapter_id)
+            .maybeSingle();
+          if (chapDoc?.chapter_name) {
+            resolvedChapterName = chapDoc.chapter_name;
+          }
+        } catch (e) {}
+      }
+      if (!resolvedChapterName) resolvedChapterName = 'SSK Business Network';
+
+      const newInvitation = {
+        invited_by: currentAuthId,
+        invited_by_user_id: currentAuthId,
+        created_by: currentAuthId,
+        invited_by_name: invitedByName,
+        invited_by_role: invitedByRole,
+        chapter_id: userChapId || selectedMeeting.chapter_id || null,
+        invited_by_chapter: userChapId || selectedMeeting.chapter_id || null,
+        chapter_name: resolvedChapterName,
         guest_name: formData.guestName.trim(),
-        phone: normPhone,
         guest_phone: normPhone,
-        whatsapp: normWhatsapp,
         guest_whatsapp: normWhatsapp,
         business_category: formData.guestBusiness.trim(),
         guest_business: formData.guestBusiness.trim(),
-        meeting_id: formData.meetingId,
-        meetingId: formData.meetingId,
-        invited_by: currentAuthId,
-        invitedBy: currentAuthId,
-        chapter_id: userChapId,
-        chapterId: userChapId,
-        status: 'INVITED',
+        meeting_id: selectedMeeting.id || formData.meetingId,
+        meeting_title: selectedMeeting.title || 'Weekly Chapter Meeting',
+        meeting_date: selectedMeeting.date || null,
+        meeting_time: selectedMeeting.time || '10:00 AM',
+        venue: selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall',
+        status: 'Pending',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      const { error: insertErr } = await supabase
-        .from('guests')
-        .insert([guestPayload]);
+      // 1. Try authoritative API endpoint
+      let apiSuccess = false;
+      try {
+        const res = await fetch('/api/guests/invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newInvitation,
+            callerId: currentAuthId
+          })
+        });
+        const text = await res.text();
+        let resData: any = null;
+        try { resData = text ? JSON.parse(text) : null; } catch(e) {}
+        
+        if (res.status === 409 || resData?.error === 'MEMBER_CANNOT_BE_GUEST') {
+          const errMemberName = resData?.memberName || formData.guestName;
+          const errMemberPos = resData?.memberPosition || 'Member';
+          setMatchedMember({ name: errMemberName, position: errMemberPos, phone: formData.guestPhone });
+          const errorMsg = resData?.message || `${errMemberName} is already a member (${errMemberPos}) and cannot be added as a guest.`;
+          setError(errorMsg);
+          showError(errorMsg);
+          scrollToError();
+          return;
+        }
 
-      if (insertErr) {
-        try {
-          await databaseService.create('guests', guestPayload);
-        } catch (dbErr: any) {
-          throw insertErr;
+        if (res.status === 409 || resData?.error === 'GUEST_ALREADY_INVITED') {
+          const dupMsg = resData?.message || "This guest has already been invited to this meeting.";
+          setDuplicateMeetingError(dupMsg);
+          setError(dupMsg);
+          showError(dupMsg);
+          scrollToError();
+          return;
+        }
+
+        if (resData && resData.success) {
+          apiSuccess = true;
+        }
+      } catch (apiErr) {
+        console.warn('API invite route attempt notice:', apiErr);
+      }
+
+      // 2. Fallback / Direct insert to guest_invitations Supabase table
+      if (!apiSuccess) {
+        const { error: insertErr } = await supabase
+          .from('guest_invitations')
+          .insert([newInvitation]);
+
+        if (insertErr) {
+          try {
+            await databaseService.create('guest_invitations', newInvitation);
+          } catch (dbErr: any) {
+            console.error('Direct guest_invitations insert error:', insertErr);
+            throw insertErr;
+          }
         }
       }
 
       showSuccess('Guest invited successfully!');
+
+      // WhatsApp sharing
+      if (normWhatsapp && selectedMeeting.date) {
+        try {
+          const venue = selectedMeeting.venue || selectedMeeting.location || 'SSK Business Hall';
+          const locationLink = selectedMeeting.location_link || selectedMeeting.locationLink || selectedMeeting.location_url || (selectedMeeting.location && selectedMeeting.location.startsWith('http') ? selectedMeeting.location : '') || selectedMeeting.location || 'N/A';
+          const message = `Hello *${formData.guestName.trim()}*,
+
+You are warmly invited to attend the *SSK Business Network – ${resolvedChapterName}* Chapter Meeting.
+
+📅 Date: ${selectedMeeting.date}
+🕙 Time: ${selectedMeeting.time || '10:00 AM'}
+📍 Venue: ${venue}
+📍 Location: ${locationLink}
+
+We would be delighted to have you join us to connect with local business professionals, build relationships, and explore new business opportunities.
+
+Looking forward to seeing you.
+
+Regards,
+${invitedByName} (${invitedByRole})
+${resolvedChapterName} Chapter
+SSK Business Network`;
+          
+          const waUrl = `https://wa.me/${normWhatsapp}?text=${encodeURIComponent(message)}`;
+          window.open(waUrl, '_blank');
+        } catch (wErr) {}
+      }
+
       window.dispatchEvent(new CustomEvent('guests-updated'));
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
 
       setFormData({
         guestName: '',
