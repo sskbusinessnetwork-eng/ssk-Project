@@ -834,19 +834,221 @@ async function startServer() {
     }
   });
 
-  // Delete User endpoint
-  app.post("/api/auth/delete-user", async (req, res) => {
-    const { uid } = req.body;
+  // Helpers for phone normalization
+  function normalizeDigits(phone?: string | number | null): string {
+    if (!phone) return "";
+    const digits = phone.toString().replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  }
+
+  function normalizePhone(phone?: string | number | null): string {
+    if (!phone) return "";
+    const digits = normalizeDigits(phone);
+    return digits.length >= 10 ? "+91" + digits : digits ? "+91" + digits : "";
+  }
+
+  // Create Member endpoint with strict duplicate validation and single-record persistence
+  app.post("/api/members/create", async (req, res) => {
+    try {
+      const data = req.body || {};
+      const {
+        name,
+        phone,
+        whatsapp,
+        whatsappNumber,
+        category,
+        password,
+        subscriptionStart,
+        subscriptionStartDate,
+        subscriptionEnd,
+        subscriptionEndDate,
+        chapter_id,
+        chapter_name,
+        chapterName,
+        role,
+        position,
+        admin_id,
+        created_by,
+        createdByName,
+        createdByRole,
+        callerId
+      } = data;
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ success: false, error: "Full Name is required." });
+      }
+
+      if (!phone || !phone.toString().trim()) {
+        return res.status(400).json({ success: false, error: "Mobile Number is required." });
+      }
+
+      const phone10 = normalizeDigits(phone);
+      if (!phone10 || phone10.length < 10) {
+        return res.status(400).json({ success: false, error: "Please enter a valid 10-digit mobile number." });
+      }
+
+      const cleanPhone = normalizePhone(phone);
+      const rawWhatsapp = whatsapp || whatsappNumber || phone;
+      const whatsapp10 = normalizeDigits(rawWhatsapp);
+      const cleanWhatsapp = normalizePhone(rawWhatsapp);
+
+      // Check if mobile number already exists in users table
+      const { data: existingUsers, error: fetchErr } = await adminSupabase
+        .from("users")
+        .select("id, name, phone, whatsapp_number, deleted, status");
+
+      if (fetchErr) {
+        console.error("Error checking existing users:", fetchErr);
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        const duplicatePhoneUser = existingUsers.find(u => {
+          const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+          if (isDeleted) return false;
+          const uPhone10 = normalizeDigits(u.phone);
+          const uWPhone10 = normalizeDigits(u.whatsapp_number);
+          return (uPhone10 && uPhone10 === phone10) || (uWPhone10 && uWPhone10 === phone10);
+        });
+
+        if (duplicatePhoneUser) {
+          return res.status(409).json({
+            success: false,
+            error: "This mobile number is already registered to a member."
+          });
+        }
+
+        if (whatsapp10 && whatsapp10 !== phone10) {
+          const duplicateWhatsappUser = existingUsers.find(u => {
+            const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+            if (isDeleted) return false;
+            const uPhone10 = normalizeDigits(u.phone);
+            const uWPhone10 = normalizeDigits(u.whatsapp_number);
+            return (uPhone10 && uPhone10 === whatsapp10) || (uWPhone10 && uWPhone10 === whatsapp10);
+          });
+
+          if (duplicateWhatsappUser) {
+            return res.status(409).json({
+              success: false,
+              error: "This WhatsApp number is already registered to a member."
+            });
+          }
+        }
+      }
+
+      const newUserId = data.id || data.uid || crypto.randomUUID();
+      const rawPassword = password || 'Welcometosskbusiness';
+      const hashedPassword = bcrypt.hashSync(rawPassword, 10);
+      const finalChapterId = chapter_id || null;
+      const finalChapterName = chapter_name || chapterName || null;
+      const finalSubStart = subscriptionStart || subscriptionStartDate || new Date().toISOString().split('T')[0];
+      const finalSubEnd = subscriptionEnd || subscriptionEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+
+      const userPayload: Record<string, any> = {
+        id: newUserId,
+        name: name.trim(),
+        phone: cleanPhone,
+        whatsapp_number: cleanWhatsapp || cleanPhone,
+        category: category || null,
+        chapter_id: finalChapterId,
+        chapter_name: finalChapterName,
+        role: role || 'MEMBER',
+        position: position || 'member',
+        status: 'ACTIVE',
+        membership_status: 'ACTIVE',
+        account_status: 'ACTIVE',
+        disabled: false,
+        deleted: false,
+        blocked: false,
+        must_change_password: true,
+        password: hashedPassword,
+        subscription_start: finalSubStart,
+        subscription_end: finalSubEnd,
+        subscriptionStartDate: finalSubStart,
+        subscriptionEndDate: finalSubEnd,
+        subscriptionStatus: 'Active',
+        created_by: created_by || admin_id || callerId || null,
+        admin_id: admin_id || created_by || callerId || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: insertedUser, error: insertErr } = await adminSupabase
+        .from("users")
+        .insert(userPayload)
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error("Member insert error:", insertErr);
+        if (insertErr.code === '23505' || insertErr.message?.toLowerCase().includes('unique') || insertErr.message?.toLowerCase().includes('duplicate')) {
+          return res.status(409).json({
+            success: false,
+            error: "This mobile number is already registered to a member."
+          });
+        }
+        return res.status(500).json({ success: false, error: insertErr.message || "Failed to save member to database." });
+      }
+
+      // Upsert into member_subscriptions
+      try {
+        await adminSupabase.from("member_subscriptions").upsert({
+          user_id: newUserId,
+          member_name: name.trim(),
+          chapter_id: finalChapterId,
+          chapter_name: finalChapterName,
+          position_name: position || 'member',
+          subscription_start: finalSubStart,
+          subscription_end: finalSubEnd,
+          membership_status: 'Active',
+          account_status: 'Active',
+          created_by: created_by || admin_id || callerId || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+      } catch (subErr) {
+        console.warn("member_subscriptions upsert warning:", subErr);
+      }
+
+      return res.json({
+        success: true,
+        id: newUserId,
+        uid: newUserId,
+        data: insertedUser
+      });
+    } catch (err: any) {
+      console.error("Error in /api/members/create:", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to create member." });
+    }
+  });
+
+  // Delete Member endpoint (both /api/members/delete and /api/auth/delete-user)
+  app.post(["/api/members/delete", "/api/auth/delete-user"], async (req, res) => {
+    const uid = req.body.uid || req.body.id;
     if (!uid) {
       return res.status(400).json({ error: "Missing uid parameter" });
     }
     try {
-      const { error } = await supabase
+      // 1. Delete associated subscriptions
+      await adminSupabase
+        .from("member_subscriptions")
+        .delete()
+        .eq("user_id", uid);
+
+      // 2. Delete meeting participants
+      await adminSupabase
+        .from("meeting_participants")
+        .delete()
+        .eq("user_id", uid);
+
+      // 3. Delete user from users table
+      const { error } = await adminSupabase
         .from("users")
         .delete()
         .eq("id", uid);
 
-      if (error) throw error;
+      if (error) {
+        console.error("adminSupabase delete error:", error);
+        throw error;
+      }
 
       res.json({ success: true });
     } catch (err: any) {

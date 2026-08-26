@@ -182,10 +182,14 @@ export function Positions() {
     }
   };
 
-  const filteredMembers = members.filter(m => 
-    (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (m.email || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = members.filter(m => {
+    if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
+    return (
+      (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.phone || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   return (
     <div className="space-y-6">

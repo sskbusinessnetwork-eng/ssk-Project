@@ -194,7 +194,10 @@ export function OnboardMember() {
     
     try {
       await deleteDoc(doc(db, 'users', uid));
+      setMembers(prev => prev.filter(m => (m.uid || (m as any).id) !== uid));
       triggerSuccessToast('Member deleted successfully.');
+      window.dispatchEvent(new Event('dashboard-refresh'));
+      window.dispatchEvent(new Event('members-refresh'));
     } catch (err: any) {
       console.error(err);
       showError(err?.message || 'Failed to delete member.');
@@ -217,6 +220,9 @@ export function OnboardMember() {
   }
 
   const filteredMembers = members.filter(m => {
+    // Filter out deleted members
+    if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
+
     // Basic search by name, phone, memberId
     const searchMatch = !searchTerm || 
       (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

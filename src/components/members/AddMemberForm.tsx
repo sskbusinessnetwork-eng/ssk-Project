@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db, collection, query, where, getDocs, doc, setDoc, getDoc, addDoc } from '../../lib/database';
 import { useAuth } from '../../hooks/useAuth';
 import { User, Phone, Mail, Lock, CheckCircle2, AlertCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
-import { normalizePhoneNumber } from '../../utils/phoneUtils';
+import { normalizePhoneNumber, normalizePhoneDigits } from '../../utils/phoneUtils';
 import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
 import { supabase } from '../../lib/supabaseClient';
@@ -141,16 +141,42 @@ export function AddMemberForm() {
       }
 
       // 1. Mobile number duplicate check across all members
+      const phone10 = normalizePhoneDigits(formData.phone);
+      const whatsapp10 = normalizePhoneDigits(formData.whatsapp);
       const cleanPhone = normalizePhoneNumber(formData.phone);
-      const { data: existingUser, error: checkError } = await supabase
+      const cleanWhatsapp = normalizePhoneNumber(formData.whatsapp);
+
+      const { data: allExistingUsers, error: checkError } = await supabase
         .from('users')
-        .select('id')
-        .eq('phone', cleanPhone)
-        .limit(1);
+        .select('id, phone, whatsapp_number, deleted, status');
 
       if (checkError) throw checkError;
-      if (existingUser && existingUser.length > 0) {
-        throw new Error('This phone number is already registered. Please use a different phone number.');
+      if (allExistingUsers && allExistingUsers.length > 0) {
+        const isDuplicatePhone = allExistingUsers.some(u => {
+          const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+          if (isDeleted) return false;
+          const uP10 = normalizePhoneDigits(u.phone);
+          const uWP10 = normalizePhoneDigits(u.whatsapp_number);
+          return (uP10 && uP10 === phone10) || (uWP10 && uWP10 === phone10);
+        });
+
+        if (isDuplicatePhone) {
+          throw new Error('This mobile number is already registered to a member.');
+        }
+
+        if (whatsapp10 && whatsapp10 !== phone10) {
+          const isDuplicateWhatsapp = allExistingUsers.some(u => {
+            const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+            if (isDeleted) return false;
+            const uP10 = normalizePhoneDigits(u.phone);
+            const uWP10 = normalizePhoneDigits(u.whatsapp_number);
+            return (uP10 && uP10 === whatsapp10) || (uWP10 && uWP10 === whatsapp10);
+          });
+
+          if (isDuplicateWhatsapp) {
+            throw new Error('This WhatsApp number is already registered to a member.');
+          }
+        }
       }
 
       // 2. Generate unique Member ID

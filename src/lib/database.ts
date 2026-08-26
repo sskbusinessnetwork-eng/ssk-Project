@@ -616,11 +616,34 @@ export async function addDoc(collectionRef: any, data: any) {
   }
 
   if (collectionPath === 'users') {
+    try {
+      const resp = await fetch('/api/members/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanData)
+      });
+      const resJson = await resp.json();
+      if (!resp.ok) {
+        throw new Error(resJson.error || resJson.message || 'Failed to create member');
+      }
+      if (resJson.id || resJson.uid) {
+        return { id: resJson.id || resJson.uid };
+      }
+    } catch (apiErr: any) {
+      if (apiErr.message?.includes('already registered')) {
+        throw apiErr;
+      }
+      console.warn("API fallback for user insert:", apiErr);
+    }
+
     const userSnakeData = keysToSnake(cleanData);
     const preparedSnake = prepareUserPayload(userSnakeData, '');
     const { data: userResult, error: userError } = await supabase.from(collectionPath).insert(preparedSnake).select().single();
     if (userError) {
       console.error("addDoc error:", userError);
+      if (userError.code === '23505' || userError.message?.toLowerCase().includes('unique') || userError.message?.toLowerCase().includes('duplicate')) {
+        throw new Error("This mobile number is already registered to a member.");
+      }
       throw new Error(userError.message || 'Database insert failed');
     }
     return { id: userResult?.id || Math.random().toString(36).substring(2, 15) };
@@ -869,6 +892,18 @@ export async function updateDoc(docRef: any, partialData: any) {
 
 export async function deleteDoc(docRef: any) {
   const { path, id } = docRef;
+  if (path === 'users') {
+    try {
+      await fetch('/api/members/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: id })
+      });
+    } catch (e) {
+      console.warn("API delete notice:", e);
+    }
+    await supabase.from('member_subscriptions').delete().eq('user_id', id);
+  }
   const { error } = await supabase.from(path).delete().eq('id', id);
   if (error) console.error("deleteDoc error:", error);
 }

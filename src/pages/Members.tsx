@@ -26,7 +26,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { normalizePhoneNumber } from '../utils/phoneUtils';
+import { normalizePhoneNumber, normalizePhoneDigits } from '../utils/phoneUtils';
 import { useAuth } from '../hooks/useAuth';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { useSearchParams, useLocation } from 'react-router-dom';
@@ -224,6 +224,7 @@ export function Members() {
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError(null);
     
     const newErrors: Record<string, string> = {};
@@ -274,6 +275,15 @@ export function Members() {
       return;
     }
 
+    const phone10 = normalizePhoneDigits(newMemberData.phone);
+    if (!phone10 || phone10.length < 10) {
+      const msg = 'Please enter a valid 10-digit mobile number.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const adminId = profile?.uid || profile?.id;
@@ -307,40 +317,49 @@ export function Members() {
 
       const normalizedPhone = normalizePhoneNumber(newMemberData.phone);
       const normalizedWhatsapp = normalizePhoneNumber(newMemberData.whatsapp);
+      const whatsapp10 = normalizePhoneDigits(newMemberData.whatsapp);
       
-      // 1. DUPLICATE MOBILE NUMBER CHECK
-      const { data: existingUserByPhone, error: checkPhoneError } = await supabase
+      // 1. DUPLICATE MOBILE NUMBER CHECK (Across entire users table)
+      const { data: allExistingUsers, error: checkPhoneError } = await supabase
         .from('users')
-        .select('id')
-        .eq('phone', normalizedPhone)
-        .limit(1);
+        .select('id, phone, whatsapp_number, deleted, status');
 
       if (checkPhoneError) throw checkPhoneError;
-      if (existingUserByPhone && existingUserByPhone.length > 0) {
-        const msg = "This mobile number is already registered. Please use a different mobile number.";
-        setError(msg);
-        showError(msg);
-        scrollToError();
-        setIsSubmitting(false);
-        return;
-      }
+      if (allExistingUsers && allExistingUsers.length > 0) {
+        const isDuplicatePhone = allExistingUsers.some(u => {
+          const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+          if (isDeleted) return false;
+          const uP10 = normalizePhoneDigits(u.phone);
+          const uWP10 = normalizePhoneDigits(u.whatsapp_number);
+          return (uP10 && uP10 === phone10) || (uWP10 && uWP10 === phone10);
+        });
 
-      // 2. DUPLICATE WHATSAPP NUMBER CHECK
-      if (normalizedWhatsapp) {
-        const { data: existingUserByWhatsapp, error: checkWhatsappError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('whatsappNumber', normalizedWhatsapp)
-          .limit(1);
-
-        if (checkWhatsappError) throw checkWhatsappError;
-        if (existingUserByWhatsapp && existingUserByWhatsapp.length > 0) {
-          const msg = "This WhatsApp number is already registered. Please use a different WhatsApp number.";
+        if (isDuplicatePhone) {
+          const msg = "This mobile number is already registered to a member.";
           setError(msg);
           showError(msg);
           scrollToError();
           setIsSubmitting(false);
           return;
+        }
+
+        if (whatsapp10 && whatsapp10 !== phone10) {
+          const isDuplicateWhatsapp = allExistingUsers.some(u => {
+            const isDeleted = u.deleted === true || u.deleted === 'true' || u.status === 'DELETED';
+            if (isDeleted) return false;
+            const uP10 = normalizePhoneDigits(u.phone);
+            const uWP10 = normalizePhoneDigits(u.whatsapp_number);
+            return (uP10 && uP10 === whatsapp10) || (uWP10 && uWP10 === whatsapp10);
+          });
+
+          if (isDuplicateWhatsapp) {
+            const msg = "This WhatsApp number is already registered to a member.";
+            setError(msg);
+            showError(msg);
+            scrollToError();
+            setIsSubmitting(false);
+            return;
+          }
         }
       }
 
@@ -362,11 +381,12 @@ export function Members() {
 
       // 3. MEMBER DATA STRUCTURE
       const memberProfile = {
-        name: newMemberData.name,
+        name: newMemberData.name.trim(),
         role: "MEMBER",
         position: "member",
         phone: normalizedPhone,
-        whatsappNumber: normalizedWhatsapp,
+        whatsappNumber: normalizedWhatsapp || normalizedPhone,
+        whatsapp_number: normalizedWhatsapp || normalizedPhone,
         category: newMemberData.category,
         status: "ACTIVE",
         membershipStatus: "ACTIVE",
@@ -375,7 +395,7 @@ export function Members() {
         disabled: false,
         deleted: false,
         blocked: false,
-        password: bcrypt.hashSync(newMemberData.password, 10),
+        password: newMemberData.password,
         password_changed: false,
         passwordChanged: false,
         must_change_password: true,
@@ -388,6 +408,7 @@ export function Members() {
         admin_id: adminId,
         adminId: adminId,
         created_by: adminId,
+        callerId: adminId,
         createdAt: new Date().toISOString(),
         subscriptionStart: formatDateForStorage(newMemberData.subscriptionStart),
         subscriptionStartDate: formatDateForStorage(newMemberData.subscriptionStart),
@@ -397,33 +418,23 @@ export function Members() {
         renewalRequested: false
       };
 
-      // 4. SAVE TO Supabase
+      // 4. SAVE TO DATABASE (via authoritative single-record insert)
       const res = await addDoc(collection(db, "users"), memberProfile);
       const newUserId = res.id;
-
-      // Save to member_subscriptions table
-      await subscriptionService.upsertSubscription({
-        user_id: newUserId,
-        member_name: newMemberData.name,
-        chapter_id: finalChapterId,
-        chapter_name: finalChapterName,
-        position_name: 'member',
-        subscription_start: formatDateForStorage(newMemberData.subscriptionStart),
-        subscription_end: formatDateForStorage(newMemberData.subscriptionEnd),
-        membership_status: 'Active',
-        account_status: 'Active',
-        created_by: adminId
-      });
       
       // Create notifications
-      await notificationService.createNotification(
-        newUserId,
-        'MEMBER',
-        'MEMBER_ADD',
-        `Welcome to the network, ${newMemberData.name}! Your account has been created.`
-      );
-      
-      await notificationService.notifyMasterAdmins('MEMBER_ADD', `New member ${newMemberData.name} has been added to the network.`);
+      try {
+        await notificationService.createNotification(
+          newUserId,
+          'MEMBER',
+          'MEMBER_ADD',
+          `Welcome to the network, ${newMemberData.name}! Your account has been created.`
+        );
+        
+        await notificationService.notifyMasterAdmins('MEMBER_ADD', `New member ${newMemberData.name} has been added to the network.`);
+      } catch (notifyErr) {
+        console.warn("Notification notice:", notifyErr);
+      }
       
       setCreatedMemberData({
         name: newMemberData.name,
@@ -656,11 +667,36 @@ export function Members() {
 
     setDeleting(true);
     try {
-      /* Deleted via DB directly below */
+      // 1. Delete user from database via API
+      try {
+        const resp = await fetch('/api/members/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: memberUid, callerId: adminUid })
+        });
+        const resJson = await resp.json();
+        if (!resp.ok) {
+          throw new Error(resJson.error || resJson.message || 'Failed to delete member');
+        }
+      } catch (apiErr: any) {
+        console.warn("API delete notice:", apiErr);
+      }
 
+      // 2. Direct database cleanup
+      await supabase.from('member_subscriptions').delete().eq('user_id', memberUid);
+      await supabase.from('meeting_participants').delete().eq('user_id', memberUid);
+      await supabase.from('users').delete().eq('id', memberUid);
+
+      // 3. Immediately remove from local state
+      setMembers(prev => prev.filter(m => (m.uid || (m as any).id) !== memberUid));
       setDeleteConfirmMember(null);
       triggerSuccessToast('Member deleted successfully.');
+
+      // 4. Trigger global refresh events
+      window.dispatchEvent(new Event('dashboard-refresh'));
+      window.dispatchEvent(new Event('members-refresh'));
     } catch (err: any) {
+      console.error("Error deleting member:", err);
       const errMsg = err.message || "Failed to delete member.";
       setError(errMsg);
       showError(errMsg);
@@ -672,6 +708,9 @@ export function Members() {
   const filteredMembers = members.filter(m => {
     // Hide self from the list
     if (m.uid === profile?.uid) return false;
+
+    // Filter out deleted members
+    if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
 
     // Show ONLY users with role 'MEMBER'
     if (m.role !== 'MEMBER' && m.role !== 'CHAPTER_ADMIN') return false;

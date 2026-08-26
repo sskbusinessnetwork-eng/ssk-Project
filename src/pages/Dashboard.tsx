@@ -338,9 +338,10 @@ export function Analytics() {
       }
     }
     const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
-      setAllUsersList(data);
+      const activeData = data.filter(u => !u.deleted && u.deleted !== 'true' && u.status !== 'DELETED' && u.membershipStatus !== 'DELETED');
+      setAllUsersList(activeData);
       
-      const chapterMems = data.filter(u => {
+      const chapterMems = activeData.filter(u => {
         const r = (u.role || 'MEMBER').toUpperCase();
         return r !== 'MASTER_ADMIN';
       });
