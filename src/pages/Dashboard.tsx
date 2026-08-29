@@ -1,11 +1,11 @@
 import { addYears, isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
-  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X, Building2, Search, FileText} from 'lucide-react';
+  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X, Building2, Search, FileText, UserCheck, UserX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -329,24 +329,59 @@ export function Analytics() {
   useEffect(() => {
     if (!profile) return;
 
-    // 1. Subscribe to users (chapter members & global users for name resolution)
-    let userConstraints: any[] = [];
-    if (profile.role !== 'MASTER_ADMIN') {
-      const myChapId = String(profile.chapter_id || '').trim();
-      if (myChapId) {
-        userConstraints = [where('chapter_id', '==', myChapId)];
-      }
-    }
-    const unsubUsers = databaseService.subscribe<any>('users', userConstraints, (data) => {
-      const activeData = data.filter(u => !u.deleted && u.deleted !== 'true' && u.status !== 'DELETED' && u.membershipStatus !== 'DELETED');
-      setAllUsersList(activeData);
+    // 1. Subscribe to all users (global & chapter members) for 100% accurate name resolution
+    const unsubUsers = databaseService.subscribe<any>('users', [], (data) => {
+      const activeData = (data || []).filter(u => !u.deleted && u.deleted !== 'true' && u.status !== 'DELETED' && u.membershipStatus !== 'DELETED');
+      setAllUsersList(prev => {
+        const map = new Map<string, any>();
+        (prev || []).forEach(u => {
+          const k = String(u.id || u.uid || '');
+          if (k) map.set(k.toLowerCase(), u);
+        });
+        activeData.forEach((u: any) => {
+          const k = String(u.id || u.uid || '');
+          if (k) {
+            const existing = map.get(k.toLowerCase()) || {};
+            map.set(k.toLowerCase(), { ...existing, ...u });
+          }
+        });
+        return Array.from(map.values());
+      });
       
       const chapterMems = activeData.filter(u => {
         const r = (u.role || 'MEMBER').toUpperCase();
-        return r !== 'MASTER_ADMIN';
+        if (r === 'MASTER_ADMIN') return false;
+        if (profile.role === 'MASTER_ADMIN') return true;
+        const myChap = String(profile.chapter_id || profile.chapterId || '').trim();
+        const uChap = String(u.chapter_id || u.chapterId || '').trim();
+        return !myChap || uChap === myChap;
       });
       setChapterUsers(chapterMems);
     });
+
+    // Also fetch all users from Supabase users table
+    supabase.from('users').select('*').then(
+      ({ data: sbUsers }) => {
+        if (sbUsers && sbUsers.length > 0) {
+          setAllUsersList(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(u => {
+              const k = String(u.id || u.uid || '');
+              if (k) map.set(k.toLowerCase(), u);
+            });
+            sbUsers.forEach((u: any) => {
+              const k = String(u.id || u.uid || '');
+              if (k) {
+                const existing = map.get(k.toLowerCase()) || {};
+                map.set(k.toLowerCase(), { ...existing, ...u });
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load users notice:", err)
+    );
 
     // 2. Subscribe to thank you slips
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {
@@ -359,15 +394,15 @@ export function Analytics() {
       ({ data: sbSlips }) => {
         if (sbSlips && sbSlips.length > 0) {
           const mappedSbSlips = sbSlips.map((s: any) => {
-            const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
-            const slipReceiver = String(s.to_user_id || s.toUserId || (s.receiver_id && String(s.receiver_id) !== slipSender ? s.receiver_id : (s.sender_id && String(s.sender_id) !== slipSender ? s.sender_id : '')) || '');
+            const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || s.sender_id || '');
+            const slipReceiver = String(s.to_user_id || s.toUserId || s.receiver_id || s.recipient_id || '');
             return {
               id: String(s.id),
               referralId: String(s.referral_id || s.referralId || ''),
               fromUserId: slipSender,
               toUserId: slipReceiver,
               customerName: s.customer_name || s.customerName || '',
-              businessValue: Number(s.business_value || s.businessValue || 0),
+              businessValue: Number(s.business_value || s.businessValue || s.amount || 0),
               notes: s.notes || '',
               createdAt: s.created_at || s.createdAt || new Date().toISOString()
             };
@@ -382,12 +417,52 @@ export function Analytics() {
 
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
-      setAllReferrals(data);
+      setAllReferrals(prev => {
+        const map = new Map<string, any>();
+        (prev || []).forEach(r => map.set(String(r.id), r));
+        (data || []).forEach(r => map.set(String(r.id), r));
+        return Array.from(map.values());
+      });
       if (profile.role === 'MEMBER') {
-        setPassedReferrals(data.filter(r => r.fromUserId === profile.uid));
-        setReceivedReferrals(data.filter(r => r.toUserId === profile.uid));
+        const myUid = String(profile.uid || profile.id || '');
+        setPassedReferrals((data || []).filter(r => String(r.fromUserId || r.from_user_id || r.sender_id) === myUid));
+        setReceivedReferrals((data || []).filter(r => String(r.toUserId || r.to_user_id || r.receiver_id) === myUid));
       }
     });
+
+    // Fetch referrals from Supabase as well
+    supabase.from('referrals').select('*').then(
+      ({ data: sbReferrals }) => {
+        if (sbReferrals && sbReferrals.length > 0) {
+          const mapped = sbReferrals.map((r: any) => ({
+            id: String(r.id),
+            fromUserId: String(r.from_user_id || r.sender_id || r.fromUserId || ''),
+            toUserId: String(r.to_user_id || r.receiver_id || r.toUserId || ''),
+            sender_id: r.sender_id,
+            receiver_id: r.receiver_id,
+            chapter_id: r.chapter_id || r.chapterId || null,
+            chapterName: r.chapter_name || r.chapterName || '',
+            status: r.status || 'Pending',
+            notes: r.notes || r.requirement || '',
+            business_requirement: r.business_requirement || r.requirement || '',
+            contact_name: r.contact_name || r.customer_name || '',
+            contact_phone: r.contact_phone || r.customer_mobile || '',
+            customerName: r.customer_name || r.contact_name || '',
+            fromUserName: r.from_user_name || r.fromUserName || r.sender_name || '',
+            toUserName: r.to_user_name || r.toUserName || r.receiver_name || '',
+            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+            updatedAt: r.updated_at || r.updatedAt || r.created_at || r.createdAt
+          }));
+          setAllReferrals(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            mapped.forEach(item => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load referrals notice:", err)
+    );
 
     // 4. Subscribe to 1-to-1s
     const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
@@ -397,19 +472,89 @@ export function Analytics() {
       setParticipatedOneToOnes(data.filter(m => isUserOneToOneParticipant(m, userCand)));
     });
 
+    supabase.from('one_to_one_meetings').select('*').then(
+      ({ data: sbOto }) => {
+        if (sbOto && sbOto.length > 0) {
+          setOneToOnes(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            sbOto.forEach((item: any) => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load 1-to-1s notice:", err)
+    );
+
     // 5. Subscribe to guest invitations
     const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
       setGuestInvitations(data);
     });
 
+    supabase.from('guest_invitations').select('*').then(
+      ({ data: sbGuests }) => {
+        if (sbGuests && sbGuests.length > 0) {
+          setGuestInvitations(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            sbGuests.forEach((item: any) => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load guest invitations notice:", err)
+    );
+
     // 6. Subscribe to meetings
     const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
+
+    supabase.from('meetings').select('*').then(
+      ({ data: sbMeetings }) => {
+        if (sbMeetings && sbMeetings.length > 0) {
+          setMeetings(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            sbMeetings.forEach((item: any) => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load meetings notice:", err)
+    );
 
     // 7. Subscribe to testimonials
     const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
 
+    supabase.from('testimonials').select('*').then(
+      ({ data: sbTestimonials }) => {
+        if (sbTestimonials && sbTestimonials.length > 0) {
+          setAllTestimonials(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            sbTestimonials.forEach((item: any) => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load testimonials notice:", err)
+    );
+
     // 8. Subscribe to chapters
     const unsubChapters = databaseService.subscribe<any>('chapters', [], setAllChapters);
+
+    supabase.from('chapters').select('*').then(
+      ({ data: sbChapters }) => {
+        if (sbChapters && sbChapters.length > 0) {
+          setAllChapters(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            sbChapters.forEach((item: any) => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load chapters notice:", err)
+    );
 
     return () => {
       unsubUsers();
@@ -689,12 +834,166 @@ export function Analytics() {
     return businessReceivedSlips.length;
   }, [businessReceivedSlips]);
 
-  const getMemberName = (userId: string) => {
-    if (!userId) return 'N/A';
-    const found = allUsersList.find(u => u.uid === userId || u.id === userId || String(u.id) === String(userId) || String(u.uid) === String(userId)) ||
-                  chapterUsers.find(u => u.uid === userId || u.id === userId || String(u.id) === String(userId) || String(u.uid) === String(userId));
-    return found?.name || found?.full_name || 'N/A';
-  };
+  // Comprehensive lookup map for fast O(1) user & member resolution
+  const userMap = useMemo(() => {
+    const map = new Map<string, any>();
+    const register = (u: any) => {
+      if (!u) return;
+      const keys = [
+        u.id,
+        u.uid,
+        u.user_id,
+        u.userId,
+        u.member_id,
+        u.memberId,
+        u.auth_id,
+        u.firebase_uid,
+        u.phone,
+        u.mobile,
+        u.email
+      ];
+      keys.forEach(k => {
+        if (k !== undefined && k !== null && String(k).trim()) {
+          map.set(String(k).trim().toLowerCase(), u);
+        }
+      });
+    };
+
+    (allUsersList || []).forEach(register);
+    (chapterUsers || []).forEach(register);
+    if (profile) register(profile);
+
+    return map;
+  }, [allUsersList, chapterUsers, profile]);
+
+  // Robust validation helper that checks if a string is an authentic real member name
+  const isValidRealName = useCallback((name?: any): boolean => {
+    if (!name || typeof name !== 'string') return false;
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const lower = trimmed.toLowerCase();
+    
+    // Forbidden placeholders & generic names
+    const forbidden = [
+      'member',
+      'this member',
+      'unknown member',
+      'unknown',
+      'partner',
+      'a partner',
+      'user',
+      'n/a',
+      'na',
+      'null',
+      'undefined',
+      '[object object]',
+      'chapter leader',
+      'chapter member',
+      'anonymous',
+      'admin',
+      'system'
+    ];
+    if (forbidden.includes(lower)) return false;
+
+    // Reject UUIDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(trimmed)) return false;
+
+    // Reject DB ID format strings
+    if (/^(usr_|mem_|user_|ref_|slip_|oto_|chap_|sub_|test_|uid_|auth_)/i.test(trimmed)) return false;
+    if (/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) return false;
+
+    // Reject pure phone numbers
+    const phoneClean = trimmed.replace(/[\s\-\+\(\)]/g, '');
+    if (/^\d{7,15}$/.test(phoneClean)) return false;
+
+    return true;
+  }, []);
+
+  // Extract a valid display name from a user object
+  const extractUserName = useCallback((u: any): string | null => {
+    if (!u) return null;
+    const candidates = [
+      u.name,
+      u.full_name,
+      u.displayName,
+      u.display_name,
+      u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : (u.firstName || u.lastName),
+      u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` : (u.first_name || u.last_name),
+      u.userName,
+      u.user_name,
+      u.businessName,
+      u.companyName
+    ];
+    for (const c of candidates) {
+      if (isValidRealName(c)) {
+        return String(c).trim();
+      }
+    }
+    return null;
+  }, [isValidRealName]);
+
+  // Primary real member name resolution function
+  const resolveMemberName = useCallback((userId?: string | number | null, candidateName?: string | null, fallback: string = 'Member'): string => {
+    const targetId = userId !== undefined && userId !== null ? String(userId).trim() : '';
+
+    if (targetId) {
+      const targetLower = targetId.toLowerCase();
+      const u = userMap.get(targetLower) ||
+        allUsersList.find(x => 
+          String(x.id || '').toLowerCase() === targetLower ||
+          String(x.uid || '').toLowerCase() === targetLower ||
+          String(x.user_id || '').toLowerCase() === targetLower ||
+          String(x.userId || '').toLowerCase() === targetLower ||
+          String(x.member_id || '').toLowerCase() === targetLower ||
+          String(x.memberId || '').toLowerCase() === targetLower
+        ) ||
+        chapterUsers.find(x => 
+          String(x.id || '').toLowerCase() === targetLower ||
+          String(x.uid || '').toLowerCase() === targetLower
+        );
+
+      if (u) {
+        const extracted = extractUserName(u);
+        if (extracted) {
+          return extracted;
+        }
+      }
+
+      // Check current profile
+      if (profile && (String(profile.id || '').toLowerCase() === targetLower || String(profile.uid || '').toLowerCase() === targetLower)) {
+        const profName = extractUserName(profile);
+        if (profName) {
+          return profName;
+        }
+      }
+    }
+
+    // Check candidate name if supplied on the record
+    if (candidateName && typeof candidateName === 'string') {
+      const clean = candidateName.trim();
+      // Check if candidateName itself is a userId or phone registered in userMap
+      const userFromCandidate = userMap.get(clean.toLowerCase());
+      if (userFromCandidate) {
+        const extracted = extractUserName(userFromCandidate);
+        if (extracted) return extracted;
+      }
+      if (isValidRealName(clean)) {
+        return clean;
+      }
+    }
+
+    // If fallback is a valid real name, use it; otherwise provide a clean descriptive fallback
+    if (fallback && isValidRealName(fallback)) {
+      return fallback.trim();
+    }
+
+    return 'Network Member';
+  }, [userMap, allUsersList, chapterUsers, profile, isValidRealName, extractUserName]);
+
+  const getMemberName = useCallback((userId: string) => {
+    return resolveMemberName(userId, null, 'Network Member');
+  }, [resolveMemberName]);
 
   const referralsPassedCount = useMemo(() => {
     const isCompleted = (r: any) => isNormalReferral(r) && ['COMPLETED', 'CONVERTED', 'CLOSED'].includes((r.status || '').toUpperCase());
@@ -1006,320 +1305,395 @@ export function Analytics() {
       .slice(0, 5);
   }, [effectiveSlips, chapterUsers, profile]);
 
-  // Dynamic Recent Activities based on real database records
+  // Dynamic Recent Activities based on real database records with full real-name resolution
   const dynamicRecentActivities = useMemo(() => {
     const activities: any[] = [];
 
-    if (profile?.role === 'MASTER_ADMIN') {
-      // 1. Chapters
-      (allChapters || []).forEach(c => {
-        const cName = c.name || c.chapter_name || 'Organization';
-        const createdTime = new Date(c.created_at || c.createdAt || Date.now()).getTime();
-        if (!isNaN(createdTime)) {
+    // 1. Chapters
+    (allChapters || []).forEach(c => {
+      const cName = c.name || c.chapter_name || 'Organization';
+      const createdTime = new Date(c.created_at || c.createdAt || Date.now()).getTime();
+      const creatorId = c.created_by || c.created_by_user_id || c.admin_id;
+      const creatorName = resolveMemberName(creatorId, c.created_by_name || c.createdByName, 'Master Admin');
+
+      if (!isNaN(createdTime)) {
+        activities.push({
+          id: 'chap-new-' + (c.id || cName),
+          activity: `Chapter Established: ${cName}`,
+          title: `Chapter Established: ${cName}`,
+          desc: `Chapter ${cName} established by ${creatorName}`,
+          type: 'chapter',
+          memberName: creatorName,
+          chapterName: cName,
+          chapter_id: c.id,
+          dateTime: createdTime,
+          time: createdTime,
+          status: (c.status || 'ACTIVE').toUpperCase(),
+          fromUserId: creatorId,
+          icon: Building2,
+          bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+        });
+      }
+      if (c.updated_at || c.updatedAt) {
+        const updTime = new Date(c.updated_at || c.updatedAt).getTime();
+        if (!isNaN(updTime) && updTime - createdTime > 60000) {
+          const updaterId = c.updated_by || c.updated_by_user_id;
+          const updaterName = resolveMemberName(updaterId, c.updated_by_name, 'Master Admin');
           activities.push({
-            id: 'chap-new-' + (c.id || cName),
-            activity: 'New Chapter Created',
-            title: 'New Chapter Created',
-            desc: `Chapter ${cName} established`,
+            id: 'chap-upd-' + (c.id || cName),
+            activity: `Chapter Updated: ${cName}`,
+            title: `Chapter Updated: ${cName}`,
+            desc: `Details updated for ${cName} by ${updaterName}`,
             type: 'chapter',
-            memberName: c.created_by_name || c.createdByName || 'Master Admin',
+            memberName: updaterName,
             chapterName: cName,
-            dateTime: createdTime,
-            time: createdTime,
-            status: (c.status || 'ACTIVE').toUpperCase()
+            chapter_id: c.id,
+            dateTime: updTime,
+            time: updTime,
+            status: 'UPDATED',
+            fromUserId: updaterId,
+            icon: Building2,
+            bg: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
           });
         }
-        if (c.updated_at || c.updatedAt) {
-          const updTime = new Date(c.updated_at || c.updatedAt).getTime();
-          if (!isNaN(updTime) && updTime - createdTime > 60000) {
-            activities.push({
-              id: 'chap-upd-' + (c.id || cName),
-              activity: 'Chapter Updated',
-              title: 'Chapter Updated',
-              desc: `Details updated for ${cName}`,
-              type: 'chapter',
-              memberName: c.updated_by_name || 'Master Admin',
-              chapterName: cName,
-              dateTime: updTime,
-              time: updTime,
-              status: 'UPDATED'
-            });
-          }
-        }
-      });
+      }
+    });
 
-      // 2. Members
-      const relevantUsers = activeDateRange 
-        ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
-        : chapterUsers;
+    // 2. Members (Added, Activated, Deactivated, Leadership Position)
+    const relevantUsers = activeDateRange 
+      ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
+      : chapterUsers;
 
-      relevantUsers.forEach(u => {
-        const uName = u.name || u.full_name || 'Member';
-        const chName = u.chapterName || u.chapter_name || u.chapter || 'Unassigned';
-        const regTime = new Date(u.createdAt || u.created_at || Date.now()).getTime();
+    relevantUsers.forEach(u => {
+      const uName = resolveMemberName(u.uid || u.id, u.name || u.full_name || u.displayName);
+      const chName = u.chapterName || u.chapter_name || u.chapter || 'Chapter';
+      const regTime = new Date(u.createdAt || u.created_at || Date.now()).getTime();
 
-        if (!isNaN(regTime)) {
-          activities.push({
-            id: 'mem-add-' + u.uid,
-            activity: 'Member Added',
-            title: 'Member Added',
-            desc: `${uName} joined as ${u.category || 'Member'}`,
-            type: 'member',
-            memberName: uName,
-            chapterName: chName,
-            dateTime: regTime,
-            time: regTime,
-            status: isMemberActive(u) ? 'ACTIVE' : 'INACTIVE',
-            fromUserId: u.uid
-          });
-        }
-
-        if (u.status === 'ACTIVE' || isMemberActive(u)) {
-          activities.push({
-            id: 'mem-act-' + u.uid,
-            activity: 'Member Activated',
-            title: 'Member Activated',
-            desc: `${uName} account activated`,
-            type: 'member',
-            memberName: uName,
-            chapterName: chName,
-            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            status: 'ACTIVE',
-            fromUserId: u.uid
-          });
-        } else if (u.status === 'INACTIVE' || u.status === 'SUSPENDED') {
-          activities.push({
-            id: 'mem-deact-' + u.uid,
-            activity: 'Member Deactivated',
-            title: 'Member Deactivated',
-            desc: `${uName} account deactivated`,
-            type: 'member',
-            memberName: uName,
-            chapterName: chName,
-            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            status: 'INACTIVE',
-            fromUserId: u.uid
-          });
-        }
-
-        if (u.position && u.position !== 'member') {
-          const formattedPos = u.position.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-          activities.push({
-            id: 'mem-pos-' + u.uid,
-            activity: 'Leadership Position Changed',
-            title: 'Leadership Position Changed',
-            desc: `${uName} assigned as ${formattedPos}`,
-            type: 'leadership',
-            memberName: uName,
-            chapterName: chName,
-            dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
-            status: formattedPos.toUpperCase(),
-            fromUserId: u.uid
-          });
-        }
-      });
-
-      // 3. Subscriptions
-      (subscriptionRequests || []).forEach(s => {
-        const uName = s.userName || s.user_name || s.name || 'Member';
-        const chName = s.chapterName || s.chapter_name || 'Organization';
-        const sTime = new Date(s.updated_at || s.updatedAt || s.created_at || s.createdAt || Date.now()).getTime();
-
-        if (!isNaN(sTime)) {
-          const isRenewal = s.is_renewal || s.type === 'RENEWAL' || s.status === 'RENEWED';
-          activities.push({
-            id: 'sub-' + s.id,
-            activity: isRenewal ? 'Subscription Renewed' : 'Subscription Approved',
-            title: isRenewal ? 'Subscription Renewed' : 'Subscription Approved',
-            desc: `Subscription ${isRenewal ? 'renewed' : 'approved'} for ${uName}`,
-            type: 'subscription',
-            memberName: uName,
-            chapterName: chName,
-            dateTime: sTime,
-            time: sTime,
-            status: (s.status || 'APPROVED').toUpperCase()
-          });
-        }
-      });
-
-      // 4. Chapter Meetings
-      (meetings || []).forEach(m => {
-        const mTime = new Date(m.created_at || m.createdAt || m.date || Date.now()).getTime();
-        if (!isNaN(mTime)) {
-          activities.push({
-            id: 'mtg-' + m.id,
-            activity: 'Chapter Meeting Created',
-            title: 'Chapter Meeting Created',
-            desc: `Meeting "${m.title || 'Chapter Meeting'}" scheduled`,
-            type: 'meeting',
-            memberName: m.creatorName || m.created_by_name || 'Chapter Leader',
-            chapterName: m.chapterName || m.chapter_name || 'Chapter',
-            dateTime: mTime,
-            time: mTime,
-            status: (m.isCompleted === true || String(m.isCompleted) === 'true') ? 'COMPLETED' : 'SCHEDULED'
-          });
-        }
-      });
-
-      // 5. One-to-One Meetings
-      effectiveOneToOnes.forEach(m => {
-        const creatorName = m.creatorName || 'Member';
-        const participantName = m.participantNames?.[0] || 'Member';
-        const mTime = new Date(m.createdAt || m.created_at || m.date || Date.now()).getTime();
-        if (!isNaN(mTime)) {
-          activities.push({
-            id: 'oto-' + m.id,
-            activity: 'One-to-One Meeting Created',
-            title: 'One-to-One Meeting Created',
-            desc: `1-to-1 session between ${creatorName} and ${participantName}`,
-            type: 'onetoone',
-            memberName: creatorName,
-            chapterName: m.chapterName || m.chapter_name || 'Chapter',
-            dateTime: mTime,
-            time: mTime,
-            status: 'COMPLETED',
-            fromUserId: m.organizer_id || m.creatorId,
-            toUserId: m.participantIds?.[0]
-          });
-        }
-      });
-
-      // 6. Referrals
-      effectiveReferrals.forEach(r => {
-        const fromName = r.fromUserName || 'Member';
-        const toName = r.toUserName || 'Partner';
-        const rTime = new Date(r.createdAt || r.created_at || r.date || Date.now()).getTime();
-        if (!isNaN(rTime)) {
-          activities.push({
-            id: 'ref-' + r.id,
-            activity: 'Referral Created',
-            title: 'Referral Created',
-            desc: `${fromName} passed referral to ${toName}`,
-            type: 'referral',
-            memberName: fromName,
-            chapterName: r.chapterName || r.chapter_name || 'Chapter',
-            dateTime: rTime,
-            time: rTime,
-            status: (r.status || 'PASSED').toUpperCase(),
-            fromUserId: r.fromUserId,
-            toUserId: r.toUserId
-          });
-        }
-      });
-
-      // 7. Thank You Slips / Business
-      effectiveSlips.forEach(s => {
-        const fromName = s.fromUserName || s.from_user_name || 'Member';
-        const toName = s.toUserName || s.to_user_name || 'Partner';
-        const val = Number(s.businessValue) || 0;
-        const sTime = new Date(s.createdAt || s.created_at || s.date || Date.now()).getTime();
-        if (!isNaN(sTime)) {
-          const isBizClosed = val > 0;
-          activities.push({
-            id: 'slip-' + s.id,
-            activity: isBizClosed ? 'Business Closed' : 'Thank You Slip Submitted',
-            title: isBizClosed ? 'Business Closed' : 'Thank You Slip Submitted',
-            desc: isBizClosed 
-              ? `${fromName} closed ₹${val.toLocaleString('en-IN')} business with ${toName}`
-              : `${fromName} submitted thank you slip to ${toName}`,
-            type: 'business',
-            memberName: fromName,
-            chapterName: s.chapterName || s.chapter_name || 'Chapter',
-            dateTime: sTime,
-            time: sTime,
-            status: 'CLOSED',
-            fromUserId: s.fromUserId,
-            toUserId: s.toUserId
-          });
-        }
-      });
-
-      // 8. Testimonials
-      (allTestimonials || []).forEach(t => {
-        const authorName = t.author_name || t.authorName || 'Member';
-        const recipientName = t.recipient_name || t.recipientName || 'Partner';
-        const tTime = new Date(t.created_at || t.createdAt || Date.now()).getTime();
-        if (!isNaN(tTime)) {
-          activities.push({
-            id: 'test-' + t.id,
-            activity: 'Testimonial Submitted',
-            title: 'Testimonial Submitted',
-            desc: `${authorName} submitted testimonial for ${recipientName}`,
-            type: 'testimonial',
-            memberName: authorName,
-            chapterName: t.chapterName || t.chapter_name || 'Chapter',
-            dateTime: tTime,
-            time: tTime,
-            status: (t.status || 'APPROVED').toUpperCase(),
-            fromUserId: t.authorMemberId || t.author_id
-          });
-        }
-      });
-    } else {
-      // 1. Slips (Revenue)
-      effectiveSlips.forEach(s => {
-        const fromName = s.fromUserName || s.from_user_name || 'Partner';
-        const toName = s.toUserName || s.to_user_name || 'Partner';
-        const val = Number(s.businessValue) || 0;
+      if (!isNaN(regTime)) {
         activities.push({
-          id: s.id,
-          title: 'Business Generated',
-          desc: `${fromName} generated ₹${val.toLocaleString('en-IN')} business for ${toName}`,
-          type: 'business',
-          time: new Date(s.createdAt || s.date).getTime(),
-          fromUserId: s.fromUserId,
-          toUserId: s.toUserId,
-        });
-      });
-
-      // 2. Referrals
-      effectiveReferrals.forEach(r => {
-        const fromName = r.fromUserName || 'Partner';
-        const toName = r.toUserName || 'Partner';
-        activities.push({
-          id: r.id,
-          title: 'Referral Passed',
-          desc: `${fromName} passed a referral to ${toName}`,
-          type: 'referral',
-          time: new Date(r.createdAt || r.date).getTime(),
-          fromUserId: r.fromUserId,
-          toUserId: r.toUserId,
-        });
-      });
-
-      // 3. One-to-Ones
-      effectiveOneToOnes.forEach(m => {
-        const creatorName = m.creatorName || 'Partner';
-        const participantName = m.participantNames?.[0] || 'Partner';
-        activities.push({
-          id: m.id,
-          title: '1-to-1 Completed',
-          desc: `${creatorName} completed 1-to-1 with ${participantName}`,
-          type: 'onetoone',
-          time: new Date(m.createdAt || m.date).getTime(),
-          fromUserId: (m.organizer_id || m.creatorId),
-          toUserId: m.participantIds?.[0],
-        });
-      });
-
-      // 4. New Members
-      const relevantUsers = activeDateRange 
-        ? chapterUsers.filter(u => isDateInRange(u.createdAt || u.created_at, activeDateRange.start, activeDateRange.end))
-        : chapterUsers;
-      relevantUsers.forEach(u => {
-        activities.push({
-          id: u.uid,
-          title: 'New Partner Joined',
-          desc: `${u.name || 'A partner'} registered as ${u.category || 'Member'}`,
+          id: 'mem-add-' + (u.uid || u.id),
+          activity: `${uName} Joined ${chName}`,
+          title: `${uName} Joined`,
+          desc: `${uName} joined ${chName} as ${u.category || u.businessName || 'Member'}`,
           type: 'member',
-          time: new Date(u.createdAt).getTime(),
-          fromUserId: u.uid,
+          memberName: uName,
+          chapterName: chName,
+          chapter_id: u.chapter_id || u.chapterId,
+          dateTime: regTime,
+          time: regTime,
+          status: isMemberActive(u) ? 'ACTIVE' : 'INACTIVE',
+          fromUserId: u.uid || u.id,
+          icon: Users,
+          bg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
         });
-      });
-    }
+      }
+
+      if (u.status === 'ACTIVE' || isMemberActive(u)) {
+        activities.push({
+          id: 'mem-act-' + (u.uid || u.id),
+          activity: `Membership Activated: ${uName}`,
+          title: `${uName} Activated`,
+          desc: `${uName}'s membership activated in ${chName}`,
+          type: 'member',
+          memberName: uName,
+          chapterName: chName,
+          chapter_id: u.chapter_id || u.chapterId,
+          dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          status: 'ACTIVE',
+          fromUserId: u.uid || u.id,
+          icon: UserCheck,
+          bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        });
+      } else if (u.status === 'INACTIVE' || u.status === 'SUSPENDED') {
+        activities.push({
+          id: 'mem-deact-' + (u.uid || u.id),
+          activity: `Membership Deactivated: ${uName}`,
+          title: `${uName} Deactivated`,
+          desc: `${uName}'s membership deactivated in ${chName}`,
+          type: 'member',
+          memberName: uName,
+          chapterName: chName,
+          chapter_id: u.chapter_id || u.chapterId,
+          dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          status: 'INACTIVE',
+          fromUserId: u.uid || u.id,
+          icon: UserX,
+          bg: 'bg-red-500/10 text-red-400 border-red-500/20'
+        });
+      }
+
+      if (u.position && u.position !== 'member') {
+        const formattedPos = u.position.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        activities.push({
+          id: 'mem-pos-' + (u.uid || u.id),
+          activity: `${uName} Appointed ${formattedPos}`,
+          title: `${uName} Appointed ${formattedPos}`,
+          desc: `${uName} assigned as ${formattedPos} in ${chName}`,
+          type: 'leadership',
+          memberName: uName,
+          chapterName: chName,
+          chapter_id: u.chapter_id || u.chapterId,
+          dateTime: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          time: new Date(u.updatedAt || u.updated_at || u.createdAt || Date.now()).getTime(),
+          status: formattedPos.toUpperCase(),
+          fromUserId: u.uid || u.id,
+          icon: Award,
+          bg: 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+        });
+      }
+    });
+
+    // 3. Subscriptions
+    (subscriptionRequests || []).forEach(s => {
+      const userId = s.userId || s.user_id || s.memberId || s.member_id;
+      const uName = resolveMemberName(userId, s.userName || s.user_name || s.name || s.memberName);
+      const chName = s.chapterName || s.chapter_name || 'Organization';
+      const sTime = new Date(s.updated_at || s.updatedAt || s.created_at || s.createdAt || Date.now()).getTime();
+
+      if (!isNaN(sTime)) {
+        const isRenewal = s.is_renewal || s.type === 'RENEWAL' || s.status === 'RENEWED';
+        activities.push({
+          id: 'sub-' + s.id,
+          activity: `Subscription ${isRenewal ? 'Renewed' : 'Approved'}: ${uName}`,
+          title: `Subscription ${isRenewal ? 'Renewed' : 'Approved'}: ${uName}`,
+          desc: `Subscription ${isRenewal ? 'renewed' : 'approved'} for ${uName} in ${chName}`,
+          type: 'subscription',
+          memberName: uName,
+          chapterName: chName,
+          chapter_id: s.chapter_id || s.chapterId,
+          dateTime: sTime,
+          time: sTime,
+          status: (s.status || 'APPROVED').toUpperCase(),
+          fromUserId: userId,
+          icon: CheckCircle2,
+          bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        });
+      }
+    });
+
+    // 4. Chapter Meetings
+    (meetings || []).forEach(m => {
+      const creatorId = m.creatorId || m.created_by || m.creator_id || m.created_by_user_id || m.leader_id || m.userId;
+      const creatorName = resolveMemberName(creatorId, m.creatorName || m.created_by_name || m.leader_name);
+      const mTime = new Date(m.created_at || m.createdAt || m.date || Date.now()).getTime();
+
+      if (!isNaN(mTime)) {
+        const isCompleted = (m.isCompleted === true || String(m.isCompleted) === 'true' || m.status === 'COMPLETED');
+        const meetingTitle = m.title || m.meeting_name || 'Weekly Chapter Meeting';
+        activities.push({
+          id: 'mtg-' + m.id,
+          activity: isCompleted ? 'Chapter Meeting Completed' : 'Chapter Meeting Scheduled',
+          title: isCompleted ? 'Chapter Meeting Completed' : 'Chapter Meeting Scheduled',
+          desc: isCompleted 
+            ? `Chapter meeting "${meetingTitle}" completed by ${creatorName}`
+            : `Chapter meeting "${meetingTitle}" scheduled by ${creatorName}`,
+          type: 'meeting',
+          memberName: creatorName,
+          chapterName: m.chapterName || m.chapter_name || 'Chapter',
+          chapter_id: m.chapter_id || m.chapterId,
+          dateTime: mTime,
+          time: mTime,
+          status: isCompleted ? 'COMPLETED' : 'SCHEDULED',
+          fromUserId: creatorId,
+          icon: Calendar,
+          bg: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+        });
+      }
+    });
+
+    // 5. One-to-One Meetings
+    effectiveOneToOnes.forEach(m => {
+      const creatorId = m.organizer_id || m.creatorId || m.creator_id || m.created_by || m.sender_id || m.userId || m.host_id;
+      const participantId = (m.participantIds && m.participantIds[0]) || m.participant_ids?.[0] || m.withMemberId || m.with_member_id || m.member_id || m.receiver_id || m.partner_id;
+      
+      let candidateCreator = m.creatorName || m.creator_name || m.organizer_name || m.host_name || m.userName;
+      let candidateParticipant = (m.participantNames && m.participantNames[0]) || m.participant_names?.[0] || m.withMemberName || m.with_member_name || m.partner_name;
+
+      if ((!candidateCreator || !candidateParticipant) && m.title && typeof m.title === 'string') {
+        const titleMatch = m.title.match(/(?:1:?1\s*Meeting\s*-\s*|1-to-1:\s*)([^\&]+)\&(.+)/i);
+        if (titleMatch) {
+          if (!candidateCreator) candidateCreator = titleMatch[1].trim();
+          if (!candidateParticipant) candidateParticipant = titleMatch[2].trim();
+        }
+      }
+
+      const creatorName = resolveMemberName(creatorId, candidateCreator);
+      const participantName = resolveMemberName(participantId, candidateParticipant);
+      
+      const mTime = new Date(m.createdAt || m.created_at || m.date || Date.now()).getTime();
+      if (!isNaN(mTime)) {
+        const isCompleted = m.status === 'COMPLETED' || m.status === 'completed' || m.isCompleted === true || String(m.isCompleted) === 'true';
+        
+        const activityHeadline = isCompleted 
+          ? `1-to-1 meeting completed with ${participantName}`
+          : `1-to-1 meeting with ${participantName}`;
+
+        const descText = isCompleted
+          ? `1-to-1 meeting completed between ${creatorName} and ${participantName}`
+          : `1-to-1 session scheduled between ${creatorName} and ${participantName}`;
+
+        activities.push({
+          id: 'oto-' + m.id,
+          activity: activityHeadline,
+          title: activityHeadline,
+          desc: descText,
+          type: 'onetoone',
+          memberName: creatorName,
+          creatorName: creatorName,
+          partnerName: participantName,
+          participantName: participantName,
+          chapterName: m.chapterName || m.chapter_name || 'Chapter',
+          chapter_id: m.chapter_id || m.chapterId,
+          dateTime: mTime,
+          time: mTime,
+          status: isCompleted ? 'COMPLETED' : 'SCHEDULED',
+          fromUserId: creatorId,
+          toUserId: participantId,
+          icon: Handshake,
+          bg: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+        });
+      }
+    });
+
+    // 6. Referrals
+    effectiveReferrals.forEach(r => {
+      const senderId = r.fromUserId || r.from_user_id || r.sender_id || r.created_by || r.userId || r.member_id;
+      const receiverId = r.toUserId || r.to_user_id || r.receiver_id || r.recipient_id || r.assigned_to;
+      
+      const senderName = resolveMemberName(senderId, r.fromUserName || r.from_user_name || r.sender_name || r.creatorName);
+      const receiverName = resolveMemberName(receiverId, r.toUserName || r.to_user_name || r.receiver_name || r.recipient_name);
+      
+      const rTime = new Date(r.createdAt || r.created_at || r.date || Date.now()).getTime();
+      if (!isNaN(rTime)) {
+        const clientOrReq = r.contact_name || r.customerName || r.customer_name || r.notes || r.business_requirement;
+        const details = clientOrReq ? ` (${clientOrReq})` : '';
+        activities.push({
+          id: 'ref-' + r.id,
+          activity: `${senderName} referred ${receiverName}`,
+          title: `${senderName} referred ${receiverName}`,
+          desc: `${senderName} referred ${receiverName}${details}`,
+          type: 'referral',
+          memberName: senderName,
+          senderName: senderName,
+          receiverName: receiverName,
+          toUserName: receiverName,
+          fromUserName: senderName,
+          chapterName: r.chapterName || r.chapter_name || 'Chapter',
+          chapter_id: r.chapter_id || r.chapterId,
+          dateTime: rTime,
+          time: rTime,
+          status: (r.status || 'PASSED').toUpperCase(),
+          fromUserId: senderId,
+          toUserId: receiverId,
+          icon: Share2,
+          bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        });
+      }
+    });
+
+    // 7. Thank You Slips / Business
+    effectiveSlips.forEach(s => {
+      const senderId = s.fromUserId || s.from_user_id || s.sender_id || s.submitted_by || s.user_id || s.created_by;
+      const receiverId = s.toUserId || s.to_user_id || s.receiver_id || s.recipient_id || s.member_id;
+      
+      const senderName = resolveMemberName(senderId, s.fromUserName || s.from_user_name || s.sender_name);
+      const receiverName = resolveMemberName(receiverId, s.toUserName || s.to_user_name || s.receiver_name);
+      
+      const val = Number(s.businessValue || s.business_value || s.amount || 0);
+      const sTime = new Date(s.createdAt || s.created_at || s.date || Date.now()).getTime();
+      if (!isNaN(sTime)) {
+        const isBizClosed = val > 0;
+        activities.push({
+          id: 'slip-' + s.id,
+          activity: isBizClosed 
+            ? `${senderName} closed ₹${val.toLocaleString('en-IN')} with ${receiverName}`
+            : `${senderName} submitted Thank You Slip to ${receiverName}`,
+          title: isBizClosed 
+            ? `${senderName} closed ₹${val.toLocaleString('en-IN')} with ${receiverName}`
+            : `Thank You Slip: ${senderName} ➔ ${receiverName}`,
+          desc: isBizClosed 
+            ? `${senderName} closed ₹${val.toLocaleString('en-IN')} business with ${receiverName}`
+            : `${senderName} submitted thank you slip to ${receiverName}`,
+          type: 'business',
+          memberName: senderName,
+          senderName: senderName,
+          receiverName: receiverName,
+          amount: val,
+          chapterName: s.chapterName || s.chapter_name || 'Chapter',
+          chapter_id: s.chapter_id || s.chapterId,
+          dateTime: sTime,
+          time: sTime,
+          status: 'CLOSED',
+          fromUserId: senderId,
+          toUserId: receiverId,
+          icon: Briefcase,
+          bg: 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+        });
+      }
+    });
+
+    // 8. Guest Invitations
+    (guestInvitations || []).forEach(g => {
+      const inviterId = g.invited_by_user_id || g.invited_by || g.createdBy || g.created_by || g.inviterId || g.inviter_id || g.user_id;
+      const inviterName = resolveMemberName(inviterId, g.invited_by_name || g.inviter_name || g.creatorName);
+      const guestName = g.guest_name || g.guestName || g.name || g.visitor_name || 'Guest';
+      const gTime = new Date(g.createdAt || g.created_at || g.date || Date.now()).getTime();
+
+      if (!isNaN(gTime)) {
+        activities.push({
+          id: 'guest-' + g.id,
+          activity: `${inviterName} invited ${guestName}`,
+          title: `${inviterName} invited ${guestName}`,
+          desc: `${inviterName} invited ${guestName} (Guest) to ${g.chapterName || g.chapter_name || 'Chapter'}`,
+          type: 'guest',
+          memberName: inviterName,
+          inviterName: inviterName,
+          guestName: guestName,
+          chapterName: g.chapterName || g.chapter_name || 'Chapter',
+          chapter_id: g.chapter_id || g.chapterId,
+          dateTime: gTime,
+          time: gTime,
+          status: (g.status || 'INVITED').toUpperCase(),
+          fromUserId: inviterId,
+          icon: UserPlus,
+          bg: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+        });
+      }
+    });
+
+    // 9. Testimonials
+    (allTestimonials || []).forEach(t => {
+      const authorId = t.authorMemberId || t.author_id || t.author_member_id || t.fromUserId || t.created_by || t.userId;
+      const recipientId = t.recipientMemberId || t.recipient_id || t.recipient_member_id || t.toUserId || t.member_id;
+      
+      const authorName = resolveMemberName(authorId, t.author_name || t.authorName || t.author);
+      const recipientName = resolveMemberName(recipientId, t.recipient_name || t.recipientName || t.recipient);
+      
+      const tTime = new Date(t.created_at || t.createdAt || Date.now()).getTime();
+      if (!isNaN(tTime)) {
+        activities.push({
+          id: 'test-' + t.id,
+          activity: `${authorName} submitted testimonial for ${recipientName}`,
+          title: `Testimonial for ${recipientName}`,
+          desc: `${authorName} submitted testimonial for ${recipientName}`,
+          type: 'testimonial',
+          memberName: authorName,
+          authorName: authorName,
+          recipientName: recipientName,
+          chapterName: t.chapterName || t.chapter_name || 'Chapter',
+          chapter_id: t.chapter_id || t.chapterId,
+          dateTime: tTime,
+          time: tTime,
+          status: (t.status || 'APPROVED').toUpperCase(),
+          fromUserId: authorId,
+          toUserId: recipientId,
+          icon: Star,
+          bg: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+        });
+      }
+    });
 
     // Filter valid entries, sort by time desc
     const sorted = activities
@@ -1327,26 +1701,49 @@ export function Analytics() {
       .sort((a, b) => b.time - a.time);
 
     return sorted;
-  }, [effectiveSlips, effectiveReferrals, effectiveOneToOnes, chapterUsers, allChapters, meetings, allTestimonials, subscriptionRequests, activeDateRange, profile]);
+  }, [
+    effectiveSlips,
+    effectiveReferrals,
+    effectiveOneToOnes,
+    guestInvitations,
+    chapterUsers,
+    allChapters,
+    meetings,
+    allTestimonials,
+    subscriptionRequests,
+    activeDateRange,
+    resolveMemberName
+  ]);
 
-  // Filtered recent activities based on role
+  // Filtered recent activities based on role and chapter context
   const filteredRecentActivities = useMemo(() => {
     if (!profile) return [];
     if (profile.role === 'MASTER_ADMIN') {
       return dynamicRecentActivities;
     }
     if (isChapterAdminUser) {
+      const myChapId = String(profile.chapter_id || profile.chapterId || '').trim().toLowerCase();
+      const myChapName = String(profile.chapterName || profile.chapter_name || '').trim().toLowerCase();
       return dynamicRecentActivities.filter(a => 
-        chapterUserIds.includes(a.fromUserId) || 
-        (a.toUserId && chapterUserIds.includes(a.toUserId))
+        chapterUserIds.includes(String(a.fromUserId)) || 
+        (a.toUserId && chapterUserIds.includes(String(a.toUserId))) ||
+        (a.chapter_id && String(a.chapter_id).toLowerCase() === myChapId) ||
+        (a.chapterName && String(a.chapterName).toLowerCase() === myChapName)
       );
     }
     // MEMBER role
     const userIds = [profile.id, profile.uid].filter(Boolean).map(String);
+    const myChapId = String(profile.chapter_id || profile.chapterId || '').trim().toLowerCase();
+    const myChapName = String(profile.chapterName || profile.chapter_name || '').trim().toLowerCase();
     return dynamicRecentActivities.filter(a => 
-      userIds.includes(String(a.fromUserId)) || userIds.includes(String(a.toUserId))
+      userIds.includes(String(a.fromUserId)) || 
+      (a.toUserId && userIds.includes(String(a.toUserId))) ||
+      chapterUserIds.includes(String(a.fromUserId)) || 
+      (a.toUserId && chapterUserIds.includes(String(a.toUserId))) ||
+      (a.chapter_id && myChapId && String(a.chapter_id).toLowerCase() === myChapId) ||
+      (a.chapterName && myChapName && String(a.chapterName).toLowerCase() === myChapName)
     );
-  }, [dynamicRecentActivities, profile, chapterUserIds]);
+  }, [dynamicRecentActivities, profile, chapterUserIds, isChapterAdminUser]);
 
   // Derived Checklist Status
   const hasAttendedMeeting = useMemo(() => {
@@ -1859,9 +2256,10 @@ export function Analytics() {
       
       records = list.map(m => {
         const isSubActive = isMemberActive(m);
+        const memName = resolveMemberName(m.uid || m.id, m.name || m.full_name || m.displayName);
         return {
           id: m.uid || m.id,
-          title: m.name || 'N/A',
+          title: memName,
           subtitle: formatRole(m.role, m.position),
           icon: <User size={20} className="text-white/70" />,
           badgeText: isSubActive ? 'Active' : 'Inactive',
@@ -1874,7 +2272,7 @@ export function Analytics() {
     } else if (norm.includes('chapter') && !norm.includes('meeting')) {
       records = allChapters.map(c => ({
         id: c.id,
-        title: c.chapterName || c.chapter_name || c.name || 'N/A',
+        title: c.chapterName || c.chapter_name || c.name || 'Chapter',
         subtitle: c.region || 'Region',
         icon: <Building2 size={20} className="text-white/70" />,
         badgeText: 'Active',
@@ -1899,10 +2297,8 @@ export function Analytics() {
       }
 
       records = list.map(slip => {
-        const giver = allUsersList.find(u => String(u.id || '') === String(slip.fromUserId) || String(u.uid || '') === String(slip.fromUserId)) || chapterUsers.find(u => String(u.id || '') === String(slip.fromUserId) || String(u.uid || '') === String(slip.fromUserId));
-        const recipient = allUsersList.find(u => String(u.id || '') === String(slip.toUserId) || String(u.uid || '') === String(slip.toUserId)) || chapterUsers.find(u => String(u.id || '') === String(slip.toUserId) || String(u.uid || '') === String(slip.toUserId));
-        const giverName = giver?.name || (giver as any)?.full_name || giver?.displayName || slip.fromUserName || 'Unknown Member';
-        const recipientName = recipient?.name || (recipient as any)?.full_name || recipient?.displayName || slip.toUserName || 'Unknown Member';
+        const giverName = resolveMemberName(slip.fromUserId, slip.fromUserName);
+        const recipientName = resolveMemberName(slip.toUserId, slip.toUserName);
         return {
           id: slip.id,
           title: slip.customerName || 'Business Given',
@@ -1931,8 +2327,8 @@ export function Analytics() {
       }
 
       records = list.map(ref => {
-        const giver = allUsersList.find(u => u.uid === ref.fromUserId) || chapterUsers.find(u => u.uid === ref.fromUserId);
-        const recipient = allUsersList.find(u => u.uid === ref.toUserId) || chapterUsers.find(u => u.uid === ref.toUserId);
+        const giverName = resolveMemberName(ref.fromUserId, ref.fromUserName);
+        const recipientName = resolveMemberName(ref.toUserId, ref.toUserName);
         const st = (ref.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'closed' || st === 'completed') bColor = 'emerald';
@@ -1940,7 +2336,7 @@ export function Analytics() {
 
         return {
           id: ref.id,
-          title: norm.includes('sent') ? `To: ${recipient?.name || ref.toUserName || 'N/A'}` : `From: ${giver?.name || ref.fromUserName || 'N/A'}`,
+          title: norm.includes('sent') ? `To: ${recipientName}` : `From: ${giverName}`,
           subtitle: ref.customerName || 'Referral',
           icon: <Share2 size={20} className="text-white/70" />,
           badgeText: ref.status || 'Pending',
@@ -1967,10 +2363,22 @@ export function Analytics() {
       }
       
       records = list.map(m => {
-        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || '');
-        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || '');
-        const sender = allUsersList.find(u => String(u.uid || u.id) === senderId) || chapterUsers.find(u => String(u.uid || u.id) === senderId);
-        const receiver = allUsersList.find(u => String(u.uid || u.id) === receiverId) || chapterUsers.find(u => String(u.uid || u.id) === receiverId);
+        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || m.userId || '');
+        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || m.withMemberId || '');
+        
+        let candSender = m.creatorName || m.creator_name || m.organizer_name || m.host_name || m.userName;
+        let candReceiver = (m.participantNames && m.participantNames[0]) || m.withMemberName || m.partner_name;
+
+        if ((!candSender || !candReceiver) && m.title && typeof m.title === 'string') {
+          const titleMatch = m.title.match(/(?:1:?1\s*Meeting\s*-\s*|1-to-1:\s*)([^\&]+)\&(.+)/i);
+          if (titleMatch) {
+            if (!candSender) candSender = titleMatch[1].trim();
+            if (!candReceiver) candReceiver = titleMatch[2].trim();
+          }
+        }
+
+        const senderName = resolveMemberName(senderId, candSender);
+        const receiverName = resolveMemberName(receiverId, candReceiver);
         
         const st = (m.status || '').toLowerCase();
         let bColor = 'amber';
@@ -1979,7 +2387,7 @@ export function Analytics() {
 
         return {
           id: m.id,
-          title: `${sender?.name || 'Member'} & ${receiver?.name || 'Member'}`,
+          title: `${senderName} & ${receiverName}`,
           subtitle: m.venue || m.meetingLocation || m.locationType || 'Online Meeting',
           icon: <Handshake size={20} className="text-white/70" />,
           badgeText: m.status || 'Scheduled',
@@ -2005,9 +2413,8 @@ export function Analytics() {
       
       records = list.map(g => {
         const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-        const inviter = allUsersList.find(u => String(u.uid || u.id) === invId) || chapterUsers.find(u => String(u.uid || u.id) === invId);
-        const inviterName = g.invited_by_name || inviter?.name || g.inviterName || 'Member';
-        const inviterRole = g.invited_by_role || (inviter?.position ? inviter.position : 'Member');
+        const inviterName = resolveMemberName(invId, g.invited_by_name || g.inviter_name || g.creatorName);
+        const inviterRole = g.invited_by_role || 'Member';
         const st = (g.status || '').toLowerCase();
         let bColor = 'amber';
         if (st === 'attended') bColor = 'emerald';
@@ -2015,7 +2422,7 @@ export function Analytics() {
 
         return {
           id: g.id,
-          title: g.guest_name || g.guestName || 'N/A',
+          title: g.guest_name || g.guestName || g.name || 'Guest',
           subtitle: `Invited By: ${inviterName}${inviterRole ? ` (${inviterRole})` : ''}`,
           icon: <UserPlus size={20} className="text-white/70" />,
           badgeText: g.status || 'Expected',
@@ -2040,8 +2447,8 @@ export function Analytics() {
       }
 
       records = list.map(t => {
-        const giver = allUsersList.find(u => String(u.uid) === String(t.giverId)) || chapterUsers.find(u => String(u.uid) === String(t.giverId));
-        const receiver = allUsersList.find(u => String(u.uid) === String(t.receiverId)) || chapterUsers.find(u => String(u.uid) === String(t.receiverId));
+        const giverName = resolveMemberName(t.giverId || t.author_id, t.author_name || t.authorName);
+        const receiverName = resolveMemberName(t.receiverId || t.recipient_id, t.recipient_name || t.recipientName);
         let text = t.testimonial || '';
         if (text.includes('|||')) {
           const parts = text.split('|||');
@@ -2049,7 +2456,7 @@ export function Analytics() {
         }
         return {
           id: t.id,
-          title: norm.includes('given') ? `To: ${receiver?.name || 'N/A'}` : `From: ${giver?.name || 'N/A'}`,
+          title: norm.includes('given') ? `To: ${receiverName}` : `From: ${giverName}`,
           subtitle: 'Testimonial',
           icon: <Star size={20} className="text-white/70" />,
           badgeText: 'Published',

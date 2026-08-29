@@ -252,12 +252,39 @@ export function MasterAdminCompanionView({
                 </tr>
               ) : (
                 finalRecentActivities.slice(0, 15).map((act, idx) => {
-                  const actName = act.activity || act.title || 'Activity Logged';
-                  const memName = act.memberName || act.fromUserName || 'N/A';
+                  let actName = act.activity || act.title || 'Activity Logged';
+                  let memName = act.memberName || act.fromUserName || act.senderName || 'Member';
                   const chapName = act.chapterName || 'Organization';
                   const rawTime = act.dateTime || act.time;
                   const formattedDateTime = rawTime ? format(new Date(rawTime), 'MMM dd, yyyy HH:mm') : 'Just now';
                   const statusVal = (act.status || 'COMPLETED').toUpperCase();
+
+                  if (act.type === 'onetoone') {
+                    const isCompleted = act.status === 'COMPLETED' || act.status === 'completed' || act.isCompleted;
+                    const partner = act.partnerName || act.participantName;
+                    const creator = act.creatorName || act.memberName;
+                    if (partner) {
+                      actName = isCompleted ? `1-to-1 meeting completed with ${partner}` : `1-to-1 meeting with ${partner}`;
+                    }
+                    if (creator && partner && creator !== partner) {
+                      memName = `${creator} & ${partner}`;
+                    } else if (creator) {
+                      memName = creator;
+                    }
+                  } else if (act.type === 'referral') {
+                    if (act.senderName && act.receiverName) {
+                      actName = `${act.senderName} referred ${act.receiverName}`;
+                      memName = `${act.senderName} ➔ ${act.receiverName}`;
+                    }
+                  } else if (act.type === 'business') {
+                    if (act.senderName && act.receiverName) {
+                      memName = `${act.senderName} ➔ ${act.receiverName}`;
+                    }
+                  } else if (act.type === 'testimonial') {
+                    if (act.authorName && act.recipientName) {
+                      memName = `${act.authorName} ➔ ${act.recipientName}`;
+                    }
+                  }
 
                   const getBadgeColor = (status: string) => {
                     if (['APPROVED', 'ACTIVE', 'CLOSED', 'COMPLETED', 'RENEWED'].includes(status)) {

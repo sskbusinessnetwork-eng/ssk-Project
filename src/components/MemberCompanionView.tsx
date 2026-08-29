@@ -574,9 +574,65 @@ export function MemberCompanionView({
           {finalRecentActivities && finalRecentActivities.length > 0 ? (
             finalRecentActivities.slice(0, 5).map((act, idx) => {
               const IconComponent = act.icon || Target;
+              const currentUid = profile ? String(profile.id || profile.uid || '').toLowerCase() : '';
+
+              let displayTitle = act.title || act.activity || 'Activity Logged';
+              let displayDesc = act.desc || '';
+
+              if (act.type === 'onetoone') {
+                const isCreator = currentUid && String(act.fromUserId || '').toLowerCase() === currentUid;
+                const isParticipant = currentUid && String(act.toUserId || '').toLowerCase() === currentUid;
+                const isCompleted = act.status === 'COMPLETED' || act.status === 'completed' || act.isCompleted;
+                const partnerName = isCreator 
+                  ? (act.partnerName || act.participantName) 
+                  : isParticipant 
+                    ? (act.creatorName || act.memberName) 
+                    : (act.partnerName || act.participantName || act.creatorName);
+
+                if (partnerName) {
+                  displayTitle = isCompleted 
+                    ? `1-to-1 meeting completed with ${partnerName}`
+                    : `1-to-1 meeting with ${partnerName}`;
+                  displayDesc = isCompleted
+                    ? `1-to-1 meeting completed with ${partnerName}`
+                    : `1-to-1 session scheduled with ${partnerName}`;
+                }
+              } else if (act.type === 'referral') {
+                const isSender = currentUid && String(act.fromUserId || '').toLowerCase() === currentUid;
+                const isReceiver = currentUid && String(act.toUserId || '').toLowerCase() === currentUid;
+
+                if (isSender && act.receiverName) {
+                  displayTitle = `Referral sent to ${act.receiverName}`;
+                  displayDesc = `You referred ${act.receiverName}`;
+                } else if (isReceiver && act.senderName) {
+                  displayTitle = `Referral received from ${act.senderName}`;
+                  displayDesc = `Referral received from ${act.senderName}`;
+                } else if (act.senderName && act.receiverName) {
+                  displayTitle = `${act.senderName} referred ${act.receiverName}`;
+                  displayDesc = `${act.senderName} referred ${act.receiverName}`;
+                }
+              } else if (act.type === 'business') {
+                const isSender = currentUid && String(act.fromUserId || '').toLowerCase() === currentUid;
+                const isReceiver = currentUid && String(act.toUserId || '').toLowerCase() === currentUid;
+                const val = act.amount || 0;
+
+                if (val > 0) {
+                  if (isSender && act.receiverName) {
+                    displayTitle = `₹${Number(val).toLocaleString('en-IN')} Business Given`;
+                    displayDesc = `Closed ₹${Number(val).toLocaleString('en-IN')} with ${act.receiverName}`;
+                  } else if (isReceiver && act.senderName) {
+                    displayTitle = `₹${Number(val).toLocaleString('en-IN')} Business Received`;
+                    displayDesc = `Received ₹${Number(val).toLocaleString('en-IN')} from ${act.senderName}`;
+                  } else if (act.senderName && act.receiverName) {
+                    displayTitle = `${act.senderName} closed ₹${Number(val).toLocaleString('en-IN')} with ${act.receiverName}`;
+                    displayDesc = `${act.senderName} closed ₹${Number(val).toLocaleString('en-IN')} business with ${act.receiverName}`;
+                  }
+                }
+              }
+
               return (
                 <motion.div 
-                  key={idx} 
+                  key={act.id || idx} 
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.08, duration: 0.4 }}
@@ -595,8 +651,8 @@ export function MemberCompanionView({
                     </span>
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-[12px] font-bold text-white truncate leading-tight">{act.title}</h4>
-                    <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2">{act.desc}</p>
+                    <h4 className="text-[12px] font-bold text-white truncate leading-tight" title={displayTitle}>{displayTitle}</h4>
+                    <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2" title={displayDesc}>{displayDesc}</p>
                   </div>
                 </motion.div>
               );
