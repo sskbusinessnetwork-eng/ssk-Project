@@ -279,17 +279,46 @@ export const notificationService = {
     }
   },
 
-  getDefaultLinkForType(type: NotificationType, relatedId?: string): string {
+  getDefaultLinkForType(type: NotificationType, relatedId?: string, userRole?: string): string {
     switch (type) {
       case 'REFERRAL': return '/referrals';
       case 'MEETING': return '/one-to-one';
       case 'GUEST': case 'GUEST_REGISTRATION': return '/guests';
-      case 'SUBSCRIPTION': return '/subscriptions';
-      case 'THANKYOU': return '/my-report';
-      case 'TESTIMONIAL': return '/testimonials';
+      case 'SUBSCRIPTION': case 'UPGRADE': case 'UPGRADE_REQUEST': 
+        return userRole === 'MASTER_ADMIN' ? '/subscriptions' : '/profile';
+      case 'THANKYOU': return '/thank-you-slips';
+      case 'TESTIMONIAL': 
+        return userRole === 'MASTER_ADMIN' ? '/testimonial-reports' : '/testimonials';
       case 'PROFILE': return '/profile';
-      default: return '/notifications';
+      case 'MEMBER_ADD': 
+        return userRole === 'MASTER_ADMIN' ? '/members' : '/directory';
+      case 'ASSOCIATE_MEMBER_INVITE': return '/directory';
+      default: return '/dashboard';
     }
+  },
+
+  resolveLink(notif: Notification, userRole?: string): string {
+    if (notif.link && notif.link !== '/notifications' && notif.link !== '#') {
+      return notif.link;
+    }
+    const type = (notif.type || '').toUpperCase() as NotificationType;
+    const text = `${notif.title || ''} ${notif.message || ''}`.toLowerCase();
+
+    if (type === 'REFERRAL' || text.includes('referral')) return '/referrals';
+    if (type === 'THANKYOU' || text.includes('thank you') || text.includes('thankyou') || text.includes('slip')) return '/thank-you-slips';
+    if (type === 'MEETING' || text.includes('meeting') || text.includes('1-to-1') || text.includes('one-to-one')) return '/one-to-one';
+    if (type === 'GUEST' || type === 'GUEST_REGISTRATION' || text.includes('guest')) return '/guests';
+    if (type === 'TESTIMONIAL' || text.includes('testimonial')) return userRole === 'MASTER_ADMIN' ? '/testimonial-reports' : '/testimonials';
+    if (type === 'SUBSCRIPTION' || type === 'UPGRADE' || type === 'UPGRADE_REQUEST' || text.includes('subscription') || text.includes('renew') || text.includes('plan')) {
+      return userRole === 'MASTER_ADMIN' ? '/subscriptions' : '/profile';
+    }
+    if (type === 'MEMBER_ADD' || text.includes('member added') || text.includes('new member')) {
+      return userRole === 'MASTER_ADMIN' ? '/members' : '/directory';
+    }
+    if (type === 'PROFILE' || text.includes('profile')) return '/profile';
+    if (text.includes('chapter')) return userRole === 'MASTER_ADMIN' ? '/manage-chapter' : '/meetings';
+
+    return this.getDefaultLinkForType(type, notif.relatedUserId || notif.relatedId, userRole);
   },
 
   // ==========================================================

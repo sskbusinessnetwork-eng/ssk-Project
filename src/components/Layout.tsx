@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
@@ -15,6 +15,7 @@ import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import {  where  } from '../lib/database';
 import { BrandLogo } from './BrandLogo';
+import { NotificationPopover } from './notifications/NotificationPopover';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -27,6 +28,8 @@ export function Layout() {
     }
   });
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
 
   const toggleDesktopCollapsed = () => {
     setIsDesktopCollapsed((prev: boolean) => {
@@ -61,16 +64,15 @@ export function Layout() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isMobileSidebarOpen) {
-        setIsMobileSidebarOpen(false);
-      }
-      if (e.key === 'Escape' && isBottomSheetOpen) {
-        setIsBottomSheetOpen(false);
+      if (e.key === 'Escape') {
+        if (isNotificationOpen) setIsNotificationOpen(false);
+        if (isMobileSidebarOpen) setIsMobileSidebarOpen(false);
+        if (isBottomSheetOpen) setIsBottomSheetOpen(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isMobileSidebarOpen, isBottomSheetOpen]);
+  }, [isMobileSidebarOpen, isBottomSheetOpen, isNotificationOpen]);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -95,10 +97,11 @@ export function Layout() {
     };
   }, [isMobileSidebarOpen]);
 
-  // Close bottom sheet and mobile sidebar on route change
+  // Close bottom sheet, notification dropdown, and mobile sidebar on route change
   useEffect(() => {
     setIsBottomSheetOpen(false);
     setIsMobileSidebarOpen(false);
+    setIsNotificationOpen(false);
   }, [location.pathname]);
 
   const handleLogout = async () => {
@@ -183,17 +186,36 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-4 lg:gap-6 shrink-0">
-            <div className="flex items-center">
-              <Link to="/notifications" className="relative group shrink-0">
-                <div className="p-1.5 sm:p-2.5 text-[#9CA3AF] group-hover:text-white transition-colors bg-[#111827] rounded-full border border-white/5 flex items-center justify-center">
+            <div className="relative flex items-center">
+              <button 
+                id="notification-bell-btn"
+                ref={bellButtonRef}
+                type="button"
+                onClick={() => setIsNotificationOpen(prev => !prev)}
+                className="relative group shrink-0 outline-none focus:outline-none cursor-pointer"
+                aria-label={isNotificationOpen ? "Close notifications" : "Open notifications"}
+                aria-expanded={isNotificationOpen}
+              >
+                <div className={cn(
+                  "p-1.5 sm:p-2.5 transition-all rounded-full border flex items-center justify-center",
+                  isNotificationOpen
+                    ? "bg-primary/20 text-white border-primary/40 shadow-sm"
+                    : "text-[#9CA3AF] group-hover:text-white bg-[#111827] border-white/5 group-hover:border-white/10"
+                )}>
                   <Bell size={18} strokeWidth={2} className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                 </div>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[14px] h-[14px] sm:min-w-[16px] sm:h-[16px] px-1 flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm">
+                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-black min-w-[14px] h-[14px] sm:min-w-[16px] sm:h-[16px] px-1 flex items-center justify-center rounded-full border-2 border-[#05070E] shadow-sm animate-pulse">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
-              </Link>
+              </button>
+
+              <NotificationPopover 
+                isOpen={isNotificationOpen} 
+                onClose={() => setIsNotificationOpen(false)} 
+                anchorRef={bellButtonRef}
+              />
             </div>
 
             {profile?.role === 'MASTER_ADMIN' ? (

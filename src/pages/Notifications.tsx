@@ -108,11 +108,7 @@ export function Notifications() {
       await handleMarkAsRead(notif.id);
     }
 
-    const targetUrl = notif.link || notificationService.getDefaultLinkForType(
-      notif.type, 
-      notif.relatedUserId || notif.relatedId
-    );
-    
+    const targetUrl = notificationService.resolveLink(notif, profile?.role);
     navigate(targetUrl);
   };
 
@@ -133,10 +129,10 @@ export function Notifications() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-24 px-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#111827] p-5 rounded-[20px] border border-white/5 shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#111827] p-4 sm:p-5 rounded-[20px] border border-white/5 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-primary/10 rounded-[14px] flex items-center justify-center text-primary relative">
-            <Bell size={24} />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-[14px] flex items-center justify-center text-primary relative">
+            <Bell size={22} />
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#111827]">
                 {unreadCount}
@@ -145,14 +141,13 @@ export function Notifications() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-white tracking-wide">Notification Center</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-white tracking-wide">Notifications</h1>
               {unreadCount > 0 && (
                 <span className="text-[10px] font-extrabold bg-primary/20 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider">
                   {unreadCount} Unread
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-neutral-400 font-medium">Real-time alerts, meetings & referral updates</p>
           </div>
         </div>
 
@@ -177,51 +172,6 @@ export function Notifications() {
           )}
         </div>
       </div>
-
-      {/* Push Notification Permission Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          "p-4 rounded-[16px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg",
-          permissionState === 'granted' 
-            ? "bg-gradient-to-r from-emerald-500/20 via-emerald-500/5 to-transparent border-emerald-500/30"
-            : "bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border-primary/30"
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-            permissionState === 'granted' ? "bg-emerald-500/20 text-emerald-400" : "bg-primary/20 text-primary"
-          )}>
-            {permissionState === 'granted' ? <Bell size={20} /> : <BellOff size={20} />}
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">Push Notifications</h3>
-            <p className="text-xs text-neutral-300">
-              {permissionState === 'granted' 
-                ? "You will receive referral, meeting, and task reminders."
-                : permissionState === 'denied'
-                ? "Notifications are disabled. Please enable them in your browser settings to receive reminders."
-                : "Enable notifications to receive referral, meeting, and task reminders."}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleEnableNotifications}
-          disabled={permissionState === 'granted'}
-          className={cn(
-            "shrink-0 px-4 py-2 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all",
-            permissionState === 'granted'
-              ? "bg-emerald-600/50 cursor-default opacity-80"
-              : permissionState === 'denied'
-              ? "bg-neutral-600 hover:bg-neutral-500 active:scale-95"
-              : "bg-primary hover:bg-primary/90 active:scale-95"
-          )}
-        >
-          {permissionState === 'granted' ? '✓ Notifications Enabled' : 'Enable Notifications'}
-        </button>
-      </motion.div>
 
       {/* Today's Task Checklist Section */}
       <div className="bg-[#111827] rounded-[20px] p-5 border border-white/5 space-y-4 shadow-xl">
