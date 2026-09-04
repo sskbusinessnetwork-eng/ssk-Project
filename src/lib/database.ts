@@ -341,6 +341,23 @@ export async function getDocs(queryRef: any) {
       }
     });
   }
+
+  if (collectionPath === 'meetings' && rows.length > 0) {
+    rows.forEach(m => {
+      const mNotes = m.memberNotes || m.member_notes || {};
+      const counts = mNotes.__counts || {};
+      const mCount = m.memberCount !== undefined ? m.memberCount : (counts.memberCount !== undefined ? counts.memberCount : mNotes.__memberCount);
+      const gCount = m.guestCount !== undefined ? m.guestCount : (counts.guestCount !== undefined ? counts.guestCount : mNotes.__guestCount);
+      if (mCount !== undefined) {
+        m.memberCount = Number(mCount);
+        m.member_count = Number(mCount);
+      }
+      if (gCount !== undefined) {
+        m.guestCount = Number(gCount);
+        m.guest_count = Number(gCount);
+      }
+    });
+  }
   
   const docs = rows.map(row => ({
     id: row.id,
@@ -468,6 +485,21 @@ export async function getDoc(docRef: any) {
     }
     const camelExtra = keysToCamel(extraData);
     Object.assign(camelData, { testimonial: body }, camelExtra);
+  }
+
+  if (path === 'meetings') {
+    const mNotes = camelData.memberNotes || camelData.member_notes || {};
+    const counts = mNotes.__counts || {};
+    const mCount = camelData.memberCount !== undefined ? camelData.memberCount : (counts.memberCount !== undefined ? counts.memberCount : mNotes.__memberCount);
+    const gCount = camelData.guestCount !== undefined ? camelData.guestCount : (counts.guestCount !== undefined ? counts.guestCount : mNotes.__guestCount);
+    if (mCount !== undefined) {
+      camelData.memberCount = Number(mCount);
+      camelData.member_count = Number(mCount);
+    }
+    if (gCount !== undefined) {
+      camelData.guestCount = Number(gCount);
+      camelData.guest_count = Number(gCount);
+    }
   }
   
   return { exists: () => true, data: () => camelData, id };
@@ -872,6 +904,28 @@ export async function updateDoc(docRef: any, partialData: any) {
       }
     }
     return;
+  }
+
+  if (path === 'meetings') {
+    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
+      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
+      cleanData.member_notes = {
+        ...existingNotes,
+        __counts: {
+          memberCount: Number(mCount) || 0,
+          guestCount: Number(gCount) || 0
+        },
+        __memberCount: Number(mCount) || 0,
+        __guestCount: Number(gCount) || 0
+      };
+      delete cleanData.memberCount;
+      delete cleanData.member_count;
+      delete cleanData.guestCount;
+      delete cleanData.guest_count;
+      delete cleanData.memberNotes;
+    }
   }
   
   const snakeData = keysToSnake(cleanData);

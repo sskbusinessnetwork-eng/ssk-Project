@@ -65,13 +65,17 @@ export interface Meeting {
   location?: string;
   attendance: Record<string, AttendanceStatus>;
   amountCollected?: Record<string, number>;
-  memberNotes?: Record<string, string>;
+  memberNotes?: Record<string, any>;
   notes?: string;
   isCompleted?: boolean;
   isRecurring?: boolean;
   isCancelled?: boolean;
   createdAt?: string;
   status?: string;
+  memberCount?: number;
+  guestCount?: number;
+  member_count?: number;
+  guest_count?: number;
 }
 
 export interface Referral {

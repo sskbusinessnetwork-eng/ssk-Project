@@ -1044,12 +1044,14 @@ export function Analytics() {
     if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
       return effectiveGuestInvitations;
     }
-    const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+    const targetChapId = (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter !== 'ALL')
+      ? String(appliedChapterFilter).trim()
+      : String(profile?.chapter_id || profile?.chapterId || '').trim();
     return effectiveGuestInvitations.filter(g => {
-      const gChapId = String(g.chapter_id || g.chapterId || '').trim();
+      const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
       const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
       if (usePersonalStats) return userCandidateIds.includes(inviter);
-      return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
+      return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
     });
   }, [effectiveGuestInvitations, chapterUserIds, userCandidateIds, profile, appliedChapterFilter, usePersonalStats]);
 
@@ -1122,23 +1124,28 @@ export function Analytics() {
 
     if (profile?.role === 'MASTER_ADMIN') {
       if (appliedChapterFilter !== 'ALL') {
-        list = list.filter(g => g.chapter_id === appliedChapterFilter || g.chapterId === appliedChapterFilter);
+        const targetChapId = String(appliedChapterFilter).trim();
+        list = list.filter(g => {
+          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
+        });
       }
       if (appliedMemberFilter !== 'ALL') {
-        list = list.filter(g => g.createdBy === appliedMemberFilter || g.userId === appliedMemberFilter);
+        list = list.filter(g => {
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          return inviter === appliedMemberFilter || g.userId === appliedMemberFilter;
+        });
       }
-    }
-
-    if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
       return list.length;
     }
 
-    const myChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+    const targetChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
     list = list.filter(g => {
-      const gChapId = String(g.chapter_id || g.chapterId || '').trim();
+      const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
       const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
       if (usePersonalStats) return userCandidateIds.includes(inviter);
-      return chapterUserIds.includes(inviter) || (gChapId && gChapId === myChapId);
+      return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
     });
 
     return list.length || 0;
@@ -2397,17 +2404,33 @@ export function Analytics() {
           notes: m.notes || '-'
         };
       });
-    } else if (norm.includes('guest') || norm.includes('visitor')) {
+    } else if (norm.includes('guest') || norm.includes('visitor') || norm.includes('invite')) {
       let list = effectiveGuestInvitations;
       const isGlobal = profile?.role === 'MASTER_ADMIN';
 
-      if (!isGlobal) {
+      if (isGlobal && appliedChapterFilter !== 'ALL') {
+        const targetChapId = String(appliedChapterFilter).trim();
+        list = list.filter(g => {
+          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
+        });
+      } else if (!isGlobal) {
         list = list.filter(g => {
           const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
           if (usePersonalStats) {
-             return invId === String(profile?.id || profile?.uid);
+             return userCandidateIds.includes(invId);
           }
-          return String(g.chapter_id || g.chapterId) === String(profile?.chapter_id);
+          const targetChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+          return chapterUserIds.includes(invId) || (gChapId && gChapId === targetChapId);
+        });
+      }
+
+      if (norm.includes('visitor') || norm.includes('attended')) {
+        list = list.filter(g => {
+          const st = String(g.status || g.attendance_status || '').toLowerCase();
+          return st === 'present' || st === 'attended';
         });
       }
       

@@ -1253,7 +1253,7 @@ async function startServer() {
   // Meeting Attendance & Collection Update Endpoint
   app.post("/api/meetings/update", async (req, res) => {
     try {
-      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates, date, time, location } = req.body || {};
+      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates, date, time, location, memberCount, guestCount } = req.body || {};
       if (!meetingId || !callerId) {
         return res.status(400).json({
           success: false,
@@ -1337,6 +1337,20 @@ async function startServer() {
       if (attendance) updatePayload.attendance = attendance;
       if (amountCollected) updatePayload.amount_collected = amountCollected;
       if (memberNotes) updatePayload.member_notes = memberNotes;
+      if (memberCount !== undefined || guestCount !== undefined) {
+        const mCount = memberCount !== undefined ? (Number(memberCount) || 0) : undefined;
+        const gCount = guestCount !== undefined ? (Number(guestCount) || 0) : undefined;
+        const existingNotes = updatePayload.member_notes || memberNotes || {};
+        updatePayload.member_notes = {
+          ...existingNotes,
+          __counts: {
+            memberCount: mCount !== undefined ? mCount : existingNotes.__counts?.memberCount,
+            guestCount: gCount !== undefined ? gCount : existingNotes.__counts?.guestCount
+          },
+          ...(mCount !== undefined ? { __memberCount: mCount } : {}),
+          ...(gCount !== undefined ? { __guestCount: gCount } : {})
+        };
+      }
       if (isCompleted === true || (isCompleted === undefined && attendance)) {
         updatePayload.is_completed = true;
         updatePayload.status = 'COMPLETED';

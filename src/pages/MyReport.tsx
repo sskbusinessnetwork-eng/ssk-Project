@@ -281,7 +281,11 @@ export function MyReport() {
   }).length;
 
   const chapterGuests = effectiveGuests.filter(g => {
-    const inviter = chapterUsers.find(u => (u.id || u.uid) === (g.createdBy || g.memberId));
+    const gChap = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || (g as any).chapterId || '').trim();
+    if (gChap && gChap === String(userChapterId)) return true;
+    
+    const inviterId = String(g.invited_by_user_id || (g as any).invitedByUserId || g.invited_by || (g as any).invitedBy || g.createdBy || (g as any).created_by || g.inviterId || (g as any).inviter_id || g.user_id || (g as any).memberId || '').trim();
+    const inviter = chapterUsers.find(u => String(u.id || u.uid) === inviterId);
     return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
   });
   const guestsInvitedCount = chapterGuests.length;
@@ -295,7 +299,11 @@ export function MyReport() {
       if (!isDateInRange(d, activeDateRange.start, activeDateRange.end)) return false;
     }
     
-    const inviter = chapterUsers.find(u => (u.id || u.uid) === (g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id));
+    const gChap = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || (g as any).chapterId || '').trim();
+    if (gChap && gChap === String(userChapterId)) return true;
+    
+    const inviterId = String(g.invited_by_user_id || (g as any).invitedByUserId || g.invited_by || (g as any).invitedBy || g.createdBy || (g as any).created_by || g.inviterId || (g as any).inviter_id || g.user_id || (g as any).memberId || '').trim();
+    const inviter = chapterUsers.find(u => String(u.id || u.uid) === inviterId);
     return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
   }).length;
   
@@ -332,6 +340,13 @@ export function MyReport() {
         return u && String(u.chapter_id || u.chapterId) === String(userChapterId);
       };
 
+      const isGuestInChapter = (g: any) => {
+        const gChap = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || (g as any).chapterId || '').trim();
+        if (gChap && gChap === String(userChapterId)) return true;
+        const inviterId = String(g.invited_by_user_id || (g as any).invitedByUserId || g.invited_by || (g as any).invitedBy || g.createdBy || (g as any).created_by || g.inviterId || (g as any).inviter_id || g.user_id || (g as any).memberId || '').trim();
+        return isInChapter(inviterId);
+      };
+
       const calcSlipsValue = (slips: any[], refs: any[]) => {
         return slips.reduce((sum, s) => {
           const ref = refs.find(r => String(r.id) === String(s.referralId || s.referral_id));
@@ -355,7 +370,7 @@ export function MyReport() {
 
       const pGuestInvitations = guestInvitations.filter(g => {
         const d = new Date(g.created_at || g.createdAt);
-        return isDateInRange(d, start, end) && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
+        return isDateInRange(d, start, end) && isGuestInChapter(g) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
       });
 
       const pSlips = allSlips.filter(s => isDateInRange(s.created_at || s.createdAt, start, end) && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));
@@ -385,7 +400,7 @@ export function MyReport() {
       
       const cGuestInvitations = guestInvitations.filter(g => {
         const d = new Date(g.created_at || g.createdAt);
-        return d <= end && isInChapter(g.createdBy || g.memberId || g.invited_by || g.invited_by_user_id || g.user_id) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
+        return d <= end && isGuestInChapter(g) && (String(g.status || g.attendance_status || '').toLowerCase() === 'present' || String(g.status || g.attendance_status || '').toLowerCase() === 'attended');
       });
 
       const cSlips = allSlips.filter(s => new Date(s.created_at || s.createdAt) <= end && (isInChapter(s.fromUserId || s.from_user_id || s.submitted_by) || isInChapter(s.toUserId || s.to_user_id)));

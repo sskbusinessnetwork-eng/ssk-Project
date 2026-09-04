@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayPosition } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
+import { supabase } from '../lib/supabaseClient';
 import { where } from '../lib/database';
 import { UserProfile, Meeting, Referral, OneToOneMeeting, GuestInvitation, Testimonial, Chapter, isOfflineReferral, isNormalReferral } from '../types';
 import { calculateMemberGrowthScore, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getISTDayBounds } from '../utils/growthScore';
@@ -13,7 +14,8 @@ import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { 
   Users, Activity, Calendar, Share2, Layers, UserPlus, 
   MessageSquare, Download, Filter, Search, ChevronDown, ChevronUp,
-  FileText, Star, X, CheckSquare, Briefcase, BarChart3, TrendingUp, Info
+  FileText, Star, X, CheckSquare, Briefcase, BarChart3, TrendingUp, Info,
+  ArrowRight, Phone, Mail, Building, CheckCircle2, Clock
 } from 'lucide-react';
 import { isWithinInterval, startOfMonth, endOfMonth, parseISO, subMonths, isValid } from 'date-fns';
 import { safeFormat as format, parseSafeDate } from '../utils/dateUtils';
@@ -86,6 +88,10 @@ export function Reports() {
   const [activeTab, setActiveTab] = useState<'table' | 'charts'>('table');
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // Detail Modal for clicked summary cards
+  const [selectedDetailCard, setSelectedDetailCard] = useState<'members' | 'revenue' | 'referrals' | 'attendance' | 'oneToOnes' | 'guests' | null>(null);
+  const [detailSearchQuery, setDetailSearchQuery] = useState('');
+
   // Initialize and load data
   useEffect(() => {
     if (!profile) return;
@@ -97,21 +103,42 @@ export function Reports() {
     let unsubGuests = () => {};
     let unsubTestimonials = () => {};
     let unsubSlips = () => {};
+    let unsubChapters = () => {};
 
     const loadAllData = async () => {
       setLoading(true);
       try {
-        // Master admin can see all chapters, let's load chapters
+        // Load all chapters for consistent chapter and leadership association across all roles
+        const chaptersList = await databaseService.list<Chapter>('chapters');
+        setChapters(chaptersList);
+
         if (profile.role === 'MASTER_ADMIN') {
-          const chaptersList = await databaseService.list<Chapter>('chapters');
-          setChapters(chaptersList);
-          setSelectedChapterId('ALL');
+          setSelectedChapterId(prev => (prev && prev !== '' ? prev : 'ALL'));
           setSelectedMemberId('ALL');
-        } else if (profile.chapter_id) {
-          setSelectedChapterId(profile.chapter_id);
+        } else {
+          const userChapId = String(profile.chapter_id || profile.chapterId || profile.adminId || '').trim();
+          if (userChapId) {
+            setSelectedChapterId(userChapId);
+          } else {
+            const ledChapter = chaptersList.find(c => 
+              String(c.chapter_admin_id) === String(profile.uid) || 
+              String(c.president_id) === String(profile.uid) || 
+              String(c.vice_president_id) === String(profile.uid) || 
+              String(c.treasurer_id) === String(profile.uid)
+            );
+            if (ledChapter) {
+              setSelectedChapterId(ledChapter.id);
+            }
+          }
         }
 
         // Setup real-time subscriptions for reactive reporting metrics
+        unsubChapters = databaseService.subscribe<Chapter>('chapters', [], (data) => {
+          if (data && data.length > 0) {
+            setChapters(data);
+          }
+        });
+
         unsubUsers = databaseService.subscribe<UserProfile>('users', [], (data) => {
           setUsers(data);
         });
@@ -129,8 +156,36 @@ export function Reports() {
         });
 
         unsubGuests = databaseService.subscribe<GuestInvitation>('guest_invitations', [], (data) => {
-          setGuestInvitations(data);
+          if (data) {
+            setGuestInvitations(prev => {
+              const map = new Map<string, any>();
+              (prev || []).forEach(item => map.set(String(item.id), item));
+              data.forEach((item: any) => {
+                const existing = map.get(String(item.id)) || {};
+                map.set(String(item.id), { ...existing, ...item });
+              });
+              return Array.from(map.values());
+            });
+          }
         });
+
+        // Direct fetch from Supabase to guarantee complete guest invitations synchronization
+        supabase.from('guest_invitations').select('*').then(
+          ({ data: sbGuests }) => {
+            if (sbGuests && sbGuests.length > 0) {
+              setGuestInvitations(prev => {
+                const map = new Map<string, any>();
+                (prev || []).forEach(item => map.set(String(item.id), item));
+                sbGuests.forEach((item: any) => {
+                  const existing = map.get(String(item.id)) || {};
+                  map.set(String(item.id), { ...existing, ...item });
+                });
+                return Array.from(map.values());
+              });
+            }
+          },
+          (err) => console.warn("Reports load guest invitations notice:", err)
+        );
 
         unsubTestimonials = databaseService.subscribe<Testimonial>('testimonials', [], (data) => {
           setTestimonials(data);
@@ -157,6 +212,7 @@ export function Reports() {
       unsubGuests();
       unsubTestimonials();
       unsubSlips();
+      unsubChapters();
     };
   }, [profile]);
 
@@ -212,25 +268,85 @@ export function Reports() {
     return getISTDayBounds(endDate).end;
   }, [endDate]);
 
+  // Active chapter object
+  const selectedChapterObj = useMemo(() => {
+    return chapters.find(c => c.id === selectedChapterId);
+  }, [chapters, selectedChapterId]);
+
+  // Check if a member belongs to or is associated with the selected chapter
+  const isMemberAssociatedWithChapter = (u: UserProfile, targetChapId: string, chapObj?: Chapter) => {
+    if (!targetChapId || targetChapId === 'ALL') {
+      return u.role !== 'MASTER_ADMIN';
+    }
+    // Pure master admin without chapter affiliation is excluded
+    if (u.role === 'MASTER_ADMIN' && !u.chapter_id && !(u as any).chapterId) {
+      return false;
+    }
+
+    const uid = String(u.uid || u.id || '');
+    const userChapId = String(u.chapter_id || (u as any).chapterId || '').trim();
+    const userAdminId = String(u.adminId || (u as any).admin_id || '').trim();
+
+    // 1. Leadership positions assigned on the Chapter object
+    if (chapObj) {
+      if (chapObj.chapter_admin_id && String(chapObj.chapter_admin_id) === uid) return true;
+      if (chapObj.president_id && String(chapObj.president_id) === uid) return true;
+      if (chapObj.vice_president_id && String(chapObj.vice_president_id) === uid) return true;
+      if (chapObj.treasurer_id && String(chapObj.treasurer_id) === uid) return true;
+      if (chapObj.chapter_admin_id && (userAdminId === String(chapObj.chapter_admin_id) || userAdminId === String(chapObj.id))) return true;
+    }
+
+    // 2. Direct chapter assignment on user profile
+    if (userChapId === targetChapId) return true;
+    if (userAdminId === targetChapId) return true;
+
+    // If member has another specific chapter assigned, exclude them
+    if (userChapId && userChapId !== targetChapId) return false;
+
+    return false;
+  };
+
+  // Helper to determine exact chapter-specific role and display position
+  const getMemberPositionInfo = (member: UserProfile) => {
+    const ch = selectedChapterObj;
+    const uid = String(member.uid || member.id || '');
+    let posKey = member.position || 'member';
+    let role = member.role || 'MEMBER';
+
+    if (ch && selectedChapterId !== 'ALL') {
+      if (ch.president_id && String(ch.president_id) === uid) {
+        posKey = 'president';
+        role = 'PRESIDENT' as any;
+      } else if (ch.vice_president_id && String(ch.vice_president_id) === uid) {
+        posKey = 'vice_president';
+        role = 'VICE_PRESIDENT' as any;
+      } else if (ch.treasurer_id && String(ch.treasurer_id) === uid) {
+        posKey = 'treasurer';
+        role = 'TREASURER' as any;
+      } else if (ch.chapter_admin_id && String(ch.chapter_admin_id) === uid) {
+        posKey = 'chapter_admin';
+        role = 'CHAPTER_ADMIN' as any;
+      }
+    }
+
+    const display = getDisplayPosition(posKey, role);
+    return {
+      positionKey: posKey,
+      displayPosition: display
+    };
+  };
+
   // Available members for dropdown based on selected chapter
   const availableMemberOptions = useMemo(() => {
-    let list = users.filter(u => u.role !== 'MASTER_ADMIN');
-    if (selectedChapterId && selectedChapterId !== 'ALL') {
-      list = list.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId);
-    }
-    return list;
-  }, [users, selectedChapterId]);
+    return users.filter(u => isMemberAssociatedWithChapter(u, selectedChapterId, selectedChapterObj));
+  }, [users, selectedChapterId, selectedChapterObj]);
 
   // Filtered members belonging to selected chapter and member filters
   const filteredMembers = useMemo(() => {
-    let results = users.filter(u => u.role !== 'MASTER_ADMIN');
-
-    if (selectedChapterId && selectedChapterId !== 'ALL') {
-      results = results.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId);
-    }
+    let results = users.filter(u => isMemberAssociatedWithChapter(u, selectedChapterId, selectedChapterObj));
 
     if (selectedMemberId && selectedMemberId !== 'ALL') {
-      results = results.filter(u => u.uid === selectedMemberId || u.id === selectedMemberId);
+      results = results.filter(u => String(u.uid || u.id) === selectedMemberId);
     }
 
     if (statusFilter !== 'ALL') {
@@ -238,91 +354,203 @@ export function Reports() {
     }
 
     return results;
-  }, [users, selectedChapterId, selectedMemberId, statusFilter]);
+  }, [users, selectedChapterId, selectedChapterObj, selectedMemberId, statusFilter]);
 
   // Derived filtered transactions based on date filter & chapter boundaries
   const currentChapterMemberIds = useMemo(() => {
-    return filteredMembers.map(m => m.uid || m.id);
+    return filteredMembers.map(m => String(m.uid || m.id));
   }, [filteredMembers]);
 
+  const currentChapterMemberUidsSet = useMemo(() => {
+    return new Set(currentChapterMemberIds);
+  }, [currentChapterMemberIds]);
+
+  const allChapterMemberUidsSet = useMemo(() => {
+    return new Set(availableMemberOptions.map(m => String(m.uid || m.id)));
+  }, [availableMemberOptions]);
+
   const reportsData = useMemo(() => {
+    // 1. Referrals
     const filteredRefs = referrals.filter(ref => {
       if (!isNormalReferral(ref)) return false;
-      const isDateValid = isWithinDateRange(ref.createdAt, parsedStart, parsedEnd);
-      let isScopeValid = true;
+      const isDateValid = isWithinDateRange(ref.createdAt || (ref as any).created_at, parsedStart, parsedEnd);
+      if (!isDateValid) return false;
+
+      const from = String(ref.fromUserId || ref.sender_id || '');
+      const to = String(ref.toUserId || ref.receiver_id || '');
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
-        isScopeValid = chapterMemberUids.includes(ref.fromUserId) || chapterMemberUids.includes(ref.toUserId);
+        const refChap = String(ref.chapter_id || (ref as any).senderChapterId || '').trim();
+        if (refChap && refChap !== selectedChapterId) return false;
+
+        const belongsToChapter = refChap === selectedChapterId || currentChapterMemberUidsSet.has(from) || currentChapterMemberUidsSet.has(to);
+        if (!belongsToChapter) return false;
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = ref.fromUserId === selectedMemberId || ref.toUserId === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        if (from !== selectedMemberId && to !== selectedMemberId) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
+    // 2. Meetings
     const filteredMeetings = meetings.filter(m => {
-      const isDateValid = isWithinDateRange(m.date, parsedStart, parsedEnd);
-      let isScopeValid = true;
+      const isDateValid = isWithinDateRange(m.date || m.meeting_date || m.createdAt, parsedStart, parsedEnd);
+      if (!isDateValid) return false;
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        isScopeValid = m.chapter_id === selectedChapterId || m.chapterId === selectedChapterId;
+        const mChap = String(m.chapter_id || m.chapterId || '').trim();
+        if (mChap) {
+          if (mChap !== selectedChapterId) return false;
+        } else if (selectedChapterObj?.chapter_admin_id && m.adminId && m.adminId !== selectedChapterObj.chapter_admin_id) {
+          return false;
+        } else if (!mChap && !selectedChapterObj?.chapter_admin_id) {
+          return false;
+        }
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = (m.attendance && !!m.attendance[selectedMemberId]) || m.createdBy === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        const attended = (m.attendance && !!m.attendance[selectedMemberId]) || m.createdBy === selectedMemberId;
+        if (!attended) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
+    // 3. One-to-Ones
     const filteredOneToOnes = oneToOnes.filter(m => {
       const meetingDate = m.date || m.meeting_date || m.scheduled_date || (m as any).scheduledDate || m.createdAt;
       const isDateValid = isWithinDateRange(meetingDate, parsedStart, parsedEnd);
-      let isScopeValid = true;
+      if (!isDateValid) return false;
+
+      const orgId = String(m.organizer_id || m.creatorId || m.sender_id || '');
+      const recId = String(m.member_id || m.receiver_id || '');
+      const pIds = (m.participantIds || []).map((id: string) => String(id));
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
-        isScopeValid = chapterMemberUids.includes(m.organizer_id || m.creatorId || m.sender_id) || (m.participantIds && m.participantIds.some(pid => chapterMemberUids.includes(pid))) || chapterMemberUids.includes(m.receiver_id || m.member_id);
+        const mChap = String(m.chapter_id || '').trim();
+        if (mChap && mChap !== selectedChapterId) return false;
+
+        const belongsToChapter = mChap === selectedChapterId || 
+          currentChapterMemberUidsSet.has(orgId) || 
+          currentChapterMemberUidsSet.has(recId) || 
+          pIds.some(pid => currentChapterMemberUidsSet.has(pid));
+
+        if (!belongsToChapter) return false;
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = (m.organizer_id || m.creatorId || m.sender_id) === selectedMemberId || (m.participantIds && m.participantIds.includes(selectedMemberId)) || (m.member_id || m.receiver_id) === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        const matchesMember = orgId === selectedMemberId || recId === selectedMemberId || pIds.includes(selectedMemberId);
+        if (!matchesMember) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
+    // 4. Guests
     const filteredGuests = guestInvitations.filter(g => {
-      const isDateValid = isWithinDateRange(g.createdAt, parsedStart, parsedEnd);
-      let isScopeValid = true;
+      const guestDate = g.createdAt || (g as any).created_at || (g as any).meeting_date || (g as any).meetingDate || g.date;
+      const isDateValid = isWithinDateRange(guestDate, parsedStart, parsedEnd);
+      if (!isDateValid) return false;
+
+      const inviterId = String(
+        g.invited_by_user_id || 
+        (g as any).invitedByUserId || 
+        g.invited_by || 
+        (g as any).invitedBy || 
+        g.createdBy || 
+        (g as any).created_by || 
+        g.inviterId || 
+        (g as any).inviter_id || 
+        g.user_id || 
+        (g as any).memberId || 
+        ''
+      ).trim();
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        isScopeValid = g.chapter_id === selectedChapterId || g.chapterId === selectedChapterId;
+        const gChap = String(
+          g.chapter_id || 
+          (g as any).chapterId || 
+          (g as any).invited_by_chapter || 
+          (g as any).invitedByChapter || 
+          ''
+        ).trim();
+
+        // If guest has a chapter specified and it does not match the selected chapter, exclude it
+        if (gChap && gChap !== selectedChapterId) return false;
+
+        // Check meeting affiliation
+        const meetId = String(g.meeting_id || (g as any).meetingId || '').trim();
+        const meet = meetId ? meetings.find(m => String(m.id) === meetId) : null;
+        const meetChap = meet ? String(meet.chapter_id || (meet as any).chapterId || '').trim() : '';
+        if (meetChap && meetChap !== selectedChapterId) return false;
+
+        // Verify that the guest is associated with the selected chapter:
+        // either directly via chapter_id / invited_by_chapter,
+        // or via the meeting's chapter_id,
+        // or via the inviter who belongs to the selected chapter.
+        const inviterBelongsToChapter = inviterId ? (
+          allChapterMemberUidsSet.has(inviterId) || 
+          currentChapterMemberUidsSet.has(inviterId) ||
+          users.some(u => String(u.uid || u.id) === inviterId && String(u.chapter_id || (u as any).chapterId || '').trim() === selectedChapterId)
+        ) : false;
+
+        const isAssociatedWithChapter = (gChap === selectedChapterId) || (meetChap === selectedChapterId) || inviterBelongsToChapter;
+        if (!isAssociatedWithChapter) return false;
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = g.createdBy === selectedMemberId || g.userId === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        if (inviterId !== selectedMemberId) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
+    // 5. Testimonials
     const filteredTestimonials = testimonials.filter(t => {
-      const isDateValid = isWithinDateRange(t.createdAt, parsedStart, parsedEnd);
-      let isScopeValid = true;
+      const isDateValid = isWithinDateRange(t.createdAt || (t as any).created_at, parsedStart, parsedEnd);
+      if (!isDateValid) return false;
+
+      const authorId = String(t.authorMemberId || t.author_id || (t as any).fromUserId || '');
+      const recipientId = String(t.recipientMemberId || t.recipient_id || (t as any).toUserId || '');
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        isScopeValid = t.chapterId === selectedChapterId || t.chapter_id === selectedChapterId;
+        const tChap = String(t.chapterId || t.chapter_id || '').trim();
+        if (tChap && tChap !== selectedChapterId) return false;
+
+        const belongsToChapter = tChap === selectedChapterId || currentChapterMemberUidsSet.has(authorId) || currentChapterMemberUidsSet.has(recipientId);
+        if (!belongsToChapter) return false;
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = t.authorMemberId === selectedMemberId || t.recipientMemberId === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        if (authorId !== selectedMemberId && recipientId !== selectedMemberId) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
+    // 6. Thank You Slips (Revenue)
     const filteredSlips = thankYouSlips.filter(s => {
-      const isDateValid = isWithinDateRange(s.createdAt, parsedStart, parsedEnd);
-      let isScopeValid = true;
-      const from = s.fromUserId || (s as any).from_user_id || (s as any).sender_id;
-      const to = s.toUserId || (s as any).to_user_id || (s as any).receiver_id;
+      const isDateValid = isWithinDateRange(s.createdAt || (s as any).created_at || s.date, parsedStart, parsedEnd);
+      if (!isDateValid) return false;
+
+      const from = String(s.fromUserId || (s as any).from_user_id || (s as any).sender_id || '');
+      const to = String(s.toUserId || (s as any).to_user_id || (s as any).receiver_id || '');
+
       if (selectedChapterId && selectedChapterId !== 'ALL') {
-        const chapterMemberUids = users.filter(u => u.chapter_id === selectedChapterId || u.chapterId === selectedChapterId).map(u => u.uid || u.id);
-        isScopeValid = chapterMemberUids.includes(from) || chapterMemberUids.includes(to);
+        const sChap = String(s.chapter_id || s.chapterId || '').trim();
+        if (sChap && sChap !== selectedChapterId) return false;
+
+        const belongsToChapter = sChap === selectedChapterId || currentChapterMemberUidsSet.has(from) || currentChapterMemberUidsSet.has(to);
+        if (!belongsToChapter) return false;
       }
-      if (isScopeValid && selectedMemberId && selectedMemberId !== 'ALL') {
-        isScopeValid = from === selectedMemberId || to === selectedMemberId;
+
+      if (selectedMemberId && selectedMemberId !== 'ALL') {
+        if (from !== selectedMemberId && to !== selectedMemberId) return false;
       }
-      return isDateValid && isScopeValid;
+
+      return true;
     });
 
     return {
@@ -333,13 +561,13 @@ export function Reports() {
       testimonials: filteredTestimonials,
       slips: filteredSlips
     };
-  }, [referrals, meetings, oneToOnes, guestInvitations, testimonials, thankYouSlips, selectedChapterId, selectedMemberId, users, parsedStart, parsedEnd]);
+  }, [referrals, meetings, oneToOnes, guestInvitations, testimonials, thankYouSlips, selectedChapterId, selectedMemberId, currentChapterMemberUidsSet, selectedChapterObj, parsedStart, parsedEnd]);
 
   // Aggregate stats cards
   
   const chapterGrowthScoreData = useMemo(() => {
     return calculateChapterGrowthScoreData({
-      chapterMembers: currentChapterMemberIds.map(id => users.find(u => u.uid === id || u.id === id)).filter(Boolean),
+      chapterMembers: currentChapterMemberIds.map(id => users.find(u => String(u.uid || u.id) === id)).filter(Boolean),
       activeDateRange: parsedStart && parsedEnd ? { start: parsedStart, end: parsedEnd } : null,
       allReferrals: referrals,
       oneToOnes: oneToOnes,
@@ -354,13 +582,13 @@ export function Reports() {
 
   const statsSummary = useMemo(() => {
     // Total Revenue
-    const totalRevenue = reportsData.slips.reduce((sum, s) => sum + (Number(s.businessValue || s.business_value) || 0), 0);
+    const totalRevenue = reportsData.slips.reduce((sum, s) => sum + (Number(s.businessValue || s.business_value || s.amount) || 0), 0);
 
     // Referrals Total
     const referralsTotal = reportsData.referrals.length;
 
     // Attendance Average %
-    const completedMeetings = reportsData.meetings.filter(m => m.isCompleted);
+    const completedMeetings = reportsData.meetings.filter(m => m.isCompleted || m.status === 'COMPLETED');
     let totalPresentCount = 0;
     let totalAttendanceRecords = 0;
 
@@ -370,7 +598,7 @@ export function Reports() {
           const status = m.attendance[memberId];
           if (status) {
             totalAttendanceRecords++;
-            if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(status))) {
+            if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(status))) {
               totalPresentCount++;
             }
           }
@@ -382,11 +610,11 @@ export function Reports() {
     // One-to-Ones Completed
     const completedOneToOnes = reportsData.oneToOnes.filter(m => m.status === 'COMPLETED').length;
 
-    // Guests Attended
-    const guestsAttended = reportsData.guests.filter(g => g.status === 'Attended').length;
+    // Guests Count (Total chapter guests / visitors)
+    const guestsAttended = reportsData.guests.length;
 
     // Testimonials Approved
-    const approvedTestimonials = reportsData.testimonials.filter(t => t.status === 'APPROVED').length;
+    const approvedTestimonials = reportsData.testimonials.filter(t => t.status === 'APPROVED' || !t.status).length;
 
     return {
       totalRevenue,
@@ -402,18 +630,20 @@ export function Reports() {
   // Calculate detailed table data for each member in the chapter
   const tableData = useMemo(() => {
     const results = filteredMembers.map(member => {
+      const mUid = String(member.uid || member.id);
+
       // 1. Referrals Passed
-      const referralsPassed = reportsData.referrals.filter(r => r.fromUserId === member.uid).length;
+      const referralsPassed = reportsData.referrals.filter(r => String(r.fromUserId || r.sender_id) === mUid).length;
 
       // 2. Attendance %
-      const completedMeetings = reportsData.meetings.filter(m => m.isCompleted);
+      const completedMeetings = reportsData.meetings.filter(m => m.isCompleted || m.status === 'COMPLETED');
       let attendedMeetings = 0;
       let totalChapterMeetings = 0;
 
       completedMeetings.forEach(m => {
-        if (m.attendance && m.attendance[member.uid]) {
+        if (m.attendance && m.attendance[mUid]) {
           totalChapterMeetings++;
-          if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(String(m.attendance[member.uid]))) {
+          if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(m.attendance[mUid]))) {
             attendedMeetings++;
           }
         }
@@ -422,17 +652,33 @@ export function Reports() {
 
       // 3. 1-to-1 Completed
       const completedOneToOnesCount = reportsData.oneToOnes.filter(m => 
-        m.status === 'COMPLETED' && ((m.organizer_id || m.creatorId) === member.uid || ([m.member_id, ...(m.participantIds || [])]).includes(member.uid))
+        m.status === 'COMPLETED' && (
+          String(m.organizer_id || m.creatorId || m.sender_id) === mUid || 
+          String(m.member_id || m.receiver_id) === mUid ||
+          (m.participantIds && m.participantIds.map(String).includes(mUid))
+        )
       ).length;
 
       // 4. Guests Invited
       const guestsInvited = reportsData.guests.filter(g => {
-        const inviterId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-        return inviterId === String(member.uid || member.id);
+        const inviterId = String(
+          g.invited_by_user_id || 
+          (g as any).invitedByUserId || 
+          g.invited_by || 
+          (g as any).invitedBy || 
+          g.createdBy || 
+          (g as any).created_by || 
+          g.inviterId || 
+          (g as any).inviter_id || 
+          g.user_id || 
+          (g as any).memberId || 
+          ''
+        ).trim();
+        return inviterId === mUid;
       }).length;
 
       // 5. Testimonials Submitted
-      const testimonialsSubmitted = reportsData.testimonials.filter(t => t.authorMemberId === member.uid).length;
+      const testimonialsSubmitted = reportsData.testimonials.filter(t => String(t.authorMemberId || t.author_id || (t as any).fromUserId) === mUid).length;
 
       let startStr = member.subscriptionStart || member.subscriptionStartDate || member.created_at || member.createdAt;
       let endStr = member.subscriptionEnd || member.subscriptionEndDate || member.current_subscription_end_date;
@@ -456,13 +702,13 @@ export function Reports() {
       growthScore = Math.min(100, Math.max(0, Math.round(growthScore)));
 
       // Human-readable position label
-      const displayPosition = getDisplayPosition(member.position, member.role);
+      const { positionKey, displayPosition } = getMemberPositionInfo(member);
 
       return {
-        uid: member.uid,
-        name: member.name || 'Anonymous User',
+        uid: mUid,
+        name: member.name || (member as any).full_name || (member as any).displayName || 'Anonymous User',
         position: displayPosition,
-        positionKey: member.position || 'member',
+        positionKey: positionKey,
         referrals: referralsPassed,
         attendance: attendancePercent,
         oneToOnes: completedOneToOnesCount,
@@ -470,7 +716,7 @@ export function Reports() {
         testimonials: testimonialsSubmitted,
         status: member.membershipStatus || 'ACTIVE',
         growthScore,
-        businessName: member.businessName || 'N/A'
+        businessName: member.businessName || (member as any).company_name || 'N/A'
       };
     });
 
@@ -502,7 +748,7 @@ export function Reports() {
     });
 
     return processed;
-  }, [filteredMembers, reportsData, searchQuery, sortField, sortDirection]);
+  }, [filteredMembers, reportsData, searchQuery, sortField, sortDirection, selectedChapterObj]);
 
   // Derived data for charts
   const monthlyMetricsChartData = useMemo(() => {
@@ -641,6 +887,13 @@ export function Reports() {
     if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
     if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
     return `₹${val.toLocaleString()}`;
+  };
+
+  // Helper to resolve user name by ID
+  const resolveMemberNameById = (id: any, fallback?: string) => {
+    if (!id) return fallback || 'Chapter Member';
+    const u = users.find(user => String(user.uid || user.id) === String(id));
+    return u?.name || (u as any)?.full_name || (u as any)?.displayName || fallback || 'Chapter Member';
   };
 
   // EXPORT HANDLERS
@@ -995,11 +1248,12 @@ export function Reports() {
             {/* Total Members */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('members'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Active Members</span>
-                <div className="w-6 h-6 rounded-[8px] bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">Active Members</span>
+                <div className="w-6 h-6 rounded-[8px] bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20 group-hover:scale-110 transition-transform">
                   <Users size={12} />
                 </div>
               </div>
@@ -1012,11 +1266,12 @@ export function Reports() {
             {/* Business Generated */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('revenue'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Revenue</span>
-                <div className="w-6 h-6 rounded-[8px] bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">Revenue</span>
+                <div className="w-6 h-6 rounded-[8px] bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform">
                   <Briefcase size={12} />
                 </div>
               </div>
@@ -1029,11 +1284,12 @@ export function Reports() {
             {/* Referrals */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('referrals'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Referrals</span>
-                <div className="w-6 h-6 rounded-[8px] bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">Referrals</span>
+                <div className="w-6 h-6 rounded-[8px] bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform">
                   <Share2 size={12} />
                 </div>
               </div>
@@ -1046,11 +1302,12 @@ export function Reports() {
             {/* Attendance % */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('attendance'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Avg Attendance</span>
-                <div className="w-6 h-6 rounded-[8px] bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">Avg Attendance</span>
+                <div className="w-6 h-6 rounded-[8px] bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 group-hover:scale-110 transition-transform">
                   <Calendar size={12} />
                 </div>
               </div>
@@ -1063,11 +1320,12 @@ export function Reports() {
             {/* 1-to-1s Completed */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('oneToOnes'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">1-to-1 Meetings</span>
-                <div className="w-6 h-6 rounded-[8px] bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">1-to-1 Meetings</span>
+                <div className="w-6 h-6 rounded-[8px] bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 group-hover:scale-110 transition-transform">
                   <Layers size={12} />
                 </div>
               </div>
@@ -1080,11 +1338,12 @@ export function Reports() {
             {/* Guests Invited */}
             <motion.div 
               whileHover={{ y: -4 }}
-              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]"
+              onClick={() => { setSelectedDetailCard('guests'); setDetailSearchQuery(''); }}
+              className="bg-[#111827] border border-white/5 rounded-[20px] p-4 flex flex-col justify-between h-[120px] relative overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)] cursor-pointer hover:border-white/20 active:scale-[0.99] transition-all group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider">Visitors Attended</span>
-                <div className="w-6 h-6 rounded-[8px] bg-pink-500/10 text-pink-400 flex items-center justify-center border border-pink-500/20">
+                <span className="text-[9px] font-bold text-[#9CA3AF] uppercase tracking-wider group-hover:text-white transition-colors">Visitors Attended</span>
+                <div className="w-6 h-6 rounded-[8px] bg-pink-500/10 text-pink-400 flex items-center justify-center border border-pink-500/20 group-hover:scale-110 transition-transform">
                   <UserPlus size={12} />
                 </div>
               </div>
@@ -1513,6 +1772,497 @@ export function Reports() {
               className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold py-3 rounded-xl transition-all text-sm shadow-lg shadow-red-900/20"
             >
               Apply Filter
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Clicked Card Detail Modal */}
+      <Modal
+        isOpen={!!selectedDetailCard}
+        onClose={() => { setSelectedDetailCard(null); setDetailSearchQuery(''); }}
+        title={
+          selectedDetailCard === 'members' ? `Active Members (${filteredMembers.length})` :
+          selectedDetailCard === 'revenue' ? `Chapter Revenue (${reportsData.slips.length} Slips • ${formatCur(statsSummary.totalRevenue)})` :
+          selectedDetailCard === 'referrals' ? `Chapter Referrals (${reportsData.referrals.length})` :
+          selectedDetailCard === 'attendance' ? `Meeting Attendance (${statsSummary.avgAttendance}% Avg)` :
+          selectedDetailCard === 'oneToOnes' ? `1-to-1 Meetings (${statsSummary.completedOneToOnes})` :
+          selectedDetailCard === 'guests' ? `Visitors Attended (${statsSummary.guestsAttended})` : 'Details'
+        }
+        maxWidth="max-w-3xl"
+      >
+        <div className="space-y-4">
+          {/* Subheader & Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+            <div className="text-xs font-semibold text-[#9CA3AF]">
+              {selectedDetailCard === 'members' && `All members and leadership belonging to ${currentChapterName}`}
+              {selectedDetailCard === 'revenue' && `Verified thank you slips for ${currentChapterName}`}
+              {selectedDetailCard === 'referrals' && `Direct & chapter referrals passed within ${currentChapterName}`}
+              {selectedDetailCard === 'attendance' && `Completed meeting attendance history for ${currentChapterName}`}
+              {selectedDetailCard === 'oneToOnes' && `Completed 1-to-1 syncs between chapter members`}
+              {selectedDetailCard === 'guests' && `Visitors confirmed attended in chapter meetings`}
+            </div>
+            
+            <div className="relative min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" size={14} />
+              <input
+                type="text"
+                placeholder="Search records..."
+                value={detailSearchQuery}
+                onChange={(e) => setDetailSearchQuery(e.target.value)}
+                className="w-full bg-[#111827] border border-white/10 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#6B7280] focus:border-red-500 focus:outline-none transition-all"
+              />
+              {detailSearchQuery && (
+                <button
+                  onClick={() => setDetailSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List Content */}
+          <div className="max-h-[60vh] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
+            {/* 1. MEMBERS */}
+            {selectedDetailCard === 'members' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const items = filteredMembers.filter(m => {
+                if (!q) return true;
+                const { displayPosition } = getMemberPositionInfo(m);
+                return (m.name || (m as any).full_name || '').toLowerCase().includes(q) ||
+                       (m.businessName || (m as any).company_name || '').toLowerCase().includes(q) ||
+                       displayPosition.toLowerCase().includes(q) ||
+                       (m.email || '').toLowerCase().includes(q) ||
+                       (m.phone || '').includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No members found matching your search.
+                  </div>
+                );
+              }
+
+              return items.map((m) => {
+                const { displayPosition, positionKey } = getMemberPositionInfo(m);
+                const isLeader = ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(positionKey);
+                const initials = (m.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+                return (
+                  <div 
+                    key={String(m.uid || m.id)}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs uppercase shrink-0 border",
+                        isLeader 
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
+                          : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                      )}>
+                        {initials}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-white">{m.name || (m as any).full_name || 'Member'}</span>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide",
+                            isLeader 
+                              ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" 
+                              : "bg-white/5 text-[#9CA3AF] border border-white/10"
+                          )}>
+                            {displayPosition}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                          {(m.businessName || (m as any).company_name) && (
+                            <span className="flex items-center gap-1">
+                              <Building size={12} className="text-[#6B7280]" />
+                              {m.businessName || (m as any).company_name}
+                            </span>
+                          )}
+                          {m.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone size={12} className="text-[#6B7280]" />
+                              {m.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center">
+                      <span className={cn(
+                        "px-2.5 py-1 rounded-md text-[10px] font-bold uppercase",
+                        m.membershipStatus === 'ACTIVE' 
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" 
+                          : "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                      )}>
+                        {m.membershipStatus || 'ACTIVE'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* 2. REVENUE */}
+            {selectedDetailCard === 'revenue' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const items = reportsData.slips.filter(s => {
+                if (!q) return true;
+                const giver = resolveMemberNameById(s.fromUserId || (s as any).from_user_id || (s as any).sender_id);
+                const receiver = resolveMemberNameById(s.toUserId || (s as any).to_user_id || (s as any).receiver_id);
+                const valStr = String(s.businessValue || s.business_value || s.amount || '');
+                return giver.toLowerCase().includes(q) ||
+                       receiver.toLowerCase().includes(q) ||
+                       valStr.includes(q) ||
+                       (s.notes || (s as any).comments || '').toLowerCase().includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No revenue slips found for the selected period.
+                  </div>
+                );
+              }
+
+              return items.map((s, idx) => {
+                const giver = resolveMemberNameById(s.fromUserId || (s as any).from_user_id || (s as any).sender_id);
+                const receiver = resolveMemberNameById(s.toUserId || (s as any).to_user_id || (s as any).receiver_id);
+                const rawVal = Number(s.businessValue || s.business_value || s.amount) || 0;
+                const d = parseSafeDate(s.createdAt || (s as any).created_at || s.date);
+                const formattedDate = d ? format(d, 'dd MMM yyyy') : 'Recent';
+
+                return (
+                  <div 
+                    key={s.id || `slip-${idx}`}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{giver}</span>
+                        <ArrowRight size={12} className="text-[#6B7280]" />
+                        <span className="text-sm font-bold text-emerald-400">{receiver}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-[#6B7280]" />
+                          {formattedDate}
+                        </span>
+                        {s.notes && (
+                          <span className="text-[#6B7280] italic truncate max-w-xs">"{s.notes}"</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-base font-black text-emerald-400">
+                        ₹{rawVal.toLocaleString()}
+                      </span>
+                      <span className="block text-[10px] uppercase font-bold text-[#6B7280]">Verified Slip</span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* 3. REFERRALS */}
+            {selectedDetailCard === 'referrals' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const items = reportsData.referrals.filter(r => {
+                if (!q) return true;
+                const giver = resolveMemberNameById(r.fromUserId || r.sender_id);
+                const receiver = resolveMemberNameById(r.toUserId || r.receiver_id);
+                return giver.toLowerCase().includes(q) ||
+                       receiver.toLowerCase().includes(q) ||
+                       (r.referralName || (r as any).client_name || '').toLowerCase().includes(q) ||
+                       (r.notes || (r as any).description || '').toLowerCase().includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No referrals found for the selected period.
+                  </div>
+                );
+              }
+
+              return items.map((r, idx) => {
+                const giver = resolveMemberNameById(r.fromUserId || r.sender_id);
+                const receiver = resolveMemberNameById(r.toUserId || r.receiver_id);
+                const d = parseSafeDate(r.createdAt || (r as any).created_at);
+                const formattedDate = d ? format(d, 'dd MMM yyyy') : 'Recent';
+
+                return (
+                  <div 
+                    key={r.id || `ref-${idx}`}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{giver}</span>
+                        <ArrowRight size={12} className="text-[#6B7280]" />
+                        <span className="text-sm font-bold text-indigo-400">{receiver}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                        {(r.referralName || (r as any).client_name) && (
+                          <span className="font-semibold text-white">Client: {r.referralName || (r as any).client_name}</span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-[#6B7280]" />
+                          {formattedDate}
+                        </span>
+                        {r.phone && (
+                          <span className="flex items-center gap-1 text-[#6B7280]">
+                            <Phone size={11} /> {r.phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 self-start sm:self-center">
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        {r.status || 'Active'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* 4. ATTENDANCE */}
+            {selectedDetailCard === 'attendance' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const completedMeetings = reportsData.meetings.filter(m => m.isCompleted || m.status === 'COMPLETED');
+              const items = completedMeetings.filter(m => {
+                if (!q) return true;
+                return (m.title || m.name || m.venue || m.location || '').toLowerCase().includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No completed meetings found for the selected period.
+                  </div>
+                );
+              }
+
+              return items.map((m, idx) => {
+                const d = parseSafeDate(m.date || m.meeting_date || m.createdAt);
+                const formattedDate = d ? format(d, 'dd MMM yyyy') : 'Recent';
+                let presentCount = 0;
+                let totalAttendees = 0;
+
+                if (m.attendance) {
+                  currentChapterMemberIds.forEach(mid => {
+                    const st = m.attendance[mid];
+                    if (st) {
+                      totalAttendees++;
+                      if (['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(st))) {
+                        presentCount++;
+                      }
+                    }
+                  });
+                }
+                const meetingPct = totalAttendees === 0 ? 0 : Math.round((presentCount / totalAttendees) * 100);
+
+                return (
+                  <div 
+                    key={m.id || `meet-${idx}`}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">{m.title || m.name || 'Chapter Meeting'}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-[#6B7280]" />
+                          {formattedDate}
+                        </span>
+                        {(m.venue || m.location) && (
+                          <span className="text-[#6B7280]">
+                            Venue: {m.venue || m.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 self-end sm:self-center">
+                      <div className="text-right">
+                        <span className="text-sm font-black text-cyan-400">{meetingPct}%</span>
+                        <span className="block text-[10px] text-[#6B7280] font-bold">{presentCount}/{totalAttendees || currentChapterMemberIds.length} Present</span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        Completed
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* 5. 1-TO-1 MEETINGS */}
+            {selectedDetailCard === 'oneToOnes' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const items = reportsData.oneToOnes.filter(m => m.status === 'COMPLETED').filter(m => {
+                if (!q) return true;
+                const p1 = resolveMemberNameById(m.organizer_id || m.creatorId || m.sender_id);
+                const p2 = resolveMemberNameById(m.member_id || m.receiver_id);
+                return p1.toLowerCase().includes(q) ||
+                       p2.toLowerCase().includes(q) ||
+                       (m.notes || m.location || '').toLowerCase().includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No completed 1-to-1 syncs found for the selected period.
+                  </div>
+                );
+              }
+
+              return items.map((m, idx) => {
+                const p1 = resolveMemberNameById(m.organizer_id || m.creatorId || m.sender_id);
+                const p2 = resolveMemberNameById(m.member_id || m.receiver_id);
+                const meetingDate = m.date || m.meeting_date || m.scheduled_date || (m as any).scheduledDate || m.createdAt;
+                const d = parseSafeDate(meetingDate);
+                const formattedDate = d ? format(d, 'dd MMM yyyy') : 'Recent';
+
+                return (
+                  <div 
+                    key={m.id || `oto-${idx}`}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{p1}</span>
+                        <span className="text-xs text-[#6B7280] font-bold">&</span>
+                        <span className="text-sm font-bold text-blue-400">{p2}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-[#6B7280]" />
+                          {formattedDate}
+                        </span>
+                        {m.location && (
+                          <span className="text-[#6B7280]">Location: {m.location}</span>
+                        )}
+                        {m.notes && (
+                          <span className="text-[#6B7280] italic truncate max-w-xs">"{m.notes}"</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 self-start sm:self-center">
+                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                        Completed
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
+            {/* 6. GUESTS / VISITORS */}
+            {selectedDetailCard === 'guests' && (() => {
+              const q = detailSearchQuery.toLowerCase().trim();
+              const items = reportsData.guests.filter(g => {
+                if (!q) return true;
+                const inviter = resolveMemberNameById(
+                  g.invited_by_user_id || (g as any).invitedByUserId || 
+                  g.invited_by || (g as any).invitedBy || 
+                  g.createdBy || (g as any).created_by || 
+                  g.inviterId || (g as any).inviter_id || 
+                  g.user_id || (g as any).memberId
+                ) || (g as any).invited_by_name || (g as any).invitedByName || '';
+                return (g.name || (g as any).guest_name || (g as any).guestName || '').toLowerCase().includes(q) ||
+                       (g.businessName || (g as any).company || (g as any).profession || (g as any).guest_business || (g as any).business_category || '').toLowerCase().includes(q) ||
+                       (g.phone || (g as any).mobile || (g as any).guest_phone || (g as any).guest_whatsapp || '').toLowerCase().includes(q) ||
+                       inviter.toLowerCase().includes(q);
+              });
+
+              if (items.length === 0) {
+                return (
+                  <div className="text-center py-10 text-[#9CA3AF] text-sm font-medium">
+                    No guest records found for the selected period.
+                  </div>
+                );
+              }
+
+              return items.map((g, idx) => {
+                const inviter = resolveMemberNameById(
+                  g.invited_by_user_id || (g as any).invitedByUserId || 
+                  g.invited_by || (g as any).invitedBy || 
+                  g.createdBy || (g as any).created_by || 
+                  g.inviterId || (g as any).inviter_id || 
+                  g.user_id || (g as any).memberId
+                ) || (g as any).invited_by_name || (g as any).invitedByName || 'Chapter Member';
+                const d = parseSafeDate(g.createdAt || (g as any).created_at || (g as any).meeting_date || (g as any).meetingDate || g.date);
+                const formattedDate = d ? format(d, 'dd MMM yyyy') : 'Recent';
+                const guestName = g.name || (g as any).guest_name || (g as any).guestName || 'Guest';
+                const business = g.businessName || (g as any).company || (g as any).profession || (g as any).guest_business || (g as any).business_category;
+                const phone = g.phone || (g as any).mobile || (g as any).guest_phone || (g as any).guest_whatsapp;
+                const statusStr = String(g.status || (g as any).attendance_status || 'Invited');
+                const isAttended = ['attended', 'present'].includes(statusStr.toLowerCase());
+
+                return (
+                  <div 
+                    key={g.id || `guest-${idx}`}
+                    className="p-3.5 bg-[#111827] border border-white/5 rounded-xl hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{guestName}</span>
+                        {business && (
+                          <span className="text-xs text-[#9CA3AF]">
+                            • {business}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-[#9CA3AF] mt-1 flex-wrap">
+                        <span className="text-[#9CA3AF]">
+                          Invited by: <strong className="text-white font-semibold">{inviter}</strong>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} className="text-[#6B7280]" />
+                          {formattedDate}
+                        </span>
+                        {phone && (
+                          <span className="flex items-center gap-1 text-[#6B7280]">
+                            <Phone size={11} /> {phone}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 self-start sm:self-center">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase ${
+                        isAttended 
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                          : 'bg-pink-500/15 text-pink-400 border border-pink-500/30'
+                      }`}>
+                        {statusStr}
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          {/* Close button */}
+          <div className="pt-3 border-t border-white/10 flex justify-end">
+            <button
+              onClick={() => { setSelectedDetailCard(null); setDetailSearchQuery(''); }}
+              className="bg-[#111827] hover:bg-neutral-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all text-xs border border-white/10 cursor-pointer"
+            >
+              Close
             </button>
           </div>
         </div>

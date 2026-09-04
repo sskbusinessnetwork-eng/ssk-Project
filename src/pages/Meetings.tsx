@@ -365,6 +365,8 @@ export function Meetings() {
   const [tempDate, setTempDate] = useState('');
   const [tempTime, setTempTime] = useState('');
   const [tempLocation, setTempLocation] = useState('');
+  const [tempMemberCount, setTempMemberCount] = useState<number | ''>('');
+  const [tempGuestCount, setTempGuestCount] = useState<number | ''>('');
   const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
   const [tempGuestAttendance, setTempGuestAttendance] = useState<Record<string, string>>({});
   const [guestInviters, setGuestInviters] = useState<Record<string, any>>({});
@@ -784,6 +786,16 @@ export function Meetings() {
             });
 
             setModalChapterMembers(chapterMembersList);
+            const mCount = selectedMeeting.memberCount !== undefined 
+              ? selectedMeeting.memberCount 
+              : ((selectedMeeting as any).member_count !== undefined 
+                  ? (selectedMeeting as any).member_count 
+                  : ((selectedMeeting.memberNotes as any)?.__counts?.memberCount ?? (selectedMeeting.memberNotes as any)?.__memberCount));
+            if (mCount !== undefined && mCount !== null) {
+              setTempMemberCount(mCount);
+            } else {
+              setTempMemberCount(prev => (prev !== '' ? prev : chapterMembersList.length));
+            }
           } else {
             setModalChapterMembers([]);
           }
@@ -796,6 +808,16 @@ export function Meetings() {
             
           if (guests) {
             setMeetingGuests(guests);
+            const gCount = selectedMeeting.guestCount !== undefined 
+              ? selectedMeeting.guestCount 
+              : ((selectedMeeting as any).guest_count !== undefined 
+                  ? (selectedMeeting as any).guest_count 
+                  : ((selectedMeeting.memberNotes as any)?.__counts?.guestCount ?? (selectedMeeting.memberNotes as any)?.__guestCount));
+            if (gCount !== undefined && gCount !== null) {
+              setTempGuestCount(gCount);
+            } else {
+              setTempGuestCount(prev => (prev !== '' ? prev : guests.length));
+            }
             
             // Extract unique inviter IDs
             const inviterIds = [...new Set(guests.map(g => g.invited_by).filter(Boolean))];
@@ -1462,6 +1484,19 @@ export function Meetings() {
       
       const shouldComplete = allMembersFilled && allGuestsFilled && meetingMembers.length > 0;
 
+      const finalMemberCount = tempMemberCount === '' ? 0 : Number(tempMemberCount);
+      const finalGuestCount = tempGuestCount === '' ? 0 : Number(tempGuestCount);
+
+      const updatedMemberNotes = {
+        ...(tempMemberNotes || {}),
+        __counts: {
+          memberCount: finalMemberCount,
+          guestCount: finalGuestCount
+        },
+        __memberCount: finalMemberCount,
+        __guestCount: finalGuestCount
+      };
+
       const updatePayload: any = {
         updated_at: new Date().toISOString()
       };
@@ -1470,7 +1505,9 @@ export function Meetings() {
       if (tempLocation !== undefined) updatePayload.location = tempLocation;
       if (tempAttendance) updatePayload.attendance = tempAttendance;
       if (tempAmount) updatePayload.amount_collected = tempAmount;
-      if (tempMemberNotes) updatePayload.member_notes = tempMemberNotes;
+      updatePayload.member_notes = updatedMemberNotes;
+      updatePayload.memberCount = finalMemberCount;
+      updatePayload.guestCount = finalGuestCount;
       if (shouldComplete) {
         updatePayload.is_completed = true;
         updatePayload.status = 'COMPLETED';
@@ -1491,9 +1528,11 @@ export function Meetings() {
             location: tempLocation,
             attendance: tempAttendance,
             amountCollected: tempAmount,
-            memberNotes: tempMemberNotes,
+            memberNotes: updatedMemberNotes,
             isCompleted: shouldComplete,
-            guestUpdates
+            guestUpdates,
+            memberCount: finalMemberCount,
+            guestCount: finalGuestCount
           })
         });
 
@@ -1574,6 +1613,8 @@ export function Meetings() {
       setIsUpdateModalOpen(false);
       setSuccess(null);
       setSelectedMeeting(null);
+      setTempMemberCount('');
+      setTempGuestCount('');
     } catch (err: any) {
       console.error("Error updating meeting:", err);
       const errMsg = "Failed to update meeting attendance. Please try again.";
@@ -2114,6 +2155,18 @@ export function Meetings() {
                       setTempDate(primaryFocusMeeting.date || '');
                       setTempTime(primaryFocusMeeting.time || '');
                       setTempLocation(primaryFocusMeeting.location || '');
+                      const mCount = primaryFocusMeeting.memberCount !== undefined 
+                        ? primaryFocusMeeting.memberCount 
+                        : ((primaryFocusMeeting as any).member_count !== undefined 
+                            ? (primaryFocusMeeting as any).member_count 
+                            : ((primaryFocusMeeting.memberNotes as any)?.__counts?.memberCount ?? (primaryFocusMeeting.memberNotes as any)?.__memberCount));
+                      const gCount = primaryFocusMeeting.guestCount !== undefined 
+                        ? primaryFocusMeeting.guestCount 
+                        : ((primaryFocusMeeting as any).guest_count !== undefined 
+                            ? (primaryFocusMeeting as any).guest_count 
+                            : ((primaryFocusMeeting.memberNotes as any)?.__counts?.guestCount ?? (primaryFocusMeeting.memberNotes as any)?.__guestCount));
+                      setTempMemberCount(mCount !== undefined && mCount !== null ? mCount : '');
+                      setTempGuestCount(gCount !== undefined && gCount !== null ? gCount : '');
                       setIsUpdateModalOpen(true);
                     }}
                     className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
@@ -2323,6 +2376,18 @@ export function Meetings() {
                               setTempDate(meeting.date || '');
                               setTempTime(meeting.time || '');
                               setTempLocation(meeting.location || '');
+                              const mCount = meeting.memberCount !== undefined 
+                                ? meeting.memberCount 
+                                : ((meeting as any).member_count !== undefined 
+                                    ? (meeting as any).member_count 
+                                    : ((meeting.memberNotes as any)?.__counts?.memberCount ?? (meeting.memberNotes as any)?.__memberCount));
+                              const gCount = meeting.guestCount !== undefined 
+                                ? meeting.guestCount 
+                                : ((meeting as any).guest_count !== undefined 
+                                    ? (meeting as any).guest_count 
+                                    : ((meeting.memberNotes as any)?.__counts?.guestCount ?? (meeting.memberNotes as any)?.__guestCount));
+                              setTempMemberCount(mCount !== undefined && mCount !== null ? mCount : '');
+                              setTempGuestCount(gCount !== undefined && gCount !== null ? gCount : '');
                               setIsUpdateModalOpen(true);
                             }}
                             className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
@@ -2591,6 +2656,42 @@ export function Meetings() {
                   onChange={(e) => setTempLocation(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Count</label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Enter member count"
+                    value={tempMemberCount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTempMemberCount(val === '' ? '' : Math.max(0, parseInt(val, 10) || 0));
+                    }}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Guest Count</label>
+                <div className="relative">
+                  <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Enter guest count"
+                    value={tempGuestCount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTempGuestCount(val === '' ? '' : Math.max(0, parseInt(val, 10) || 0));
+                    }}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
               </div>
             </div>
           </div>
