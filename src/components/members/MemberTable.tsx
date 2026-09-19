@@ -160,14 +160,12 @@ export function MemberTable({
                   >
                     Reset
                   </button>
-                  {isMasterAdmin && (
-                    <button
-                      onClick={() => onTransferMember(member)}
-                      className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
-                    >
-                      Transfer
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onTransferMember(member)}
+                    className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-amber-500/20"
+                  >
+                    Transfer
+                  </button>
                   <button
                     onClick={() => onOpenSubModal(member)}
                     className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"

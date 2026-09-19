@@ -21,7 +21,6 @@ import { Profile } from './pages/Profile';
 import { Categories } from './pages/Categories';
 import { Admins } from './pages/Admins';
 import { Members } from './pages/Members';
-import { TransferMembers } from './pages/TransferMembers';
 import { Meetings } from './pages/Meetings';
 import { Guests } from './pages/Guests';
 import { OneToOneMeetings } from './pages/OneToOneMeetings';
@@ -113,7 +112,6 @@ export default function App() {
               <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN']}><Analytics /></ProtectedRoute>} />
               <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Members /></ProtectedRoute>} />
-              <Route path="/transfer-members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TransferMembers /></ProtectedRoute>} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/activity" element={<Activity />} />
               <Route path="/refer" element={<Activity />} />

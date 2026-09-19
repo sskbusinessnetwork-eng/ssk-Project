@@ -18,6 +18,7 @@ import {
   Trash2,
   Building2,
   Plus,
+  ArrowRight,
   Lock,
   UserPlus,
   ChevronRight,
@@ -34,10 +35,11 @@ import { databaseService } from '../services/databaseService';
 import { subscriptionService } from '../services/subscriptionService';
 import { UserProfile, Category, GuestInvitation } from '../types';
 import { Modal } from '../components/Modal';
+import { TransferMemberModal } from '../components/members/TransferMemberModal';
 import { MemberTable } from '../components/members/MemberTable';
+
 import { AddMemberModal } from '../components/members/AddMemberModal';
 import { EditMemberModal } from '../components/members/EditMemberModal';
-import { TransferChapterModal } from '../components/modals/TransferChapterModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { PositionManagement } from '../components/positions/PositionManagement';
@@ -162,9 +164,10 @@ export function Members() {
 
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferMember, setTransferMember] = useState<UserProfile | null>(null);
   const [createdMemberData, setCreatedMemberData] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [deleteConfirmMember, setDeleteConfirmMember] = useState<UserProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -540,38 +543,6 @@ export function Members() {
     setIsEditModalOpen(true);
   };
 
-  const openTransferModal = (member: UserProfile) => {
-    setSelectedMember(member);
-    setIsTransferModalOpen(true);
-  };
-
-  const handleTransferMember = async (newChapterId: string) => {
-    if (!selectedMember) return;
-
-    setIsSubmitting(true);
-    try {
-      const newChapter = chapters.find(c => c.id === newChapterId);
-      if (!newChapter) throw new Error('New chapter not found.');
-
-      await databaseService.update('users', selectedMember.uid || selectedMember.id, {
-        chapter_id: newChapterId,
-        chapter_name: newChapter.chapter_name,
-        chapterName: newChapter.chapter_name
-      });
-      
-      setIsTransferModalOpen(false);
-      setSelectedMember(null);
-      
-      triggerSuccessToast('Member transferred successfully!');
-      window.dispatchEvent(new Event('members-refresh'));
-    } catch (err: any) {
-      console.error('Error transferring member:', err);
-      showError(`Failed to transfer member: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const openSubModal = (member: UserProfile) => {
     setSelectedMember(member);
     setSubDates({
@@ -739,6 +710,25 @@ export function Members() {
     }
   };
 
+  const handleTransferMember = async (memberId: string, newChapterId: string) => {
+    const member = members.find(m => (m.uid || m.id) === memberId);
+    const chapter = chapters.find(c => c.id === newChapterId);
+    if (!member || !chapter) return;
+
+    try {
+      await databaseService.update('users', memberId, {
+        chapter_id: newChapterId,
+        chapter_name: chapter.chapter_name
+      });
+      triggerSuccessToast('Member transferred successfully!');
+      window.dispatchEvent(new Event('members-refresh'));
+      window.dispatchEvent(new Event('dashboard-refresh'));
+    } catch (err: any) {
+      console.error("Transfer Member Error:", err);
+      showError('Failed to transfer member.');
+    }
+  };
+
   const filteredMembers = members.filter(m => {
     // Hide self from the list
     if (m.uid === profile?.uid) return false;
@@ -819,6 +809,18 @@ export function Members() {
             >
               <Plus size={16} />
               + Add Member
+            </button>
+          )}
+          {isMasterAdmin && (
+            <button
+              onClick={() => {
+                setTransferMember(null);
+                setIsTransferModalOpen(true);
+              }}
+              className="h-11 px-6 bg-amber-600 text-white rounded-[12px] text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.02)] shadow-amber-500/10 flex items-center gap-2 hover:bg-amber-700 hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)]"
+            >
+              <ArrowRight size={16} />
+              Transfer Member
             </button>
           )}
         </div>
@@ -925,9 +927,12 @@ export function Members() {
               onUpdateStatus={updateStatus}
               onOpenSubModal={openSubModal}
               onEditMember={openEditModal}
-              onTransferMember={openTransferModal}
               onDeleteMember={setDeleteConfirmMember}
               onResetPassword={setResetPasswordMember}
+              onTransferMember={(member) => {
+                setTransferMember(member);
+                setIsTransferModalOpen(true);
+              }}
             />
           </>
         ) : activeTab === 'invites' ? (
@@ -1013,15 +1018,6 @@ export function Members() {
         setFormData={setEditMemberData}
         isMasterAdmin={isMasterAdmin}
         categories={categories}
-      />
-
-      <TransferChapterModal
-        isOpen={isTransferModalOpen}
-        onClose={() => setIsTransferModalOpen(false)}
-        onSubmit={handleTransferMember}
-        member={selectedMember}
-        chapters={chapters}
-        isSubmitting={isSubmitting}
       />
 
       <SubscriptionModal
@@ -1139,6 +1135,18 @@ export function Members() {
           </div>
         </form>
       </Modal>
+
+      <TransferMemberModal
+        isOpen={isTransferModalOpen}
+        onClose={() => {
+          setIsTransferModalOpen(false);
+          setTransferMember(null);
+        }}
+        onConfirm={handleTransferMember}
+        members={members}
+        chapters={chapters}
+        preSelectedMember={transferMember}
+      />
 
     </div>
   );
