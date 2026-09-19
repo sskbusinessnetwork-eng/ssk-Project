@@ -15,6 +15,7 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile, Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
+import { PhoneInputWithPicker } from '../components/PhoneInputWithPicker';
 import { TopPerformingMembersSection } from '../components/TopPerformingMembersSection';
 import {  where, orderBy, limit  } from '../lib/database';
 import { isValid } from 'date-fns';
@@ -944,7 +945,13 @@ export function LandingPage() {
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Phone Number</label>
-                    <input required type="tel" placeholder="e.g. +91 9..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" />
+                    <PhoneInputWithPicker 
+  required 
+  value={formData.phone} 
+  onChange={(value) => setFormData({...formData, phone: value})} 
+  placeholder="e.g. +91 9..." 
+  className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" 
+/>
                   </div>
                   <div className="space-y-2 md:space-y-3">
                     <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Business Name</label>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import bcrypt from 'bcryptjs';
 import { Building, MapPin, CheckCircle2, User, Phone, Mail, MessageCircle, AlertCircle, X, Calendar } from 'lucide-react';
+import { PhoneInputWithPicker } from './PhoneInputWithPicker';
 import { useAuth } from "../hooks/useAuth";
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { supabase } from '../lib/supabaseClient';
@@ -600,34 +601,29 @@ export function CreateChapter({ onSuccess, editChapterId }: { onSuccess?: () => 
         {/* Mobile */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-[#E5E7EB] uppercase tracking-[0.5px] ml-1 block">Mobile Number *</label>
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
-            <input
-              type="tel"
+          <PhoneInputWithPicker
+              required
+              icon={<Phone size={14} />}
               name={`${String(pos)}_mobile`}
               placeholder="e.g. 9876543210"
               value={leaders[pos].mobile}
-              onChange={(e) => handleLeaderChange(pos, 'mobile', e.target.value)}
+              onChange={(value) => handleLeaderChange(pos, 'mobile', value)}
               className={`w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border ${errors[`${String(pos)}_mobile`] ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-primary'} rounded-lg outline-none text-white placeholder-white/50 text-xs transition-all`}
-            />
-          </div>
+          />
           {errors[`${String(pos)}_mobile`] && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors[`${String(pos)}_mobile`]}</p>}
         </div>
         
         {/* WhatsApp */}
         <div className="space-y-1">
           <label className="text-[10px] font-semibold text-neutral-400 uppercase tracking-[0.5px] ml-1 block">WhatsApp (Optional)</label>
-          <div className="relative">
-            <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
-            <input
-              type="tel"
+          <PhoneInputWithPicker
+              icon={<MessageCircle size={14} />}
               name={`${String(pos)}_whatsapp`}
               placeholder="Same as mobile if empty"
               value={leaders[pos].whatsapp}
-              onChange={(e) => handleLeaderChange(pos, 'whatsapp', e.target.value)}
+              onChange={(value) => handleLeaderChange(pos, 'whatsapp', value)}
               className="w-full h-[40px] pl-9 pr-4 bg-[#0F172A] border border-white/10 rounded-lg focus:border-primary outline-none text-white placeholder-white/50 text-xs transition-all"
-            />
-          </div>
+          />
         </div>
         
         {/* Email */}

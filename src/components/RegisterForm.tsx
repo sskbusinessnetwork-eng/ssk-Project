@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import React from 'react';
 import { motion } from 'motion/react';
 import { Phone, ShieldCheck, Lock, User, AlertCircle, Eye, EyeOff, Building2, CheckCircle2 } from 'lucide-react';
+import { PhoneInputWithPicker } from './PhoneInputWithPicker';
 import { db } from '../lib/database';
 import {  doc, setDoc, collection, getDocs, query, where, limit  } from '../lib/database';
 import { UserRole } from '../types';
@@ -188,11 +189,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.3em] flex items-center gap-2 ml-2">
           <Phone size={12} className="text-primary" /> Phone Number
         </label>
-        <input
+        <PhoneInputWithPicker
           required
-          type="tel"
+          icon={<Phone size={14} />}
           value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          onChange={(value) => setFormData({ ...formData, phone: value })}
           placeholder="Enter phone number"
           className="w-full px-6 py-5 rounded-[2rem] border border-white/5 bg-[#111827] focus:bg-[#151C2E] focus:border-primary focus:ring-8 focus:ring-primary/5 outline-none transition-all font-bold text-white placeholder:text-neutral-500"
         />
