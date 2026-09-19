@@ -356,6 +356,10 @@ export async function getDocs(queryRef: any) {
         m.guestCount = Number(gCount);
         m.guest_count = Number(gCount);
       }
+      if (m.status === 'CANCELLED' || m.status === 'CANCELED') {
+        m.isCancelled = true;
+        m.isCompleted = false;
+      }
     });
   }
   
@@ -500,6 +504,10 @@ export async function getDoc(docRef: any) {
       camelData.guestCount = Number(gCount);
       camelData.guest_count = Number(gCount);
     }
+    if (camelData.status === 'CANCELLED' || camelData.status === 'CANCELED') {
+      camelData.isCancelled = true;
+      camelData.isCompleted = false;
+    }
   }
   
   return { exists: () => true, data: () => camelData, id };
@@ -529,6 +537,36 @@ export async function setDoc(docRef: any, data: any, options?: any) {
       cleanData.testimonial = (cleanData.testimonial || '') + '|||' + JSON.stringify(extra);
     }
     delete cleanData.title;
+  }
+
+  if (path === 'meetings') {
+    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
+      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
+      cleanData.member_notes = {
+        ...existingNotes,
+        __counts: {
+          memberCount: Number(mCount) || 0,
+          guestCount: Number(gCount) || 0
+        },
+        __memberCount: Number(mCount) || 0,
+        __guestCount: Number(gCount) || 0
+      };
+      delete cleanData.memberCount;
+      delete cleanData.member_count;
+      delete cleanData.guestCount;
+      delete cleanData.guest_count;
+      delete cleanData.memberNotes;
+    }
+
+    if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
+      cleanData.status = 'CANCELLED';
+      cleanData.is_completed = false;
+      delete cleanData.isCompleted;
+    }
+    delete cleanData.isCancelled;
+    delete cleanData.is_cancelled;
   }
   
   if (path === 'users') {
@@ -782,6 +820,36 @@ export async function addDoc(collectionRef: any, data: any) {
     return { id: Math.random().toString(36).substring(2, 15) };
   }
 
+  if (collectionPath === 'meetings') {
+    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
+      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
+      cleanData.member_notes = {
+        ...existingNotes,
+        __counts: {
+          memberCount: Number(mCount) || 0,
+          guestCount: Number(gCount) || 0
+        },
+        __memberCount: Number(mCount) || 0,
+        __guestCount: Number(gCount) || 0
+      };
+      delete cleanData.memberCount;
+      delete cleanData.member_count;
+      delete cleanData.guestCount;
+      delete cleanData.guest_count;
+      delete cleanData.memberNotes;
+    }
+
+    if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
+      cleanData.status = 'CANCELLED';
+      cleanData.is_completed = false;
+      delete cleanData.isCompleted;
+    }
+    delete cleanData.isCancelled;
+    delete cleanData.is_cancelled;
+  }
+
   const snakeData = keysToSnake(cleanData);
   const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
   if (error) {
@@ -926,6 +994,14 @@ export async function updateDoc(docRef: any, partialData: any) {
       delete cleanData.guest_count;
       delete cleanData.memberNotes;
     }
+
+    if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
+      cleanData.status = 'CANCELLED';
+      cleanData.is_completed = false;
+      delete cleanData.isCompleted;
+    }
+    delete cleanData.isCancelled;
+    delete cleanData.is_cancelled;
   }
   
   const snakeData = keysToSnake(cleanData);

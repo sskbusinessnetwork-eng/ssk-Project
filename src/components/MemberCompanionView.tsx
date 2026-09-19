@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
-  Share2, Handshake, UserPlus, Users, Clock, Calendar, 
+  Share2, Handshake, UserPlus, Users, Clock, Calendar, MapPin,
   Target, Shield, Award, ChevronRight, FileText, BarChart3, TrendingUp, CheckSquare, ChevronDown, Star, ArrowRight, Crown,
   Loader2, CheckCircle2, Filter, MessageSquare
 } from 'lucide-react';
@@ -14,8 +14,9 @@ import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabaseClient';
-import { isValid } from 'date-fns';
+import { isValid, parseISO } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
+import { parseMeetingDateParts } from '../utils/recurringMeetingUtils';
 import { PassReferralModal } from './modals/PassReferralModal';
 import { ScheduleOneToOneModal } from './modals/ScheduleOneToOneModal';
 import { InviteGuestModal } from './modals/InviteGuestModal';
@@ -59,6 +60,7 @@ export function MemberCompanionView({
   focusProgressPercent,
   activeFocusTasks,
   handleToggleTask,
+  nextMeeting,
   businessGrowthScore,
   daysAnalysedText,
   scoreText,
@@ -384,63 +386,6 @@ export function MemberCompanionView({
   return (
     <div className="space-y-8 sm:space-y-10">
       
-      {/* 1. Core Operations */}
-      <motion.div 
-        initial="hidden"
-        animate="show"
-        variants={{
-          hidden: { opacity: 0 },
-          show: {
-            opacity: 1,
-            transition: {
-              staggerChildren: 0.1
-            }
-          }
-        }}
-        className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
-      >
-        <div className="flex items-center justify-between mb-5 relative z-10">
-          <h3 className="text-[17px] font-bold text-white tracking-tight">Core Operations</h3>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 relative z-10 w-full">
-          {operations.map((op, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05, duration: 0.4 }}
-              whileHover={{ 
-                y: -4, 
-                scale: 1.02, 
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                borderColor: "rgba(255, 255, 255, 0.15)"
-              }}
-            >
-              <button 
-                type="button"
-                onClick={op.action} 
-                className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] h-[74px] px-3.5 flex items-center justify-between transition-all duration-300 group cursor-pointer w-full text-left hover:bg-[#151C2E]"
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <motion.div 
-                    whileHover={{ rotate: [0, 8, -8, 0] }}
-                    className={`w-10 h-10 rounded-[12px] ${op.bg} ${op.color} flex items-center justify-center border border-white/5 shadow-sm shrink-0`}
-                  >
-                    <op.icon size={18} />
-                  </motion.div>
-                  <div className="min-w-0">
-                    <h4 className="text-[13px] font-bold text-white truncate">{op.label}</h4>
-                    <p className="text-[11px] text-[#9CA3AF] font-medium truncate">{op.desc}</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[#4B5563] group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
-              </button>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-
       {/* 2. Workspace Checklist */}
       <motion.div 
         id="workspace-checklist"

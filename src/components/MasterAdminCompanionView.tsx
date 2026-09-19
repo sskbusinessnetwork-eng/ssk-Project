@@ -151,62 +151,6 @@ export function MasterAdminCompanionView({
   return (
     <div className="space-y-8 sm:space-y-10">
       
-      {/* 1. Core Operations */}
-      <motion.div 
-        initial="hidden"
-        animate="show"
-        variants={{
-          hidden: { opacity: 0 },
-          show: {
-            opacity: 1,
-            transition: {
-              staggerChildren: 0.1
-            }
-          }
-        }}
-        className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden"
-      >
-        <div className="flex items-center justify-between mb-5 relative z-10">
-          <h3 className="text-[17px] font-bold text-white tracking-tight">Core Operations</h3>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10 w-full">
-          {operations.map((op, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05, duration: 0.4 }}
-              whileHover={{ 
-                y: -5, 
-                scale: 1.02, 
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-                borderColor: "rgba(255, 255, 255, 0.1)"
-              }}
-            >
-              <Link 
-                to={op.path} 
-                className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] h-[72px] px-4 flex items-center justify-between transition-colors duration-300 group cursor-pointer w-full"
-              >
-                <div className="flex items-center gap-3">
-                  <motion.div 
-                    whileHover={{ rotate: [0, 8, -8, 0] }}
-                    className={`w-10 h-10 rounded-[12px] ${op.bg} ${op.color} flex items-center justify-center border border-white/5 shadow-sm shrink-0`}
-                  >
-                    <op.icon size={18} />
-                  </motion.div>
-                  <div>
-                    <h4 className="text-[13px] font-bold text-white">{op.label}</h4>
-                    <p className="text-[11px] text-[#9CA3AF] font-medium">{op.desc}</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[#4B5563] group-hover:text-white group-hover:translate-x-1 transition-all" />
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-
       {/* 2. Recent Activity */}
       <motion.div 
         variants={{

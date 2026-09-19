@@ -15,16 +15,20 @@ interface SubmitThankYouSlipModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   initialReferralId?: string;
+  senderUser?: any | null;
 }
 
 export function SubmitThankYouSlipModal({
   isOpen,
   onClose,
   onSuccess,
-  initialReferralId
+  initialReferralId,
+  senderUser
 }: SubmitThankYouSlipModalProps) {
   const { profile } = useAuth();
-  const currentUserId = profile?.uid || (profile as any)?.id;
+  const effectiveSender = senderUser || profile;
+  const effectiveSenderId = String(effectiveSender?.uid || (effectiveSender as any)?.id || '');
+  const currentUserId = effectiveSenderId;
 
   const [referrals, setReferrals] = useState<any[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
@@ -55,7 +59,7 @@ export function SubmitThankYouSlipModal({
     let isMounted = true;
     const loadReferrals = async () => {
       try {
-        const uId = profile?.uid || (profile as any)?.id;
+        const uId = effectiveSenderId;
         if (!uId) return;
 
         // Fetch users map for sender names
@@ -108,6 +112,30 @@ export function SubmitThankYouSlipModal({
               };
             });
 
+          if (initialReferralId && !eligible.some(r => String(r.id) === String(initialReferralId))) {
+            const { data: specificRef } = await supabase
+              .from('referrals')
+              .select('*')
+              .eq('id', initialReferralId)
+              .maybeSingle();
+
+            if (specificRef) {
+              const sId = specificRef.sender_id || specificRef.from_user_id || '';
+              const senderObj = uMap[String(sId).toLowerCase()];
+              const sName = senderObj?.name || senderObj?.displayName || specificRef.sender_name || 'Member';
+              const specificItem = {
+                id: specificRef.id,
+                contactName: specificRef.contact_name || specificRef.customer_name || 'Client',
+                contactPhone: specificRef.contact_phone || specificRef.customer_mobile || '',
+                requirement: specificRef.business_requirement || specificRef.requirement || '',
+                senderId: sId,
+                senderName: sName,
+                createdAt: specificRef.created_at || specificRef.createdAt || new Date().toISOString()
+              };
+              eligible.unshift(specificItem);
+            }
+          }
+
           setReferrals(eligible);
 
           if (initialReferralId) {
@@ -133,7 +161,7 @@ export function SubmitThankYouSlipModal({
 
     loadReferrals();
     return () => { isMounted = false; };
-  }, [isOpen, profile, initialReferralId]);
+  }, [isOpen, effectiveSenderId, initialReferralId]);
 
   const handleReferralSelect = (selectedId: string) => {
     const selected = referrals.find(r => String(r.id) === String(selectedId));
@@ -164,7 +192,7 @@ export function SubmitThankYouSlipModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile || isSubmitting) return;
+    if (!effectiveSender || isSubmitting) return;
 
     if (!isOffline && !formData.referralId) {
       const msg = 'Please select an eligible referral.';
@@ -194,7 +222,7 @@ export function SubmitThankYouSlipModal({
     setError(null);
 
     try {
-      const currentAuthId = String(profile?.uid || profile?.id || '');
+      const currentAuthId = String(effectiveSenderId);
       let targetReferrerId = '';
       let effectiveReferralId = '';
       let customerName = formData.customerName?.trim() || '';
@@ -220,7 +248,7 @@ export function SubmitThankYouSlipModal({
           business_requirement: 'Offline Referral',
           notes: formData.notes?.trim() ? `[Offline Referral] ${formData.notes.trim()}` : '[Offline Referral] Direct offline referral',
           status: 'Offline',
-          chapter_id: profile.chapter_id || (profile as any).chapterId || null,
+          chapter_id: effectiveSender.chapter_id || (effectiveSender as any).chapterId || profile?.chapter_id || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
@@ -283,14 +311,15 @@ export function SubmitThankYouSlipModal({
       // Send notification to referrer
       if (targetReferrerId) {
         try {
+          const senderDisplayName = effectiveSender?.name || effectiveSender?.displayName || effectiveSender?.full_name || 'a member';
           await notificationService.sendNotification({
             userId: targetReferrerId,
             role: 'MEMBER',
             type: 'THANKYOU',
             title: isOffline ? 'Thank You Slip Received (Offline Referral)' : 'Thank You Slip Received',
-            message: `You received a Thank You Slip of ₹${Number(formData.businessValue).toLocaleString('en-IN')} from ${profile.name || 'a member'}.`,
+            message: `You received a Thank You Slip of ₹${Number(formData.businessValue).toLocaleString('en-IN')} from ${senderDisplayName}.`,
             relatedUserId: currentAuthId,
-            link: '/thank-you-slips'
+            link: '/activity'
           });
         } catch (nErr) {
           console.warn('Thank you slip notification notice:', nErr);
@@ -330,12 +359,11 @@ export function SubmitThankYouSlipModal({
   };
 
   const eligibleMembersList = useMemo(() => {
-    const currentUid = String(profile?.uid || profile?.id || '');
     return allUsersList.filter(u => {
       const uId = String(u.uid || u.id || '');
-      return uId && uId !== currentUid;
+      return uId && uId !== effectiveSenderId;
     });
-  }, [allUsersList, profile]);
+  }, [allUsersList, effectiveSenderId]);
 
   return (
     <Modal
@@ -343,9 +371,32 @@ export function SubmitThankYouSlipModal({
       onClose={() => {
         if (!isSubmitting) onClose();
       }}
-      title="Submit Thank You Slip"
+      title={senderUser ? `Submit Thank You Slip (On Behalf of Member)` : "Submit Thank You Slip"}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
+        {senderUser && (
+          <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 text-primary font-bold text-xs">
+                TYS
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">
+                  Sender (On Behalf of Member)
+                </p>
+                <p className="text-sm font-bold text-white truncate">
+                  {senderUser.name || senderUser.displayName || senderUser.full_name || 'Member'}
+                </p>
+              </div>
+            </div>
+            {senderUser.chapter_name || senderUser.chapterName ? (
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-neutral-300 shrink-0">
+                {senderUser.chapter_name || senderUser.chapterName}
+              </span>
+            ) : null}
+          </div>
+        )}
+
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-semibold flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0" />
@@ -426,7 +477,9 @@ export function SubmitThankYouSlipModal({
           </select>
           {!isOffline && (
             <p className="text-[11px] text-neutral-400">
-              Only referrals received by you that haven't received a slip will appear here.
+              {senderUser
+                ? `Only referrals received by ${senderUser.name || 'this member'} that haven't received a slip will appear here.`
+                : "Only referrals received by you that haven't received a slip will appear here."}
             </p>
           )}
         </div>

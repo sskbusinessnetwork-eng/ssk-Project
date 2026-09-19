@@ -124,7 +124,7 @@ export function Layout() {
   const mobileNavItems: { icon: any; label: string; path?: string; isAction?: boolean; action?: () => void }[] = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
     { icon: Calendar, label: 'Meetings', path: '/meetings' },
-    { icon: Share2, label: 'Referrals', path: '/refer' },
+    { icon: Activity, label: 'Activity', path: '/activity' },
   ];
 
   return (

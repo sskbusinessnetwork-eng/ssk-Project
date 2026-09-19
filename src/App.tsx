@@ -10,6 +10,7 @@ import { Analytics } from './pages/Dashboard';
 import { MyReport } from './pages/MyReport';
 import { Referrals } from './pages/Referrals';
 import { ThankYouSlips } from './pages/ThankYouSlips';
+import { Activity } from './pages/Activity';
 import { Testimonials } from './pages/Testimonials';
 import { TestimonialReports } from './pages/TestimonialReports';
 import { Positions } from './pages/Positions';
@@ -29,6 +30,7 @@ import { SubscriptionExpired } from './pages/SubscriptionExpired';
 import { Reports } from './pages/Reports';
 import { ManageSubscriptions } from './pages/ManageSubscriptions';
 import { Settings } from './pages/Settings';
+import { MemberTYS } from './pages/MemberTYS';
 
 
 import { GlobalToast } from './components/GlobalToast';
@@ -109,13 +111,15 @@ export default function App() {
               <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Members /></ProtectedRoute>} />
               <Route path="/meetings" element={<Meetings />} />
-              <Route path="/refer" element={<Referrals />} />
-              <Route path="/referrals" element={<Referrals />} />
-              <Route path="/thank-you-slips" element={<ThankYouSlips />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/refer" element={<Activity />} />
+              <Route path="/referrals" element={<Activity />} />
+              <Route path="/thank-you-slips" element={<Activity />} />
               <Route path="/testimonials" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER']}><Testimonials /></ProtectedRoute>} />
               <Route path="/testimonial-reports" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><TestimonialReports /></ProtectedRoute>} />
               <Route path="/positions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Positions /></ProtectedRoute>} />
               <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
+              <Route path="/member-tys" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN', 'MASTER_ADMIN']}><MemberTYS /></ProtectedRoute>} />
               <Route path="/add-member" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN']}><Members /></ProtectedRoute>} />
               <Route path="/onboard" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><OnboardMember /></ProtectedRoute>} />
               <Route path="/set-password" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><SetPassword /></ProtectedRoute>} />

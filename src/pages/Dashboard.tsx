@@ -5,7 +5,8 @@ import {
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
   HelpCircle, Activity, Briefcase, ArrowRight, Trophy, Flame, Star, Zap, Shield, Rocket, Crown,
-  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X, Building2, Search, FileText, UserCheck, UserX } from 'lucide-react';
+  CheckSquare, User, AlertTriangle, RotateCcw, Loader2, X, Building2, Search, FileText, UserCheck, UserX, MapPin
+} from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -25,6 +26,7 @@ import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, c
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 import { isOfflineReferral, isNormalReferral } from '../types';
+import { parseMeetingDateParts } from '../utils/recurringMeetingUtils';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -1025,6 +1027,25 @@ export function Analytics() {
 
     return (upcomingMeetingsCount + upcomingOneToOnesCount) || 0;
   }, [effectiveMeetings, effectiveOneToOnes, chapterUserIds, profile]);
+
+  const upcomingChapterMeeting = useMemo(() => {
+    const chapterMeetings = profile?.role === 'MASTER_ADMIN'
+      ? effectiveMeetings
+      : effectiveMeetings.filter(m => m.chapter_id === profile?.chapter_id);
+    
+    const now = new Date();
+    const upcoming = chapterMeetings.filter(m => {
+      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
+                     m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      if (isDone) return false;
+      return getMeetingExactDateTime(m) > now;
+    });
+    
+    if (upcoming.length === 0) return null;
+    
+    upcoming.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
+    return upcoming[0];
+  }, [effectiveMeetings, profile]);
 
   const oneToOneMeetingsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -2848,6 +2869,82 @@ const getGreeting = () => {
         )}
       </motion.div>
 
+      {/* 0. Upcoming Meeting Card */}
+      {profile?.role !== 'MASTER_ADMIN' && upcomingChapterMeeting && (
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: { opacity: 0, y: 15 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+          }}
+          className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden mt-8"
+        >
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[12px] bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <Calendar size={16} />
+              </div>
+              Upcoming Meeting
+            </h3>
+            <span className="text-[11px] font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.15)]">
+              Next
+            </span>
+          </div>
+
+          <div className="relative z-10 w-full">
+            <div className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex flex-col min-w-0">
+                <h4 className="text-[15px] font-bold text-white truncate mb-1">
+                  {upcomingChapterMeeting.title || (upcomingChapterMeeting as any).topic || `${resolvedChapterName || 'Chapter'} Meeting`}
+                </h4>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 font-medium">
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <Calendar size={13} className="text-blue-400" />
+                    <span>{parseMeetingDateParts(upcomingChapterMeeting.date, upcomingChapterMeeting.time || '07:30')?.displayDate || upcomingChapterMeeting.date}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <Clock size={13} className="text-emerald-400" />
+                    <span>{upcomingChapterMeeting.time || '07:30 AM'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <MapPin size={13} className="text-amber-400 shrink-0" />
+                    <span className="truncate">{upcomingChapterMeeting.location || upcomingChapterMeeting.venue || 'TBA'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {profile?.role !== 'MASTER_ADMIN' && !upcomingChapterMeeting && (
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{
+            hidden: { opacity: 0, y: 15 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+          }}
+          className="w-full bg-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col relative overflow-hidden mt-8"
+        >
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[12px] bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <Calendar size={16} />
+              </div>
+              Upcoming Meeting
+            </h3>
+          </div>
+          <div className="relative z-10 w-full">
+            <div className="bg-[#0B1220]/60 border border-white/5 rounded-[18px] p-6 flex flex-col items-center justify-center text-center">
+              <Calendar size={24} className="text-neutral-600 mb-3" />
+              <p className="text-[13px] text-neutral-400 font-medium">No upcoming meetings</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Dynamic Chapter Analytics Heading & KPI cards - Shown for Member, Chapter Admin, President, Vice President, Treasurer, and Master Admin */}
       {profile && (
         <>
@@ -2961,7 +3058,7 @@ const getGreeting = () => {
             inviteGuest: hasInvitedGuest 
           }}
           handleToggleTask={handleToggleTask}
-          nextMeeting={null}
+          nextMeeting={upcomingChapterMeeting}
           countdown={{ days: 0, hours: 0, minutes: 0 }}
           finalRecentActivities={filteredRecentActivities}
           businessGrowthScore={memberGrowthScoreData.score}

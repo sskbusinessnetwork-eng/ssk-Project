@@ -11,7 +11,9 @@ import {
   ChevronRight,
   CheckCircle2,
   Download,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -42,6 +44,8 @@ export function ThankYouSlips() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showTestimonialPrompt, setShowTestimonialPrompt] = useState(false);
   const [showWriteModal, setShowWriteModal] = useState(false);
+  const [slipToDelete, setSlipToDelete] = useState<ThankYouSlip | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [testimonialReceiver, setTestimonialReceiver] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -693,6 +697,27 @@ export function ThankYouSlips() {
     }
   };
 
+  const confirmDeleteSlip = async () => {
+    if (!slipToDelete) return;
+    setIsDeleting(true);
+    try {
+      await databaseService.delete('thank_you_slips', slipToDelete.id);
+      
+      // Also delete from UI state immediately
+      setSlips(prev => prev.filter(s => s.id !== slipToDelete.id));
+      setReceivedSlips(prev => prev.filter(s => s.id !== slipToDelete.id));
+      setAllSlips(prev => prev.filter(s => s.id !== slipToDelete.id));
+      
+      triggerSuccessToast("Thank you slip deleted successfully!");
+      setSlipToDelete(null);
+    } catch (err: any) {
+      console.error("Error deleting slip:", err);
+      showError(err.message || "Failed to delete thank you slip");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const filteredSlips = allSlips.filter(slip => {
     if (isChapterAdmin) {
       const associatedMemberIds = [...allUsers.filter(m => m.chapter_id === profile?.chapter_id || m.adminId === profile?.uid).map(m => m.uid || (m as any).id), profile?.uid];
@@ -1129,16 +1154,28 @@ export function ThankYouSlips() {
                     {slip.notes ? (
                       <p className="text-xs text-neutral-300 italic line-clamp-1 leading-relaxed max-w-[70%]">"{slip.notes}"</p>
                     ) : <div />}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSlipForDetails(slip);
-                      }}
-                      className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
-                    >
-                      View Details <ChevronRight size={14} />
-                    </button>
+                    <div className="flex items-center gap-4 shrink-0 ml-auto">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSlipToDelete(slip);
+                        }}
+                        className="text-xs font-bold text-red-500 hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSlipForDetails(slip);
+                        }}
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+                      >
+                        View Details <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                   </div>
                 </motion.div>
@@ -1534,7 +1571,17 @@ export function ThankYouSlips() {
                   </p>
                 </div>
               </div>
-              <div className="flex justify-end pt-1">
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSlipForDetails(null);
+                    setSlipToDelete(selectedSlipForDetails);
+                  }}
+                  className="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs rounded-xl transition-all cursor-pointer border border-red-500/20"
+                >
+                  Delete Slip
+                </button>
                 <button
                   type="button"
                   onClick={() => setSelectedSlipForDetails(null)}
@@ -1547,6 +1594,53 @@ export function ThankYouSlips() {
           );
         })()}
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!slipToDelete}
+        onClose={() => setSlipToDelete(null)}
+        title="Delete Thank You Slip"
+        maxWidth="max-w-md"
+      >
+        <div className="flex flex-col gap-5 p-1">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 border border-red-500/20">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+            </div>
+            <div>
+              <h3 className="text-[15px] font-bold text-white mb-2">Confirm Deletion</h3>
+              <p className="text-sm text-neutral-400 leading-relaxed">
+                Are you sure you want to delete this Thank You slip? This action cannot be undone and will permanently remove this slip from all reports and records.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col-reverse sm:flex-row items-center gap-3 mt-4 pt-5 border-t border-white/10">
+            <button
+              onClick={() => setSlipToDelete(null)}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-[#151C2E] hover:bg-[#1E293B] border border-white/10 transition-all text-center cursor-pointer"
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDeleteSlip}
+              disabled={isDeleting}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-500 transition-all text-center cursor-pointer flex items-center justify-center gap-2"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Slip'
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 }

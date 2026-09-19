@@ -48,6 +48,7 @@ import {
   isMeetingCancelled,
   isMeetingDone,
   isMeetingInPastInIST,
+  isMeetingPending,
   isMeetingUpcomingInIST,
   isSameMeetingDate,
   formatMeetingDateDisplay
@@ -58,6 +59,7 @@ export {
   isMeetingCancelled,
   isMeetingDone,
   isMeetingInPastInIST,
+  isMeetingPending,
   isMeetingUpcomingInIST,
   isSameMeetingDate,
   formatMeetingDateDisplay
@@ -153,6 +155,29 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       (m.isRecurring || (m as any).is_recurring)
     );
     for (const m of toDelete) {
+      try {
+        await supabase.from('meetings').delete().eq('id', m.id);
+      } catch (e) {}
+      try {
+        await databaseService.delete('meetings', m.id);
+      } catch (e) {}
+    }
+    return;
+  }
+
+  // 1. Pending Meeting Check:
+  // If there is already a Pending Meeting that has not been updated/completed by Admin,
+  // do NOT allow the system to create or sync another upcoming meeting.
+  // The existing pending meeting must be completed/updated by Admin first!
+  const hasPendingMeeting = allMeetings.some(m => isMeetingPending(m));
+  if (hasPendingMeeting) {
+    // If a future recurring meeting was generated ahead of time while a pending meeting exists, clean it up
+    const prematureFutureRecurring = allMeetings.filter(m => 
+      !isMeetingDone(m) && 
+      !isMeetingPending(m) && 
+      (m.isRecurring || (m as any).is_recurring)
+    );
+    for (const m of prematureFutureRecurring) {
       try {
         await supabase.from('meetings').delete().eq('id', m.id);
       } catch (e) {}
@@ -561,14 +586,17 @@ export function Meetings() {
       if (found) return found;
     }
     const userChapIdStr = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
-    const upcomingMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
+    const actionableMeetings = (isMasterAdmin ? meetings : filteredMeetings).filter(m => {
       if (isMeetingDone(m)) return false;
-      if (isMeetingInPastInIST(m)) return false;
-      const mChap = String(m.chapter_id || (m as any)?.chapterId || '').trim();
+      const mChap = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
       return !userChapIdStr || !mChap || mChap === userChapIdStr;
     });
-    if (upcomingMeetings.length > 0) {
-      return [...upcomingMeetings].sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time))[0];
+    if (actionableMeetings.length > 0) {
+      // Prioritize pending meeting that needs Admin update, or the earliest upcoming meeting
+      const pendingOne = actionableMeetings.find(m => isMeetingPending(m));
+      if (pendingOne) return pendingOne;
+
+      return [...actionableMeetings].sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time))[0];
     }
     return null;
   }, [meetings, filteredMeetings, urlMeetingId, profile?.chapter_id, isMasterAdmin]);
@@ -1201,6 +1229,24 @@ export function Meetings() {
         }
       }
 
+      // 1. Pending Meeting Guard:
+      // If there is already a Pending Meeting that has not been updated/completed by Admin,
+      // do NOT allow scheduling another upcoming meeting. The existing pending meeting must be completed first!
+      const targetChapStr = String(finalChapterId || adminId || '').trim();
+      const existingPending = meetings.find(m => {
+        const mChap = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
+        return mChap === targetChapStr && isMeetingPending(m);
+      });
+
+      if (existingPending) {
+        const msg = 'There is already a pending meeting for this chapter that has not been updated/completed by Admin. Please update and complete the pending meeting first.';
+        setError(msg);
+        showError(msg);
+        scrollToError();
+        setIsSubmitting(false);
+        return;
+      }
+
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || profile?.uid || '',
         chapter_id: finalChapterId || adminId,
@@ -1482,7 +1528,37 @@ export function Meetings() {
         }
       }
       
-      const shouldComplete = allMembersFilled && allGuestsFilled && meetingMembers.length > 0;
+      const isPending = isMeetingPending(selectedMeeting);
+      if (isPending) {
+        // When Admin updates a pending meeting, default unselected members to 'Absent' with amount 0 so record is complete
+        if (meetingMembers.length > 0) {
+          for (const member of meetingMembers) {
+            const mId = member.id || member.uid;
+            if (!tempAttendance[mId] || String(tempAttendance[mId]).trim() === '') {
+              tempAttendance[mId] = 'Absent';
+              tempAmount[mId] = 0;
+            }
+          }
+          allMembersFilled = true;
+        }
+        if (meetingGuests.length > 0) {
+          for (const guest of meetingGuests) {
+            if (!tempGuestAttendance[guest.id] || String(tempGuestAttendance[guest.id]).trim() === '') {
+              tempGuestAttendance[guest.id] = 'Absent';
+              tempAmount[guest.id] = 0;
+              guestUpdates.push({
+                id: guest.id,
+                status: 'Absent',
+                wasNotPresent: true,
+                inviterId: guest.invited_by
+              });
+            }
+          }
+          allGuestsFilled = true;
+        }
+      }
+      
+      const shouldComplete = isPending || (allMembersFilled && allGuestsFilled && meetingMembers.length > 0);
 
       const finalMemberCount = tempMemberCount === '' ? 0 : Number(tempMemberCount);
       const finalGuestCount = tempGuestCount === '' ? 0 : Number(tempGuestCount);
@@ -1510,6 +1586,7 @@ export function Meetings() {
       updatePayload.guestCount = finalGuestCount;
       if (shouldComplete) {
         updatePayload.is_completed = true;
+        updatePayload.isCompleted = true;
         updatePayload.status = 'COMPLETED';
       }
 
@@ -1652,9 +1729,9 @@ export function Meetings() {
   };
 
   const executeCancelMeeting = async () => {
-    if (!selectedMeeting || isMasterAdmin) return;
+    if (!selectedMeeting) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
-      const msg = "Only the Chapter Admin of this chapter can cancel this meeting.";
+      const msg = "Only Chapter Admin or Master Admin can cancel this meeting.";
       setError(msg);
       showError(msg);
       scrollToError();
@@ -1664,30 +1741,104 @@ export function Meetings() {
     setError(null);
     try {
       const meetingId = selectedMeeting.id;
-      const { error: dbErr } = await supabase
-        .from('meetings')
-        .update({
-          status: 'CANCELLED',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', meetingId);
+      const callerId = profile?.uid || profile?.id;
 
-      if (dbErr) {
-        console.error("Error cancelling meeting in Supabase:", dbErr);
-        const errMsg = "Failed to cancel meeting. Please try again.";
-        setError(errMsg);
-        showError(errMsg);
+      let apiSuccess = false;
+      let apiErrorMessage = '';
+
+      // 1. Try dedicated /api/meetings/cancel endpoint (uses adminSupabase)
+      try {
+        const cancelRes = await fetch('/api/meetings/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meetingId,
+            callerId
+          })
+        });
+        const cancelData = await cancelRes.json();
+        if (cancelRes.ok && cancelData.success) {
+          apiSuccess = true;
+        } else {
+          apiErrorMessage = cancelData.message || cancelData.error || '';
+          console.warn("Cancel API notice:", cancelData);
+        }
+      } catch (callErr: any) {
+        console.warn("Error calling /api/meetings/cancel:", callErr);
+      }
+
+      // 2. Fallback to /api/meetings/update if cancel endpoint didn't succeed
+      if (!apiSuccess) {
+        try {
+          const updateRes = await fetch('/api/meetings/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              meetingId,
+              callerId,
+              isCancelled: true,
+              status: 'CANCELLED',
+              isCompleted: false
+            })
+          });
+          const updateData = await updateRes.json();
+          if (updateRes.ok && updateData.success) {
+            apiSuccess = true;
+          } else if (!apiErrorMessage) {
+            apiErrorMessage = updateData.message || updateData.error || '';
+          }
+        } catch (updateErr: any) {
+          console.warn("Error calling fallback /api/meetings/update:", updateErr);
+        }
+      }
+
+      // 3. Fallback to direct client Supabase or databaseService
+      if (!apiSuccess) {
+        try {
+          const { error: dbErr } = await supabase
+            .from('meetings')
+            .update({
+              status: 'CANCELLED',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', meetingId);
+
+          if (!dbErr) {
+            apiSuccess = true;
+          }
+        } catch (clientErr) {
+          console.warn("Direct client update notice:", clientErr);
+        }
+      }
+
+      // Sync with databaseService
+      try {
+        await databaseService.update('meetings', meetingId, {
+          isCompleted: false,
+          status: 'CANCELLED',
+          updatedAt: new Date().toISOString()
+        });
+        apiSuccess = true;
+      } catch (dsErr) {
+        console.warn("databaseService update notice:", dsErr);
+      }
+
+      if (!apiSuccess && apiErrorMessage) {
+        setError(apiErrorMessage);
+        showError(apiErrorMessage);
         scrollToError();
         setIsSubmitting(false);
         return;
       }
 
-      await databaseService.update('meetings', meetingId, {
+      // Optimistically update local meetings state immediately
+      setMeetings(prev => prev.map(m => m.id === meetingId ? {
+        ...m,
         isCancelled: true,
-        isCompleted: false,
         status: 'CANCELLED',
-        updatedAt: new Date().toISOString()
-      });
+        isCompleted: false,
+        is_completed: false
+      } : m));
 
       // Auto-generate next recurring meeting after cancellation if setup is enabled
       try {
@@ -1704,16 +1855,16 @@ export function Meetings() {
         console.error("Error generating next recurring meeting after cancellation:", autoErr);
       }
 
-      setSuccess('Meeting cancelled and moved to history.');
-      triggerSuccessToast('Meeting cancelled successfully.');
+      if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      setTimeout(() => {
-        setIsCancelConfirmOpen(false);
-        setIsUpdateModalOpen(false);
-        setSuccess(null);
-        setSelectedMeeting(null);
-      }, 1200);
+
+      triggerSuccessToast('Meeting cancelled and moved to history.');
+      setIsCancelConfirmOpen(false);
+      setIsUpdateModalOpen(false);
+      setSuccess(null);
+      setSelectedMeeting(null);
     } catch (err: any) {
+      console.error("Error cancelling meeting:", err);
       const errMsg = 'Failed to cancel meeting. Please try again.';
       setError(errMsg);
       showError(errMsg);
@@ -1740,17 +1891,18 @@ export function Meetings() {
     if (isMeetingCompleted(meeting)) {
       return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     }
-    if (isMeetingInPastInIST(meeting)) {
-      return { label: 'UPDATE REQUIRED', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-black' };
+    if (isMeetingPending(meeting)) {
+      return { label: 'Pending', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-black' };
     }
     return { label: 'Upcoming', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
   };
 
-  // History: Completed meetings, Cancelled meetings, and Past occurrences in reverse chronological order
+  // History: Completed meetings and Cancelled meetings ONLY (after Admin completes/updates or cancels them)
+  // Pending meetings must NEVER automatically move to Meeting History
   const completedMeetings = React.useMemo(() => {
     const seenIds = new Set<string>();
     const rawHistory = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => isMeetingDone(m) || isMeetingInPastInIST(m))
+      .filter(m => isMeetingDone(m))
       .sort((a, b) => getMeetingTimestampInIST(b.date, b.time) - getMeetingTimestampInIST(a.date, a.time));
 
     const result: Meeting[] = [];
@@ -1825,22 +1977,45 @@ export function Meetings() {
     );
   };
 
-  // Deduplicated Upcoming Meetings for table/list view (strictly future/current occurrences in IST)
+  // Deduplicated Upcoming and Pending Meetings for table/list view (non-completed / non-cancelled)
+  // If a chapter has a pending meeting, only the pending meeting is shown until Admin updates/completes it
   const upcomingTableMeetings = React.useMemo(() => {
-    const seenIds = new Set<string>();
-
-    const rawUpcoming = (isMasterAdmin ? meetings : filteredMeetings)
-      .filter(m => !isMeetingDone(m) && !isMeetingInPastInIST(m))
+    const nonDone = (isMasterAdmin ? meetings : filteredMeetings)
+      .filter(m => !isMeetingDone(m))
       .sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time));
 
-    const result: Meeting[] = [];
-    for (const m of rawUpcoming) {
-      const mId = String(m.id);
-      if (!seenIds.has(mId)) {
-        seenIds.add(mId);
-        result.push(m);
+    // Find which chapters have an active Pending meeting that has not been completed/updated
+    const chaptersWithPending = new Set<string>();
+    for (const m of nonDone) {
+      if (isMeetingPending(m)) {
+        const chapKey = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
+        if (chapKey) chaptersWithPending.add(chapKey);
       }
     }
+
+    const seenIds = new Set<string>();
+    const result: Meeting[] = [];
+
+    for (const m of nonDone) {
+      const mId = String(m.id);
+      if (seenIds.has(mId)) continue;
+
+      const chapKey = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
+      
+      // If this chapter has a pending meeting:
+      // Allow only the pending meeting to be shown.
+      // Do NOT show another upcoming meeting for this chapter until the pending meeting is completed/updated!
+      if (chapKey && chaptersWithPending.has(chapKey)) {
+        if (!isMeetingPending(m)) {
+          // Suppress future upcoming meetings for this chapter while pending meeting exists
+          continue;
+        }
+      }
+
+      seenIds.add(mId);
+      result.push(m);
+    }
+
     return result;
   }, [meetings, filteredMeetings, isMasterAdmin]);
 
@@ -2064,9 +2239,10 @@ export function Meetings() {
                 "px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border",
                 isMeetingDone(primaryFocusMeeting) ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
                 primaryFocusMeeting.isCancelled ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                isMeetingPending(primaryFocusMeeting) ? "bg-amber-500/10 text-amber-400 border-amber-500/20 font-black" :
+                "bg-blue-500/10 text-blue-400 border-blue-500/20"
               )}>
-                {isMeetingDone(primaryFocusMeeting) ? 'Completed' : primaryFocusMeeting.isCancelled ? 'Cancelled' : 'Upcoming Scheduled'}
+                {isMeetingDone(primaryFocusMeeting) ? 'Completed' : primaryFocusMeeting.isCancelled ? 'Cancelled' : isMeetingPending(primaryFocusMeeting) ? 'Pending' : 'Upcoming Scheduled'}
               </span>
             </div>
 
@@ -3693,9 +3869,10 @@ export function Meetings() {
                     "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
                     isMeetingDone(readOnlyMeeting) ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
                     readOnlyMeeting.isCancelled ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                    "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    isMeetingPending(readOnlyMeeting) ? "bg-amber-500/10 text-amber-400 border-amber-500/20 font-black" :
+                    "bg-blue-500/10 text-blue-400 border-blue-500/20"
                   )}>
-                    {isMeetingDone(readOnlyMeeting) ? 'Completed' : readOnlyMeeting.isCancelled ? 'Cancelled' : 'Upcoming'}
+                    {isMeetingDone(readOnlyMeeting) ? 'Completed' : readOnlyMeeting.isCancelled ? 'Cancelled' : isMeetingPending(readOnlyMeeting) ? 'Pending' : 'Upcoming'}
                   </span>
                 </div>
               </div>

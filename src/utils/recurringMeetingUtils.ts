@@ -361,6 +361,18 @@ export function isMeetingInPastInIST(meeting: any): boolean {
 }
 
 /**
+ * Returns true if a meeting is pending (scheduled time has arrived or passed, or explicitly marked pending,
+ * and has not yet been completed/updated or cancelled by an Admin).
+ */
+export function isMeetingPending(meeting: any): boolean {
+  if (!meeting) return false;
+  if (isMeetingDone(meeting)) return false;
+  const statusStr = String(meeting.status || '').trim().toUpperCase();
+  if (statusStr === 'PENDING') return true;
+  return isMeetingInPastInIST(meeting);
+}
+
+/**
  * Returns true if the meeting is an upcoming/future occurrence (not done and not in the past).
  */
 export function isMeetingUpcomingInIST(meeting: any): boolean {

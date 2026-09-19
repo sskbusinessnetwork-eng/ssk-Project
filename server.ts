@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
@@ -1351,7 +1352,10 @@ async function startServer() {
           ...(gCount !== undefined ? { __guestCount: gCount } : {})
         };
       }
-      if (isCompleted === true || (isCompleted === undefined && attendance)) {
+      if (req.body.isCancelled === true || req.body.status === 'CANCELLED') {
+        updatePayload.is_completed = false;
+        updatePayload.status = 'CANCELLED';
+      } else if (isCompleted === true || (isCompleted === undefined && attendance)) {
         updatePayload.is_completed = true;
         updatePayload.status = 'COMPLETED';
       } else if (isCompleted === false) {
@@ -1359,10 +1363,22 @@ async function startServer() {
         updatePayload.status = 'UPCOMING';
       }
 
-      const { error: updateErr } = await adminSupabase
+      let updateErr: any = null;
+      const { error: firstErr } = await adminSupabase
         .from('meetings')
         .update(updatePayload)
         .eq('id', meetingId);
+
+      if (firstErr) {
+        console.warn("First update failed, retrying without is_completed:", firstErr.message);
+        const fallbackPayload = { ...updatePayload };
+        delete fallbackPayload.is_completed;
+        const { error: secondErr } = await adminSupabase
+          .from('meetings')
+          .update(fallbackPayload)
+          .eq('id', meetingId);
+        updateErr = secondErr;
+      }
 
       if (updateErr) { console.error("SUPABASE UPDATE ERR:", updateErr);
         return res.status(500).json({
@@ -1423,7 +1439,135 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
+  // Meeting Cancellation Endpoint
+  app.post("/api/meetings/cancel", async (req, res) => {
+    try {
+      const { meetingId, callerId, reason } = req.body || {};
+      if (!meetingId || !callerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required meetingId or callerId.",
+          error: "Missing required parameters."
+        });
+      }
+
+      // Fetch caller account
+      const { data: caller, error: callerErr } = await adminSupabase
+        .from('users')
+        .select('*')
+        .or(`id.eq.${callerId},uid.eq.${callerId}`)
+        .maybeSingle();
+
+      if (callerErr || !caller) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized user account.",
+          error: "Unauthorized user account."
+        });
+      }
+
+      const role = String(caller.role || '').toUpperCase();
+      const pos = String(caller.position || '').toLowerCase();
+      const isAuthorized = 
+        role === 'CHAPTER_ADMIN' || 
+        role === 'MASTER_ADMIN' || 
+        role === 'ADMIN' || 
+        pos === 'chapter_admin' ||
+        pos === 'president' ||
+        pos === 'vice_president' ||
+        pos === 'treasurer' ||
+        pos === 'secretary' ||
+        pos === 'coordinator';
+
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          message: "Only Chapter Admin or Position Holders can cancel meetings.",
+          error: "Permission denied: Normal Member cannot cancel meetings."
+        });
+      }
+
+      // Fetch target meeting
+      const { data: meeting, error: meetingErr } = await adminSupabase
+        .from('meetings')
+        .select('*')
+        .eq('id', meetingId)
+        .single();
+
+      if (meetingErr || !meeting) {
+        return res.status(404).json({
+          success: false,
+          message: "Target meeting not found.",
+          error: "Meeting not found."
+        });
+      }
+
+      // Verify chapter restriction
+      if (caller.role !== 'MASTER_ADMIN') {
+        const callerChap = caller.chapter_id || caller.chapterId;
+        const meetingChap = meeting.chapter_id || meeting.chapterId;
+        if (callerChap && meetingChap && String(callerChap).trim() !== String(meetingChap).trim()) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only cancel meetings belonging to your own chapter.",
+            error: "You can only cancel meetings belonging to your own chapter."
+          });
+        }
+      }
+
+      const updatePayload: any = {
+        status: 'CANCELLED',
+        is_completed: false,
+        updated_at: new Date().toISOString()
+      };
+
+      if (reason) {
+        const existingNotes = meeting.member_notes || {};
+        updatePayload.member_notes = {
+          ...existingNotes,
+          cancellation_reason: reason
+        };
+      }
+
+      let cancelErr: any = null;
+      const { error: firstErr } = await adminSupabase
+        .from('meetings')
+        .update(updatePayload)
+        .eq('id', meetingId);
+
+      if (firstErr) {
+        console.warn("First cancel update failed, retrying without is_completed:", firstErr.message);
+        const fallbackPayload = { ...updatePayload };
+        delete fallbackPayload.is_completed;
+        const { error: secondErr } = await adminSupabase
+          .from('meetings')
+          .update(fallbackPayload)
+          .eq('id', meetingId);
+        cancelErr = secondErr;
+      }
+
+      if (cancelErr) {
+        console.error("SUPABASE CANCEL ERR:", cancelErr);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to cancel meeting in database.",
+          error: cancelErr.message
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Meeting cancelled successfully."
+      });
+    } catch (err: any) {
+      console.error("Error in /api/meetings/cancel:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Backend Crash: " + (err.stack || err.message || "Unknown error"),
+        error: err.message || "Server error"
+      });
+    }
+  });
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -1434,6 +1578,7 @@ async function startServer() {
   } else {
     // Production (Standard Node server)
     const distPath = path.join(process.cwd(), "dist");
+    const indexPath = path.join(distPath, "index.html");
     
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
@@ -1444,13 +1589,17 @@ async function startServer() {
     }));
     
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("Application build not found. Please build the project.");
+      }
     });
   }
 
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server running on port ${PORT}`);
     });
   }
 

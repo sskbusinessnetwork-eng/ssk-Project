@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, Share2, Award, UserPlus, User, LogOut, CreditCard,
   Shield, Bell, X, Sparkles, Layers, ChevronLeft, ChevronRight, Activity, FileText,
-  MessageSquare, Settings, HelpCircle, LogIn, Crown, Tags
+  MessageSquare, Settings, HelpCircle, LogIn, Crown, Tags, BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -60,14 +60,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath(), roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Calendar, label: 'Meetings', path: '/meetings', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: Layers, label: 'One-to-One', path: '/one-to-one', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Share2, label: 'Referrals', path: '/refer', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: Activity, label: 'Activity', path: '/activity', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
     { icon: FileText, label: 'Directory', path: '/directory', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
-    { icon: Activity, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
-    { icon: Award, label: 'Thank You Slips', path: '/thank-you-slips', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
+    { icon: BarChart3, label: 'Reports', path: '/reports', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN'] },
     { icon: MessageSquare, label: 'Testimonials', path: '/testimonials', roles: ['CHAPTER_ADMIN', 'MEMBER'] },
     { icon: MessageSquare, label: 'Testimonial Reports', path: '/testimonial-reports', roles: ['MASTER_ADMIN'] },
     { icon: Crown, label: 'Manage Chapter', path: '/manage-chapter', roles: ['MASTER_ADMIN'] },
     { icon: Users, label: 'Manage Members', path: '/members', roles: ['MASTER_ADMIN'] },
+    { icon: Award, label: 'Member TYS', path: '/member-tys', roles: ['CHAPTER_ADMIN', 'MASTER_ADMIN'] },
     { icon: UserPlus, label: 'Add Member', path: '/add-member', roles: ['CHAPTER_ADMIN'] },
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN'] },
     { icon: Tags, label: 'Manage Categories', path: '/categories', roles: ['MASTER_ADMIN'] },
