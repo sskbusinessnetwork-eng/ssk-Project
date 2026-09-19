@@ -16,6 +16,7 @@ import { notificationService } from '../services/notificationService';
 import {  where  } from '../lib/database';
 import { BrandLogo } from './BrandLogo';
 import { NotificationPopover } from './notifications/NotificationPopover';
+import { ThemeToggle } from './ThemeToggle';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -146,12 +147,12 @@ export function Layout() {
       )}>
         
         {/* Top Header */}
-        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-2 sm:px-4 lg:px-6 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
+        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-3 sm:px-5 lg:px-8 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
           
-          <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-4 min-w-0 flex-1 mr-1 sm:mr-2">
+          <div className="flex items-center gap-3 sm:gap-5 lg:gap-6 min-w-0 flex-1">
             <button 
               onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-              className="lg:hidden p-1.5 sm:p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white shrink-0 z-[10000] relative"
+              className="lg:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white shrink-0 z-[10000] relative"
               aria-label={isMobileSidebarOpen ? "Close menu" : "Open menu"}
             >
               {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
@@ -161,7 +162,7 @@ export function Layout() {
             <Link to="/dashboard" className="flex items-center min-w-0 shrink">
               <BrandLogo 
                 size="sm" 
-                showText={true} 
+                showText={false} 
                 subtitle="ENTERPRISE PLATFORM" 
                 subtitleClassName="hidden lg:block"
                 textClassName="text-[11px] sm:text-[13px] lg:text-sm tracking-tighter sm:tracking-tight lg:tracking-wider font-extrabold truncate"
@@ -170,7 +171,7 @@ export function Layout() {
             </Link>
           </div>
 
-          <div className="flex-1 max-w-[600px] px-6 hidden lg:block">
+          <div className="flex-1 max-w-[600px] px-8 hidden lg:block">
             <div className="relative flex items-center bg-[#111827] rounded-full px-4 py-2.5 hover:bg-[#1F2937] transition-colors focus-within:bg-[#111827] focus-within:ring-1 focus-within:ring-white/20 border border-white/5">
               <Search size={18} className="text-[#9CA3AF]" />
               <input 
@@ -185,7 +186,9 @@ export function Layout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-4 lg:gap-6 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-5 lg:gap-8 shrink-0">
+            <ThemeToggle />
+
             <div className="relative flex items-center">
               <button 
                 id="notification-bell-btn"

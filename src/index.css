@@ -179,3 +179,491 @@
 .overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+/* ==========================================================================
+   DAY THEME SPECIFICATION (LIGHT MODE OPTIMIZATION)
+   ========================================================================== */
+html.theme-day,
+body.theme-day,
+[data-theme="day"] {
+  --color-background: #F8FAFC;
+  --color-foreground: #0F172A;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #0F172A;
+  --color-muted: #F1F5F9;
+  --color-muted-foreground: #64748B;
+  --color-border: #E2E8F0;
+  --color-navy: #FFFFFF;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #64748B;
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* Page canvases & main wrappers */
+.theme-day,
+.theme-day .min-h-screen,
+.theme-day main,
+.theme-day .bg-\[\#05070D\],
+.theme-day .bg-\[\#05070E\],
+.theme-day .bg-\[\#05070E\]\/80,
+.theme-day .bg-\[\#0A0A0A\],
+.theme-day .bg-\[\#0E0E0E\],
+.theme-day .bg-background {
+  background-color: #F8FAFC !important;
+}
+
+/* Header in Day Theme */
+.theme-day header {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Sidebar in Day Theme */
+.theme-day aside,
+.theme-day [class*="Sidebar"],
+.theme-day .bg-\[\#11131A\] {
+  background-color: #FFFFFF !important;
+  border-right-color: #E2E8F0 !important;
+}
+
+/* Primary Cards & Elevated Panels */
+.theme-day .bg-\[\#111827\],
+.theme-day .bg-\[\#111827\]\/85,
+.theme-day .bg-\[\#111827\]\/90,
+.theme-day .bg-\[\#111827\]\/95,
+.theme-day .bg-\[\#0F172A\],
+.theme-day .bg-\[\#161B22\],
+.theme-day .bg-\[\#1A1D24\],
+.theme-day .dark-glass-card,
+.theme-day .analytics-card,
+.theme-day .bg-card {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Secondary Panels & Inner Nested Sections */
+.theme-day .bg-\[\#151C2E\],
+.theme-day .bg-\[\#151C2E\]\/70,
+.theme-day .bg-\[\#151C2E\]\/80,
+.theme-day .bg-\[\#151C2E\]\/90,
+.theme-day .bg-\[\#1C2538\],
+.theme-day .bg-\[\#0B1220\],
+.theme-day .bg-\[\#0B1220\]\/80,
+.theme-day .bg-\[\#1A1F2B\],
+.theme-day .bg-\[\#1E293B\],
+.theme-day .bg-\[\#0F2040\] {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Subtle grey container chips & hover states */
+.theme-day .bg-\[\#1F2937\],
+.theme-day .bg-\[\#1F2937\]\/80,
+.theme-day .bg-\[\#1F2937\]\/50,
+.theme-day .bg-\[\#374151\] {
+  background-color: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Semi-transparent dark surfaces */
+.theme-day .bg-white\/5,
+.theme-day .bg-white\/\[0\.03\],
+.theme-day .bg-white\/\[0\.02\],
+.theme-day .bg-white\/10 {
+  background-color: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Headings */
+.theme-day h1,
+.theme-day h2,
+.theme-day h3,
+.theme-day h4,
+.theme-day h5,
+.theme-day h6 {
+  color: #0F172A !important;
+}
+
+/* General text-white on non-colored backgrounds */
+.theme-day .text-white:not(button.bg-primary):not(button[class*="bg-primary"]):not(button[class*="bg-\[\#E53935\]"]):not(button[class*="bg-red"]):not(button[class*="bg-emerald"]):not(button[class*="bg-green"]):not(button[class*="bg-blue"]):not(button[class*="bg-purple"]):not(button[class*="bg-amber"]):not(a.bg-primary):not(a[class*="bg-primary"]):not(a[class*="bg-\[\#E53935\]"]):not([class*="bg-red-"]):not([class*="bg-emerald-"]):not([class*="bg-blue-"]):not([class*="bg-primary"]):not(.preserve-white) {
+  color: #0F172A !important;
+}
+
+/* Preserve white text inside saturated colored action buttons / badges */
+.theme-day .bg-primary .text-white,
+.theme-day .bg-\[\#E53935\] .text-white,
+.theme-day [class*="bg-red-"] .text-white,
+.theme-day [class*="bg-emerald-"] .text-white,
+.theme-day [class*="bg-blue-"] .text-white,
+.theme-day .preserve-white {
+  color: #FFFFFF !important;
+}
+
+/* Secondary & Muted Typography */
+.theme-day .text-neutral-200,
+.theme-day .text-neutral-300,
+.theme-day .text-\[\#E5E7EB\],
+.theme-day .text-\[\#D1D5DB\] {
+  color: #334155 !important;
+}
+
+.theme-day .text-neutral-400,
+.theme-day .text-neutral-500,
+.theme-day .text-\[\#9CA3AF\],
+.theme-day .text-\[\#6B7280\],
+.theme-day .text-\[\#8A93A7\] {
+  color: #64748B !important;
+}
+
+.theme-day .text-foreground,
+.theme-day .text-text-primary {
+  color: #0F172A !important;
+}
+
+.theme-day .text-text-secondary {
+  color: #64748B !important;
+}
+
+/* Subtle clean dividers */
+.theme-day .border-white\/5,
+.theme-day .border-white\/10,
+.theme-day .border-white\/15,
+.theme-day .border-white\/20,
+.theme-day .border-white\/30,
+.theme-day .border-\[\#1F2937\],
+.theme-day .border-\[\#1F2937\]\/50,
+.theme-day .border-neutral-800,
+.theme-day .border-neutral-900,
+.theme-day .border-border {
+  border-color: #E2E8F0 !important;
+}
+
+.theme-day .divide-white\/5 > * + *,
+.theme-day .divide-white\/10 > * + * {
+  border-color: #E2E8F0 !important;
+}
+
+/* Form inputs & dropdowns */
+.theme-day input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.theme-day select,
+.theme-day textarea {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-day input:focus,
+.theme-day select:focus,
+.theme-day textarea:focus {
+  border-color: #E53935 !important;
+  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.15) !important;
+}
+
+.theme-day input::placeholder,
+.theme-day textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+.theme-day select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+/* Tables in Day Theme */
+.theme-day table {
+  background-color: #FFFFFF !important;
+}
+
+.theme-day thead,
+.theme-day thead tr,
+.theme-day thead th {
+  background-color: #F8FAFC !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.theme-day tbody tr {
+  background-color: #FFFFFF !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+}
+
+.theme-day tbody tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+.theme-day td {
+  color: #1E293B !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Modals, Popovers & Dialogs */
+.theme-day [role="dialog"],
+.theme-day [role="dialog"] > div {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+.theme-day [role="dialog"] h1,
+.theme-day [role="dialog"] h2,
+.theme-day [role="dialog"] h3 {
+  color: #0F172A !important;
+}
+
+.theme-day .modal-backdrop,
+.theme-day .fixed.inset-0.bg-black\/80,
+.theme-day .fixed.inset-0.bg-black\/60,
+.theme-day .fixed.inset-0.bg-black\/50 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* Sidebar Navigation Items in Day Theme */
+.theme-day aside a,
+.theme-day [class*="Sidebar"] a {
+  color: #475569 !important;
+}
+
+.theme-day aside a:hover,
+.theme-day [class*="Sidebar"] a:hover {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+.theme-day aside a.bg-\[\#E53935\]\/10,
+.theme-day [class*="Sidebar"] a.bg-\[\#E53935\]\/10 {
+  background-color: rgba(229, 57, 53, 0.08) !important;
+  color: #E53935 !important;
+  border-color: rgba(229, 57, 53, 0.2) !important;
+}
+
+.theme-day aside a.bg-\[\#E53935\]\/10 svg,
+.theme-day [class*="Sidebar"] a.bg-\[\#E53935\]\/10 svg {
+  color: #E53935 !important;
+}
+
+/* Status Badges & Chips in Day Theme */
+.theme-day .text-amber-400 {
+  color: #D97706 !important;
+}
+.theme-day .bg-amber-500\/10,
+.theme-day .bg-amber-500\/15,
+.theme-day .bg-amber-500\/20 {
+  background-color: #FEF3C7 !important;
+  border-color: #FDE68A !important;
+}
+
+.theme-day .text-emerald-400,
+.theme-day .text-green-400 {
+  color: #059669 !important;
+}
+.theme-day .bg-emerald-500\/10,
+.theme-day .bg-emerald-500\/15,
+.theme-day .bg-emerald-500\/20,
+.theme-day .bg-green-500\/10 {
+  background-color: #D1FAE5 !important;
+  border-color: #A7F3D0 !important;
+}
+
+.theme-day .text-blue-400 {
+  color: #2563EB !important;
+}
+.theme-day .bg-blue-500\/10,
+.theme-day .bg-blue-500\/15,
+.theme-day .bg-blue-500\/20 {
+  background-color: #DBEAFE !important;
+  border-color: #BFDBFE !important;
+}
+
+.theme-day .text-purple-400 {
+  color: #7C3AED !important;
+}
+.theme-day .bg-purple-500\/10,
+.theme-day .bg-purple-500\/15,
+.theme-day .bg-purple-500\/20 {
+  background-color: #EDE9FE !important;
+  border-color: #DDD6FE !important;
+}
+
+.theme-day .text-red-400 {
+  color: #DC2626 !important;
+}
+.theme-day .bg-red-500\/10,
+.theme-day .bg-red-500\/15,
+.theme-day .bg-red-500\/20 {
+  background-color: #FEE2E2 !important;
+  border-color: #FECACA !important;
+}
+
+/* Mobile Bottom Navigation in Day Theme */
+.theme-day nav.fixed.bottom-4 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #E2E8F0 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
+}
+.theme-day nav.fixed.bottom-4 button,
+.theme-day nav.fixed.bottom-4 a {
+  color: #64748B !important;
+}
+.theme-day nav.fixed.bottom-4 .text-white {
+  color: #0F172A !important;
+}
+.theme-day nav.fixed.bottom-4 .text-primary {
+  color: #E53935 !important;
+}
+
+/* Scrollbars in Day Theme */
+.theme-day ::-webkit-scrollbar-track,
+.theme-day .custom-scrollbar::-webkit-scrollbar-track,
+.theme-day .overflow-x-auto::-webkit-scrollbar-track {
+  background: #F1F5F9 !important;
+}
+
+.theme-day ::-webkit-scrollbar-thumb,
+.theme-day .custom-scrollbar::-webkit-scrollbar-thumb,
+.theme-day .overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #CBD5E1 !important;
+}
+
+.theme-day ::-webkit-scrollbar-thumb:hover,
+.theme-day .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.theme-day .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8 !important;
+}
+
+/* Recharts Charts in Day Theme */
+.theme-day .recharts-default-tooltip {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important;
+  color: #0F172A !important;
+}
+.theme-day .recharts-tooltip-label {
+  color: #0F172A !important;
+  font-weight: 700 !important;
+}
+.theme-day .recharts-tooltip-item {
+  color: #334155 !important;
+}
+.theme-day .recharts-text {
+  fill: #64748B !important;
+}
+.theme-day .recharts-cartesian-grid line {
+  stroke: #E2E8F0 !important;
+}
+.theme-day .recharts-legend-item-text {
+  color: #475569 !important;
+}
+
+/* Wildcard Attribute Matching for Complete Theme Coverage */
+.theme-day [class*="bg-[#111827]"],
+.theme-day [class*="bg-[#161B22]"],
+.theme-day [class*="bg-[#1A1D24]"],
+.theme-day [class*="bg-[#0A0A0A]"],
+.theme-day [class*="bg-[#0E0E0E]"],
+.theme-day [class*="bg-[#080d1a]"],
+.theme-day [class*="bg-[#0F172A]"] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-day [class*="bg-[#151C2E]"],
+.theme-day [class*="bg-[#141C2E]"],
+.theme-day [class*="bg-[#1C2538]"],
+.theme-day [class*="bg-[#0B1220]"],
+.theme-day [class*="bg-[#0F172A]"],
+.theme-day [class*="bg-[#1A1F2B]"],
+.theme-day [class*="bg-[#1E293B]"],
+.theme-day [class*="bg-[#0F2040]"] {
+  background-color: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-day [class*="border-white/"] {
+  border-color: #E2E8F0 !important;
+}
+
+.theme-day [class*="divide-white/"] > * + * {
+  border-color: #E2E8F0 !important;
+}
+
+.theme-day [class*="text-[#9CA3AF]"],
+.theme-day [class*="text-[#6B7280]"],
+.theme-day [class*="text-[#8A93A7]"],
+.theme-day [class*="text-[#4B5563]"] {
+  color: #64748B !important;
+}
+
+.theme-day [class*="text-[#E5E7EB]"],
+.theme-day [class*="text-[#D1D5DB]"] {
+  color: #334155 !important;
+}
+
+/* Hover and active states for light theme */
+.theme-day [class*="hover:bg-white/"]:hover,
+.theme-day [class*="hover:bg-[#1F2937]"]:hover,
+.theme-day [class*="hover:bg-[#151C2E]"]:hover {
+  background-color: #F1F5F9 !important;
+}
+
+.theme-day [class*="hover:text-white"]:hover:not([class*="bg-primary"]):not([class*="bg-[#E53935]"]) {
+  color: #0F172A !important;
+}
+
+.theme-day .group:hover [class*="group-hover:text-white"] {
+  color: #0F172A !important;
+}
+
+.theme-day .group:hover [class*="group-hover:border-white/"] {
+  border-color: #CBD5E1 !important;
+}
+
+/* Ensure solid action buttons preserve white text and icons */
+.theme-day button.bg-primary,
+.theme-day button[class*="bg-primary"]:not([class*="bg-primary\/"]),
+.theme-day button[class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]),
+.theme-day button[class*="bg-[#D32F2F]"]:not([class*="bg-[#D32F2F]\/"]),
+.theme-day a.bg-primary,
+.theme-day a[class*="bg-primary"]:not([class*="bg-primary\/"]),
+.theme-day a[class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]),
+.theme-day [class*="bg-primary"]:not([class*="bg-primary\/"]),
+.theme-day [class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]),
+.theme-day [class*="bg-[#D32F2F]"]:not([class*="bg-[#D32F2F]\/"]),
+.theme-day [class*="bg-red-600"],
+.theme-day [class*="bg-emerald-600"],
+.theme-day [class*="bg-blue-600"] {
+  color: #FFFFFF !important;
+}
+
+.theme-day button.bg-primary *,
+.theme-day button[class*="bg-primary"]:not([class*="bg-primary\/"]) *,
+.theme-day button[class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]) *,
+.theme-day button[class*="bg-[#D32F2F]"]:not([class*="bg-[#D32F2F]\/"]) *,
+.theme-day a.bg-primary *,
+.theme-day a[class*="bg-primary"]:not([class*="bg-primary\/"]) *,
+.theme-day a[class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]) *,
+.theme-day [class*="bg-primary"]:not([class*="bg-primary\/"]) *,
+.theme-day [class*="bg-[#E53935]"]:not([class*="bg-[#E53935]\/"]) *,
+.theme-day [class*="bg-[#D32F2F]"]:not([class*="bg-[#D32F2F]\/"]) *,
+.theme-day [class*="bg-red-600"] *,
+.theme-day [class*="bg-emerald-600"] *,
+.theme-day [class*="bg-blue-600"] * {
+  color: #FFFFFF !important;
+}
+
+/* Empty State Styling */
+.theme-day [class*="border-dashed"] {
+  border-color: #CBD5E1 !important;
+  background-color: #F8FAFC !important;
+}
+
+
+

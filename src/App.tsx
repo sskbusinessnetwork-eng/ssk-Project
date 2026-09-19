@@ -36,6 +36,7 @@ import { MemberTYS } from './pages/MemberTYS';
 import { GlobalToast } from './components/GlobalToast';
 import { showError } from './services/toastService';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 export default function App() {
   useEffect(() => {
@@ -92,8 +93,9 @@ export default function App() {
     <ErrorBoundary>
       <GlobalToast />
       <AuthProvider>
-        <Router>
-          <Routes>
+        <ThemeProvider>
+          <Router>
+            <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/register" element={<Register />} />
             <Route path="/login" element={<Login />} />
@@ -137,6 +139,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Router>
+        </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

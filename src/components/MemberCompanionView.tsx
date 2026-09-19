@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Meeting, UserProfile, isNormalReferral } from '../types';
 import { cn } from '../lib/utils';
+import { useTheme } from '../contexts/ThemeContext';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { getSubscriptionStatus, getSubscriptionDates } from '../utils/memberStatus';
 import { useAuth } from '../hooks/useAuth';
@@ -79,6 +80,7 @@ export function MemberCompanionView({
   allReferrals = [],
 }: MemberCompanionViewProps) {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const { refreshProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -396,33 +398,35 @@ export function MemberCompanionView({
         initial="hidden"
         animate="show"
         className={cn(
-          "w-full bg-gradient-to-b from-[#1B122C] to-[#111827] rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border flex flex-col relative overflow-hidden transition-all duration-700",
-          isHighlightActive 
-            ? "border-purple-500/50 shadow-[0_0_35px_rgba(168,85,247,0.55)] scale-[1.01] bg-gradient-to-b from-[#2B1C4C] to-[#111827]" 
-            : "border-white/5"
+          "w-full rounded-[20px] p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.5)] border flex flex-col relative overflow-hidden transition-all duration-700",
+          theme === 'day' 
+            ? "bg-white border-[#E2E8F0]" 
+            : isHighlightActive 
+              ? "bg-gradient-to-b from-[#2B1C4C] to-[#111827] border-purple-500/50 shadow-[0_0_35px_rgba(168,85,247,0.55)] scale-[1.01]" 
+              : "bg-gradient-to-b from-[#1B122C] to-[#111827] border-white/5"
         )}
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className={cn("absolute top-0 right-0 w-32 h-32 rounded-full blur-2xl pointer-events-none", theme === 'day' ? "bg-purple-100" : "bg-purple-500/10")} />
         
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[17px] font-bold text-white tracking-tight flex items-center gap-2">
+          <h3 className={cn("text-[17px] font-bold tracking-tight flex items-center gap-2", theme === 'day' ? "text-gray-900" : "text-white")}>
             <motion.div 
               animate={isHighlightActive ? { rotate: [0, 15, -15, 10, -10, 0] } : { rotate: [0, 5, -5, 0] }}
               transition={isHighlightActive ? { duration: 0.8 } : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="w-8 h-8 rounded-[12px] bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/20"
+              className={cn("w-8 h-8 rounded-[12px] flex items-center justify-center border", theme === 'day' ? "bg-purple-100 text-purple-600 border-purple-200" : "bg-purple-500/20 text-purple-400 border-purple-500/20")}
             >
               <CheckSquare size={16} />
             </motion.div>
             Workspace Checklist
           </h3>
-          <span className="text-[11px] font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider border border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+          <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border shadow-sm", theme === 'day' ? "bg-purple-50 text-purple-600 border-purple-200" : "text-purple-400 bg-purple-500/10 border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.15)]")}>
             {completedCount} / {displayTasks.length} COMPLETE
           </span>
         </div>
 
         {businessGrowthScore !== undefined && (
-          <div className="mb-4 px-3.5 py-2 bg-[#0B1220]/80 border border-white/10 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 text-neutral-300 font-medium shadow-sm">
-            <span><strong className="text-emerald-400 font-bold">Growth Score:</strong> <span className="text-white font-extrabold">{businessGrowthScore}%</span></span>
+          <div className={cn("mb-4 px-3.5 py-2 border rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 font-medium shadow-sm", theme === 'day' ? "bg-gray-50 text-gray-700 border-gray-200" : "bg-[#0B1220]/80 border-white/10 text-neutral-300")}>
+            <span><strong className={cn("font-bold", theme === 'day' ? "text-emerald-600" : "text-emerald-400")}>Growth Score:</strong> <span className={cn("font-extrabold", theme === 'day' ? "text-gray-900" : "text-white")}>{businessGrowthScore}%</span></span>
           </div>
         )}
 
@@ -442,19 +446,24 @@ export function MemberCompanionView({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
                 whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
-                className="bg-[#0B1220]/60 border border-white/5 px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] cursor-pointer"
+                className={cn(
+                  "px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] cursor-pointer border",
+                  theme === 'day' 
+                    ? "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm"
+                    : "bg-[#0B1220]/60 border-white/5 hover:bg-[#172033] hover:border-red-500/20 shadow-md"
+                )}
                 onClick={() => handleTaskClick(task)}
               >
                 {/* Left Column: Title only */}
                 <div className="flex flex-col flex-1 min-w-0 pr-2">
                     <h4 className={cn(
                       "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words flex items-center gap-1.5 flex-wrap",
-                      task.isDone ? "text-gray-500 line-through opacity-70" : "text-white"
+                      task.isDone ? "text-gray-500 line-through opacity-70" : theme === 'day' ? "text-gray-900" : "text-white"
                     )}>
                       {task.label}
                     </h4>
                     {task.isDone && task.pointsVal ? (
-                       <span className="text-[11px] font-extrabold text-amber-400 tracking-tight block mt-0.5">+{task.pointsVal} Points Earned</span>
+                       <span className={cn("text-[11px] font-extrabold tracking-tight block mt-0.5", theme === 'day' ? "text-amber-600" : "text-amber-400")}>+{task.pointsVal} Points Earned</span>
                     ) : null}
                 </div>
 
@@ -490,12 +499,12 @@ export function MemberCompanionView({
             <span className="text-[#9CA3AF]">Progress Indicator</span>
             <span className="text-white">{progressPercent}%</span>
           </div>
-          <div className="w-full h-2 bg-[#1F2937] rounded-full overflow-hidden border border-white/5">
+          <div className={cn("w-full h-2 rounded-full overflow-hidden border", theme === 'day' ? "bg-gray-100 border-gray-200" : "bg-[#1F2937] border-white/5")}>
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: `${progressPercent}%` }}
               transition={{ duration: 1, ease: "easeOut" }}
-              className="h-full bg-gradient-to-r from-purple-500 to-red-500 rounded-full shadow-[0_0_12px_rgba(168,85,247,0.5)]" 
+              className={cn("h-full rounded-full", theme === 'day' ? "bg-gradient-to-r from-purple-600 to-red-600 shadow-[0_0_12px_rgba(168,85,247,0.3)]" : "bg-gradient-to-r from-purple-500 to-red-500 shadow-[0_0_12px_rgba(168,85,247,0.5)]")}
             />
           </div>
         </div>
@@ -805,41 +814,46 @@ export function MemberCompanionView({
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="w-full bg-gradient-to-br from-[#1E123B] via-[#0E071A] to-[#111827] rounded-[20px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-purple-500/10 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6"
+            className={cn(
+              "w-full rounded-[20px] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] border relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6",
+              theme === 'day' 
+                ? "bg-white border-gray-100" 
+                : "bg-gradient-to-br from-[#1E123B] via-[#0E071A] to-[#111827] border-purple-500/10"
+            )}
           >
-            <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className={cn("absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl pointer-events-none", theme === 'day' ? "bg-purple-100" : "bg-purple-500/10")} />
             
             <div className="relative z-10 flex-1 text-center md:text-left space-y-3">
               <div className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-2">
-                <h2 className="text-[17px] font-bold text-white flex items-center gap-1.5">
-                  Membership Subscription Status <Crown size={16} className="text-[#FBBF24] animate-pulse" />
+                <h2 className={cn("text-[17px] font-bold flex items-center gap-1.5", theme === 'day' ? "text-gray-900" : "text-white")}>
+                  Membership Subscription Status <Crown size={16} className={cn("animate-pulse", theme === 'day' ? "text-amber-500" : "text-[#FBBF24]")} />
                 </h2>
                 <span className={cn(
                   "text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full border shrink-0",
                   isAlreadyRequested 
-                    ? "bg-amber-500/20 text-amber-400 border-amber-500/10" 
+                    ? "bg-amber-500/20 text-amber-600 border-amber-500/10" 
                     : subStatus === 'Inactive / Expired'
-                      ? "bg-red-500/20 text-red-400 border-red-500/10"
+                      ? "bg-red-500/20 text-red-600 border-red-500/10"
                       : subStatus === 'Pending'
-                        ? "bg-blue-500/20 text-blue-400 border-blue-500/10"
-                        : "bg-emerald-500/20 text-emerald-400 border-emerald-500/10"
+                        ? "bg-blue-500/20 text-blue-600 border-blue-500/10"
+                        : "bg-emerald-500/20 text-emerald-600 border-emerald-500/10"
                 )}>
                   {isAlreadyRequested ? "Pending Approval" : subStatus}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg pt-1">
-                <div className="bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-left">
-                  <span className="text-[10px] font-bold text-[#9CA3AF] block uppercase tracking-wider mb-0.5">Expires In:</span>
-                  <div className="text-[16px] font-extrabold text-white">
+                <div className={cn("border rounded-xl px-4 py-3 text-left", theme === 'day' ? "bg-gray-50 border-gray-100" : "bg-white/5 border-white/5")}>
+                  <span className="text-[10px] font-bold text-[#6B7280] block uppercase tracking-wider mb-0.5">Expires In:</span>
+                  <div className={cn("text-[16px] font-extrabold", theme === 'day' ? "text-gray-900" : "text-white")}>
                     {daysRemaining < 0 ? "0 Days" : `${daysRemaining} Days`}
-                    <span className="text-xs font-medium text-[#9CA3AF] ml-1.5">({monthsRemaining} Months)</span>
+                    <span className="text-xs font-medium text-[#6B7280] ml-1.5">({monthsRemaining} Months)</span>
                   </div>
                 </div>
                 
-                <div className="bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-left">
-                  <span className="text-[10px] font-bold text-[#9CA3AF] block uppercase tracking-wider mb-0.5">Renew Before:</span>
-                  <div className="text-[15px] font-extrabold text-white">
+                <div className={cn("border rounded-xl px-4 py-3 text-left", theme === 'day' ? "bg-gray-50 border-gray-100" : "bg-white/5 border-white/5")}>
+                  <span className="text-[10px] font-bold text-[#6B7280] block uppercase tracking-wider mb-0.5">Renew Before:</span>
+                  <div className={cn("text-[15px] font-extrabold", theme === 'day' ? "text-gray-900" : "text-white")}>
                     {formatRenewBefore(resolvedEndDate)}
                   </div>
                 </div>

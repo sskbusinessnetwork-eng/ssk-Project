@@ -10,6 +10,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../contexts/ThemeContext';
 import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
 import { cn } from '../lib/utils';
 import {  where  } from '../lib/database';
@@ -72,6 +73,7 @@ const isToday = (dateStr: string) => {
 export function Analytics() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+const { theme } = useTheme();
   const [score, setScore] = useState(0);
   const [userName, setUserName] = useState<string>('');
 
@@ -2635,7 +2637,12 @@ const getGreeting = () => {
         className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch"
       >
         {/* Left/Center Wrapper: Hero Section (Optimized Height: 320-340px) */}
-        <div className="xl:col-span-12 bg-gradient-to-b from-[#0B1220] to-[#111827] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 lg:h-[330px] md:h-[300px] h-auto">
+        <div className={cn(
+          "xl:col-span-12 rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 lg:h-[330px] md:h-[300px] h-auto",
+          theme === 'day'
+            ? "bg-white border border-[#E2E8F0] shadow-sm"
+            : "bg-gradient-to-b from-[#0B1220] to-[#111827] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5"
+        )}>
           
           {/* Suble moving gradient radial light blobs */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
@@ -2815,7 +2822,12 @@ const getGreeting = () => {
           <motion.div 
             animate={{ y: [0, -5, 0] }}
             transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            className="xl:col-span-4 bg-gradient-to-b from-[#111827] to-[#0B1220] rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden flex flex-col justify-between lg:h-[330px] md:h-[300px] h-auto min-h-[220px]"
+            className={cn(
+              "xl:col-span-4 rounded-[20px] p-[20px] md:p-[24px] lg:p-[28px] relative overflow-hidden flex flex-col justify-between lg:h-[330px] md:h-[300px] h-auto min-h-[220px]",
+              theme === 'day'
+                ? "bg-white border border-[#E2E8F0] shadow-sm"
+                : "bg-gradient-to-b from-[#111827] to-[#0B1220] shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5"
+            )}
           >
             <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[#E53935]/8 rounded-full blur-[60px]" />
             <div className="absolute bottom-0 right-0 w-[100px] h-[100px] bg-[#8B5CF6]/8 rounded-full blur-[50px]" />
@@ -3277,7 +3289,10 @@ const getGreeting = () => {
               </div>
               
               {/* Body */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8 bg-gradient-to-b from-[#0B1220] to-[#111827]">
+              <div className={cn(
+                "flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8",
+                theme === 'day' ? "bg-white" : "bg-gradient-to-b from-[#0B1220] to-[#111827]"
+              )}>
                 {renderAnalyticsDetails()}
               </div>
             </motion.div>
