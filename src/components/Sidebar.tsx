@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, Share2, Award, UserPlus, User, LogOut, CreditCard,
   Shield, Bell, X, Sparkles, Layers, ChevronLeft, ChevronRight, Activity, FileText,
-  MessageSquare, Settings, HelpCircle, LogIn, Crown, Tags, BarChart3
+  MessageSquare, Settings, HelpCircle, LogIn, Crown, Tags, BarChart3, ArrowLeftRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
@@ -71,6 +71,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
     { icon: UserPlus, label: 'Add Member', path: '/add-member', roles: ['CHAPTER_ADMIN'] },
     { icon: CreditCard, label: 'Manage Subscriptions', path: '/subscriptions', roles: ['MASTER_ADMIN'] },
     { icon: Tags, label: 'Manage Categories', path: '/categories', roles: ['MASTER_ADMIN'] },
+    { icon: ArrowLeftRight, label: 'Transfer Members', path: '/transfer-members', roles: ['MASTER_ADMIN'] },
     { icon: UserPlus, label: 'Guests', path: '/guests', roles: ['MASTER_ADMIN', 'CHAPTER_ADMIN', 'MEMBER'] },
   ];
 
