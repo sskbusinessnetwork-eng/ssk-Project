@@ -37,6 +37,7 @@ import { Modal } from '../components/Modal';
 import { MemberTable } from '../components/members/MemberTable';
 import { AddMemberModal } from '../components/members/AddMemberModal';
 import { EditMemberModal } from '../components/members/EditMemberModal';
+import { TransferChapterModal } from '../components/modals/TransferChapterModal';
 import { SubscriptionModal } from '../components/members/SubscriptionModal';
 import { MemberSuccessPopup } from '../components/members/MemberSuccessPopup';
 import { PositionManagement } from '../components/positions/PositionManagement';
@@ -163,6 +164,7 @@ export function Members() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [createdMemberData, setCreatedMemberData] = useState<any>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [deleteConfirmMember, setDeleteConfirmMember] = useState<UserProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -538,6 +540,38 @@ export function Members() {
     setIsEditModalOpen(true);
   };
 
+  const openTransferModal = (member: UserProfile) => {
+    setSelectedMember(member);
+    setIsTransferModalOpen(true);
+  };
+
+  const handleTransferMember = async (newChapterId: string) => {
+    if (!selectedMember) return;
+
+    setIsSubmitting(true);
+    try {
+      const newChapter = chapters.find(c => c.id === newChapterId);
+      if (!newChapter) throw new Error('New chapter not found.');
+
+      await databaseService.update('users', selectedMember.uid || selectedMember.id, {
+        chapter_id: newChapterId,
+        chapter_name: newChapter.chapter_name,
+        chapterName: newChapter.chapter_name
+      });
+      
+      setIsTransferModalOpen(false);
+      setSelectedMember(null);
+      
+      triggerSuccessToast('Member transferred successfully!');
+      window.dispatchEvent(new Event('members-refresh'));
+    } catch (err: any) {
+      console.error('Error transferring member:', err);
+      showError(`Failed to transfer member: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const openSubModal = (member: UserProfile) => {
     setSelectedMember(member);
     setSubDates({
@@ -891,6 +925,7 @@ export function Members() {
               onUpdateStatus={updateStatus}
               onOpenSubModal={openSubModal}
               onEditMember={openEditModal}
+              onTransferMember={openTransferModal}
               onDeleteMember={setDeleteConfirmMember}
               onResetPassword={setResetPasswordMember}
             />
@@ -978,6 +1013,15 @@ export function Members() {
         setFormData={setEditMemberData}
         isMasterAdmin={isMasterAdmin}
         categories={categories}
+      />
+
+      <TransferChapterModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        onSubmit={handleTransferMember}
+        member={selectedMember}
+        chapters={chapters}
+        isSubmitting={isSubmitting}
       />
 
       <SubscriptionModal

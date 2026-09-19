@@ -41,6 +41,7 @@ interface MemberTableProps {
   onEditMember: (member: UserProfile) => void;
   onDeleteMember: (member: UserProfile) => void;
   onResetPassword: (member: UserProfile) => void;
+  onTransferMember: (member: UserProfile) => void;
 }
 
 import { getDisplayPosition } from '../../utils/authUtils';
@@ -56,7 +57,8 @@ export function MemberTable({
   onOpenSubModal,
   onEditMember,
   onDeleteMember,
-  onResetPassword
+  onResetPassword,
+  onTransferMember
 }: MemberTableProps) {
   const navigate = useNavigate();
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -158,6 +160,14 @@ export function MemberTable({
                   >
                     Reset
                   </button>
+                  {isMasterAdmin && (
+                    <button
+                      onClick={() => onTransferMember(member)}
+                      className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
+                    >
+                      Transfer
+                    </button>
+                  )}
                   <button
                     onClick={() => onOpenSubModal(member)}
                     className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
