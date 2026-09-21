@@ -340,11 +340,18 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-[#0F2040] overflow-x-hidden font-sans selection:bg-[#F97316] selection:text-[#0F2040]">
+      {/* Accessible Skip Link */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[#F97316] focus:text-white focus:rounded-lg focus:font-bold focus:shadow-lg focus:outline-none"
+      >
+        Skip to main content
+      </a>
       
       {/* Fixed Header Wrapper */}
       <div className="fixed top-0 left-0 right-0 z-50">
         {/* Navbar */}
-        <nav className={`px-4 sm:px-6 py-3 sm:py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-b border-white/10' : 'bg-transparent'}`}>
+        <nav aria-label="Main Navigation" className={`px-4 sm:px-6 py-3 sm:py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-b border-white/10' : 'bg-transparent'}`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <Link to="/">
@@ -373,10 +380,17 @@ export function LandingPage() {
       <header className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0F2040]">
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute -inset-x-0 -top-[20%] h-[140%] z-0">
           <img 
-            src="https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=2000" 
+            src="https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1280" 
+            srcSet="https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=640 640w, https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1280 1280w, https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1920 1920w"
+            sizes="100vw"
+            width={1280}
+            height={720}
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
-            alt="Business Meeting"
+            alt="SSK Business Network community entrepreneurs meeting and collaborating"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0F2040]/80 via-[#0F2040]/90 to-[#0F2040]"></div>
         </motion.div>
@@ -446,6 +460,9 @@ export function LandingPage() {
           </div>
         </motion.div>
       </header>
+
+      {/* Main Content Landmark */}
+      <main id="main-content">
 
       {/* Top Performing Members Section */}
       <TopPerformingMembersSection />
@@ -940,26 +957,47 @@ export function LandingPage() {
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-6">
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Full Name</label>
-                    <input required type="text" placeholder="e.g. John D." value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" />
+                    <label htmlFor="guest-full-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Full Name</label>
+                    <input 
+                      id="guest-full-name"
+                      name="fullName"
+                      required 
+                      type="text" 
+                      placeholder="e.g. John D." 
+                      value={formData.fullName} 
+                      onChange={e => setFormData({...formData, fullName: e.target.value})} 
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                    />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Phone Number</label>
+                    <label htmlFor="guest-phone-number" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Phone Number</label>
                     <PhoneInputWithPicker 
-  required 
-  value={formData.phone} 
-  onChange={(value) => setFormData({...formData, phone: value})} 
-  placeholder="e.g. +91 9..." 
-  className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" 
-/>
+                      id="guest-phone-number"
+                      name="phone"
+                      required 
+                      value={formData.phone} 
+                      onChange={(value) => setFormData({...formData, phone: value})} 
+                      placeholder="e.g. +91 9..." 
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                    />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Business Name</label>
-                    <input required type="text" placeholder="e.g. SSK Creations" value={formData.businessName} onChange={e => setFormData({...formData, businessName: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" />
+                    <label htmlFor="guest-business-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Name</label>
+                    <input 
+                      id="guest-business-name"
+                      name="businessName"
+                      required 
+                      type="text" 
+                      placeholder="e.g. SSK Creations" 
+                      value={formData.businessName} 
+                      onChange={e => setFormData({...formData, businessName: e.target.value})} 
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                    />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Business Category</label>
+                    <label htmlFor="guest-business-category" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Category</label>
                     <CategorySelect
+                      id="guest-business-category"
                       value={formData.businessCategory}
                       onChange={(val) => setFormData({ ...formData, businessCategory: val })}
                       categories={categories}
@@ -970,12 +1008,28 @@ export function LandingPage() {
                     />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">City</label>
-                    <input required type="text" placeholder="e.g. Bangalore" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#9CA3AF]" />
+                    <label htmlFor="guest-city" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">City</label>
+                    <input 
+                      id="guest-city"
+                      name="city"
+                      required 
+                      type="text" 
+                      placeholder="e.g. Bangalore" 
+                      value={formData.city} 
+                      onChange={e => setFormData({...formData, city: e.target.value})} 
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                    />
                   </div>
                   <div className="space-y-2 md:space-y-3">
-                    <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Preferred Chapter Name</label>
-                    <select required value={formData.adminId} onChange={e => setFormData({...formData, adminId: e.target.value})} className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040]">
+                    <label htmlFor="guest-preferred-chapter" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Preferred Chapter Name</label>
+                    <select 
+                      id="guest-preferred-chapter"
+                      name="chapter"
+                      required 
+                      value={formData.adminId} 
+                      onChange={e => setFormData({...formData, adminId: e.target.value})} 
+                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040]"
+                    >
                       <option value="">Select Chapter</option>
                       {chaptersList.map(chap => (
                         <option key={chap.chapterId} value={chap.chapterId}>{chap.chapterName}</option>
@@ -1057,6 +1111,7 @@ export function LandingPage() {
           </motion.div>
         </div>
       </section>
+      </main>
 
       {/* Final Message & Footer */}
       <footer className="py-16 md:py-24 bg-white text-center px-4 sm:px-6 border-t border-[#F3F4F6]">
@@ -1068,11 +1123,11 @@ export function LandingPage() {
             We have <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F97316] to-[#FB923C]">always grown</span> as a community.<br/>
             Now it’s time to grow as a business community.
           </motion.h2>
-          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[10px] sm:text-[11px] md:text-[12px] font-extrabold text-[#9CA3AF] uppercase tracking-[2px] md:tracking-[3px]">
+          <motion.p initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[10px] sm:text-[11px] md:text-[12px] font-extrabold text-[#4B5563] uppercase tracking-[2px] md:tracking-[3px]">
             Together, we rise. Together, we grow.
           </motion.p>
           
-          <div className="pt-10 md:pt-20 flex flex-col md:flex-row items-center justify-between border-t border-[#F3F4F6] mt-10 md:mt-20 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[#9CA3AF]">
+          <div className="pt-10 md:pt-20 flex flex-col md:flex-row items-center justify-between border-t border-[#F3F4F6] mt-10 md:mt-20 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[#4B5563]">
             <div className="flex items-center gap-3 mb-6 md:mb-0">
               <Shield className="w-4 h-4 md:w-5 md:h-5 text-[#F97316]" /> SSK Business Network
             </div>
@@ -1081,7 +1136,7 @@ export function LandingPage() {
                 <a href="mailto:sskbusinessnetwork@gmail.com" className="hover:text-[#0F2040] transition-colors">sskbusinessnetwork@gmail.com</a>
                 <a href="tel:+918884449689" className="hover:text-[#0F2040] transition-colors">+91 88844 49689</a>
               </div>
-              <a href="#" className="hover:text-[#0F2040] transition-colors">Contact</a>
+              <a href="#join-section" className="hover:text-[#0F2040] transition-colors">Contact</a>
             </div>
           </div>
         </div>

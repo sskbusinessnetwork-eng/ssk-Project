@@ -97,14 +97,16 @@ export function CategorySelect({
   const defaultAllText = defaultOptionLabel || (allowAllOption ? 'All Categories' : 'Select Category');
 
   return (
-    <div className="relative w-full" ref={containerRef} id={id}>
+    <div className="relative w-full" ref={containerRef}>
       {/* Hidden input for HTML form validation if required */}
       {required && (
         <input
+          id={id}
           type="text"
           value={value}
           onChange={() => {}}
           required={required}
+          aria-label={placeholder || 'Select Category'}
           className="sr-only opacity-0 w-0 h-0 absolute pointer-events-none"
           tabIndex={-1}
         />
@@ -112,9 +114,13 @@ export function CategorySelect({
 
       {/* Trigger Button */}
       <button
+        id={id ? `${id}-btn` : undefined}
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={placeholder || 'Select Category'}
         className={
           className ||
           (lightTheme

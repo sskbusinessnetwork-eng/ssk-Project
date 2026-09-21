@@ -204,6 +204,10 @@ const TopMemberCard: React.FC<{
             <img
               src={member.profilePhoto}
               alt={member.name}
+              width={88}
+              height={88}
+              loading="lazy"
+              decoding="async"
               onError={() => setImgError(true)}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"

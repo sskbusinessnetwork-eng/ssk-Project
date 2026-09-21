@@ -48,6 +48,9 @@ export function BrandLogo({
         <img 
           src={SSK_OFFICIAL_LOGO} 
           alt="SSK Business Network Logo" 
+          width={44}
+          height={44}
+          decoding="async"
           className={cn("w-full h-full object-contain drop-shadow-sm", imgClassName)}
           referrerPolicy="no-referrer"
           loading="eager"

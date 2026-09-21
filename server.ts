@@ -1568,6 +1568,30 @@ async function startServer() {
       });
     }
   });
+
+  // Dedicated AI Agent and SEO Endpoints (guaranteed text/xml delivery without SPA redirect)
+  const servePublicFile = (reqFileName: string, contentType: string) => {
+    return (_req: express.Request, res: express.Response) => {
+      const candidates = [
+        path.join(process.cwd(), "public", reqFileName),
+        path.join(process.cwd(), "dist", reqFileName)
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          return res.sendFile(candidate);
+        }
+      }
+      return res.status(404).type("text/plain").send("Not found");
+    };
+  };
+
+  app.get("/robots.txt", servePublicFile("robots.txt", "text/plain; charset=utf-8"));
+  app.get("/llms.txt", servePublicFile("llms.txt", "text/plain; charset=utf-8"));
+  app.get("/llms-full.txt", servePublicFile("llms-full.txt", "text/plain; charset=utf-8"));
+  app.get("/sitemap.xml", servePublicFile("sitemap.xml", "application/xml; charset=utf-8"));
+
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -1581,9 +1605,17 @@ async function startServer() {
     const indexPath = path.join(distPath, "index.html");
     
     app.use(express.static(distPath, {
+      maxAge: '1y',
+      immutable: true,
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (/\.(js|css)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else if (/\.(webp|png|jpg|jpeg|svg|ico|woff|woff2)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=2592000, stale-while-revalidate=86400');
+        } else if (/\.(txt|xml|json)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
         }
       }
     }));

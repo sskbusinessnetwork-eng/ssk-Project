@@ -13,6 +13,7 @@ export interface UserProfile {
   phone?: string;
   businessName?: string;
   chapterName?: string;
+  chapter_name?: string;
   category?: string;
   state?: string;
   city?: string;

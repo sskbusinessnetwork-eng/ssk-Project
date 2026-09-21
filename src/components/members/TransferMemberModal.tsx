@@ -59,7 +59,7 @@ export function TransferMemberModal({
           {selectedMember && (
             <div className="p-4 bg-[#0F172A] rounded-lg border border-white/5">
               <p className="text-xs text-neutral-400 font-bold uppercase">Current Chapter</p>
-              <p className="text-white font-bold">{selectedMember.chapter_name || 'No Chapter'}</p>
+              <p className="text-white font-bold">{selectedMember.chapter_name || selectedMember.chapterName || 'No Chapter'}</p>
             </div>
           )}
 
@@ -71,7 +71,7 @@ export function TransferMemberModal({
               className="w-full h-11 px-4 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm outline-none"
             >
               <option value="">Select a chapter...</option>
-              {chapters.filter(c => c.id !== selectedMember?.chapter_id).map(c => (
+              {chapters.filter(c => c.id !== selectedMember?.chapter_id && c.id !== (selectedMember as any)?.chapterId).map(c => (
                 <option key={c.id} value={c.id}>{c.chapter_name}</option>
               ))}
             </select>
@@ -90,7 +90,7 @@ export function TransferMemberModal({
           <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
             <p className="text-amber-500 text-sm font-bold text-center">Are you sure?</p>
             <p className="text-neutral-400 text-xs text-center mt-2">
-              This will transfer <strong className="text-white">{selectedMember?.name}</strong> from <strong className="text-white">{selectedMember?.chapter_name}</strong> to <strong className="text-white">{targetChapter?.chapter_name}</strong>.
+              This will transfer <strong className="text-white">{selectedMember?.name}</strong> from <strong className="text-white">{selectedMember?.chapter_name || selectedMember?.chapterName || 'Current Chapter'}</strong> to <strong className="text-white">{targetChapter?.chapter_name}</strong>.
             </p>
             <p className="text-neutral-500 text-[10px] text-center mt-4">
               Historical data will remain with the old chapter. Only the current active chapter will change.

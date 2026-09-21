@@ -10,6 +10,7 @@ interface PhoneInputWithPickerProps {
   required?: boolean;
   icon?: React.ReactNode;
   name?: string;
+  id?: string;
 }
 
 export function PhoneInputWithPicker({
@@ -19,7 +20,8 @@ export function PhoneInputWithPicker({
   className,
   required = false,
   icon,
-  name
+  name,
+  id
 }: PhoneInputWithPickerProps) {
   const [isSupported, setIsSupported] = useState(false);
 
@@ -58,6 +60,7 @@ export function PhoneInputWithPicker({
     <div className="relative w-full">
       {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">{icon}</div>}
       <input
+        id={id}
         name={name}
         required={required}
         type="tel"
@@ -71,6 +74,7 @@ export function PhoneInputWithPicker({
         onClick={handlePickContact}
         className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-neutral-700 rounded-full transition-colors text-neutral-400 hover:text-white z-10"
         title="Select from contacts"
+        aria-label="Select contact from phonebook"
       >
         <Users size={18} />
       </button>

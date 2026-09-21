@@ -1,0 +1,33 @@
+# SSK Business Network — Full Documentation for AI Agents
+
+> Comprehensive overview of the SSK Business Network, its chapter operations, membership structure, and community platform.
+
+SSK Business Network is a dedicated business referral and professional networking ecosystem designed to unite Somavanshiya Sahasrarjun Kshatriya (SSK) business founders, manufacturers, merchants, retailers, and service providers across India.
+
+## Principles & Operational Framework
+
+1. **Values & Integrity**: Business relationships forged within the community are grounded in trust, high standards of trade ethics, and mutual accountability.
+2. **Hard Work & Discipline**: Structured weekly meetings with clear agendas, punctuality, and consistent participation.
+3. **Verified Business Referrals**: Members exchange qualified business opportunities and track generated business volume through Thank You Slips (TYS).
+4. **One-to-One Collaboration**: Members schedule structured 1-to-1 meetings to deepen understanding of each other's core competencies, market reach, and synergy opportunities.
+5. **Continuous Learning & Showcases**: Each meeting features member presentations, chapter education, and category exclusivity within chapters to prevent internal conflict.
+
+## Platform Capabilities
+
+- **Visitor & Guest Management**: Seamless chapter meeting reservation for prospective members to observe chapter dynamics before applying.
+- **Member Directory**: Verified listings of community businesses categorized by industry, location, and specialization.
+- **Referral Tracking**: Real-time logging of referrals, status updates, and closed business value.
+- **Chapter Governance**: Managed by elected chapter leaders (Chapter Admin, President, Vice President, Secretary, Treasurer) under Master Admin coordination.
+
+## Public Endpoints
+
+- **Homepage**: https://www.sskbusiness.com/
+- **Meeting RSVP**: https://www.sskbusiness.com/#join-section
+- **Register**: https://www.sskbusiness.com/register
+- **Login**: https://www.sskbusiness.com/login
+
+## Contact & Inquiries
+
+- **Email**: sskbusinessnetwork@gmail.com
+- **Phone**: +91 88844 49689
+- **Website**: https://www.sskbusiness.com/

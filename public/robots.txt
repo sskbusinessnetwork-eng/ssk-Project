@@ -1,0 +1,28 @@
+# robots.txt for SSK Business Network (https://www.sskbusiness.com)
+User-agent: *
+Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /sitemap.xml
+Allow: /assets/
+Allow: /*.js
+Allow: /*.css
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.webp
+Allow: /*.svg
+
+# Disallow private user/admin application dashboards from search crawler indexation
+Disallow: /admin/
+Disallow: /chapter-admin/
+Disallow: /master-admin/
+Disallow: /member/
+Disallow: /analytics
+Disallow: /activity
+Disallow: /reports
+Disallow: /settings
+Disallow: /manage-chapter
+Disallow: /manage-subscriptions
+Disallow: /api/
+
+Sitemap: https://www.sskbusiness.com/sitemap.xml
