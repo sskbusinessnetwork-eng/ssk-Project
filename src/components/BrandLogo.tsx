@@ -46,7 +46,9 @@ export function BrandLogo({
         containerSizeMap[size]
       )}>
         <img 
-          src={SSK_OFFICIAL_LOGO} 
+          src={size === 'xs' || size === 'sm' || size === 'md' ? '/ssk-logo-64.webp' : SSK_OFFICIAL_LOGO} 
+          srcSet="/ssk-logo-32.webp 32w, /ssk-logo-64.webp 64w, /ssk-logo-128.webp 128w, /ssk-logo-256.webp 256w"
+          sizes="(max-width: 640px) 36px, (max-width: 1024px) 44px, 64px"
           alt="SSK Business Network Logo" 
           width={44}
           height={44}

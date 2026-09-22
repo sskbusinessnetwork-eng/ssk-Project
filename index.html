@@ -44,9 +44,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link 
-      rel="stylesheet" 
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" 
+      rel="preload" 
+      as="style" 
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" 
     />
+    <link 
+      rel="stylesheet" 
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" 
+      media="print" 
+      onload="this.media='all'" 
+    />
+    <noscript>
+      <link 
+        rel="stylesheet" 
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;600;700&display=swap" 
+      />
+    </noscript>
 
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
@@ -56,10 +69,15 @@
       "name": "SSK Business Network",
       "url": "https://www.sskbusiness.com/",
       "logo": "https://www.sskbusiness.com/ssk-logo-512.webp",
-      "description": "A structured business networking platform to ignite, nurture, and grow SSK entrepreneurs across India.",
+      "description": "A structured business networking platform to ignite, nurture, and grow SSK entrepreneurs across India through verified referrals and chapter collaboration.",
       "email": "sskbusinessnetwork@gmail.com",
       "telephone": "+918884449689",
-      "sameAs": []
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+918884449689",
+        "contactType": "customer service",
+        "email": "sskbusinessnetwork@gmail.com"
+      }
     }
     </script>
   </head>

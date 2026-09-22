@@ -27,8 +27,76 @@ async function startServer() {
   const PORT = 3000;
 
   app.set('trust proxy', true);
+
+  // Production & Development Security Headers (Lighthouse Best Practices & Security)
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co https://www.sskbusiness.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com https://*.run.app",
+      "frame-ancestors 'self' https://ai.studio https://*.google.com https://*.googleusercontent.com https://*.run.app",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; ");
+    res.setHeader('Content-Security-Policy', csp);
+
+    next();
+  });
+
   app.use(express.json({ limit: '20mb' }));
   app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+  // Dedicated AI Agentic Browsing discovery endpoints
+  app.get("/ai-catalog.json", (req, res) => {
+    const pubPath = path.join(process.cwd(), "public", "ai-catalog.json");
+    const distPath = path.join(process.cwd(), "dist", "ai-catalog.json");
+    const filePath = fs.existsSync(pubPath) ? pubPath : (fs.existsSync(distPath) ? distPath : null);
+
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (filePath && fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(200).json({
+        "$schema": "https://ai-catalog.org/schema/v1/ai-catalog.json",
+        "name": "SSK Business Network",
+        "description": "A structured business networking platform to ignite, nurture, and grow SSK entrepreneurs across India through verified referrals and chapter collaboration.",
+        "version": "1.0.0",
+        "url": "https://www.sskbusiness.com/",
+        "documentation": "https://www.sskbusiness.com/llms.txt",
+        "organization": {
+          "name": "SSK Business Network",
+          "url": "https://www.sskbusiness.com/",
+          "email": "sskbusinessnetwork@gmail.com",
+          "phone": "+918884449689"
+        }
+      });
+    }
+  });
+
+  app.get("/llms.txt", (req, res) => {
+    const pubPath = path.join(process.cwd(), "public", "llms.txt");
+    const distPath = path.join(process.cwd(), "dist", "llms.txt");
+    const filePath = fs.existsSync(pubPath) ? pubPath : (fs.existsSync(distPath) ? distPath : null);
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (filePath && fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send("Not found");
+    }
+  });
 
   // Initialize Supabase Client
   const supabaseUrl = process.env.SUPABASE_URL || 'https://wfbkgfotpzscjyaanzpx.supabase.co';

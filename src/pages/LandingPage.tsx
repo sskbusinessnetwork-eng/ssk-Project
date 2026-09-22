@@ -197,10 +197,18 @@ export function LandingPage() {
   }, [formData.adminId, chaptersList]);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const isScrolled = window.scrollY > 50;
+          setScrolled(prev => (prev !== isScrolled ? isScrolled : prev));
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -367,7 +375,8 @@ export function LandingPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={scrollToForm} 
-                className="px-3.5 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 bg-[#F97316] text-white text-[10px] sm:text-xs md:text-sm font-extrabold uppercase tracking-[1.5px] sm:tracking-[3px] rounded-full hover:bg-[#EA580C] transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] whitespace-nowrap"
+                className="px-3.5 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 bg-[#C2410C] text-white text-[10px] sm:text-xs md:text-sm font-extrabold uppercase tracking-[1.5px] sm:tracking-[3px] rounded-full hover:bg-[#9A3412] transition-all shadow-[0_0_20px_rgba(194,65,12,0.3)] whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                aria-label="Join Meeting"
               >
                 Join Meeting
               </motion.button>
@@ -380,8 +389,8 @@ export function LandingPage() {
       <header className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0F2040]">
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute -inset-x-0 -top-[20%] h-[140%] z-0">
           <img 
-            src="https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1280" 
-            srcSet="https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=640 640w, https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1280 1280w, https://images.unsplash.com/photo-1556761175-5973dc0f32d7?auto=format&fit=crop&q=80&w=1920 1920w"
+            src="/images/hero-bg.webp" 
+            srcSet="/images/hero-bg-sm.webp 640w, /images/hero-bg.webp 1280w"
             sizes="100vw"
             width={1280}
             height={720}
@@ -389,54 +398,46 @@ export function LandingPage() {
             fetchPriority="high"
             decoding="async"
             className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
             alt="SSK Business Network community entrepreneurs meeting and collaborating"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0F2040]/80 via-[#0F2040]/90 to-[#0F2040]"></div>
         </motion.div>
 
-        {/* Animated Particles */}
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
+        {/* Ambient background particles with fixed CSS positions (no reflow) */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
+          {[
+            { left: '12%', top: '25%', delay: '0s' },
+            { left: '28%', top: '65%', delay: '1.8s' },
+            { left: '46%', top: '35%', delay: '0.9s' },
+            { left: '64%', top: '78%', delay: '2.7s' },
+            { left: '78%', top: '22%', delay: '1.4s' },
+            { left: '86%', top: '55%', delay: '2.2s' },
+            { left: '92%', top: '72%', delay: '0.6s' },
+            { left: '38%', top: '18%', delay: '3.1s' },
+          ].map((pt, i) => (
+            <div
               key={i}
-              className="absolute w-1.5 h-1.5 bg-[#F97316] rounded-full opacity-30"
-              initial={{ 
-                x: Math.random() * window.innerWidth, 
-                y: Math.random() * window.innerHeight 
-              }}
-              animate={{ 
-                y: [null, Math.random() * -500],
-                opacity: [0.3, 0.8, 0]
-              }}
-              transition={{ 
-                duration: Math.random() * 10 + 10, 
-                repeat: Infinity, 
-                ease: "linear" 
-              }}
+              className="absolute w-1.5 h-1.5 bg-[#F97316] rounded-full opacity-30 animate-pulse"
+              style={{ left: pt.left, top: pt.top, animationDelay: pt.delay }}
             />
           ))}
         </div>
 
         <div className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-20 md:mt-24">
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={staggerContainer}
-          >
-            <motion.h1 variants={fadeUp} className="text-[24px] sm:text-[32px] md:text-[40px] lg:text-[48px] font-black tracking-tight text-white mb-6 leading-[1.2] px-2">
+          <div className="space-y-2">
+            <h1 className="text-[24px] sm:text-[32px] md:text-[40px] lg:text-[48px] font-black tracking-tight text-white mb-6 leading-[1.2] px-2">
               We Built Our Community with Values.<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F97316] to-[#FB923C] drop-shadow-[0_0_30px_rgba(249,115,22,0.3)]">
                 Now Let’s Build Our Businesses Together.
               </span>
-            </motion.h1>
-            <motion.p variants={fadeUp} className="text-[14px] sm:text-[15px] md:text-[16px] text-white/90 mb-4 font-medium max-w-2xl mx-auto leading-relaxed px-4">
+            </h1>
+            <p className="text-[14px] sm:text-[15px] md:text-[16px] text-white/90 mb-4 font-medium max-w-2xl mx-auto leading-relaxed px-4">
               A powerful movement to Ignite, Nurture & Grow SSK Entrepreneurs across India.
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-[16px] sm:text-[18px] md:text-[20px] lg:text-[22px] font-black text-white mb-8 md:mb-12 tracking-tight">
+            </p>
+            <p className="text-[16px] sm:text-[18px] md:text-[20px] lg:text-[22px] font-black text-white mb-8 md:mb-12 tracking-tight">
               By the <span className="text-[#EF4444]">SSK People</span>. For the <span className="text-[#EF4444]">SSK People</span>.
-            </motion.p>
-            <motion.div variants={fadeUp}>
+            </p>
+            <div>
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(249, 115, 22, 0.6)" }}
                 whileTap={{ scale: 0.95 }}
@@ -445,8 +446,8 @@ export function LandingPage() {
               >
                 Join a Chapter Meeting
               </motion.button>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
         
         {/* Scroll Indicator */}
@@ -674,12 +675,15 @@ export function LandingPage() {
             className="w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 mx-auto bg-white/5 backdrop-blur-xl rounded-full flex items-center justify-center mb-10 md:mb-16 border border-white/10 relative"
           >
             <motion.div 
-              animate={{ boxShadow: ["0 0 0px rgba(249,115,22,0)", "0 0 60px rgba(249,115,22,0.4)", "0 0 0px rgba(249,115,22,0)"] }}
-              transition={{ duration: 3, repeat: Infinity }}
-              className="absolute inset-3 md:inset-4 bg-white rounded-full flex items-center justify-center border-4 border-[#F97316] p-4 overflow-hidden"
+              animate={{ opacity: [0.2, 0.8, 0.2] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-2 md:inset-3 rounded-full bg-[#F97316]/30 blur-xl pointer-events-none"
+            />
+            <div 
+              className="absolute inset-3 md:inset-4 bg-white rounded-full flex items-center justify-center border-4 border-[#F97316] p-4 overflow-hidden shadow-lg shadow-[#F97316]/20"
             >
               <BrandLogo size="xl" showText={false} imgClassName="object-contain" />
-            </motion.div>
+            </div>
           </motion.div>
 
           <motion.div 
@@ -817,10 +821,13 @@ export function LandingPage() {
       <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#0F2040] text-center relative overflow-hidden">
         <div className="absolute inset-0 z-0 opacity-40">
           <img 
-            src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2000" 
+            src="/images/vision-bg.webp" 
+            width={1280}
+            height={720}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-            alt="World Map"
+            alt="SSK Business Network vision for future growth across India and global connectivity"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0F2040] via-[#0F2040]/80 to-[#0F2040]"></div>
         </div>

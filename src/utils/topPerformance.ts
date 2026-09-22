@@ -87,27 +87,46 @@ export async function saveTopPerformanceSettings(settings: TopPerformanceSetting
   }
 }
 
-export function subscribeTopPerformanceSettings(callback: (settings: TopPerformanceSettings) => void): () => void {
+export function subscribeTopPerformanceSettings(
+  callback: (settings: TopPerformanceSettings) => void,
+  enableRealtime = false
+): () => void {
   // Fetch initial settings from Supabase
-  getTopPerformanceSettings().then(callback);
+  getTopPerformanceSettings().then(callback).catch(() => {});
 
-  // Realtime postgres changes channel
-  const channel = supabase
-    .channel('realtime_global_top_performance_settings')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'assessments',
-        filter: 'title=eq.global_top_performance_settings',
-      },
-      async () => {
-        const fresh = await getTopPerformanceSettings();
-        callback(fresh);
-      }
-    )
-    .subscribe();
+  let channel: any = null;
+
+  // Realtime postgres changes channel only when explicitly enabled (e.g. inside authenticated dashboard)
+  if (enableRealtime) {
+    try {
+      channel = supabase
+        .channel('realtime_global_top_performance_settings')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'assessments',
+            filter: 'title=eq.global_top_performance_settings',
+          },
+          async () => {
+            try {
+              const fresh = await getTopPerformanceSettings();
+              callback(fresh);
+            } catch (e) {
+              console.warn('Realtime top performance update notice:', e);
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('Top performance realtime channel notice: Realtime not reachable');
+          }
+        });
+    } catch (e) {
+      console.warn('Could not initialize top performance realtime channel:', e);
+    }
+  }
 
   // Local window event listener for same-tab updates
   const handleLocalUpdate = (e: any) => {
@@ -125,7 +144,11 @@ export function subscribeTopPerformanceSettings(callback: (settings: TopPerforma
   }
 
   return () => {
-    supabase.removeChannel(channel);
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (e) {}
+    }
     if (typeof window !== 'undefined') {
       window.removeEventListener('global_top_performance_settings_updated', handleLocalUpdate);
     }

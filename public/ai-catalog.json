@@ -1,0 +1,38 @@
+{
+  "$schema": "https://ai-catalog.org/schema/v1/ai-catalog.json",
+  "name": "SSK Business Network",
+  "description": "A structured business networking platform to ignite, nurture, and grow SSK entrepreneurs across India through verified referrals and chapter collaboration.",
+  "version": "1.0.0",
+  "url": "https://www.sskbusiness.com/",
+  "documentation": "https://www.sskbusiness.com/llms.txt",
+  "organization": {
+    "name": "SSK Business Network",
+    "url": "https://www.sskbusiness.com/",
+    "email": "sskbusinessnetwork@gmail.com",
+    "phone": "+918884449689"
+  },
+  "capabilities": [
+    {
+      "id": "meeting-registration",
+      "name": "Register for Chapter Meeting",
+      "description": "Allows prospective SSK business owners and guests to register for weekly business networking meetings.",
+      "url": "https://www.sskbusiness.com/#join-section"
+    },
+    {
+      "id": "member-registration",
+      "name": "Member Registration",
+      "description": "Onboarding for verified SSK community entrepreneurs into local business chapters.",
+      "url": "https://www.sskbusiness.com/register"
+    },
+    {
+      "id": "member-portal",
+      "name": "Member Portal",
+      "description": "Member dashboard for business referrals, 1-on-1 meetings, and thank you slips.",
+      "url": "https://www.sskbusiness.com/login"
+    }
+  ],
+  "contact": {
+    "email": "sskbusinessnetwork@gmail.com",
+    "phone": "+918884449689"
+  }
+}

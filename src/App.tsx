@@ -1,13 +1,15 @@
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { GlobalToast } from './components/GlobalToast';
 import { showError } from './services/toastService';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+
+// Lazy-load layout and protected routes to keep initial public homepage bundle minimal
+const ProtectedRoute = lazy(() => import('./components/ProtectedRoute').then(m => ({ default: m.ProtectedRoute })));
+const Layout = lazy(() => import('./components/Layout').then(m => ({ default: m.Layout })));
 
 // Lazy-load non-landing routes to drastically reduce initial JS payload and execution time
 const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));

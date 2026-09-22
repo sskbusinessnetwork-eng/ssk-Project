@@ -9,18 +9,21 @@ export default defineConfig(({mode}) => {
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss()],
     build: {
-      target: 'es2020',
+      target: 'es2022',
       cssCodeSplit: true,
-      sourcemap: false,
+      sourcemap: true,
+      modulePreload: {
+        polyfill: false,
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {
+            if (id.includes('vite/') || id.includes('commonjsHelpers') || id.includes('plugin-vue') || id.includes('\x00')) {
+              return 'vendor-framework';
+            }
             if (id.includes('node_modules')) {
-              if (id.includes('jspdf') || id.includes('xlsx') || id.includes('docx') || id.includes('html2canvas') || id.includes('dompurify')) {
-                return 'vendor-documents';
-              }
-              if (id.includes('recharts') || id.includes('d3-')) {
-                return 'vendor-charts';
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') || id.includes('clsx') || id.includes('tailwind-merge') || id.includes('scheduler')) {
+                return 'vendor-framework';
               }
               if (id.includes('@supabase')) {
                 return 'vendor-supabase';
@@ -31,8 +34,11 @@ export default defineConfig(({mode}) => {
               if (id.includes('motion')) {
                 return 'vendor-motion';
               }
-              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-                return 'vendor-framework';
+              if (id.includes('recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('jspdf') || id.includes('xlsx') || id.includes('docx') || id.includes('canvg') || id.includes('fflate')) {
+                return 'vendor-documents';
               }
             }
           },
