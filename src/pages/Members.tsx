@@ -28,6 +28,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { normalizePhoneNumber, normalizePhoneDigits } from '../utils/phoneUtils';
+import { isChapterLeaderRole } from '../utils/authUtils';
 import { useAuth } from '../hooks/useAuth';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { useSearchParams, useLocation } from 'react-router-dom';
@@ -88,7 +89,7 @@ export function Members() {
     if (!profile) return;
 
     // CHAPTER ADMIN MEMBER SECTION: Show ONLY members created by that Chapter Admin
-    const isChapterAdminUser = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    const isChapterAdminUser = isChapterLeaderRole(profile);
     const constraints = profile.role !== 'MASTER_ADMIN'
       ? [where('chapter_id', '==', profile?.chapter_id)]
       : [];
@@ -205,7 +206,7 @@ export function Members() {
   });
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const isChapterAdmin = isChapterLeaderRole(profile);
 
   useEffect(() => {
     if (location.pathname === '/add-member') {
@@ -308,9 +309,9 @@ export function Members() {
       }
 
       // Enforce security role check
-      const isAdminOrChapterAdmin = adminProfile.role === 'CHAPTER_ADMIN' || (adminProfile.role === 'MEMBER' && adminProfile.position === 'chapter_admin') || profile?.role === 'CHAPTER_ADMIN';
+      const isAdminOrChapterAdmin = isChapterLeaderRole(adminProfile) || isChapterLeaderRole(profile);
       if (!isAdminOrChapterAdmin) {
-        throw new Error('Unauthorized. Only Chapter Admins are allowed to create regular members.');
+        throw new Error('Unauthorized. Only Chapter Admins and Chapter Leaders are allowed to create regular members.');
       }
 
       const finalChapterId = adminProfile.chapter_id || profile?.chapter_id;
@@ -658,7 +659,7 @@ export function Members() {
     const memberUid = member.uid || (member as any).id;
     const adminUid = profile?.uid;
 
-    const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+    const isUserChapterAdmin = isChapterLeaderRole(profile);
     if (!profile || (profile.role !== 'MASTER_ADMIN' && !isUserChapterAdmin)) {
       return;
     }
@@ -739,8 +740,8 @@ export function Members() {
     // Show ONLY users with role 'MEMBER'
     if (m.role !== 'MEMBER' && m.role !== 'CHAPTER_ADMIN') return false;
 
-    // Chapter Admin can ONLY see members they created
-    const isUserChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+    // Chapter Admin & Chapter Leaders can ONLY see members in their chapter
+    const isUserChapterAdmin = isChapterLeaderRole(profile);
     if (isUserChapterAdmin) {
       const myChapId = String(profile?.chapter_id || '').trim();
       const memId = String(m.chapter_id || (m as any).chapterId || '').trim();
@@ -794,7 +795,7 @@ export function Members() {
             </div>
             <div>
               <h1 className="text-xl md:text-2xl font-bold text-neutral-900 tracking-tight uppercase">
-                {isChapterAdmin ? 'Member Management' : 'Member Directory'}
+                {isChapterAdmin ? 'Member Management' : 'Members'}
               </h1>
               <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.15em] mt-0.5">
                 {isChapterAdmin ? 'Manage chapter roster, roles, and status' : 'Manage roster, roles, and status'}
@@ -839,7 +840,7 @@ export function Members() {
                 activeTab === 'directory' ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-500/10" : "text-neutral-400 hover:text-neutral-200"
               )}
             >
-              Member Directory
+              Members
             </button>
             {isMasterAdmin && (
               <button 
@@ -945,7 +946,7 @@ export function Members() {
                     const inviterId = String((invite as any).invited_by_user_id || (invite as any).invited_by || invite.createdBy || (invite as any).user_id || '').trim();
                     const inviter = members.find(m => String(m.uid || m.id) === inviterId);
                     const inviterName = (invite as any).invited_by_name || inviter?.name || 'Member';
-                    const inviterRole = (invite as any).invited_by_role || inviter?.position || '';
+                    const inviterCategory = inviter?.category || inviter?.businessName || '';
                     return (
                       <div key={invite.id} className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
@@ -956,7 +957,7 @@ export function Members() {
                             <h4 className="text-sm font-bold text-white">{invite.guestName || (invite as any).guest_name}</h4>
                             <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{invite.guestBusiness || (invite as any).business_category}</p>
                             <p className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1">
-                              Invited By: {inviterName}{inviterRole ? ` (${inviterRole})` : ''}
+                              Invited By: {inviterName}{inviterCategory ? ` (${inviterCategory})` : ''}
                             </p>
                           </div>
                         </div>

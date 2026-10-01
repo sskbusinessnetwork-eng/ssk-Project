@@ -20,6 +20,7 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { ThankYouSlip, Referral, UserProfile, Category, isOfflineReferral, isNormalReferral } from '../types';
 import { Modal } from '../components/Modal';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
@@ -28,6 +29,7 @@ import { cn } from '../lib/utils';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 import { notificationService } from '../services/notificationService';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { isChapterLeaderRole } from '../utils/authUtils';
 
 export function ThankYouSlips() {
   const { profile } = useAuth();
@@ -116,7 +118,7 @@ export function ThankYouSlips() {
   }, [referrals]);
 
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const isChapterAdmin = isChapterLeaderRole(profile);
   const currentUserId = String(profile?.id || profile?.uid);
 
   // Fetch converted referrals where current user is the RECEIVER (Member B) and no Thank You Slip exists yet
@@ -1330,11 +1332,14 @@ export function ThankYouSlips() {
                       {allUsers.filter(u => {
                         const uId = String(u.uid || u.id || '');
                         return uId && uId !== String(profile?.uid || profile?.id);
-                      }).map((m) => (
-                        <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
-                          {m.name || (m as any).full_name || m.displayName} ({m.businessCategory || m.category || (m as any).companyName || 'Member'})
-                        </option>
-                      ))}
+                      }).map((m) => {
+                        const cat = m.category || m.businessCategory || (m as any).business_category || (m as any).companyName || 'No Category';
+                        return (
+                          <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
+                            {m.name || (m as any).full_name || m.displayName} — Category: {cat}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -1351,13 +1356,16 @@ export function ThankYouSlips() {
 
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Customer Mobile Number</label>
-                    <input
-                      type="text"
-                      value={formData.contactPhone}
-                      onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                      placeholder="e.g. +91 98765 43210"
-                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
-                    />
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        value={formData.contactPhone}
+                        onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                        placeholder="e.g. +91 98765 43210"
+                        className="w-full px-3 pr-10 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                      />
+                      <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                    </div>
                   </div>
 
                   <div className="space-y-1 sm:col-span-2">
@@ -1392,13 +1400,16 @@ export function ThankYouSlips() {
 
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Customer Mobile Number</label>
-                    <input
-                      type="text"
-                      value={formData.contactPhone}
-                      onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                      placeholder="Customer Mobile Number"
-                      className="w-full px-3 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
-                    />
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        value={formData.contactPhone}
+                        onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                        placeholder="Customer Mobile Number"
+                        className="w-full px-3 pr-10 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                      />
+                      <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                    </div>
                   </div>
 
                   <div className="space-y-1 sm:col-span-2">
@@ -1488,13 +1499,13 @@ export function ThankYouSlips() {
       </Modal>
 
               {testimonialReceiver && (
-  <WriteTestimonialModal
-    isOpen={showWriteModal}
-    onClose={() => setShowWriteModal(false)}
-    author={profile}
-    receiver={testimonialReceiver}
-  />
-)}
+                <WriteTestimonialModal
+                  isOpen={showWriteModal}
+                  onClose={() => setShowWriteModal(false)}
+                  author={profile}
+                  receiver={testimonialReceiver}
+                />
+              )}
 
       {/* Thank You Slip Details Modal */}
       <Modal

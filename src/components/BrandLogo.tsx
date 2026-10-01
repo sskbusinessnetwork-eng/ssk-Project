@@ -42,7 +42,8 @@ export function BrandLogo({
       className={cn("flex items-center gap-2.5 sm:gap-3 shrink-0 select-none min-w-0", onClick && "cursor-pointer", className)}
     >
       <div className={cn(
-        "bg-white border border-white/20 shadow-lg shadow-black/10 flex items-center justify-center shrink-0 overflow-hidden transition-transform duration-300 hover:scale-[1.02]", 
+        "bg-white flex items-center justify-center shrink-0 overflow-hidden transition-transform duration-300 hover:scale-[1.02]", 
+        lightText ? "border border-white/20 shadow-lg shadow-black/10" : "border border-slate-200 shadow-sm",
         containerSizeMap[size]
       )}>
         <img 

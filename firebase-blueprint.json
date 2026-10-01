@@ -170,6 +170,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["creatorId", "participantIds", "date", "time", "status", "createdAt"]
+    },
+    "FuturePresentation": {
+      "title": "FuturePresentation",
+      "description": "A scheduled member presentation.",
+      "type": "object",
+      "properties": {
+        "memberId": { "type": "string" },
+        "presentationDate": { "type": "string", "format": "date" },
+        "presentationDetails": { "type": "string" },
+        "status": { "type": "string", "enum": ["SCHEDULED", "COMPLETED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["memberId", "presentationDate", "status", "createdAt", "createdBy"]
     }
   },
   "firestore": {
@@ -183,6 +197,7 @@
     "/notifications/{notificationId}": { "schema": "Notification", "description": "User notifications" },
     "/messages/{messageId}": { "schema": "SMSMessage", "description": "Collection monitored by the Trigger SMS extension" },
     "/one_to_one_meetings/{meetingId}": { "schema": "OneToOneMeeting", "description": "Member-initiated networking sessions" },
+    "/future_presentations/{presentationId}": { "schema": "FuturePresentation", "description": "Scheduled member presentations" },
     "/positions/{positionId}": { "schema": "Position", "description": "Chapter leadership positions" }
   }
 }

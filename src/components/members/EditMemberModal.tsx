@@ -3,6 +3,7 @@ import { UserCircle, Save, Smartphone, Briefcase, Tag, Globe, MapPin, Lock, Help
 import { Modal } from '../Modal';
 import { Category, UserProfile } from '../../types';
 import { CategorySelect } from '../CategorySelect';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 interface EditMemberModalProps {
   isOpen: boolean;
@@ -74,8 +75,9 @@ export function EditMemberModal({
                 placeholder="+91 99999 99999"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+                className="w-full h-11 pl-10 pr-11 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
+              <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, phone })} />
             </div>
           </div>
           <div className="space-y-2">

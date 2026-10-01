@@ -51,7 +51,14 @@ export function TransferMemberModal({
                 className="w-full h-11 px-4 bg-[#0F172A] border border-white/10 rounded-lg text-white text-sm outline-none"
               >
                 <option value="">Select a member...</option>
-                {members.map(m => <option key={m.uid || m.id} value={m.uid || m.id}>{m.name || m.displayName}</option>)}
+                {members.map(m => {
+                  const cat = m.category || (m as any).business_category || 'No Category';
+                  return (
+                    <option key={m.uid || m.id} value={m.uid || m.id}>
+                      {m.name || m.displayName} — Category: {cat}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}

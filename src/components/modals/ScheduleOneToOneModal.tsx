@@ -348,7 +348,7 @@ export function ScheduleOneToOneModal({
                       {selectedMember.displayName} <span className="text-xs font-semibold text-primary">({selectedMember.position})</span>
                     </p>
                     <p className="text-[10px] text-neutral-400 truncate">
-                      {selectedMember.businessCategory} • {selectedMember.chapterName || 'Chapter'}
+                      Category: {selectedMember.businessCategory || selectedMember.category || 'General'} • {selectedMember.chapterName || 'Chapter'}
                     </p>
                   </div>
                 </div>
@@ -424,7 +424,7 @@ export function ScheduleOneToOneModal({
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-white truncate">{member.displayName}</p>
                           <p className="text-[10px] text-neutral-400 truncate">
-                            {member.position} • {member.chapterName}
+                            Category: {member.businessCategory || member.category || 'General'} • {member.position} • {member.chapterName}
                           </p>
                         </div>
                       </div>

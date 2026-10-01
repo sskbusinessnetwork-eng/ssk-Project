@@ -3,6 +3,7 @@ import { UserPlus, Lock, Eye, EyeOff, Smartphone, Briefcase, Tag, Globe, MapPin,
 import { Modal } from '../Modal';
 import { Category } from '../../types';
 import { CategorySelect } from '../CategorySelect';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -93,8 +94,9 @@ export function AddMemberModal({
                 placeholder="e.g. 9876543210"
                 value={formData.whatsapp}
                 onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+                className="w-full h-11 pl-10 pr-11 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
+              <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, whatsapp: phone })} />
             </div>
             {errors.whatsapp && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.whatsapp}</p>}
           </div>
@@ -109,8 +111,9 @@ export function AddMemberModal({
                 placeholder="e.g. 9876543210"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full h-11 pl-10 pr-4 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
+                className="w-full h-11 pl-10 pr-11 rounded-[12px] bg-[#151C2E] border border-white/5 focus:border-primary focus:ring-4 focus:ring-primary/15 outline-none transition-all text-sm font-semibold text-white placeholder:text-[#8A93A7]"
               />
+              <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, phone })} />
             </div>
             {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
           </div>

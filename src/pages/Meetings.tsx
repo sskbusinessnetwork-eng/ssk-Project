@@ -1,6 +1,3 @@
-import { Avatar } from '../components/Avatar';
-import { supabase } from '../lib/supabaseClient';
-import { getCleanFullName } from '../utils/authUtils';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -25,13 +22,18 @@ import {
   Building,
   Eye,
   ExternalLink,
-  PhoneCall
+  PhoneCall,
+  Settings2,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { getDisplayPosition } from '../utils/authUtils';
+import { Avatar } from '../components/Avatar';
+import { supabase } from '../lib/supabaseClient';
+import { getCleanFullName, getDisplayPosition, isChapterLeaderRole } from '../utils/authUtils';
 import { databaseService } from '../services/databaseService';
+import { walletService } from '../services/walletService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
-import {  where, orderBy, limit  } from '../lib/database';
+import { where, orderBy, limit, normalizeMeetingRecord } from '../lib/database';
 import { startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore, isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
@@ -90,6 +92,9 @@ export function getAttendanceDisplay(status?: string) {
   if (statusUpper === 'MEDICAL') {
     return { label: 'Medical', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
   }
+  if (statusUpper === 'LATE') {
+    return { label: 'Late', color: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' };
+  }
   return { label: status, color: 'bg-[#151C2E] text-neutral-400 border border-white/5' };
 }
 
@@ -133,7 +138,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       const map = new Map<string, any>();
       allMeetings.forEach(m => map.set(m.id, m));
       supaMeetings.forEach((sm: any) => {
-        map.set(sm.id, {
+        const merged = normalizeMeetingRecord({
           ...map.get(sm.id),
           ...sm,
           isCompleted: sm.is_completed ?? sm.isCompleted,
@@ -141,6 +146,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
           adminId: sm.admin_id ?? sm.adminId,
           chapter_id: sm.chapter_id ?? sm.chapterId
         });
+        map.set(sm.id, merged);
       });
       allMeetings = Array.from(map.values());
     }
@@ -200,7 +206,6 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   while (safetyCounter < 5) {
     const existingDoneMeeting = allMeetings.find(m => 
       isMeetingDone(m) && 
-      (m.isRecurring || (m as any).is_recurring) &&
       isSameMeetingDate(m.date, occurrenceDateString)
     );
     
@@ -224,33 +229,44 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   );
 
   if (exactUpcomingMeeting) {
-    // Existing record on that exact date -> PRESERVE & UPDATE metadata if needed
-    const updatePayload: any = {
-      isRecurring: true,
-      chapter_id: targetChapterId,
-      adminId: adminId || targetChapterId,
-      status: 'UPCOMING'
-    };
-    
-    if (forceDateUpdate) {
-      updatePayload.time = occurrenceTime;
-      updatePayload.location = occurrenceLocation;
-    }
-    
-    await databaseService.update('meetings', exactUpcomingMeeting.id, updatePayload);
-    try {
-      const supabaseUpdatePayload: any = {
-        is_recurring: true,
+    // Existing record on that exact date -> PRESERVE & UPDATE metadata only if needed
+    const currentChap = exactUpcomingMeeting.chapter_id || (exactUpcomingMeeting as any).chapterId;
+    const currentAdmin = exactUpcomingMeeting.adminId || (exactUpcomingMeeting as any).admin_id;
+    const currentRecurring = exactUpcomingMeeting.isRecurring ?? (exactUpcomingMeeting as any).is_recurring;
+    const needsMetadataUpdate =
+      forceDateUpdate ||
+      !currentRecurring ||
+      (targetChapterId && String(currentChap || '') !== String(targetChapterId)) ||
+      (adminId && String(currentAdmin || '') !== String(adminId));
+
+    if (needsMetadataUpdate) {
+      const updatePayload: any = {
+        isRecurring: true,
         chapter_id: targetChapterId,
-        admin_id: adminId || targetChapterId,
+        adminId: adminId || targetChapterId,
         status: 'UPCOMING'
       };
+      
       if (forceDateUpdate) {
-        supabaseUpdatePayload.time = occurrenceTime;
-        supabaseUpdatePayload.location = occurrenceLocation;
+        updatePayload.time = occurrenceTime;
+        updatePayload.location = occurrenceLocation;
       }
-      await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', exactUpcomingMeeting.id);
-    } catch (e) {}
+      
+      await databaseService.update('meetings', exactUpcomingMeeting.id, updatePayload);
+      try {
+        const supabaseUpdatePayload: any = {
+          is_recurring: true,
+          chapter_id: targetChapterId,
+          admin_id: adminId || targetChapterId,
+          status: 'UPCOMING'
+        };
+        if (forceDateUpdate) {
+          supabaseUpdatePayload.time = occurrenceTime;
+          supabaseUpdatePayload.location = occurrenceLocation;
+        }
+        await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', exactUpcomingMeeting.id);
+      } catch (e) {}
+    }
     occurrenceIdsToPreserve.add(exactUpcomingMeeting.id);
   } else {
     // Check if there is an existing FUTURE non-completed recurring meeting scheduled on an outdated date
@@ -369,7 +385,8 @@ export function Meetings() {
     date: '',
     time: '',
     location: '',
-    adminId: ''
+    adminId: '',
+    meetingAmount: ''
   });
 
   const [isDefaultSetupOpen, setIsDefaultSetupOpen] = useState(false);
@@ -383,6 +400,9 @@ export function Meetings() {
   const [selectedAdminId, setSelectedAdminId] = useState<string>('');
   const [isMeetingDetailsModalOpen, setIsMeetingDetailsModalOpen] = useState(false);
   const [detailsMeeting, setDetailsMeeting] = useState<Meeting | null>(null);
+  const [tempMeetingAmount, setTempMeetingAmount] = useState<number | ''>('');
+  const [tempPaymentStatus, setTempPaymentStatus] = useState<Record<string, 'PAID' | 'NOT PAID' | string>>({});
+  const [tempPaymentMethods, setTempPaymentMethods] = useState<Record<string, 'UPI' | 'CASH' | string>>({});
   const [tempAttendance, setTempAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [tempAmount, setTempAmount] = useState<Record<string, number>>({});
   const [tempMemberNotes, setTempMemberNotes] = useState<Record<string, string>>({});
@@ -390,6 +410,7 @@ export function Meetings() {
   const [tempDate, setTempDate] = useState('');
   const [tempTime, setTempTime] = useState('');
   const [tempLocation, setTempLocation] = useState('');
+  const [tempStatus, setTempStatus] = useState<'UPCOMING' | 'PENDING' | 'COMPLETED' | 'CANCELLED'>('UPCOMING');
   const [tempMemberCount, setTempMemberCount] = useState<number | ''>('');
   const [tempGuestCount, setTempGuestCount] = useState<number | ''>('');
   const [meetingGuests, setMeetingGuests] = useState<any[]>([]);
@@ -417,6 +438,7 @@ export function Meetings() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
 
   const [isAttendanceReportOpen, setIsAttendanceReportOpen] = useState(false);
+  const [futurePresentations, setFuturePresentations] = useState<any[]>([]);
   const [reportMeeting, setReportMeeting] = useState<Meeting | null>(null);
   const [reportGuests, setReportGuests] = useState<any[]>([]);
 
@@ -425,7 +447,7 @@ export function Meetings() {
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
   // --- 2. Roles & Active Chapter ID ---
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const isChapterAdmin = isChapterLeaderRole(profile);
   const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
   const isPending = profile?.membershipStatus === 'PENDING' && !isMasterAdmin;
 
@@ -474,7 +496,7 @@ export function Meetings() {
     if (!profile || !meeting) return false;
     if (profile.role === 'MASTER_ADMIN') return true;
 
-    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin';
+    const isChapAdminRole = isChapterLeaderRole(profile);
     if (!isChapAdminRole) return false;
 
     const userChap = profile.chapter_id || (profile as any).chapterId;
@@ -493,7 +515,7 @@ export function Meetings() {
     if (!profile || !meeting) return false;
     if (profile.role === 'MASTER_ADMIN') return true;
 
-    const isChapAdminRole = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || (profile as any).chapter_position === 'chapter_admin';
+    const isChapAdminRole = isChapterLeaderRole(profile);
     if (!isChapAdminRole) return false;
 
     const userChap = profile.chapter_id || (profile as any).chapterId;
@@ -509,8 +531,48 @@ export function Meetings() {
   };
 
   const getMemberPositionLabel = (member: any): string => {
-    if (!member) return 'Member';
-    return getDisplayPosition(member.position || member.chapter_position || member.designation || member.role, member.role);
+    if (!member) return '';
+    const mId = String(member.id || member.uid || '');
+    const mChapId = member.chapter_id || (member as any).chapterId;
+    const chap = mChapId ? chaptersMap[mChapId] : null;
+
+    const rawRole = String(member.role || '').trim().toUpperCase();
+    const rawPos = String(member.position || member.chapter_position || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ');
+
+    if (
+      rawRole === 'CHAPTER_ADMIN' ||
+      rawPos === 'chapter admin' ||
+      (chap && mId && String(chap.chapter_admin_id) === mId)
+    ) {
+      return 'CHAPTER ADMIN';
+    }
+    if (
+      rawRole === 'VICE_PRESIDENT' ||
+      rawPos === 'vice president' ||
+      rawPos === 'vp' ||
+      (chap && mId && String(chap.vice_president_id) === mId)
+    ) {
+      return 'VICE PRESIDENT';
+    }
+    if (
+      rawRole === 'PRESIDENT' ||
+      rawPos === 'president' ||
+      (chap && mId && String(chap.president_id) === mId)
+    ) {
+      return 'PRESIDENT';
+    }
+    if (
+      rawRole === 'TREASURER' ||
+      rawPos === 'treasurer' ||
+      (chap && mId && String(chap.treasurer_id) === mId)
+    ) {
+      return 'TREASURER';
+    }
+    return '';
   };
 
   const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
@@ -557,6 +619,12 @@ export function Meetings() {
       return {
         label: 'SUBSTITUTE',
         color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      };
+    }
+    if (s === 'LATE') {
+      return {
+        label: 'LATE',
+        color: 'bg-purple-500/10 text-purple-400 border-purple-500/20'
       };
     }
 
@@ -668,7 +736,7 @@ export function Meetings() {
               phone: row.phone,
               businessName: row.businessName || row.business_name || '',
               chapterName: row.chapter_name || row.chapter || '',
-              category: row.category || '',
+              category: row.category || row.business_category || row.businessCategory || '',
               role: row.role,
               position: row.position || '',
               membershipStatus: row.status || row.membershipStatus || 'ACTIVE',
@@ -690,6 +758,14 @@ export function Meetings() {
     };
 
     loadChaptersAndUsers();
+    
+    const unsubPresentations = databaseService.subscribe<any>('future_presentations', [], (presentations) => {
+      setFuturePresentations(presentations || []);
+    });
+
+    return () => {
+      unsubPresentations();
+    };
   }, []);
 
   const handleOpenReadOnlyMeetingDetails = async (meeting: Meeting) => {
@@ -1030,7 +1106,7 @@ export function Meetings() {
 
           if (chapterId || adminUserId) {
             syncDefaultMeetings(adminUserId, chapterId || adminUserId || '', setup).catch(err => {
-              console.error("Background default meetings sync error:", err);
+              console.warn("Background default meetings sync notice:", err);
             });
           }
         } else {
@@ -1047,7 +1123,7 @@ export function Meetings() {
 
           if (chapterId || adminUserId) {
             syncDefaultMeetings(adminUserId, chapterId || adminUserId || '', disabledSetup).catch(err => {
-              console.error("Background default meetings disable sync error:", err);
+              console.warn("Background default meetings disable sync notice:", err);
             });
           }
         }
@@ -1247,13 +1323,22 @@ export function Meetings() {
         return;
       }
 
+      const meetingAmountNum = scheduleData.meetingAmount !== '' ? Number(scheduleData.meetingAmount) : 0;
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || profile?.uid || '',
         chapter_id: finalChapterId || adminId,
         date: scheduleData.date,
         time: scheduleData.time,
         location: scheduleData.location,
+        meetingAmount: meetingAmountNum,
+        meeting_amount: meetingAmountNum,
         attendance: {},
+        amountCollected: {},
+        paymentStatus: {},
+        paymentMethods: {},
+        memberNotes: {
+          __meetingAmount: meetingAmountNum
+        },
         isCompleted: false,
       createdAt: new Date().toISOString(),
         status: 'UPCOMING'
@@ -1489,7 +1574,7 @@ export function Meetings() {
 
         const finalAmount = amount === undefined ? 0 : amount;
 
-        const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'Yes', 'No', 'YES', 'NO'];
+        const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'Late', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'LATE', 'Yes', 'No', 'YES', 'NO'];
         if (!allowedStatuses.includes(status)) {
           const msg = `Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`;
           setError(msg);
@@ -1497,6 +1582,23 @@ export function Meetings() {
           scrollToError();
           setIsSubmitting(false);
           return;
+        }
+
+        // Validate Payment Method when marked as PAID
+        const isAttended = ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
+        if (isAttended) {
+          const pStatus = tempPaymentStatus[mId] || 'NOT PAID';
+          if (pStatus === 'PAID') {
+            const pMethod = tempPaymentMethods[mId];
+            if (!pMethod || (pMethod !== 'UPI' && pMethod !== 'CASH' && pMethod !== 'WALLET')) {
+              const msg = `Please select a Payment Method (UPI, Cash, or Wallet) for ${member.name || member.displayName || 'member'} marked as PAID.`;
+              setError(msg);
+              showError(msg);
+              scrollToError();
+              setIsSubmitting(false);
+              return;
+            }
+          }
         }
         
         // Save the assumed 0 back to tempAmount so it gets persisted correctly
@@ -1528,9 +1630,24 @@ export function Meetings() {
         }
       }
       
-      const isPending = isMeetingPending(selectedMeeting);
-      if (isPending) {
-        // When Admin updates a pending meeting, default unselected members to 'Absent' with amount 0 so record is complete
+      if (tempStatus === 'CANCELLED') {
+        setIsSubmitting(false);
+        await executeCancelMeeting();
+        return;
+      }
+
+      const effectiveDate = tempDate || selectedMeeting.date;
+      const effectiveTime = tempTime || selectedMeeting.time;
+      const isDateTimeInPast = isMeetingInPastInIST({ date: effectiveDate, time: effectiveTime });
+      const wasPendingWhenOpened = isMeetingPending(selectedMeeting);
+      const shouldAutoCompletePending = wasPendingWhenOpened && isDateTimeInPast && tempStatus !== 'UPCOMING';
+      const shouldComplete =
+        tempStatus === 'COMPLETED' ||
+        shouldAutoCompletePending ||
+        (allMembersFilled && allGuestsFilled && meetingMembers.length > 0);
+
+      if (shouldComplete) {
+        // Default unselected members/guests to 'Absent' with amount 0 so completed record is complete
         if (meetingMembers.length > 0) {
           for (const member of meetingMembers) {
             const mId = member.id || member.uid;
@@ -1557,40 +1674,131 @@ export function Meetings() {
           allGuestsFilled = true;
         }
       }
-      
-      const shouldComplete = isPending || (allMembersFilled && allGuestsFilled && meetingMembers.length > 0);
+
+      const finalStatus = shouldComplete
+        ? 'COMPLETED'
+        : (tempStatus === 'PENDING' && isDateTimeInPast ? 'PENDING' : 'UPCOMING');
 
       const finalMemberCount = tempMemberCount === '' ? 0 : Number(tempMemberCount);
       const finalGuestCount = tempGuestCount === '' ? 0 : Number(tempGuestCount);
 
+      const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined ? Number(tempMeetingAmount) : 0;
+      const finalAmountCollected: Record<string, number> = {};
+      const finalPaymentStatus: Record<string, string> = {};
+      const finalPaymentMethods: Record<string, string> = {};
+
+      for (const member of meetingMembers) {
+        const mId = member.id || member.uid;
+        const status = tempAttendance[mId];
+        const isAttended = status && ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
+
+        if (isAttended) {
+          const pStatus = tempPaymentStatus[mId] || 'NOT PAID';
+          finalPaymentStatus[mId] = pStatus;
+          if (pStatus === 'PAID') {
+            const pMethod = tempPaymentMethods[mId] || 'UPI';
+            finalPaymentMethods[mId] = pMethod;
+            const amt = configuredMeetingAmt > 0
+              ? configuredMeetingAmt
+              : (tempAmount[mId] !== undefined && tempAmount[mId] !== '' && Number(tempAmount[mId]) > 0
+                  ? Number(tempAmount[mId])
+                  : 0);
+            finalAmountCollected[mId] = amt;
+          } else {
+            // NOT PAID: No payment amount recorded as received
+            finalAmountCollected[mId] = 0;
+          }
+        } else {
+          finalPaymentStatus[mId] = 'NOT PAID';
+          finalAmountCollected[mId] = 0;
+        }
+        tempAmount[mId] = finalAmountCollected[mId];
+      }
+
+      // Preserve guest payment amounts and methods
+      if (meetingGuests.length > 0) {
+        for (const guest of meetingGuests) {
+          if (tempGuestAttendance[guest.id] && ['present', 'substitute'].includes(String(tempGuestAttendance[guest.id]).toLowerCase())) {
+            const gAmt = Number(tempAmount[guest.id]) || 0;
+            finalAmountCollected[guest.id] = gAmt;
+            if (gAmt > 0) {
+              finalPaymentStatus[guest.id] = 'PAID';
+              finalPaymentMethods[guest.id] = tempPaymentMethods[guest.id] || 'CASH';
+            }
+          }
+        }
+      }
+
       const updatedMemberNotes = {
         ...(tempMemberNotes || {}),
+        __status: finalStatus,
+        __isCompleted: shouldComplete,
+        __isCancelled: false,
+        __attendance: tempAttendance || {},
         __counts: {
           memberCount: finalMemberCount,
           guestCount: finalGuestCount
         },
         __memberCount: finalMemberCount,
-        __guestCount: finalGuestCount
+        __guestCount: finalGuestCount,
+        __meetingAmount: configuredMeetingAmt,
+        __paymentStatus: finalPaymentStatus,
+        __paymentMethods: finalPaymentMethods,
+        __amountCollected: finalAmountCollected
       };
 
+      const targetMeetingId = selectedMeeting.id;
+      if (!targetMeetingId) {
+        throw new Error("Missing meeting ID for update.");
+      }
+
+      // Validate and process automatic Wallet deductions / reversals before completing meeting save
+      const walletSyncResult = await walletService.validateAndSyncMeetingWalletPayments({
+        meetingId: targetMeetingId,
+        meetingDate: effectiveDate || new Date().toISOString().split('T')[0],
+        meetingTitle: selectedMeeting.title || selectedMeeting.topic || `${getChapterName(selectedMeeting)} Meeting`,
+        chapterMembers: meetingMembers,
+        attendanceMap: tempAttendance || {},
+        paymentStatusMap: finalPaymentStatus,
+        paymentMethodsMap: finalPaymentMethods,
+        amountCollectedMap: finalAmountCollected,
+        configuredMeetingAmount: configuredMeetingAmt,
+        callerProfile: profile
+      });
+
+      if (!walletSyncResult.valid) {
+        const walletErrMsg = walletSyncResult.errorMessage || 'Insufficient wallet balance.';
+        setError(walletErrMsg);
+        showError(walletErrMsg);
+        scrollToError();
+        setIsSubmitting(false);
+        return;
+      }
+
       const updatePayload: any = {
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        status: finalStatus,
+        is_completed: shouldComplete,
+        isCompleted: shouldComplete
       };
       if (tempDate) updatePayload.date = tempDate;
       if (tempTime) updatePayload.time = tempTime;
       if (tempLocation !== undefined) updatePayload.location = tempLocation;
       if (tempAttendance) updatePayload.attendance = tempAttendance;
-      if (tempAmount) updatePayload.amount_collected = tempAmount;
+      updatePayload.amount_collected = finalAmountCollected;
+      updatePayload.amountCollected = finalAmountCollected;
+      updatePayload.payment_status = finalPaymentStatus;
+      updatePayload.paymentStatus = finalPaymentStatus;
+      updatePayload.payment_methods = finalPaymentMethods;
+      updatePayload.paymentMethods = finalPaymentMethods;
+      updatePayload.meeting_amount = configuredMeetingAmt;
+      updatePayload.meetingAmount = configuredMeetingAmt;
       updatePayload.member_notes = updatedMemberNotes;
       updatePayload.memberCount = finalMemberCount;
       updatePayload.guestCount = finalGuestCount;
-      if (shouldComplete) {
-        updatePayload.is_completed = true;
-        updatePayload.isCompleted = true;
-        updatePayload.status = 'COMPLETED';
-      }
 
       let apiSuccess = false;
+      let apiErrorMsg = '';
       // Try backend API endpoint first
       try {
         const callerId = profile?.uid || profile?.id;
@@ -1598,13 +1806,17 @@ export function Meetings() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            meetingId: selectedMeeting.id,
+            meetingId: targetMeetingId,
             callerId,
             date: tempDate,
             time: tempTime,
             location: tempLocation,
+            status: finalStatus,
+            meetingAmount: configuredMeetingAmt,
             attendance: tempAttendance,
-            amountCollected: tempAmount,
+            amountCollected: finalAmountCollected,
+            paymentStatus: finalPaymentStatus,
+            paymentMethods: finalPaymentMethods,
             memberNotes: updatedMemberNotes,
             isCompleted: shouldComplete,
             guestUpdates,
@@ -1618,7 +1830,6 @@ export function Meetings() {
         try {
           resData = text ? JSON.parse(text) : null;
         } catch {
-          // If response is not JSON (e.g. serverless proxy), fallback to direct database update
           resData = null;
         }
 
@@ -1631,39 +1842,79 @@ export function Meetings() {
           scrollToError();
           setIsSubmitting(false);
           return;
+        } else if (resData && (resData.error || resData.message)) {
+          apiErrorMsg = resData.message || resData.error;
         }
       } catch (apiErr: any) {
         console.warn("API meeting update attempt notice:", apiErr);
       }
 
-      // If backend API did not handle it (or running in static / serverless fallback mode), update via databaseService
-      if (!apiSuccess) {
-        await databaseService.update('meetings', selectedMeeting.id, updatePayload);
-        if (guestUpdates && guestUpdates.length > 0) {
-          for (const guest of guestUpdates) {
-            try {
-              await databaseService.update('guest_invitations', guest.id, {
-                status: guest.status,
-                attendance_status: guest.status,
-                attendance_updated_by: profile?.uid || profile?.id,
-                attendance_updated_by_name: profile?.name || profile?.displayName || 'Chapter Admin',
-                attendance_updated_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              });
-              if (guest.status === 'Present' && guest.wasNotPresent && guest.inviterId) {
-                const inviterData = await databaseService.get<any>('users', guest.inviterId);
-                if (inviterData) {
-                  const checklist = inviterData.workspace_checklist || {};
-                  await databaseService.update('users', guest.inviterId, {
-                    workspace_checklist: { ...checklist, task_invite_guest: true, 'Invite a New Guest': true }
-                  });
-                }
+      // Always ensure persistence via databaseService.update (which notifies active listeners and verifies Supabase update)
+      await databaseService.update('meetings', targetMeetingId, updatePayload);
+      if (!apiSuccess && guestUpdates && guestUpdates.length > 0) {
+        for (const guest of guestUpdates) {
+          try {
+            await databaseService.update('guest_invitations', guest.id, {
+              status: guest.status,
+              attendance_status: guest.status,
+              attendance_updated_by: profile?.uid || profile?.id,
+              attendance_updated_by_name: profile?.name || profile?.displayName || 'Chapter Admin',
+              attendance_updated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+            if (guest.status === 'Present' && guest.wasNotPresent && guest.inviterId) {
+              const inviterData = await databaseService.get<any>('users', guest.inviterId);
+              if (inviterData) {
+                const checklist = inviterData.workspace_checklist || {};
+                await databaseService.update('users', guest.inviterId, {
+                  workspace_checklist: { ...checklist, task_invite_guest: true, 'Invite a New Guest': true }
+                });
               }
-            } catch (gErr) {
-              console.warn("Error updating guest invitation attendance status:", gErr);
             }
+          } catch (gErr) {
+            console.warn("Error updating guest invitation attendance status:", gErr);
           }
         }
+      }
+
+      // Auto-sync matching Future Presentations status based on meeting status & member attendance
+      try {
+        const effectiveDate = tempDate || selectedMeeting.date;
+        const matchingPresentations = futurePresentations.filter(p => {
+          const pDate = p.presentationDate || p.presentation_date;
+          if (!isSameMeetingDate(pDate, effectiveDate) && !isSameMeetingDate(pDate, selectedMeeting.date)) return false;
+          const mId = p.memberId || p.member_id;
+          const pChap = p.chapter_id || p.chapterId || (mId ? usersMap[mId]?.chapter_id : null);
+          if (meetingChapId && pChap && String(meetingChapId) !== String(pChap)) return false;
+          return true;
+        });
+
+        for (const pres of matchingPresentations) {
+          const presMemberId = String(pres.memberId || pres.member_id || '');
+          const matchedMemberObj = meetingMembers.find(m => String(m.id || m.uid) === presMemberId || String(m.uid) === presMemberId || String(m.id) === presMemberId);
+          const rawAtt =
+            tempAttendance?.[presMemberId] ??
+            (matchedMemberObj?.id ? tempAttendance?.[matchedMemberObj.id] : undefined) ??
+            (matchedMemberObj?.uid ? tempAttendance?.[matchedMemberObj.uid] : undefined);
+          const attUpper = String(rawAtt || '').trim().toUpperCase();
+          const isAbsent = attUpper === 'ABSENT' || attUpper === 'NO';
+
+          let nextPresStatus = 'Upcoming';
+          if (isAbsent) {
+            nextPresStatus = 'Absent';
+          } else if (shouldComplete) {
+            nextPresStatus = 'Completed';
+          } else if (isMeetingPending({ ...selectedMeeting, date: effectiveDate, time: tempTime || selectedMeeting.time })) {
+            nextPresStatus = 'Pending';
+          }
+
+          await databaseService.update('future_presentations', pres.id, {
+            status: nextPresStatus,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      } catch (presErr) {
+        console.warn("Error syncing future presentation status:", presErr);
       }
 
       // Auto-generate next recurring meeting after completion if setup is enabled
@@ -1683,18 +1934,32 @@ export function Meetings() {
         }
       }
 
+      // Immediately re-fetch the updated meeting record and refresh chapter meetings from Supabase
+      const refreshedMeeting = await databaseService.get<Meeting>('meetings', targetMeetingId);
+      const userChapIdNow = profile?.chapter_id || (profile as any)?.chapterId;
+      const chapterIdNow = isMasterAdmin ? selectedAdminId : userChapIdNow;
+      const refreshConstraints = isMasterAdmin
+        ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
+        : chapterIdNow ? [where('chapter_id', '==', chapterIdNow), orderBy('date', 'desc'), limit(50)] : [orderBy('date', 'desc'), limit(50)];
+      const latestMeetings = await databaseService.list<Meeting>('meetings', refreshConstraints);
+      if (latestMeetings && latestMeetings.length > 0) {
+        setMeetings(latestMeetings);
+      } else if (refreshedMeeting) {
+        setMeetings(prev => prev.map(m => String(m.id) === String(targetMeetingId) ? refreshedMeeting : m));
+      }
+
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
-      triggerSuccessToast('Meeting attendance updated successfully!');
+      triggerSuccessToast('Meeting updated successfully!');
       setIsUpdateModalOpen(false);
       setSuccess(null);
-      setSelectedMeeting(null);
+      setSelectedMeeting(refreshedMeeting && !isMeetingDone(refreshedMeeting) ? refreshedMeeting : null);
       setTempMemberCount('');
       setTempGuestCount('');
     } catch (err: any) {
       console.error("Error updating meeting:", err);
-      const errMsg = "Failed to update meeting attendance. Please try again.";
+      const errMsg = err?.message || "Failed to update meeting. Please try again.";
       setError(errMsg);
       showError(errMsg);
       scrollToError();
@@ -1831,6 +2096,13 @@ export function Meetings() {
         return;
       }
 
+      // Reverse any wallet deductions associated with this cancelled meeting
+      try {
+        await walletService.reverseAllMeetingWalletDeductions(meetingId, profile);
+      } catch (wRevErr) {
+        console.warn("Error reversing meeting wallet deductions on cancel:", wRevErr);
+      }
+
       // Optimistically update local meetings state immediately
       setMeetings(prev => prev.map(m => m.id === meetingId ? {
         ...m,
@@ -1878,7 +2150,7 @@ export function Meetings() {
     const status = m.attendance?.[profile?.uid || ''];
     if (!status) return false;
     const statusUpper = status.toUpperCase();
-    return statusUpper === 'PRESENT' || statusUpper === 'YES' || statusUpper === 'SUBSTITUTE';
+    return statusUpper === 'PRESENT' || statusUpper === 'YES' || statusUpper === 'SUBSTITUTE' || statusUpper === 'LATE';
   });
   const attendancePercentage = userAttendance.length > 0 
     ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
@@ -2026,6 +2298,222 @@ export function Meetings() {
   
   const totalUpcomingPages = Math.ceil(upcomingTableMeetings.length / upcomingPerPage);
 
+  const getSavedMeetingPaymentTotals = (meeting: Meeting | null | undefined) => {
+    if (!meeting) return { totalUpi: 0, totalCash: 0, totalWallet: 0, totalCollected: 0 };
+    const rawNotes: any = meeting.memberNotes || (meeting as any).member_notes || {};
+    const savedMeetingAmt = Number(
+      meeting.meetingAmount ??
+      (meeting as any).meeting_amount ??
+      rawNotes.__meetingAmount ??
+      rawNotes.__meeting_amount ??
+      rawNotes._MeetingAmount ??
+      0
+    ) || 0;
+
+    const savedPaymentStatus: Record<string, any> =
+      meeting.paymentStatus ||
+      (meeting as any).payment_status ||
+      rawNotes.__paymentStatus ||
+      rawNotes.__payment_status ||
+      rawNotes._PaymentStatus ||
+      {};
+    const savedPaymentMethods: Record<string, any> =
+      meeting.paymentMethods ||
+      (meeting as any).payment_methods ||
+      rawNotes.__paymentMethods ||
+      rawNotes.__payment_methods ||
+      rawNotes._PaymentMethods ||
+      {};
+    const savedAmountCollected: Record<string, any> =
+      meeting.amountCollected ||
+      (meeting as any).amount_collected ||
+      rawNotes.__amountCollected ||
+      rawNotes.__amount_collected ||
+      rawNotes._AmountCollected ||
+      {};
+
+    let totalUpi = 0;
+    let totalCash = 0;
+    let totalWallet = 0;
+
+    const allKeys = new Set<string>();
+    Object.keys(savedAmountCollected || {}).forEach(k => {
+      if (!k.startsWith('_')) allKeys.add(k);
+    });
+    Object.keys(savedPaymentStatus || {}).forEach(k => {
+      if (!k.startsWith('_')) allKeys.add(k);
+    });
+    Object.keys(savedPaymentMethods || {}).forEach(k => {
+      if (!k.startsWith('_')) allKeys.add(k);
+    });
+
+    const seenLower = new Set<string>();
+    allKeys.forEach(uid => {
+      const lowerKey = uid.toLowerCase();
+      if (seenLower.has(lowerKey)) return;
+      seenLower.add(lowerKey);
+
+      const rawAmt = Number(savedAmountCollected[uid] ?? savedAmountCollected[lowerKey] ?? 0) || 0;
+      const pStatus = String(
+        savedPaymentStatus[uid] ??
+        savedPaymentStatus[lowerKey] ??
+        (rawAmt > 0 ? 'PAID' : 'NOT PAID')
+      ).toUpperCase();
+      const pMethod = String(
+        savedPaymentMethods[uid] ??
+        savedPaymentMethods[lowerKey] ??
+        (rawAmt > 0 ? 'UPI' : '')
+      ).toUpperCase();
+
+      if (pStatus === 'PAID') {
+        const effectiveAmt = rawAmt > 0 ? rawAmt : savedMeetingAmt;
+        if (pMethod === 'CASH') {
+          totalCash += effectiveAmt;
+        } else if (pMethod === 'WALLET') {
+          totalWallet += effectiveAmt;
+        } else if (pMethod === 'UPI') {
+          totalUpi += effectiveAmt;
+        }
+      }
+    });
+
+    const totalCollected = totalUpi + totalCash + totalWallet;
+    return { totalUpi, totalCash, totalWallet, totalCollected };
+  };
+
+  const handleOpenUpdateMeetingModal = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    const normalizedAttendance: Record<string, any> = {};
+    if (meeting.attendance) {
+      Object.entries(meeting.attendance).forEach(([uid, val]) => {
+        if (uid.startsWith('_')) return;
+        if (uid.includes('-') && uid !== uid.toLowerCase() && meeting.attendance[uid.toLowerCase()] !== undefined) return;
+        const v = String(val);
+        if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
+        else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
+        else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
+        else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
+        else if (v === 'LATE' || v === 'Late') normalizedAttendance[uid] = 'Late';
+        else normalizedAttendance[uid] = String(val);
+      });
+    }
+    setTempAttendance(normalizedAttendance);
+
+    const rawNotes: any = meeting.memberNotes || (meeting as any).member_notes || {};
+    const savedAmountCollected: Record<string, any> =
+      meeting.amountCollected ||
+      (meeting as any).amount_collected ||
+      rawNotes.__amountCollected ||
+      rawNotes.__amount_collected ||
+      rawNotes._AmountCollected ||
+      {};
+    const cleanAmountMap: Record<string, number> = {};
+    Object.entries(savedAmountCollected || {}).forEach(([uid, val]) => {
+      if (uid.startsWith('_')) return;
+      if (uid.includes('-') && uid !== uid.toLowerCase() && savedAmountCollected[uid.toLowerCase()] !== undefined) return;
+      cleanAmountMap[uid] = Number(val) || 0;
+    });
+
+    let mAmt =
+      meeting.meetingAmount !== undefined
+        ? meeting.meetingAmount
+        : (meeting as any).meeting_amount !== undefined
+          ? (meeting as any).meeting_amount
+          : rawNotes.__meetingAmount ?? rawNotes.__meeting_amount ?? rawNotes._MeetingAmount ?? '';
+
+    if (mAmt === '' || mAmt === null || mAmt === undefined || Number(mAmt) === 0) {
+      const positiveSavedAmt = Object.values(cleanAmountMap).find(v => Number(v) > 0);
+      if (positiveSavedAmt !== undefined) {
+        mAmt = positiveSavedAmt;
+      }
+    }
+    setTempMeetingAmount(mAmt !== undefined && mAmt !== null && mAmt !== '' ? Number(mAmt) : '');
+
+    const savedPaymentStatus: Record<string, any> =
+      meeting.paymentStatus ||
+      (meeting as any).payment_status ||
+      rawNotes.__paymentStatus ||
+      rawNotes.__payment_status ||
+      rawNotes._PaymentStatus ||
+      {};
+    const savedPaymentMethods: Record<string, any> =
+      meeting.paymentMethods ||
+      (meeting as any).payment_methods ||
+      rawNotes.__paymentMethods ||
+      rawNotes.__payment_methods ||
+      rawNotes._PaymentMethods ||
+      {};
+
+    const initPaymentStatus: Record<string, string> = {};
+    const initPaymentMethods: Record<string, string> = {};
+    const initAmount: Record<string, number> = { ...cleanAmountMap };
+
+    const allUids = new Set<string>([
+      ...Object.keys(normalizedAttendance),
+      ...Object.keys(cleanAmountMap),
+      ...Object.keys(savedPaymentStatus),
+      ...Object.keys(savedPaymentMethods)
+    ]);
+
+    allUids.forEach(uid => {
+      if (uid.startsWith('_')) return;
+      if (uid.includes('-') && uid !== uid.toLowerCase() && allUids.has(uid.toLowerCase())) return;
+      const st = savedPaymentStatus[uid];
+      if (st) {
+        initPaymentStatus[uid] = String(st).toUpperCase();
+      } else if (Number(cleanAmountMap[uid]) > 0) {
+        initPaymentStatus[uid] = 'PAID';
+      } else {
+        initPaymentStatus[uid] = 'NOT PAID';
+      }
+
+      if (savedPaymentMethods[uid]) {
+        initPaymentMethods[uid] = String(savedPaymentMethods[uid]).toUpperCase();
+      } else if (initPaymentStatus[uid] === 'PAID' && Number(cleanAmountMap[uid]) > 0) {
+        initPaymentMethods[uid] = 'UPI';
+      }
+
+      if (initPaymentStatus[uid] === 'PAID') {
+        initAmount[uid] = Number(cleanAmountMap[uid]) > 0 ? Number(cleanAmountMap[uid]) : (Number(mAmt) || 0);
+      } else {
+        initAmount[uid] = 0;
+      }
+    });
+
+    setTempAmount(initAmount);
+    setTempPaymentStatus(initPaymentStatus);
+    setTempPaymentMethods(initPaymentMethods);
+    setTempMemberNotes(rawNotes);
+    setTempDate(meeting.date || '');
+    setTempTime(meeting.time || '');
+    setTempLocation(meeting.location || '');
+    if (isMeetingCancelled(meeting)) {
+      setTempStatus('CANCELLED');
+    } else if (isMeetingCompleted(meeting)) {
+      setTempStatus('COMPLETED');
+    } else if (isMeetingPending(meeting)) {
+      setTempStatus('PENDING');
+    } else {
+      setTempStatus('UPCOMING');
+    }
+
+    const mCount =
+      meeting.memberCount !== undefined
+        ? meeting.memberCount
+        : (meeting as any).member_count !== undefined
+          ? (meeting as any).member_count
+          : rawNotes.__counts?.memberCount ?? rawNotes.__memberCount ?? rawNotes.__member_count;
+    const gCount =
+      meeting.guestCount !== undefined
+        ? meeting.guestCount
+        : (meeting as any).guest_count !== undefined
+          ? (meeting as any).guest_count
+          : rawNotes.__counts?.guestCount ?? rawNotes.__guestCount ?? rawNotes.__guest_count;
+    setTempMemberCount(mCount !== undefined && mCount !== null ? mCount : '');
+    setTempGuestCount(gCount !== undefined && gCount !== null ? gCount : '');
+    setIsUpdateModalOpen(true);
+  };
+
   const renderMeetingSummary = (meeting: Meeting, guests: any[]) => {
     const meetingChapId = meeting.chapter_id || (meeting as any).chapterId || (meeting.adminId ? usersMap[meeting.adminId]?.chapter_id : null);
     const chapMembers = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && meetingChapId && u.chapter_id === meetingChapId);
@@ -2043,6 +2531,8 @@ export function Meetings() {
       } else if (st === 'SUBSTITUTE') {
         substituteCount++;
         presentCount++;
+      } else if (st === 'LATE') {
+        presentCount++;
       } else if (st === 'ABSENT' || st === 'NO') {
         absentCount++;
       } else if (st === 'MEDICAL') {
@@ -2055,6 +2545,7 @@ export function Meetings() {
           const uSt = String(st).toUpperCase();
           if (uSt === 'PRESENT' || uSt === 'YES') presentCount++;
           else if (uSt === 'SUBSTITUTE') { substituteCount++; presentCount++; }
+          else if (uSt === 'LATE') presentCount++;
           else if (uSt === 'ABSENT' || uSt === 'NO') absentCount++;
           else if (uSt === 'MEDICAL') medicalCount++;
        });
@@ -2070,12 +2561,7 @@ export function Meetings() {
       else if (gSt === 'ABSENT' || gSt === 'NO') guestsAbsent++;
     });
 
-    let totalCollected = 0;
-    if (meeting.amountCollected) {
-      Object.values(meeting.amountCollected).forEach(amt => {
-        totalCollected += (Number(amt) || 0);
-      });
-    }
+    const { totalUpi: summaryUpi, totalCash: summaryCash, totalWallet: summaryWallet, totalCollected } = getSavedMeetingPaymentTotals(meeting);
 
     return (
       <div className="bg-[#151C2E] p-4 rounded-[16px] border border-white/5 space-y-4 mb-6">
@@ -2120,7 +2606,12 @@ export function Meetings() {
         </div>
 
         <div className="bg-primary/10 p-4 rounded-[12px] border border-primary/20 flex items-center justify-between">
-          <span className="text-xs font-bold text-primary uppercase tracking-wider">Total Collection</span>
+          <div>
+            <span className="text-xs font-bold text-primary uppercase tracking-wider block">Total Collected</span>
+            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mt-0.5 block">
+              Total UPI Payment: ₹{summaryUpi.toLocaleString()} &bull; Total Cash Payment: ₹{summaryCash.toLocaleString()} &bull; Total Wallet Payment: ₹{summaryWallet.toLocaleString()}
+            </span>
+          </div>
           <span className="text-xl font-bold text-primary">₹{totalCollected.toLocaleString()}</span>
         </div>
       </div>
@@ -2179,7 +2670,8 @@ export function Meetings() {
                 setScheduleData(prev => ({ 
                   ...prev, 
                   adminId: targetChapterId || profile?.chapter_id || '',
-                  location: venue
+                  location: venue,
+                  meetingAmount: ''
                 }));
                 setIsScheduleModalOpen(true);
               }}
@@ -2312,39 +2804,7 @@ export function Meetings() {
                 <div className="flex items-center gap-3 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedMeeting(primaryFocusMeeting);
-                      const normalizedAttendance: Record<string, any> = {};
-                      if (primaryFocusMeeting.attendance) {
-                        Object.entries(primaryFocusMeeting.attendance).forEach(([uid, val]) => {
-                          const v = String(val);
-                          if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                          else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                          else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                          else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                          else normalizedAttendance[uid] = val;
-                        });
-                      }
-                      setTempAttendance(normalizedAttendance);
-                      setTempAmount(primaryFocusMeeting.amountCollected || {});
-                      setTempMemberNotes(primaryFocusMeeting.memberNotes || {});
-                      setTempDate(primaryFocusMeeting.date || '');
-                      setTempTime(primaryFocusMeeting.time || '');
-                      setTempLocation(primaryFocusMeeting.location || '');
-                      const mCount = primaryFocusMeeting.memberCount !== undefined 
-                        ? primaryFocusMeeting.memberCount 
-                        : ((primaryFocusMeeting as any).member_count !== undefined 
-                            ? (primaryFocusMeeting as any).member_count 
-                            : ((primaryFocusMeeting.memberNotes as any)?.__counts?.memberCount ?? (primaryFocusMeeting.memberNotes as any)?.__memberCount));
-                      const gCount = primaryFocusMeeting.guestCount !== undefined 
-                        ? primaryFocusMeeting.guestCount 
-                        : ((primaryFocusMeeting as any).guest_count !== undefined 
-                            ? (primaryFocusMeeting as any).guest_count 
-                            : ((primaryFocusMeeting.memberNotes as any)?.__counts?.guestCount ?? (primaryFocusMeeting.memberNotes as any)?.__guestCount));
-                      setTempMemberCount(mCount !== undefined && mCount !== null ? mCount : '');
-                      setTempGuestCount(gCount !== undefined && gCount !== null ? gCount : '');
-                      setIsUpdateModalOpen(true);
-                    }}
+                    onClick={() => handleOpenUpdateMeetingModal(primaryFocusMeeting)}
                     className="px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[14px] font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
                   >
                     <Settings size={16} />
@@ -2524,6 +2984,55 @@ export function Meetings() {
                           <span className="truncate max-w-[200px] sm:max-w-[250px]">{meeting.location || 'N/A'}</span>
                         </div>
                       </div>
+
+                      {/* Future Presentation matched by meeting date */}
+                      {(() => {
+                        const matchedPresentations = futurePresentations.filter(p => {
+                          const st = String(p.status || 'Scheduled').toUpperCase();
+                          if (st === 'CANCELLED') return false;
+                          const pDate = p.presentationDate || p.presentation_date;
+                          if (!isSameMeetingDate(pDate, meeting.date)) return false;
+                          const mChap = meeting.chapter_id || (meeting as any).chapterId;
+                          const mId = p.memberId || p.member_id;
+                          const pChap = p.chapter_id || p.chapterId || (mId ? usersMap[mId]?.chapter_id : null);
+                          if (mChap && pChap && String(mChap) !== String(pChap)) return false;
+                          return true;
+                        });
+
+                        if (matchedPresentations.length === 0) return null;
+
+                        return (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            {matchedPresentations.map((p) => {
+                              const mId = p.memberId || p.member_id;
+                              const matchedMember =
+                                (mId && usersMap[mId]) ||
+                                members.find(m => String(m.uid || m.id) === String(mId) || String(m.id) === String(mId) || String(m.uid) === String(mId)) ||
+                                allUsers.find(m => String(m.uid || m.id) === String(mId) || String(m.id) === String(mId) || String(m.uid) === String(mId)) ||
+                                (profile && (String(profile.uid || profile.id) === String(mId) || String(profile.id) === String(mId) || String(profile.uid) === String(mId)) ? profile : null);
+                              const memberName = p.memberName || p.member_name || (matchedMember ? getCleanFullName(matchedMember.name) : 'Member');
+                              const memberCategory =
+                                matchedMember?.category ||
+                                (matchedMember as any)?.business_category ||
+                                (matchedMember as any)?.businessCategory ||
+                                p.memberCategory ||
+                                p.member_category ||
+                                p.category ||
+                                'N/A';
+
+                              return (
+                                <div
+                                  key={p.id}
+                                  className="inline-flex flex-col items-start gap-0.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-[11px] sm:text-xs font-bold text-white"
+                                >
+                                  <span className="text-primary font-extrabold">Feature Presentation by {memberName}</span>
+                                  <span className="text-neutral-300 font-bold">Category: {memberCategory}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     {/* Actions */}
@@ -2534,37 +3043,7 @@ export function Meetings() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedMeeting(meeting);
-                              const normalizedAttendance: Record<string, string> = {};
-                              if (meeting.attendance) {
-                                Object.entries(meeting.attendance).forEach(([uid, val]) => {
-                                  const v = String(val);
-                                  if (v === 'PRESENT' || v === 'YES' || v === 'Yes') normalizedAttendance[uid] = 'Present';
-                                  else if (v === 'ABSENT' || v === 'NO' || v === 'No') normalizedAttendance[uid] = 'Absent';
-                                  else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
-                                  else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
-                                  else normalizedAttendance[uid] = String(val);
-                                });
-                              }
-                              setTempAttendance(normalizedAttendance);
-                              setTempAmount(meeting.amountCollected || {});
-                              setTempMemberNotes(meeting.memberNotes || {});
-                              setTempDate(meeting.date || '');
-                              setTempTime(meeting.time || '');
-                              setTempLocation(meeting.location || '');
-                              const mCount = meeting.memberCount !== undefined 
-                                ? meeting.memberCount 
-                                : ((meeting as any).member_count !== undefined 
-                                    ? (meeting as any).member_count 
-                                    : ((meeting.memberNotes as any)?.__counts?.memberCount ?? (meeting.memberNotes as any)?.__memberCount));
-                              const gCount = meeting.guestCount !== undefined 
-                                ? meeting.guestCount 
-                                : ((meeting as any).guest_count !== undefined 
-                                    ? (meeting as any).guest_count 
-                                    : ((meeting.memberNotes as any)?.__counts?.guestCount ?? (meeting.memberNotes as any)?.__guestCount));
-                              setTempMemberCount(mCount !== undefined && mCount !== null ? mCount : '');
-                              setTempGuestCount(gCount !== undefined && gCount !== null ? gCount : '');
-                              setIsUpdateModalOpen(true);
+                              handleOpenUpdateMeetingModal(meeting);
                             }}
                             className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
                           >
@@ -2678,7 +3157,7 @@ export function Meetings() {
                         const status = m.attendance?.[profile?.uid || ''];
                         if (!status) return false;
                         const uStatus = status.toUpperCase();
-                        return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE';
+                        return uStatus === 'PRESENT' || uStatus === 'YES' || uStatus === 'SUBSTITUTE' || uStatus === 'LATE';
                       }).length}
                     </p>
                     <p className="text-[9px] text-neutral-400 font-medium mt-1 uppercase tracking-wider">Meetings Attended</p>
@@ -2821,20 +3300,70 @@ export function Meetings() {
                 })()}
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Location</label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
-                <input
-                  type="text"
-                  placeholder="Enter meeting venue"
-                  value={tempLocation}
-                  onChange={(e) => setTempLocation(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Location</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Enter meeting venue"
+                    value={tempLocation}
+                    onChange={(e) => setTempLocation(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Meeting Status</label>
+                <select
+                  value={tempStatus}
+                  onChange={(e) => setTempStatus(e.target.value as 'UPCOMING' | 'PENDING' | 'COMPLETED' | 'CANCELLED')}
+                  className={cn(
+                    "w-full px-3 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider outline-none cursor-pointer transition-colors",
+                    tempStatus === 'COMPLETED'
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : tempStatus === 'CANCELLED'
+                        ? "bg-red-500/10 text-red-400 border-red-500/30"
+                        : tempStatus === 'PENDING'
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          : "bg-[#151C2E] text-blue-400 border-white/10"
+                  )}
+                >
+                  <option value="UPCOMING" className="bg-[#111827] text-white">Upcoming</option>
+                  <option value="PENDING" className="bg-[#111827] text-white">Pending</option>
+                  <option value="COMPLETED" className="bg-[#111827] text-white">Completed</option>
+                  <option value="CANCELLED" className="bg-[#111827] text-white">Cancelled</option>
+                </select>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Meeting Amount (₹)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-xs">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={tempMeetingAmount}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0);
+                      setTempMeetingAmount(val);
+                      setTempAmount(prev => {
+                        const updated = { ...prev };
+                        Object.keys(tempPaymentStatus).forEach(uid => {
+                          if (tempPaymentStatus[uid] === 'PAID') {
+                            updated[uid] = Number(val) || 0;
+                          }
+                        });
+                        return updated;
+                      });
+                    }}
+                    className="w-full pl-7 pr-3 py-2 rounded-xl border border-white/5 bg-[#151C2E] text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Member Count</label>
                 <div className="relative">
@@ -2881,14 +3410,12 @@ export function Meetings() {
                   {(() => {
                     const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
                     const getPositionRank = (u: any) => {
-                      const role = String(u.role || '').toUpperCase();
-                      const pos = String(u.position || u.chapter_position || '').toLowerCase();
-                      if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
-                      if (pos === 'president') return 2;
-                      if (pos.includes('vice')) return 3;
-                      if (pos === 'secretary') return 4;
-                      if (pos === 'treasurer') return 5;
-                      return 6;
+                      const label = getMemberPositionLabel(u);
+                      if (label === 'CHAPTER ADMIN') return 1;
+                      if (label === 'PRESIDENT') return 2;
+                      if (label === 'VICE PRESIDENT') return 3;
+                      if (label === 'TREASURER') return 4;
+                      return 5;
                     };
                     const meetingMembers = (modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
                       if (m.role === 'MASTER_ADMIN') return false;
@@ -2908,10 +3435,16 @@ export function Meetings() {
                       );
                     }
 
+                    const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined 
+                      ? Number(tempMeetingAmount) 
+                      : (selectedMeeting?.meetingAmount ?? (selectedMeeting as any)?.meeting_amount ?? (selectedMeeting?.memberNotes as any)?.__meetingAmount ?? 0);
+
                     return meetingMembers.map((member) => {
                       const mId = member.id || member.uid;
                       const attendanceVal = tempAttendance[mId] || '';
-                      const amtVal = tempAmount[mId] || '';
+                      const isAttended = attendanceVal === 'Present' || attendanceVal === 'Substitute' || attendanceVal === 'Late';
+                      const memberPayStatus = tempPaymentStatus[mId] || 'NOT PAID';
+                      const memberPayMethod = tempPaymentMethods[mId] || '';
                       
                       const getStatusColor = (status: string) => {
                         const s = String(status || '').toLowerCase();
@@ -2919,58 +3452,178 @@ export function Meetings() {
                         if (s === 'absent') return 'text-red-400 bg-red-500/10 border-red-500/20';
                         if (s === 'substitute') return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
                         if (s === 'medical') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                        if (s === 'late') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
                         return 'text-neutral-400 bg-[#151C2E] border-white/10';
                       };
                       
+                      const roleLabel = getMemberPositionLabel(member);
+                      const walletSummary = walletService.getMemberWalletSummary(member);
+                      const existingMeetingDebit = selectedMeeting?.id
+                        ? walletSummary.transactions.find(
+                            tx => tx.type === 'DEBIT' && String(tx.meetingId || '') === String(selectedMeeting.id) && !tx.isReversed
+                          )
+                        : undefined;
+                      const effectiveWalletAvailable = walletSummary.availableBalance + (existingMeetingDebit ? Number(existingMeetingDebit.amount) || 0 : 0);
+                      const isWalletInsufficient =
+                        isAttended &&
+                        memberPayStatus === 'PAID' &&
+                        memberPayMethod === 'WALLET' &&
+                        configuredMeetingAmt > 0 &&
+                        effectiveWalletAvailable < configuredMeetingAmt;
+                      
                       return (
-                        <div key={mId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
-                              {member.name || member.displayName || 'Unknown Member'}
-                            </h4>
-                            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
-                              Member{member.position || member.chapter_position ? ` • ${member.position || member.chapter_position}` : ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
-                            <select
-                              value={attendanceVal}
-                              onChange={(e) => {
-                                setTempAttendance({ ...tempAttendance, [mId]: e.target.value as any });
-                                if (e.target.value === 'Absent' || e.target.value === 'Medical') {
-                                  setTempAmount(prev => {
-                                    const next = { ...prev };
-                                    delete next[mId];
-                                    return next;
-                                  });
-                                }
-                              }}
-                              className={cn(
-                                "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
-                                getStatusColor(attendanceVal)
-                              )}
-                            >
-                              <option value="" className="bg-[#111827] text-white">Not Marked</option>
-                              <option value="Present" className="bg-[#111827] text-white">Present</option>
-                              <option value="Absent" className="bg-[#111827] text-white">Absent</option>
-                              <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
-                              <option value="Medical" className="bg-[#111827] text-white">Medical</option>
-                            </select>
-                            
-                            {(attendanceVal === 'Present' || attendanceVal === 'Substitute') && (
-                              <div className="relative flex-shrink-0 w-24">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-[11px]">₹</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0"
-                                  value={amtVal}
-                                  onChange={(e) => setTempAmount({ ...tempAmount, [mId]: e.target.value })}
-                                  className="w-full pl-6 pr-2 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-white placeholder-neutral-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
-                                />
+                        <div key={mId} className="flex flex-col p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+                                  {member.name || member.displayName || 'Unknown Member'}
+                                </h4>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400">
+                                  <Wallet size={10} />
+                                  ₹{walletSummary.availableBalance.toLocaleString('en-IN')}
+                                </span>
                               </div>
-                            )}
+                              {roleLabel && (
+                                <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+                                  {roleLabel}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+                              <select
+                                value={attendanceVal}
+                                onChange={(e) => {
+                                  const newStatus = e.target.value as any;
+                                  setTempAttendance({ ...tempAttendance, [mId]: newStatus });
+                                  if (newStatus === 'Present' || newStatus === 'Substitute' || newStatus === 'Late') {
+                                    if (!tempPaymentStatus[mId]) {
+                                      setTempPaymentStatus(prev => ({ ...prev, [mId]: 'NOT PAID' }));
+                                    }
+                                    if (tempPaymentStatus[mId] === 'PAID') {
+                                      setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt }));
+                                    } else {
+                                      setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+                                    }
+                                  } else {
+                                    setTempPaymentStatus(prev => ({ ...prev, [mId]: 'NOT PAID' }));
+                                    setTempPaymentMethods(prev => {
+                                      const next = { ...prev };
+                                      delete next[mId];
+                                      return next;
+                                    });
+                                    setTempAmount(prev => {
+                                      const next = { ...prev };
+                                      delete next[mId];
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                className={cn(
+                                  "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
+                                  getStatusColor(attendanceVal)
+                                )}
+                              >
+                                <option value="" className="bg-[#111827] text-white">Not Marked</option>
+                                <option value="Present" className="bg-[#111827] text-white">Present</option>
+                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                                <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
+                                <option value="Medical" className="bg-[#111827] text-white">Medical</option>
+                                <option value="Late" className="bg-[#111827] text-white">Late</option>
+                              </select>
+                              
+                              {isAttended && (
+                                <>
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-neutral-300 shrink-0">
+                                    <span className="text-[10px] uppercase font-bold text-neutral-400">Amount:</span>
+                                    <span className="text-white font-extrabold">₹{configuredMeetingAmt}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Payment:</span>
+                                    <select
+                                      value={memberPayStatus}
+                                      onChange={(e) => {
+                                        const val = e.target.value as 'PAID' | 'NOT PAID';
+                                        setTempPaymentStatus(prev => ({ ...prev, [mId]: val }));
+                                        if (val === 'PAID') {
+                                          setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt }));
+                                        } else {
+                                          setTempPaymentMethods(prev => {
+                                            const next = { ...prev };
+                                            delete next[mId];
+                                            return next;
+                                          });
+                                          setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+                                          setError(null);
+                                        }
+                                      }}
+                                      className={cn(
+                                        "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
+                                        memberPayStatus === 'PAID'
+                                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                          : "bg-red-500/10 text-red-400 border-red-500/30"
+                                      )}
+                                    >
+                                      <option value="NOT PAID" className="bg-[#111827] text-white">NOT PAID</option>
+                                      <option value="PAID" className="bg-[#111827] text-white">PAID</option>
+                                    </select>
+                                  </div>
+
+                                  {memberPayStatus === 'PAID' && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Method:</span>
+                                      <select
+                                        value={memberPayMethod}
+                                        onChange={(e) => {
+                                          const methodVal = e.target.value as 'UPI' | 'CASH' | 'WALLET';
+                                          setTempPaymentMethods(prev => ({ ...prev, [mId]: methodVal }));
+                                          if (methodVal === 'UPI' || methodVal === 'CASH' || methodVal === 'WALLET') {
+                                            setTempAmount(prev => ({
+                                              ...prev,
+                                              [mId]: configuredMeetingAmt > 0 ? configuredMeetingAmt : (Number(prev[mId]) || 0)
+                                            }));
+                                          }
+                                          if (methodVal === 'WALLET') {
+                                            if (configuredMeetingAmt > 0 && effectiveWalletAvailable < configuredMeetingAmt) {
+                                              const insufficientMsg = `Insufficient wallet balance. Available balance: ₹${walletSummary.availableBalance}.`;
+                                              setError(insufficientMsg);
+                                              showError(insufficientMsg);
+                                            } else {
+                                              setError(null);
+                                            }
+                                          } else {
+                                            setError(null);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
+                                          isWalletInsufficient
+                                            ? "bg-red-500/10 text-red-400 border-red-500/40 ring-1 ring-red-500/40"
+                                            : memberPayMethod === 'WALLET'
+                                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                              : memberPayMethod
+                                                ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                                                : "bg-amber-500/10 text-amber-300 border-amber-500/40 ring-1 ring-amber-500/40 animate-pulse"
+                                        )}
+                                      >
+                                        <option value="" className="bg-[#111827] text-white">Select Method *</option>
+                                        <option value="UPI" className="bg-[#111827] text-white">UPI</option>
+                                        <option value="CASH" className="bg-[#111827] text-white">Cash</option>
+                                        <option value="WALLET" className="bg-[#111827] text-white">Wallet (₹{walletSummary.availableBalance})</option>
+                                      </select>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
+                          {isWalletInsufficient && (
+                            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2">
+                              <AlertCircle size={14} className="shrink-0" />
+                              <span>Insufficient wallet balance. Available balance: ₹{walletSummary.availableBalance}. Please choose UPI or Cash.</span>
+                            </div>
+                          )}
                         </div>
                       );
                     });
@@ -3041,25 +3694,120 @@ export function Meetings() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
-              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
-              <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
-                {Object.values(tempAttendance || {}).filter(s => ['PRESENT', 'PRESENT', 'YES', 'SUBSTITUTE'].includes(String(s).toUpperCase())).length}
-                {Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
-                  <span className="text-xs text-emerald-400/70 font-medium mb-1">
-                    (+{Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
-              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
-              <p className="text-xl font-bold text-white">
-                ₹{Object.values(tempAmount || {}).reduce((a: number, b: any) => a + (typeof b === 'number' ? b : parseInt(String(b)) || 0), 0).toLocaleString()}
-              </p>
-            </div>
-          </div>
+          {(() => {
+            const rawNotes: any = selectedMeeting?.memberNotes || (selectedMeeting as any)?.member_notes || {};
+            const savedMeetingAmt =
+              selectedMeeting?.meetingAmount ??
+              (selectedMeeting as any)?.meeting_amount ??
+              rawNotes.__meetingAmount ??
+              rawNotes.__meeting_amount ??
+              rawNotes._MeetingAmount ??
+              0;
+            const configuredAmt =
+              tempMeetingAmount !== '' && tempMeetingAmount !== undefined
+                ? Number(tempMeetingAmount) || 0
+                : Number(savedMeetingAmt) || 0;
+
+            let totalUpiPayment = 0;
+            let totalCashPayment = 0;
+            let totalWalletPayment = 0;
+
+            const guestIds = new Set<string>((meetingGuests || []).map(g => String(g.id)));
+            const allMemberIds = new Set<string>();
+            modalChapterMembers.forEach(m => {
+              const id = m.id || m.uid;
+              if (id) allMemberIds.add(String(id));
+            });
+            Object.keys(tempAttendance || {}).forEach(k => {
+              if (!k.startsWith('_')) allMemberIds.add(String(k));
+            });
+            Object.keys(tempPaymentStatus || {}).forEach(k => {
+              if (!k.startsWith('_')) allMemberIds.add(String(k));
+            });
+            Object.keys(tempPaymentMethods || {}).forEach(k => {
+              if (!k.startsWith('_')) allMemberIds.add(String(k));
+            });
+
+            const seenLower = new Set<string>();
+            allMemberIds.forEach(mId => {
+              if (guestIds.has(mId)) return;
+              const lowerId = mId.toLowerCase();
+              if (seenLower.has(lowerId)) return;
+              seenLower.add(lowerId);
+
+              const att = String(tempAttendance[mId] ?? tempAttendance[lowerId] ?? '').toUpperCase();
+              const isAttended = ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(att);
+              const payStatus = String(tempPaymentStatus[mId] ?? tempPaymentStatus[lowerId] ?? '').toUpperCase();
+              const payMethod = String(tempPaymentMethods[mId] ?? tempPaymentMethods[lowerId] ?? '').toUpperCase();
+
+              if (isAttended && payStatus === 'PAID') {
+                const rawMemberAmt = Number(tempAmount[mId] ?? tempAmount[lowerId] ?? 0) || 0;
+                const memberAmt =
+                  tempMeetingAmount !== '' && tempMeetingAmount !== undefined
+                    ? Number(tempMeetingAmount) || 0
+                    : rawMemberAmt > 0
+                      ? rawMemberAmt
+                      : configuredAmt;
+
+                if (payMethod === 'UPI') {
+                  totalUpiPayment += memberAmt;
+                } else if (payMethod === 'CASH') {
+                  totalCashPayment += memberAmt;
+                } else if (payMethod === 'WALLET') {
+                  totalWalletPayment += memberAmt;
+                }
+              }
+            });
+
+            (meetingGuests || []).forEach(guest => {
+              const gId = String(guest.id);
+              const gAtt = String(tempGuestAttendance[gId] || '').toUpperCase();
+              if (gAtt === 'PRESENT' || gAtt === 'SUBSTITUTE') {
+                const gAmt = Number(tempAmount[gId]) || 0;
+                if (gAmt > 0) {
+                  const gMethod = String(tempPaymentMethods[gId] || 'CASH').toUpperCase();
+                  if (gMethod === 'UPI') {
+                    totalUpiPayment += gAmt;
+                  } else if (gMethod === 'WALLET') {
+                    totalWalletPayment += gAmt;
+                  } else {
+                    totalCashPayment += gAmt;
+                  }
+                }
+              }
+            });
+
+            const totalCollected = totalUpiPayment + totalCashPayment + totalWalletPayment;
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
+                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
+                  <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
+                    {Object.values(tempAttendance || {}).filter(s => ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(String(s).toUpperCase())).length}
+                    {Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
+                      <span className="text-xs text-emerald-400/70 font-medium mb-1">
+                        (+{Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
+                  <p className="text-xl font-bold text-white">
+                    ₹{totalCollected.toLocaleString()}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-end gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="text-blue-400">UPI: ₹{totalUpiPayment.toLocaleString()}</span>
+                    <span className="text-neutral-600">+</span>
+                    <span className="text-amber-400">Cash: ₹{totalCashPayment.toLocaleString()}</span>
+                    <span className="text-neutral-600">+</span>
+                    <span className="text-emerald-400">Wallet: ₹{totalWalletPayment.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="flex gap-3">
             {selectedMeeting && !isMeetingDone(selectedMeeting) && (
               <button
@@ -3130,9 +3878,14 @@ export function Meetings() {
           </div>
 
           <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20 flex items-center justify-between">
-            <span className="text-sm font-bold text-emerald-400">Total Collected</span>
+            <div>
+              <span className="text-sm font-bold text-emerald-400 block">Total Collected</span>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mt-0.5 block">
+                UPI: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalUpi.toLocaleString()} &bull; Cash: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalCash.toLocaleString()} &bull; Wallet: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalWallet.toLocaleString()}
+              </span>
+            </div>
             <span className="text-lg font-bold text-emerald-400">
-              ₹{Object.values(detailsMeeting?.amountCollected || {}).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
+              ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalCollected.toLocaleString()}
             </span>
           </div>
         </div>
@@ -3191,9 +3944,14 @@ export function Meetings() {
             })}
           </div>
           <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 flex items-center justify-between">
-            <span className="text-sm font-bold text-neutral-400">Total Collected</span>
+            <div>
+              <span className="text-sm font-bold text-neutral-400 block">Total Collected</span>
+              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider mt-0.5 block">
+                UPI: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalUpi.toLocaleString()} &bull; Cash: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalCash.toLocaleString()} &bull; Wallet: ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalWallet.toLocaleString()}
+              </span>
+            </div>
             <span className="text-lg font-bold text-white">
-              ₹{Object.values(detailsMeeting?.amountCollected || {}).reduce((a: number, b: number) => a + b, 0).toLocaleString()}
+              ₹{getSavedMeetingPaymentTotals(detailsMeeting).totalCollected.toLocaleString()}
             </span>
           </div>
         </div>
@@ -3577,6 +4335,21 @@ export function Meetings() {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Meeting Amount (₹)</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₹</span>
+              <input
+                type="number"
+                min="0"
+                placeholder="Enter meeting amount (e.g. 500)"
+                value={scheduleData.meetingAmount}
+                onChange={(e) => setScheduleData({ ...scheduleData, meetingAmount: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 rounded-[12px] border border-white/5 bg-[#151C2E] text-white placeholder-neutral-500 focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -3749,15 +4522,19 @@ export function Meetings() {
                     const fee = reportMeeting.amountCollected?.[m.uid] || 0;
                     const note = reportMeeting.memberNotes?.[m.uid] || '-';
                     
+                    const roleLabel = getMemberPositionLabel(m);
+                    
                     return (
                       <div key={m.uid} className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 gap-3 hover:bg-[#1C2538] transition-colors group">
                         <div className="flex-1 min-w-0">
                           <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
                             {m.name || m.displayName || 'Unnamed Member'}
                           </h4>
-                          <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
-                            {getMemberPositionLabel(m)}
-                          </p>
+                          {roleLabel && (
+                            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+                              {roleLabel}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-5 w-full sm:w-auto">
                           <span className={cn("px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border inline-flex shrink-0", displayStatus.color)}>

@@ -12,6 +12,7 @@ import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { PositionManagement } from '../components/positions/PositionManagement';
 import { safeFetch } from '../utils/apiUtils';
 import { supabase } from '../lib/supabaseClient';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 
 export function Admins() {
   const { profile } = useAuth();
@@ -489,15 +490,21 @@ export function Admins() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Phone Number</label>
-                <input
-                  required
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g. 9876543210"
-                   disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
-                  className={`w-full px-4 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
-                />
+                <div className="relative">
+                  <input
+                    required
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                    className={`w-full px-4 pr-11 py-3 rounded-[12px] border border-neutral-200 focus:ring-2 focus:ring-emerald-500 outline-none transition-all ${!!editingAdmin && editingAdmin.uid !== profile?.uid ? "bg-neutral-100 text-neutral-500 cursor-not-allowed" : ""}`}
+                  />
+                  <ContactPickerButton
+                    disabled={!!editingAdmin && editingAdmin.uid !== profile?.uid}
+                    onSelect={(phone) => setFormData({ ...formData, phone })}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-neutral-900 uppercase tracking-wider">Email Address</label>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { UserRole } from '../types';
-import { getDashboardPath } from '../utils/authUtils';
+import { getDashboardPath, isChapterLeaderRole } from '../utils/authUtils';
 import { BrandLogo } from './BrandLogo';
 import { isMemberActive } from '../utils/memberStatus';
 
@@ -48,11 +48,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (profile && allowedRoles) {
-    const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin');
+    const isChapterAdmin = isChapterLeaderRole(profile);
     
     const hasRole = allowedRoles.includes(profile.role) || 
       (allowedRoles.includes('CHAPTER_ADMIN') && isChapterAdmin) ||
-      (allowedRoles.includes('MEMBER') && profile.role === 'MEMBER');
+      (allowedRoles.includes('MEMBER') && (profile.role === 'MEMBER' || isChapterAdmin));
 
     if (!hasRole) {
       const dashboardPath = getDashboardPath(profile.role, profile.position);
@@ -60,8 +60,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     }
   }
 
-  // Check subscription and status for members and chapter admins
-  if (profile && (profile.role === 'MEMBER' || profile.role === 'CHAPTER_ADMIN' || (profile.role === 'MEMBER' && profile.position === 'chapter_admin'))) {
+  // Check subscription and status for members and chapter leaders
+  if (profile && (profile.role === 'MEMBER' || isChapterLeaderRole(profile))) {
     if (!isMemberActive(profile)) {
       return <Navigate to="/subscription-expired" replace />;
     }

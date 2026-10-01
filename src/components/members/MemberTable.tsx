@@ -44,7 +44,7 @@ interface MemberTableProps {
   onTransferMember: (member: UserProfile) => void;
 }
 
-import { getDisplayPosition } from '../../utils/authUtils';
+import { getDisplayPosition, getCleanFullName } from '../../utils/authUtils';
 
 export function MemberTable({
   currentUserId,
@@ -99,14 +99,32 @@ export function MemberTable({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {members.length > 0 ? (
         members.map((member) => {
-          const displayPosition = getDisplayPosition(member.position, member.role);
+          const rawPos = getDisplayPosition(member.position || (member as any).chapter_position, member.role);
+          const leadershipRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos)
+            ? rawPos.toUpperCase()
+            : 'MEMBER';
+          const cleanName = getCleanFullName(member.name || member.displayName);
+          const categoryLabel = member.category || (member as any).business_category || member.businessName || (member as any).business_name || 'Business Owner';
+          const chapterLabel = member.chapter_name || member.chapterName || (member as any).chapter || 'SSK Chapter';
           return (
             <div key={member.uid} className="bg-[#111827] p-4 rounded-xl border border-white/5 relative flex flex-col gap-2 shadow-sm hover:border-white/10 transition-colors">
               <div className="flex items-start gap-3">
-                <Avatar src={member.photoURL} name={member.name} size="w-12 h-12" className="rounded-full shrink-0" fallbackClassName="rounded-full text-sm" />
+                <Avatar src={member.photoURL} name={cleanName} size="w-12 h-12" className="rounded-full shrink-0" fallbackClassName="rounded-full text-sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-bold text-white text-sm leading-tight truncate">{member.name || member.displayName}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      <p className="font-bold text-white text-sm leading-tight truncate">{cleanName}</p>
+                      <span className={cn(
+                        "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0",
+                        leadershipRole === 'PRESIDENT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                        leadershipRole === 'VICE PRESIDENT' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                        leadershipRole === 'TREASURER' ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
+                        leadershipRole === 'CHAPTER ADMIN' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                        "bg-white/5 text-neutral-300 border-white/10"
+                      )}>
+                        {leadershipRole}
+                      </span>
+                    </div>
                     <div className={cn(
                       "px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border shrink-0",
                       isMemberActive(member) ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
@@ -114,10 +132,9 @@ export function MemberTable({
                       {isMemberActive(member) ? 'ACTIVE' : 'INACTIVE'}
                     </div>
                   </div>
-                  <p className="text-xs text-primary font-semibold truncate mt-0.5">{member.businessName || member.category || 'Member'}</p>
-                  {displayPosition && (
-                    <p className="text-[10px] font-medium text-neutral-400 mt-0.5">{displayPosition}</p>
-                  )}
+                  <p className="text-xs text-primary font-semibold truncate mt-0.5 uppercase">
+                    {categoryLabel} &bull; {chapterLabel}
+                  </p>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-medium">
                       <Phone size={10} className="text-neutral-500" />

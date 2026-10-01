@@ -8,6 +8,7 @@ import { Chapter, UserProfile } from '../../types';
 import { MemberSuccessPopup } from './MemberSuccessPopup';
 import { supabase } from '../../lib/supabaseClient';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../../services/toastService';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 
 const formatDateForStorage = (dateStr: string) => {
@@ -340,9 +341,9 @@ export function AddMemberForm() {
                 value={formData.whatsapp}
                 onChange={handleChange}
                 placeholder="e.g. 9876543210"
-                className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                
+                className="w-full h-11 pl-11 pr-11 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
               />
+              <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, whatsapp: phone }))} />
             </div>
           {errors.whatsapp && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.whatsapp}</p>}
           </div>
@@ -357,9 +358,9 @@ export function AddMemberForm() {
                 value={formData.phone}
                 onChange={handleChange}
                 placeholder="e.g. 9876543210"
-                className="w-full h-11 pl-11 pr-4 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
-                
+                className="w-full h-11 pl-11 pr-11 bg-[#0F172A] border border-white/5 rounded-xl focus:border-primary outline-none transition-all text-sm font-medium text-white placeholder-neutral-500"
               />
+              <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, phone }))} />
             </div>
           {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
           </div>

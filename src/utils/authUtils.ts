@@ -8,10 +8,10 @@ export const getDisplayPosition = (pos?: string, r?: string): string => {
   if (role === 'MASTER_ADMIN') return 'Master Admin';
   if (role === 'CHAPTER_ADMIN' || position === 'CHAPTER_ADMIN' || position === 'CHAPTER ADMIN') return 'Chapter Admin';
 
-  if (position === 'PRESIDENT') return 'President';
-  if (position === 'VICE_PRESIDENT' || position === 'VICE PRESIDENT') return 'Vice President';
-  if (position === 'SECRETARY') return 'Secretary';
-  if (position === 'TREASURER') return 'Treasurer';
+  if (role === 'PRESIDENT' || position === 'PRESIDENT') return 'President';
+  if (role === 'VICE_PRESIDENT' || role === 'VICE PRESIDENT' || position === 'VICE_PRESIDENT' || position === 'VICE PRESIDENT') return 'Vice President';
+  if (role === 'SECRETARY' || position === 'SECRETARY') return 'Secretary';
+  if (role === 'TREASURER' || position === 'TREASURER') return 'Treasurer';
 
   if (pos && pos.trim().length > 0 && position !== 'MEMBER' && position !== 'NONE') {
     return pos.split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
@@ -136,12 +136,46 @@ export const ensureUserChapterId = async (userRecord: any): Promise<any> => {
   return userRecord;
 };
 
+/**
+ * Checks whether a user possesses Chapter Leader / Chapter Admin special access permissions.
+ * Identical chapter-level management access is granted to:
+ * - Chapter Admin
+ * - President
+ * - Vice President
+ * - Treasurer
+ */
+export const isChapterLeaderRole = (user: { role?: string; position?: string; chapter_position?: string } | null | undefined): boolean => {
+  if (!user) return false;
+  const role = String(user.role || '').toUpperCase().trim();
+  if (role === 'CHAPTER_ADMIN') return true;
+  if (role === 'PRESIDENT' || role === 'VICE_PRESIDENT' || role === 'TREASURER') return true;
+
+  const pos = String(user.position || user.chapter_position || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '_');
+
+  return ['chapter_admin', 'president', 'vice_president', 'treasurer'].includes(pos);
+};
+
+/**
+ * Checks whether a user is authorized to manage member wallets (add credit/debit adjustments).
+ * Authorized roles/positions:
+ * - Chapter Admin
+ * - Treasurer
+ * - Vice President
+ * - President
+ */
+export const canManageWallet = (user: { role?: string; position?: string; chapter_position?: string } | null | undefined): boolean => {
+  if (!user) return false;
+  return isChapterLeaderRole(user);
+};
+
 export const getDashboardPath = (role: UserRole | undefined, position?: string): string => {
   if (role === 'MASTER_ADMIN') {
     return '/admin/home';
   }
-  const posLower = position?.toLowerCase() || '';
-  if (role === 'CHAPTER_ADMIN' || posLower === 'chapter_admin' || posLower === 'chapter admin') {
+  if (isChapterLeaderRole({ role, position })) {
     return '/chapter-admin/home';
   }
   return '/member/home';
@@ -149,7 +183,16 @@ export const getDashboardPath = (role: UserRole | undefined, position?: string):
 
 export const getCleanFullName = (name: string | undefined): string => {
   if (!name) return 'Unnamed Member';
-  const trimmed = name.trim();
+  let trimmed = String(name).trim();
+
+  // Strip any concatenated category if present in the raw name field
+  if (/[\u2010-\u2015\-–—|/]\s*category(?:\s*:|\s+|$)/i.test(trimmed) || /\(category:[^)]*\)/i.test(trimmed) || /\[category:[^\]]*\]/i.test(trimmed) || /:\s*category:/i.test(trimmed)) {
+    trimmed = trimmed.split(/[\u2010-\u2015\-–—|/]\s*category(?:\s*:|\s+|$)|\(category:|\[category:|:\s*category:/i)[0].trim();
+  }
+
+  // Also strip any trailing category pattern like "— Category: ..." or "Category: ..."
+  trimmed = trimmed.replace(/[\u2010-\u2015\-–—|/]?\s*category\s*:\s*.+$/i, '').trim();
+
   const lower = trimmed.toLowerCase();
 
   if (lower === 'test president' || lower === 'testpresident') {
@@ -185,13 +228,15 @@ export const getCleanFullName = (name: string | undefined): string => {
     const cleaned = trimmed.replace(/[_-]/g, ' ');
     return cleaned
       .split(' ')
+      .filter(Boolean)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
   }
 
-  // Proper Title Case capitalization
+  // Proper Title Case capitalization while preserving initials or uppercase words
   return trimmed
     .split(' ')
+    .filter(Boolean)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 };

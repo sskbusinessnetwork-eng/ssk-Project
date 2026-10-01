@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -13,12 +13,17 @@ import {
   FileText,
   Filter,
   RotateCcw,
-  PhoneCall
+  PhoneCall,
+  Search,
+  ChevronDown,
+  X,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
 import { Referral, UserProfile, ThankYouSlip, isOfflineReferral } from '../types';
 import { Modal } from '../components/Modal';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
@@ -39,8 +44,24 @@ const getUserFullName = (user: any): string => {
 import { getDisplayPosition } from '../utils/authUtils';
 
 const formatUserRoleOrPosition = (user: any): string => {
-  if (!user) return 'Member';
-  return getDisplayPosition(user.position || user.chapter_position || user.chapterPosition, user.role);
+  if (!user) return '';
+  const pos = getDisplayPosition(user.position || user.chapter_position || user.chapterPosition, user.role);
+  if (['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(pos)) {
+    return pos;
+  }
+  return '';
+};
+
+const getUserCategoryName = (user: any): string => {
+  if (!user) return 'Business Owner';
+  let extraData: any = {};
+  const rawPhoto = user.profile_photo || user.photo_url || user.photoURL || '';
+  if (typeof rawPhoto === 'string' && rawPhoto.includes('|||')) {
+    try {
+      extraData = JSON.parse(rawPhoto.split('|||')[1] || '{}');
+    } catch (e) {}
+  }
+  return user.category || extraData.category || user.business_category || extraData.business_category || user.businessName || user.business_name || extraData.business_name || 'Business Owner';
 };
 
 export function Referrals() {
@@ -86,6 +107,46 @@ export function Referrals() {
     requirement: '',
     notes: ''
   });
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+  const memberSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMemberDropdownOpen) {
+      setTimeout(() => {
+        memberSearchInputRef.current?.focus();
+      }, 50);
+    } else {
+      setMemberSearchTerm('');
+    }
+  }, [isMemberDropdownOpen]);
+
+  useEffect(() => {
+    if (!isModalOpen) {
+      setIsMemberDropdownOpen(false);
+      setMemberSearchTerm('');
+    }
+  }, [isModalOpen]);
 
   useEffect(() => {
     const toUserId = searchParams.get('to');
@@ -276,14 +337,14 @@ export function Referrals() {
         const senderRoleFormatted = senderUser ? formatUserRoleOrPosition(senderUser) : '';
         const senderChapId = senderUser?.chapter_id || senderUser?.chapterId || '';
         const senderChapterName = senderChapId ? (chapterMap.get(String(senderChapId).trim().toLowerCase()) || '') : '';
-        const senderCategoryName = senderUser ? (senderUser.category || senderUser.business_category || senderUser.businessName || senderUser.business_name || '') : '';
+        const senderCategoryName = senderUser ? getUserCategoryName(senderUser) : 'Business Owner';
         const senderPhotoUrl = senderUser ? (senderUser.photo_url || senderUser.photoURL || senderUser.avatar_url || senderUser.profile_photo || senderUser.image_url || '') : '';
 
         const receiverFullName = receiverUser ? getUserFullName(receiverUser) : 'Member';
         const receiverRoleFormatted = receiverUser ? formatUserRoleOrPosition(receiverUser) : '';
         const receiverChapId = receiverUser?.chapter_id || receiverUser?.chapterId || '';
         const receiverChapterName = receiverChapId ? (chapterMap.get(String(receiverChapId).trim().toLowerCase()) || '') : '';
-        const receiverCategoryName = receiverUser ? (receiverUser.category || receiverUser.business_category || receiverUser.businessName || receiverUser.business_name || '') : '';
+        const receiverCategoryName = receiverUser ? getUserCategoryName(receiverUser) : 'Business Owner';
         const receiverPhotoUrl = receiverUser ? (receiverUser.photo_url || receiverUser.photoURL || receiverUser.avatar_url || receiverUser.profile_photo || receiverUser.image_url || '') : '';
 
         formattedList.push({
@@ -447,7 +508,7 @@ export function Referrals() {
           .map((m: any) => {
             const fullName = getUserFullName(m) || m.name || m.full_name || 'Member';
             const pos = formatUserRoleOrPosition(m);
-            const cat = m.category || m.business_category || m.business_name || '';
+            const cat = getUserCategoryName(m);
             const phone = m.phone || m.contact_phone || m.mobile || m.phone_number || '';
             const rawChapId = m.chapter_id || m.chapterId || '';
             const cId = rawChapId ? String(rawChapId).trim().toLowerCase() : '';
@@ -492,6 +553,16 @@ export function Referrals() {
     }
     return allMembers;
   }, [allMembers, memberFilter, effectiveUserChapterId]);
+
+  const searchableMembers = useMemo(() => {
+    if (!memberSearchTerm.trim()) return filteredMembers;
+    const query = memberSearchTerm.toLowerCase().trim();
+    return filteredMembers.filter((m) => {
+      const nameStr = (m.displayName || m.name || '').toLowerCase();
+      const catStr = (m.category || '').toLowerCase();
+      return nameStr.includes(query) || catStr.includes(query);
+    });
+  }, [filteredMembers, memberSearchTerm]);
 
   const allCount = allMembers.length;
   const myChapterCount = useMemo(() => {
@@ -1182,11 +1253,14 @@ export function Referrals() {
                   className="w-full h-10 bg-[#05070D] border border-white/10 rounded-[10px] px-3 text-xs text-white focus:outline-none focus:border-primary/50"
                 >
                   <option value="ALL">All Members</option>
-                  {masterAdminMemberList.map(m => (
-                    <option key={m.id || m.uid} value={m.id || m.uid}>
-                      {m.name || m.displayName} ({m.chapterName || 'No Chapter'})
-                    </option>
-                  ))}
+                  {masterAdminMemberList.map(m => {
+                    const cat = m.category || (m as any).business_category || 'No Category';
+                    return (
+                      <option key={m.id || m.uid} value={m.id || m.uid}>
+                        {m.name || m.displayName} — Category: {cat} ({m.chapterName || 'No Chapter'})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1313,10 +1387,12 @@ export function Referrals() {
                           </td>
                           <td className="p-4 align-top">
                             <p className="font-bold text-white">{ref.senderName}</p>
+                            <p className="text-[11px] font-semibold text-primary">{ref.senderCategory || 'Business Owner'}</p>
                             <p className="text-[10px] text-neutral-400">{ref.senderChapter || 'N/A'}</p>
                           </td>
                           <td className="p-4 align-top">
                             <p className="font-bold text-white">{ref.receiverName}</p>
+                            <p className="text-[11px] font-semibold text-primary">{ref.receiverCategory || 'Business Owner'}</p>
                             <p className="text-[10px] text-neutral-400">{ref.receiverChapter || 'N/A'}</p>
                           </td>
                           <td className="p-4 align-top max-w-xs">
@@ -1361,7 +1437,8 @@ export function Referrals() {
         ) : referrals.length > 0 ? (
           referrals.map((ref, i) => {
             const isSender = filter === 'passed' || String(ref.fromUserId) === String(profile?.id) || String(ref.fromUserId) === String(profile?.uid);
-            const categoryStr = ref.senderCategory || ref.receiverCategory || ref.requirement || 'Business Referral';
+            const otherMemberName = isSender ? (ref.receiverFullName || ref.receiverName || 'Member') : (ref.senderFullName || ref.senderName || 'Member');
+            const otherMemberCategory = isSender ? (ref.receiverCategory || 'Business Owner') : (ref.senderCategory || 'Business Owner');
             const sentReceivedTag = isSender ? 'Sent' : 'Received';
             const statusLabel = (ref.status || 'Pending').replace('_', ' ');
 
@@ -1385,11 +1462,14 @@ export function Referrals() {
                     <ArrowRightLeft size={15} className="text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
-                      {ref.contactName || 'Referral Contact'}
+                    <h4 className="text-xs sm:text-sm font-bold text-white tracking-tight truncate group-hover:text-primary transition-colors">
+                      {otherMemberName}
                     </h4>
-                    <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">
-                      {categoryStr} &bull; <span className="text-white font-semibold">{sentReceivedTag}</span>
+                    <p className="text-[11px] text-primary font-semibold mt-0.5 truncate">
+                      {otherMemberCategory}
+                    </p>
+                    <p className="text-[10px] text-neutral-400 font-medium mt-0.5 truncate">
+                      Client: {ref.contactName || 'Referral Contact'} &bull; <span className="text-white font-semibold">{sentReceivedTag}</span>
                     </p>
                   </div>
                 </div>
@@ -1470,30 +1550,138 @@ export function Referrals() {
               <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Select Member</label>
               <span className="text-xs text-neutral-400 font-semibold">{filteredMembers.length} active member(s)</span>
             </div>
-            <select
-              id="referral-toUserId"
-              required
-              disabled={!!searchParams.get('to')}
-              value={formData.toUserId}
-              onChange={(e) => {
-                const selectedMemberId = e.target.value;
-                setFormData({ ...formData, toUserId: selectedMemberId });
-              }}
-              className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium disabled:opacity-75 disabled:cursor-not-allowed"
-            >
-              <option value="" className="bg-[#111827] text-white">Choose a member...</option>
-              {filteredMembers.map((m) => {
-                const nameStr = m.displayName || m.name || 'Member';
-                const chapterStr = m.chapterName ? ` (${m.chapterName})` : '';
-                const posStr = m.position ? ` - ${m.position}` : '';
-                const phoneStr = m.phone ? ` • ${m.phone}` : '';
-                return (
-                  <option key={m.id} value={m.id} className="bg-[#111827] text-white">
-                    {nameStr}{chapterStr}{posStr}{phoneStr}
-                  </option>
-                );
-              })}
-            </select>
+            <div className="relative" ref={memberDropdownRef}>
+              <button
+                type="button"
+                id="referral-toUserId"
+                disabled={!!searchParams.get('to')}
+                onClick={() => {
+                  if (!searchParams.get('to')) {
+                    setIsMemberDropdownOpen(prev => !prev);
+                  }
+                }}
+                aria-haspopup="listbox"
+                aria-expanded={isMemberDropdownOpen}
+                className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-between text-left cursor-pointer"
+              >
+                <span className={cn("truncate pr-2", !formData.toUserId && "text-neutral-400")}>
+                  {(() => {
+                    if (!formData.toUserId) return 'Choose a member...';
+                    const sel = filteredMembers.find(m => String(m.id) === String(formData.toUserId)) || allMembers.find(m => String(m.id) === String(formData.toUserId));
+                    if (!sel) return 'Choose a member...';
+                    const nameStr = sel.displayName || sel.name || 'Member';
+                    const catStr = sel.category ? ` — Category: ${sel.category}` : '';
+                    const posStr = sel.position ? ` (${sel.position})` : '';
+                    const chapterStr = sel.chapterName ? ` • ${sel.chapterName}` : '';
+                    return `${nameStr}${catStr}${posStr}${chapterStr}`;
+                  })()}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={cn(
+                    "shrink-0 text-neutral-400 transition-transform duration-200",
+                    isMemberDropdownOpen && "rotate-180 text-primary"
+                  )}
+                />
+              </button>
+
+              {isMemberDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-[#151C2E] border border-white/10 rounded-[12px] shadow-2xl overflow-hidden animate-in fade-in duration-150">
+                  <div className="p-2.5 border-b border-white/10 bg-[#111827]">
+                    <div className="relative flex items-center">
+                      <Search size={15} className="absolute left-3 text-neutral-400 pointer-events-none" />
+                      <input
+                        ref={memberSearchInputRef}
+                        type="text"
+                        value={memberSearchTerm}
+                        onChange={(e) => setMemberSearchTerm(e.target.value)}
+                        placeholder="Search member by name or category..."
+                        className="w-full h-9 pl-9 pr-8 text-xs font-medium rounded-lg bg-[#151C2E] border border-white/10 text-white placeholder-neutral-400 focus:outline-none focus:border-primary transition-all"
+                      />
+                      {memberSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemberSearchTerm('');
+                            memberSearchInputRef.current?.focus();
+                          }}
+                          className="absolute right-2.5 p-0.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5 custom-scrollbar bg-[#111827]">
+                    {!memberSearchTerm.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData({ ...formData, toUserId: '' });
+                          setIsMemberDropdownOpen(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-xs font-medium rounded-lg flex items-center justify-between transition-colors cursor-pointer",
+                          !formData.toUserId ? "bg-primary/20 text-primary font-bold" : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                        )}
+                      >
+                        <span>Choose a member...</span>
+                        {!formData.toUserId && <Check size={14} className="shrink-0 text-primary" />}
+                      </button>
+                    )}
+
+                    {searchableMembers.length > 0 ? (
+                      searchableMembers.map((m) => {
+                        const nameStr = m.displayName || m.name || 'Member';
+                        const catStr = m.category ? ` — Category: ${m.category}` : '';
+                        const posStr = m.position ? ` (${m.position})` : '';
+                        const chapterStr = m.chapterName ? ` • ${m.chapterName}` : '';
+                        const isSelected = String(formData.toUserId) === String(m.id);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, toUserId: m.id });
+                              setIsMemberDropdownOpen(false);
+                            }}
+                            className={cn(
+                              "w-full text-left px-3 py-2.5 text-xs font-medium rounded-lg flex items-center justify-between gap-2 transition-colors cursor-pointer",
+                              isSelected
+                                ? "bg-primary/20 text-primary font-bold"
+                                : "text-white hover:bg-[#151C2E]"
+                            )}
+                          >
+                            <span className="truncate">
+                              {nameStr}{catStr}{posStr}{chapterStr}
+                            </span>
+                            {isSelected && <Check size={14} className="shrink-0 text-primary" />}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="py-6 text-center text-xs font-medium text-neutral-400">
+                        No members found matching "{memberSearchTerm}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            {formData.toUserId && (() => {
+              const sel = filteredMembers.find(m => String(m.id) === String(formData.toUserId)) || allMembers.find(m => String(m.id) === String(formData.toUserId));
+              if (!sel) return null;
+              return (
+                <div className="p-3 bg-[#111827] rounded-[12px] border border-white/10 mt-2">
+                  <p className="text-sm font-bold text-white leading-tight">{sel.displayName || sel.name}</p>
+                  <p className="text-xs font-semibold text-primary mt-0.5">{sel.category || 'Business Owner'}</p>
+                  {sel.position && (
+                    <p className="text-[10px] font-medium text-neutral-400 mt-0.5">{sel.position}</p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1511,15 +1699,18 @@ export function Referrals() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Contact Phone</label>
-              <input
-                id="referral-contactPhone"
-                required
-                type="tel"
-                value={formData.contactPhone}
-                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                placeholder="Phone number"
-                className="w-full px-4 py-3 bg-[#151C2E] border border-white/5 text-white placeholder-neutral-500 rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-              />
+              <div className="relative">
+                <input
+                  id="referral-contactPhone"
+                  required
+                  type="tel"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                  placeholder="Phone number"
+                  className="w-full px-4 pr-11 py-3 bg-[#151C2E] border border-white/5 text-white placeholder-neutral-500 rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                />
+                <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+              </div>
             </div>
           </div>
 
@@ -1814,18 +2005,16 @@ export function Referrals() {
                         <p className="text-sm font-bold text-white leading-tight truncate">
                           {selectedReferral.senderFullName || selectedReferral.senderName || 'Member'}
                         </p>
+                        <p className="text-xs font-semibold text-primary truncate">
+                          {selectedReferral.senderCategory || 'Business Owner'}
+                        </p>
                         {selectedReferral.senderRole && (
-                          <p className="text-xs font-semibold text-primary">
+                          <p className="text-[10px] font-medium text-neutral-400">
                             {selectedReferral.senderRole}
                           </p>
                         )}
                       </div>
                     </div>
-                    {selectedReferral.senderCategory && (
-                      <p className="text-xs text-neutral-300 font-medium">
-                        Category: <span className="text-white font-semibold">{selectedReferral.senderCategory}</span>
-                      </p>
-                    )}
                     {selectedReferral.senderChapter && (
                       <p className="text-[11px] font-medium text-neutral-400">
                         Chapter: <span className="text-neutral-300">{selectedReferral.senderChapter}</span>
@@ -1854,18 +2043,16 @@ export function Referrals() {
                         <p className="text-sm font-bold text-white leading-tight truncate">
                           {selectedReferral.receiverFullName || selectedReferral.receiverName || 'Member'}
                         </p>
+                        <p className="text-xs font-semibold text-primary truncate">
+                          {selectedReferral.receiverCategory || 'Business Owner'}
+                        </p>
                         {selectedReferral.receiverRole && (
-                          <p className="text-xs font-semibold text-primary">
+                          <p className="text-[10px] font-medium text-neutral-400">
                             {selectedReferral.receiverRole}
                           </p>
                         )}
                       </div>
                     </div>
-                    {selectedReferral.receiverCategory && (
-                      <p className="text-xs text-neutral-300 font-medium">
-                        Category: <span className="text-white font-semibold">{selectedReferral.receiverCategory}</span>
-                      </p>
-                    )}
                     {selectedReferral.receiverChapter && (
                       <p className="text-[11px] font-medium text-neutral-400">
                         Chapter: <span className="text-neutral-300">{selectedReferral.receiverChapter}</span>

@@ -5,6 +5,7 @@ import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
 import { CategorySelect } from './CategorySelect';
+import { PhoneInputWithPicker } from './PhoneInputWithPicker';
 
 interface RegistrationModalProps {
   isOpen: boolean;
@@ -112,11 +113,10 @@ export function RegistrationModal({ isOpen, onClose }: RegistrationModalProps) {
                     <label className="text-xs font-bold text-[#9CA3AF] uppercase tracking-widest flex items-center gap-2">
                       <Phone size={14} /> Mobile Number
                     </label>
-                    <input
+                    <PhoneInputWithPicker
                       required
-                      type="tel"
                       value={formData.mobile}
-                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                      onChange={(val) => setFormData({ ...formData, mobile: val })}
                       placeholder="Enter mobile number"
                       className="w-full px-4 py-3 rounded-[12px] border border-[#E5E7EB] focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                     />

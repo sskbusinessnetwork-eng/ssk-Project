@@ -259,7 +259,7 @@ export function GiveTestimonialModal({
                       {selectedReceiver.displayName} <span className="text-xs font-semibold text-primary">({selectedReceiver.position})</span>
                     </p>
                     <p className="text-[10px] text-neutral-400 truncate">
-                      {selectedReceiver.businessName ? `${selectedReceiver.businessName} • ` : ''}{selectedReceiver.chapterName || 'Chapter'}
+                      Category: {selectedReceiver.category || selectedReceiver.businessName || 'Business Owner'} • {selectedReceiver.chapterName || 'Chapter'}
                     </p>
                   </div>
                 </div>
@@ -309,7 +309,7 @@ export function GiveTestimonialModal({
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-white truncate">{member.displayName}</p>
                           <p className="text-[10px] text-neutral-400 truncate">
-                            {member.position} • {member.chapterName}
+                            Category: {member.category || member.businessName || 'Business Owner'} • {member.position} • {member.chapterName}
                           </p>
                         </div>
                       </div>

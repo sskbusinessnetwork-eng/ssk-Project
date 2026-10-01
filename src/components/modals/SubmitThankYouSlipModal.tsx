@@ -9,6 +9,7 @@ import { showError, showSuccess, scrollToError } from '../../services/toastServi
 import { safeFormat as format } from '../../utils/dateUtils';
 import { cn } from '../../lib/utils';
 import { isOfflineReferral } from '../../types';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 interface SubmitThankYouSlipModalProps {
   isOpen: boolean;
@@ -515,11 +516,14 @@ export function SubmitThankYouSlipModal({
                   className="w-full px-3 py-2.5 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary font-medium"
                 >
                   <option value="" className="bg-[#111827]">Select member who gave the referral...</option>
-                  {eligibleMembersList.map((m) => (
-                    <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
-                      {m.name || m.displayName || m.full_name} ({m.category || m.businessCategory || m.companyName || 'Member'})
-                    </option>
-                  ))}
+                  {eligibleMembersList.map((m) => {
+                    const cat = m.category || m.businessCategory || m.business_category || m.companyName || 'No Category';
+                    return (
+                      <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
+                        {m.name || m.displayName || m.full_name} — Category: {cat}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -536,13 +540,16 @@ export function SubmitThankYouSlipModal({
 
               <div className="space-y-1">
                 <label className="text-neutral-400 block text-[10px] uppercase font-semibold">Customer Mobile</label>
-                <input
-                  type="text"
-                  value={formData.contactPhone}
-                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  placeholder="e.g. +91 98765 43210"
-                  className="w-full px-3 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
-                />
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={formData.contactPhone}
+                    onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                    placeholder="e.g. +91 98765 43210"
+                    className="w-full px-3 pr-10 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
+                  />
+                  <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                </div>
               </div>
 
               <div className="sm:col-span-2 space-y-1">

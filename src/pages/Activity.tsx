@@ -12,6 +12,7 @@ import {
   X, 
   Calendar, 
   User, 
+  Users,
   Building2, 
   Phone, 
   MessageCircle, 
@@ -25,7 +26,8 @@ import {
   Sparkles,
   ExternalLink,
   ShieldCheck,
-  Award
+  Award,
+  Star
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabaseClient';
@@ -35,6 +37,8 @@ import { Referral, ThankYouSlip, UserProfile, isOfflineReferral } from '../types
 import { Modal } from '../components/Modal';
 import { PassReferralModal } from '../components/modals/PassReferralModal';
 import { SubmitThankYouSlipModal } from '../components/modals/SubmitThankYouSlipModal';
+import { GiveTestimonialModal } from '../components/modals/GiveTestimonialModal';
+import { ScheduleOneToOneModal } from '../components/modals/ScheduleOneToOneModal';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { showError, showSuccess } from '../services/toastService';
@@ -74,12 +78,14 @@ export function ReferralNotepadIcon({ className = "w-6 h-6" }: { className?: str
 
 export interface UnifiedActivityItem {
   id: string;
-  type: 'referral' | 'thank_you_slip';
+  type: 'referral' | 'thank_you_slip' | 'testimonial';
+  activityLabel?: 'Testimonial Sent' | 'Testimonial Received';
   date: string;
   rawDate: Date;
   fromUserId: string;
   toUserId: string;
   personName: string;
+  personCategory?: string;
   personPhoto?: string;
   senderName: string;
   receiverName: string;
@@ -87,6 +93,9 @@ export interface UnifiedActivityItem {
   status?: string;
   requirement?: string;
   notes?: string;
+  testimonialContent?: string;
+  testimonialTitle?: string;
+  testimonialRating?: number;
   contactName?: string;
   contactPhone?: string;
   referralId?: string;
@@ -105,6 +114,7 @@ export function Activity() {
   // Core Data
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [thankYouSlips, setThankYouSlips] = useState<ThankYouSlip[]>([]);
+  const [testimonials, setTestimonials] = useState<any[]>([]);
   const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(true);
 
@@ -112,9 +122,12 @@ export function Activity() {
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPassReferralOpen, setIsPassReferralOpen] = useState(false);
   const [isSubmitSlipOpen, setIsSubmitSlipOpen] = useState(false);
+  const [isGiveTestimonialOpen, setIsGiveTestimonialOpen] = useState(false);
+  const [isScheduleOneToOneOpen, setIsScheduleOneToOneOpen] = useState(false);
   const [prefilledReferralId, setPrefilledReferralId] = useState<string | undefined>(undefined);
   const [selectedReferralForDetails, setSelectedReferralForDetails] = useState<Referral | null>(null);
   const [selectedSlipForDetails, setSelectedSlipForDetails] = useState<ThankYouSlip | null>(null);
+  const [selectedTestimonialForDetails, setSelectedTestimonialForDetails] = useState<any | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
@@ -123,7 +136,7 @@ export function Activity() {
   const [statusVal, setStatusVal] = useState('');
 
   // Filters
-  const [filterType, setFilterType] = useState<'all' | 'referrals' | 'slips'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'referrals' | 'slips' | 'testimonials'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -145,6 +158,10 @@ export function Activity() {
     if (action === 'new') {
       if (type === 'thankyou' || refId) {
         setIsSubmitSlipOpen(true);
+      } else if (type === 'testimonial') {
+        setIsGiveTestimonialOpen(true);
+      } else if (type === 'onetoone' || type === 'one-to-one') {
+        setIsScheduleOneToOneOpen(true);
       } else {
         setIsPassReferralOpen(true);
       }
@@ -191,26 +208,49 @@ export function Activity() {
       let loadedRefs: Referral[] = [];
 
       if (!refErr && refData) {
-        loadedRefs = refData.map((r: any) => ({
-          id: String(r.id),
-          fromUserId: String(r.sender_id || r.from_user_id || ''),
-          toUserId: String(r.receiver_id || r.to_user_id || ''),
-          senderName: r.sender?.full_name || r.sender?.name || r.sender_name || 'Member',
-          receiverName: r.receiver?.full_name || r.receiver?.name || r.receiver_name || 'Member',
-          senderFullName: r.sender?.full_name || r.sender?.name || r.sender_name,
-          receiverFullName: r.receiver?.full_name || r.receiver?.name || r.receiver_name,
-          senderRole: r.sender?.role || r.sender?.position,
-          receiverRole: r.receiver?.role || r.receiver?.position,
-          senderPhoto: r.sender?.photo_url || r.sender?.photoURL,
-          receiverPhoto: r.receiver?.photo_url || r.receiver?.photoURL,
-          contactName: r.contact_name || r.customer_name || 'Client',
-          contactPhone: r.contact_phone || r.phone || '',
-          requirement: r.business_requirement || r.requirement || '',
-          notes: r.notes || '',
-          status: r.status || 'New',
-          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-          isOffline: isOfflineReferral(r)
-        }));
+        loadedRefs = refData.map((r: any) => {
+          const getSpecificRole = (u: any) => {
+            if (!u) return '';
+            const rawPos = String(u.position || u.chapter_position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+            const rawRole = String(u.role || '').trim().toUpperCase();
+            if (rawRole === 'PRESIDENT' || rawPos === 'president') return 'President';
+            if (rawRole === 'VICE_PRESIDENT' || rawPos === 'vice president' || rawPos === 'vp') return 'Vice President';
+            if (rawRole === 'TREASURER' || rawPos === 'treasurer') return 'Treasurer';
+            if (rawRole === 'CHAPTER_ADMIN' || rawPos === 'chapter admin') return 'Chapter Admin';
+            return '';
+          };
+          const getCat = (u: any) => {
+            if (!u) return '';
+            let extra: any = {};
+            const p = u.profile_photo || u.photo_url || u.photoURL || '';
+            if (typeof p === 'string' && p.includes('|||')) {
+              try { extra = JSON.parse(p.split('|||')[1] || '{}'); } catch (e) {}
+            }
+            return u.category || extra.category || u.business_category || extra.business_category || u.businessName || u.business_name || extra.business_name || '';
+          };
+          return {
+            id: String(r.id),
+            fromUserId: String(r.sender_id || r.from_user_id || ''),
+            toUserId: String(r.receiver_id || r.to_user_id || ''),
+            senderName: r.sender?.full_name || r.sender?.name || r.sender_name || 'Member',
+            receiverName: r.receiver?.full_name || r.receiver?.name || r.receiver_name || 'Member',
+            senderFullName: r.sender?.full_name || r.sender?.name || r.sender_name,
+            receiverFullName: r.receiver?.full_name || r.receiver?.name || r.receiver_name,
+            senderRole: getSpecificRole(r.sender),
+            receiverRole: getSpecificRole(r.receiver),
+            senderCategory: getCat(r.sender),
+            receiverCategory: getCat(r.receiver),
+            senderPhoto: r.sender?.photo_url || r.sender?.photoURL,
+            receiverPhoto: r.receiver?.photo_url || r.receiver?.photoURL,
+            contactName: r.contact_name || r.customer_name || 'Client',
+            contactPhone: r.contact_phone || r.phone || '',
+            requirement: r.business_requirement || r.requirement || '',
+            notes: r.notes || '',
+            status: r.status || 'New',
+            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+            isOffline: isOfflineReferral(r)
+          };
+        });
       } else {
         // Fallback simple fetch
         const { data: fallbackRefs } = await supabase
@@ -255,6 +295,59 @@ export function Activity() {
           businessRequirement: s.business_requirement || s.requirement || ''
         })));
       }
+
+      // 3. Fetch Testimonials
+      const { data: testData, error: testErr } = await supabase
+        .from('testimonials')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      let rawTestimonials: any[] = testData || [];
+      if (testErr && rawTestimonials.length === 0) {
+        try {
+          rawTestimonials = await databaseService.list<any>('testimonials');
+        } catch {
+          rawTestimonials = [];
+        }
+      }
+
+      const mappedTestimonials = rawTestimonials.map((t: any) => ({
+        id: String(t.id),
+        fromUserId: String(
+          t.sender_id ||
+          t.from_user_id ||
+          t.fromUserId ||
+          t.authorMemberId ||
+          t.author_id ||
+          t.author_member_id ||
+          t.giver_uid ||
+          t.giver_id ||
+          t.created_by ||
+          t.userId ||
+          ''
+        ),
+        toUserId: String(
+          t.receiver_id ||
+          t.to_user_id ||
+          t.toUserId ||
+          t.recipientMemberId ||
+          t.recipient_id ||
+          t.recipient_member_id ||
+          t.recipient_uid ||
+          t.member_id ||
+          ''
+        ),
+        senderName: t.sender_name || t.giver_name || t.fromUserName || t.author_name || t.authorName || t.author || '',
+        receiverName: t.receiver_name || t.recipient_name || t.toUserName || t.recipientName || t.recipient || '',
+        senderCategory: t.sender_category || t.giver_category || '',
+        receiverCategory: t.receiver_category || t.recipient_category || '',
+        content: String(t.testimonial || t.content || t.text || t.message || t.description || ''),
+        title: t.title ? String(t.title) : '',
+        rating: Number(t.rating || 5),
+        createdAt: t.created_at || t.createdAt || t.date || new Date().toISOString()
+      })).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      setTestimonials(mappedTestimonials);
     } catch (err) {
       console.error('Error fetching activities:', err);
     } finally {
@@ -277,6 +370,9 @@ export function Activity() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => {
         fetchActivities();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => {
+        fetchActivities();
+      })
       .subscribe();
 
     return () => {
@@ -292,6 +388,33 @@ export function Activity() {
       return u.name || (u as any).full_name || defaultName || 'Member';
     }
     return defaultName || 'Member';
+  }, [usersMap]);
+
+  // Helper: Resolve Member Category
+  const getMemberCategory = useCallback((userId: string, fallbackCategory?: string) => {
+    if (userId && usersMap[userId]) {
+      const u: any = usersMap[userId];
+      let extra: any = {};
+      const p = u.profile_photo || u.photo_url || u.photoURL || '';
+      if (typeof p === 'string' && p.includes('|||')) {
+        try { extra = JSON.parse(p.split('|||')[1] || '{}'); } catch (e) {}
+      }
+      const cat = u.category || extra.category || u.business_category || extra.business_category || u.businessName || u.business_name || extra.business_name || '';
+      if (cat) return cat;
+    }
+    return fallbackCategory || 'Business Owner';
+  }, [usersMap]);
+
+  // Helper: Resolve Specific Leadership Role (only Chapter Admin, President, Vice President, Treasurer)
+  const getMemberSpecificRole = useCallback((userId: string, fallbackRole?: string) => {
+    const u: any = userId ? usersMap[userId] : null;
+    const rawPos = String(u?.position || u?.chapter_position || fallbackRole || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+    const rawRole = String(u?.role || fallbackRole || '').trim().toUpperCase();
+    if (rawRole === 'PRESIDENT' || rawPos === 'president') return 'President';
+    if (rawRole === 'VICE_PRESIDENT' || rawPos === 'vice president' || rawPos === 'vp') return 'Vice President';
+    if (rawRole === 'TREASURER' || rawPos === 'treasurer') return 'Treasurer';
+    if (rawRole === 'CHAPTER_ADMIN' || rawPos === 'chapter admin') return 'Chapter Admin';
+    return '';
   }, [usersMap]);
 
   // Format Date cleanly: "September 08 2026"
@@ -316,6 +439,8 @@ export function Activity() {
 
       const senderName = getMemberName(ref.fromUserId, ref.senderFullName || ref.senderName);
       const receiverName = getMemberName(ref.toUserId, ref.receiverFullName || ref.receiverName);
+      const targetUserId = activeTab === 'given' ? ref.toUserId : ref.fromUserId;
+      const targetFallbackCat = activeTab === 'given' ? ref.receiverCategory : ref.senderCategory;
 
       items.push({
         id: `ref-${ref.id}`,
@@ -329,6 +454,7 @@ export function Activity() {
         // In GIVEN tab: Person is the Receiver (who you passed to)
         // In RECEIVED tab: Person is the Sender (who passed to you)
         personName: activeTab === 'given' ? receiverName : senderName,
+        personCategory: getMemberCategory(targetUserId, targetFallbackCat),
         status: ref.status,
         requirement: ref.requirement,
         notes: ref.notes,
@@ -342,6 +468,7 @@ export function Activity() {
     thankYouSlips.forEach(slip => {
       const senderName = getMemberName(slip.fromUserId);
       const receiverName = getMemberName(slip.toUserId);
+      const targetUserId = activeTab === 'given' ? slip.toUserId : slip.fromUserId;
 
       items.push({
         id: `slip-${slip.id}`,
@@ -353,6 +480,7 @@ export function Activity() {
         senderName,
         receiverName,
         personName: activeTab === 'given' ? receiverName : senderName,
+        personCategory: getMemberCategory(targetUserId),
         amount: slip.businessValue,
         requirement: slip.businessRequirement,
         notes: slip.notes,
@@ -361,9 +489,77 @@ export function Activity() {
       });
     });
 
+    // 3. Process Testimonials (both sent and received by the member, sorted most recent first)
+    testimonials.forEach(t => {
+      const senderName = getMemberName(t.fromUserId, t.senderName);
+      const receiverName = getMemberName(t.toUserId, t.receiverName);
+      const isSender = String(t.fromUserId) === currentUserId;
+      const isReceiver = String(t.toUserId) === currentUserId;
+
+      if (isSender) {
+        items.push({
+          id: `test-sent-${t.id}`,
+          type: 'testimonial',
+          activityLabel: 'Testimonial Sent',
+          date: t.createdAt,
+          rawDate: new Date(t.createdAt),
+          fromUserId: t.fromUserId,
+          toUserId: t.toUserId,
+          senderName,
+          receiverName,
+          personName: receiverName,
+          personCategory: getMemberCategory(t.toUserId, t.receiverCategory),
+          testimonialContent: t.content,
+          testimonialTitle: t.title,
+          testimonialRating: t.rating,
+          rawData: { ...t, activityLabel: 'Testimonial Sent' }
+        });
+      }
+
+      if (isReceiver) {
+        items.push({
+          id: `test-received-${t.id}`,
+          type: 'testimonial',
+          activityLabel: 'Testimonial Received',
+          date: t.createdAt,
+          rawDate: new Date(t.createdAt),
+          fromUserId: t.fromUserId,
+          toUserId: t.toUserId,
+          senderName,
+          receiverName,
+          personName: senderName,
+          personCategory: getMemberCategory(t.fromUserId, t.senderCategory),
+          testimonialContent: t.content,
+          testimonialTitle: t.title,
+          testimonialRating: t.rating,
+          rawData: { ...t, activityLabel: 'Testimonial Received' }
+        });
+      }
+
+      if (!isSender && !isReceiver && profile?.role === 'MASTER_ADMIN' && activeTab === 'all') {
+        items.push({
+          id: `test-${t.id}`,
+          type: 'testimonial',
+          activityLabel: 'Testimonial Sent',
+          date: t.createdAt,
+          rawDate: new Date(t.createdAt),
+          fromUserId: t.fromUserId,
+          toUserId: t.toUserId,
+          senderName,
+          receiverName,
+          personName: `${senderName} → ${receiverName}`,
+          personCategory: getMemberCategory(t.toUserId, t.receiverCategory),
+          testimonialContent: t.content,
+          testimonialTitle: t.title,
+          testimonialRating: t.rating,
+          rawData: { ...t, activityLabel: 'Testimonial Sent' }
+        });
+      }
+    });
+
     // Sort chronologically descending (newest first)
     return items.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
-  }, [referrals, thankYouSlips, getMemberName, activeTab]);
+  }, [referrals, thankYouSlips, testimonials, getMemberName, getMemberCategory, activeTab, currentUserId, profile?.role]);
 
   // Filter items by tab (Given vs Received), search query, type, and date range
   const filteredActivities = useMemo(() => {
@@ -371,7 +567,12 @@ export function Activity() {
       const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
 
       // 1. Tab Filtering
-      if (activeTab === 'given') {
+      // For testimonials, show both Testimonials sent by the member and Testimonials received by the member in the Activity Feed
+      if (item.type === 'testimonial') {
+        const isMemberTestimonial =
+          String(item.fromUserId) === currentUserId || String(item.toUserId) === currentUserId;
+        if (!isMemberTestimonial && !(isMasterAdmin && activeTab === 'all')) return false;
+      } else if (activeTab === 'given') {
         const isGiven = String(item.fromUserId) === currentUserId;
         if (!isGiven && !isMasterAdmin) return false;
         if (!isGiven && isMasterAdmin && activeTab !== 'all') return false;
@@ -381,9 +582,10 @@ export function Activity() {
         if (!isReceived && isMasterAdmin && activeTab !== 'all') return false;
       }
 
-      // 2. Type Filtering (All, Referrals, Thank You Slips)
+      // 2. Type Filtering (All, Referrals, Thank You Slips, Testimonials)
       if (filterType === 'referrals' && item.type !== 'referral') return false;
       if (filterType === 'slips' && item.type !== 'thank_you_slip') return false;
+      if (filterType === 'testimonials' && item.type !== 'testimonial') return false;
 
       // 3. Search Query
       if (searchQuery.trim()) {
@@ -393,7 +595,11 @@ export function Activity() {
         const matchesReceiver = item.receiverName.toLowerCase().includes(q);
         const matchesReq = (item.requirement || '').toLowerCase().includes(q);
         const matchesContact = (item.contactName || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesSender && !matchesReceiver && !matchesReq && !matchesContact) {
+        const matchesTestimonial =
+          (item.testimonialContent || '').toLowerCase().includes(q) ||
+          (item.testimonialTitle || '').toLowerCase().includes(q) ||
+          (item.activityLabel || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesSender && !matchesReceiver && !matchesReq && !matchesContact && !matchesTestimonial) {
           return false;
         }
       }
@@ -435,6 +641,8 @@ export function Activity() {
     if (item.type === 'referral') {
       setSelectedReferralForDetails(item.rawData as Referral);
       setStatusVal(item.rawData.status || 'New');
+    } else if (item.type === 'testimonial') {
+      setSelectedTestimonialForDetails(item.rawData);
     } else {
       setSelectedSlipForDetails(item.rawData as ThankYouSlip);
     }
@@ -571,7 +779,11 @@ export function Activity() {
             <span className="text-neutral-500 font-bold uppercase tracking-wider text-[10px]">Filters:</span>
             {filterType !== 'all' && (
               <span className="bg-[#E53935]/20 text-[#E53935] px-2 py-0.5 rounded-md font-semibold border border-[#E53935]/30">
-                {filterType === 'referrals' ? 'Referrals Only' : 'Thank You Slips Only'}
+                {filterType === 'referrals'
+                  ? 'Referrals Only'
+                  : filterType === 'testimonials'
+                  ? 'Testimonials Only'
+                  : 'Thank You Slips Only'}
               </span>
             )}
             {searchQuery && (
@@ -661,15 +873,29 @@ export function Activity() {
                   <div className="w-11 h-11 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0 group-hover:border-[#E53935]/30 transition-colors">
                     {item.type === 'referral' ? (
                       <ReferralNotepadIcon className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
+                    ) : item.type === 'testimonial' ? (
+                      <Star className="w-6 h-6 text-amber-400 group-hover:text-amber-300 transition-colors" />
                     ) : (
                       <Handshake className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
                     )}
                   </div>
 
-                  {/* Middle Content: Date on top, Member name and amount below */}
+                  {/* Middle Content: Date on top, Member name, category, amount, or testimonial content below */}
                   <div className="min-w-0 flex-1">
-                    <div className="text-[12px] font-medium text-neutral-400 leading-tight mb-1">
-                      {formatActivityDate(item.date)}
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-[12px] font-medium text-neutral-400 leading-tight">
+                        {formatActivityDate(item.date)}
+                      </span>
+                      {item.type === 'testimonial' && item.activityLabel && (
+                        <span className={cn(
+                          "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border",
+                          item.activityLabel === 'Testimonial Sent'
+                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        )}>
+                          {item.activityLabel}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[14px] font-bold text-[#E53935] truncate leading-tight flex items-center gap-1.5">
                       <span className="truncate">{item.personName}</span>
@@ -679,6 +905,16 @@ export function Activity() {
                         </span>
                       )}
                     </div>
+                    {item.personCategory && (
+                      <div className="text-[11px] font-semibold text-neutral-400 truncate mt-0.5">
+                        {item.personCategory}
+                      </div>
+                    )}
+                    {item.type === 'testimonial' && item.testimonialContent && (
+                      <p className="text-[12px] text-neutral-300 mt-1 line-clamp-2 leading-relaxed break-words">
+                        {item.testimonialContent}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -748,7 +984,7 @@ export function Activity() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="text-[14px] font-bold text-white group-hover:text-[#E53935] transition-colors">
-                    Send Referral
+                    Referral Sent
                   </h4>
                   <p className="text-[11px] text-neutral-400 font-medium leading-tight">
                     Pass a business lead or referral to a member
@@ -757,7 +993,7 @@ export function Activity() {
                 <ChevronRight size={18} className="text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
 
-              {/* Option 2: Send Thank You Slip */}
+              {/* Option 2: Send Thank Slip */}
               <button
                 type="button"
                 onClick={() => {
@@ -772,10 +1008,56 @@ export function Activity() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="text-[14px] font-bold text-white group-hover:text-emerald-400 transition-colors">
-                    Send Thank You Slip
+                    Send Thank Slip
                   </h4>
                   <p className="text-[11px] text-neutral-400 font-medium leading-tight">
                     Acknowledge and record closed deal value
+                  </p>
+                </div>
+                <ChevronRight size={18} className="text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+              </button>
+
+              {/* Option 3: Send Testimonial */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  setIsGiveTestimonialOpen(true);
+                }}
+                className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#151C2E] hover:bg-[#1C2538] border border-white/5 hover:border-[#E53935]/40 transition-all text-left active:scale-98 group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400 group-hover:scale-105 transition-transform">
+                  <Star className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[14px] font-bold text-white group-hover:text-amber-400 transition-colors">
+                    Send Testimonial
+                  </h4>
+                  <p className="text-[11px] text-neutral-400 font-medium leading-tight">
+                    Write and share a testimonial for a member
+                  </p>
+                </div>
+                <ChevronRight size={18} className="text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+              </button>
+
+              {/* Option 4: One-to-One Meeting */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  setIsScheduleOneToOneOpen(true);
+                }}
+                className="flex items-center gap-3.5 p-3 rounded-2xl bg-[#151C2E] hover:bg-[#1C2538] border border-white/5 hover:border-[#E53935]/40 transition-all text-left active:scale-98 group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400 group-hover:scale-105 transition-transform">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[14px] font-bold text-white group-hover:text-blue-400 transition-colors">
+                    One-to-One Meeting
+                  </h4>
+                  <p className="text-[11px] text-neutral-400 font-medium leading-tight">
+                    Schedule a 1-to-1 meeting with a member
                   </p>
                 </div>
                 <ChevronRight size={18} className="text-neutral-500 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
@@ -823,8 +1105,13 @@ export function Activity() {
                 <p className="text-sm font-bold text-white">
                   {getMemberName(selectedReferralForDetails.fromUserId, selectedReferralForDetails.senderName)}
                 </p>
-                {selectedReferralForDetails.senderRole && (
-                  <p className="text-[11px] font-semibold text-[#E53935]">{selectedReferralForDetails.senderRole}</p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedReferralForDetails.fromUserId, selectedReferralForDetails.senderCategory)}
+                </p>
+                {getMemberSpecificRole(selectedReferralForDetails.fromUserId, selectedReferralForDetails.senderRole) && (
+                  <p className="text-[10px] font-medium text-neutral-400 mt-0.5">
+                    {getMemberSpecificRole(selectedReferralForDetails.fromUserId, selectedReferralForDetails.senderRole)}
+                  </p>
                 )}
               </div>
 
@@ -833,8 +1120,13 @@ export function Activity() {
                 <p className="text-sm font-bold text-white">
                   {getMemberName(selectedReferralForDetails.toUserId, selectedReferralForDetails.receiverName)}
                 </p>
-                {selectedReferralForDetails.receiverRole && (
-                  <p className="text-[11px] font-semibold text-[#E53935]">{selectedReferralForDetails.receiverRole}</p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedReferralForDetails.toUserId, selectedReferralForDetails.receiverCategory)}
+                </p>
+                {getMemberSpecificRole(selectedReferralForDetails.toUserId, selectedReferralForDetails.receiverRole) && (
+                  <p className="text-[10px] font-medium text-neutral-400 mt-0.5">
+                    {getMemberSpecificRole(selectedReferralForDetails.toUserId, selectedReferralForDetails.receiverRole)}
+                  </p>
                 )}
               </div>
             </div>
@@ -965,6 +1257,9 @@ export function Activity() {
                 <p className="text-sm font-bold text-white">
                   {getMemberName(selectedSlipForDetails.fromUserId)}
                 </p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedSlipForDetails.fromUserId)}
+                </p>
               </div>
 
               <div className="p-3 bg-[#111827] rounded-xl border border-white/5">
@@ -973,6 +1268,9 @@ export function Activity() {
                 </span>
                 <p className="text-sm font-bold text-white">
                   {getMemberName(selectedSlipForDetails.toUserId)}
+                </p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedSlipForDetails.toUserId)}
                 </p>
               </div>
             </div>
@@ -1006,6 +1304,93 @@ export function Activity() {
                   <p className="text-xs text-neutral-300 italic">{selectedSlipForDetails.notes}</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 7b. Testimonial Details Modal */}
+      <Modal
+        isOpen={selectedTestimonialForDetails !== null}
+        onClose={() => setSelectedTestimonialForDetails(null)}
+        title={selectedTestimonialForDetails?.activityLabel || "Testimonial Details"}
+      >
+        {selectedTestimonialForDetails && (
+          <div className="space-y-4 text-left">
+            <div className="p-4 bg-gradient-to-r from-amber-500/10 to-[#151C2E] rounded-2xl border border-amber-500/30 flex items-center justify-between">
+              <div>
+                <span className={cn(
+                  "text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-md border inline-block mb-1.5",
+                  selectedTestimonialForDetails.activityLabel === 'Testimonial Sent'
+                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                    : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                )}>
+                  {selectedTestimonialForDetails.activityLabel || 'Testimonial'}
+                </span>
+                <div className="flex items-center gap-1 mt-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      size={16}
+                      className={cn(
+                        star <= (selectedTestimonialForDetails.rating || 5)
+                          ? "text-amber-400 fill-amber-400"
+                          : "text-neutral-600"
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                <Star size={24} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="p-3 bg-[#111827] rounded-xl border border-white/5">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block mb-1">
+                  From (Sender)
+                </span>
+                <p className="text-sm font-bold text-white">
+                  {getMemberName(selectedTestimonialForDetails.fromUserId, selectedTestimonialForDetails.senderName)}
+                </p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedTestimonialForDetails.fromUserId, selectedTestimonialForDetails.senderCategory)}
+                </p>
+              </div>
+
+              <div className="p-3 bg-[#111827] rounded-xl border border-white/5">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block mb-1">
+                  To (Receiver)
+                </span>
+                <p className="text-sm font-bold text-white">
+                  {getMemberName(selectedTestimonialForDetails.toUserId, selectedTestimonialForDetails.receiverName)}
+                </p>
+                <p className="text-[11px] font-semibold text-[#E53935]">
+                  {getMemberCategory(selectedTestimonialForDetails.toUserId, selectedTestimonialForDetails.receiverCategory)}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-[#151C2E] rounded-xl border border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-semibold">Date:</span>
+                <span className="text-white font-bold">{formatActivityDate(selectedTestimonialForDetails.createdAt)}</span>
+              </div>
+
+              {selectedTestimonialForDetails.title && (
+                <div className="pt-2 border-t border-white/5">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block mb-0.5">Headline</span>
+                  <p className="text-xs font-bold text-white">{selectedTestimonialForDetails.title}</p>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-white/5">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest block mb-0.5">Testimonial Content</span>
+                <p className="text-xs text-neutral-200 leading-relaxed whitespace-pre-wrap">
+                  {selectedTestimonialForDetails.content || 'No content provided.'}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -1088,7 +1473,7 @@ export function Activity() {
             <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block mb-1.5">
               Activity Type
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setFilterType('all')}
@@ -1124,6 +1509,18 @@ export function Activity() {
                 )}
               >
                 Thank You
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType('testimonials')}
+                className={cn(
+                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center",
+                  filterType === 'testimonials'
+                    ? "bg-[#E53935] text-white border-[#E53935]"
+                    : "bg-[#151C2E] text-neutral-300 border-white/5 hover:bg-white/[0.04]"
+                )}
+              >
+                Testimonials
               </button>
             </div>
           </div>
@@ -1200,6 +1597,26 @@ export function Activity() {
         onSuccess={() => {
           setIsSubmitSlipOpen(false);
           setPrefilledReferralId(undefined);
+          fetchActivities();
+        }}
+      />
+
+      {/* 12. Send Testimonial Modal (GiveTestimonialModal) */}
+      <GiveTestimonialModal
+        isOpen={isGiveTestimonialOpen}
+        onClose={() => setIsGiveTestimonialOpen(false)}
+        onSuccess={() => {
+          setIsGiveTestimonialOpen(false);
+          fetchActivities();
+        }}
+      />
+
+      {/* 13. One-to-One Meeting Modal (ScheduleOneToOneModal) */}
+      <ScheduleOneToOneModal
+        isOpen={isScheduleOneToOneOpen}
+        onClose={() => setIsScheduleOneToOneOpen(false)}
+        onSuccess={() => {
+          setIsScheduleOneToOneOpen(false);
           fetchActivities();
         }}
       />

@@ -14,7 +14,7 @@ import { Modal } from '../components/Modal';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 import { showError, showSuccess as triggerSuccessToast } from '../services/toastService';
 
-import { getDisplayPosition as formatPosition } from "../utils/authUtils";
+import { getDisplayPosition as formatPosition, isChapterLeaderRole } from "../utils/authUtils";
 
 export function Testimonials() {
   const { profile } = useAuth();
@@ -407,7 +407,9 @@ export function Testimonials() {
               const personUser = users[targetUserId];
               const personName = personUser?.name || (isReceivedTab ? 'Sender' : 'Receiver');
               const personPhoto = personUser?.photoURL || (personUser as any)?.avatar_url;
-              const personPosition = formatPosition(personUser?.position, personUser?.role);
+              const personCategory = personUser?.category || (personUser as any)?.business_category || personUser?.businessName || 'Business Owner';
+              const rawPos = formatPosition(personUser?.position, personUser?.role);
+              const personSpecificRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos) ? rawPos : '';
               const personChapter = personUser?.chapterName || chaptersMap[personUser?.chapter_id || '']?.chapter_name || 'Chapter';
 
               const canDelete = isMasterAdmin || isChapterAdmin || t.authorMemberId === currentUserId;
@@ -438,7 +440,7 @@ export function Testimonials() {
                            {t.status === 'APPROVED' && <Star size={10} className="text-emerald-500 shrink-0" />}
                         </div>
                         <div className="text-[10px] text-primary font-semibold truncate">
-                          {personPosition}
+                          {personCategory}{personSpecificRole ? ` • ${personSpecificRole}` : ''}
                         </div>
                       </div>
                     </div>
@@ -490,7 +492,9 @@ export function Testimonials() {
               selectableMembers.map((member) => {
                 const memId = member.uid || (member as any).id;
                 const photo = member.photoURL || (member as any).avatar_url;
-                const pos = formatPosition(member.position, member.role);
+                const cat = member.category || (member as any).business_category || member.businessName || 'Business Owner';
+                const rawPos = formatPosition(member.position, member.role);
+                const specificRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos) ? rawPos : '';
                 const chap = member.chapterName || chaptersMap[member.chapter_id || '']?.chapter_name || 'Chapter';
 
                 return (
@@ -505,11 +509,13 @@ export function Testimonials() {
                         <div className="text-xs font-bold text-white group-hover:text-primary transition-colors">
                           {member.name}
                         </div>
-                        <div className="text-[10px] text-primary font-semibold">
-                          {pos}
-                        </div>
+                        {specificRole && (
+                          <div className="text-[10px] text-primary font-semibold">
+                            {specificRole}
+                          </div>
+                        )}
                         <div className="text-[10px] text-[#9CA3AF]">
-                          {chap} {member.businessName ? `• ${member.businessName}` : ''}
+                          {chap} {member.businessName && member.businessName !== cat ? `• ${member.businessName}` : ''}
                         </div>
                       </div>
                     </div>
@@ -555,7 +561,7 @@ export function Testimonials() {
                   {users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.name || 'Member'}
                 </p>
                 <p className="text-primary text-sm font-semibold">
-                  {formatPosition(users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.position, users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.role)}
+                  {users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.category || users[activeTab === 'received' ? selectedTestimonial.authorMemberId : selectedTestimonial.receiverMemberId]?.businessName || 'Business Owner'}
                 </p>
               </div>
             </div>

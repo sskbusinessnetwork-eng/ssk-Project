@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { 
   User, 
   Briefcase, 
@@ -708,21 +709,30 @@ export function Profile() {
               <div className="flex items-center justify-center gap-2 flex-wrap px-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white break-words">{targetProfile.name}</h2>
               </div>
+              <p className="text-xs sm:text-sm font-semibold text-primary mt-1 break-words px-4">
+                {targetProfile.category || targetProfile.businessName || 'Business Owner'}
+              </p>
               
               <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
                 <div>
                   <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
                   {targetProfile.chapterName || targetProfile.chapter_name || resolvedChapterName || 'Chapter Not Assigned'}
                 </div>
-                <div>
-                  <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
-                  <span className="text-primary font-bold">
-                    {getDisplayPosition(targetProfile.position, targetProfile.role)}
-                  </span>
-                </div>
+                {(() => {
+                  const pos = getDisplayPosition(targetProfile.position, targetProfile.role);
+                  if (!['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(pos)) return null;
+                  return (
+                    <div>
+                      <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
+                      <span className="text-primary font-bold">{pos}</span>
+                    </div>
+                  );
+                })()}
               </div>
 
-              <p className="text-[10px] sm:text-xs font-medium text-neutral-400 mt-2 break-words px-4">{targetProfile.businessName || 'SSK Business Network'}</p>
+              {targetProfile.businessName && targetProfile.category && targetProfile.businessName !== targetProfile.category && (
+                <p className="text-[10px] sm:text-xs font-medium text-neutral-400 mt-2 break-words px-4">{targetProfile.businessName}</p>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -943,13 +953,16 @@ export function Profile() {
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Mobile Number</label>
-              <input
-                required
-                type="tel"
-                value={referralForm.mobileNumber}
-                onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
-                className="w-full h-11 px-4 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
-              />
+              <div className="relative">
+                <input
+                  required
+                  type="tel"
+                  value={referralForm.mobileNumber}
+                  onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                  className="w-full h-11 px-4 pr-11 bg-[#151C2E] border border-white/5 rounded-[12px] text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-sm"
+                />
+                <ContactPickerButton onSelect={(phone) => setReferralForm(prev => ({ ...prev, mobileNumber: phone }))} />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Requirement</label>
@@ -1063,18 +1076,25 @@ export function Profile() {
             <div className="flex items-center justify-center gap-2 flex-wrap px-2">
               <h2 className="text-lg sm:text-xl font-bold text-white break-words">{formData.name || 'Your Name'}</h2>
             </div>
+            <p className="text-xs sm:text-sm font-semibold text-primary mt-1 break-words px-4">
+              {formData.category || formData.businessName || 'Business Owner'}
+            </p>
             
             <div className="flex flex-col gap-0.5 items-center justify-center mt-2 text-[13px] font-medium text-neutral-400">
               <div>
                 <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
                 {formData.chapterName || resolvedChapterName || 'Chapter Not Assigned'}
               </div>
-              <div>
-                <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
-                <span className="text-primary font-bold">
-                  {getDisplayPosition(currentUserProfile?.position, currentUserProfile?.role)}
-                </span>
-              </div>
+              {(() => {
+                const pos = getDisplayPosition(currentUserProfile?.position, currentUserProfile?.role);
+                if (!['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(pos)) return null;
+                return (
+                  <div>
+                    <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Position:</span> 
+                    <span className="text-primary font-bold">{pos}</span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1094,12 +1114,15 @@ export function Profile() {
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Phone Number</label>
-              <input
-                readOnly
-                type="tel"
-                value={formData.phone}
-                className="w-full h-11 px-4 bg-[#151C2E]/60 border border-white/5 rounded-[12px] text-neutral-400 outline-none font-bold text-sm cursor-not-allowed"
-              />
+              <div className="relative">
+                <input
+                  readOnly
+                  type="tel"
+                  value={formData.phone}
+                  className="w-full h-11 px-4 pr-11 bg-[#151C2E]/60 border border-white/5 rounded-[12px] text-neutral-400 outline-none font-bold text-sm cursor-not-allowed"
+                />
+                <ContactPickerButton disabled onSelect={(phone) => setFormData({ ...formData, phone })} />
+              </div>
             </div>
 
             <div className="space-y-1">

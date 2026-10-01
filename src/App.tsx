@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, lazy } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LandingPage } from './pages/LandingPage';
@@ -6,37 +6,35 @@ import { GlobalToast } from './components/GlobalToast';
 import { showError } from './services/toastService';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-
-// Lazy-load layout and protected routes to keep initial public homepage bundle minimal
-const ProtectedRoute = lazy(() => import('./components/ProtectedRoute').then(m => ({ default: m.ProtectedRoute })));
-const Layout = lazy(() => import('./components/Layout').then(m => ({ default: m.Layout })));
-
-// Lazy-load non-landing routes to drastically reduce initial JS payload and execution time
-const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Analytics = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Analytics })));
-const MyReport = lazy(() => import('./pages/MyReport').then(m => ({ default: m.MyReport })));
-const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
-const Testimonials = lazy(() => import('./pages/Testimonials').then(m => ({ default: m.Testimonials })));
-const TestimonialReports = lazy(() => import('./pages/TestimonialReports').then(m => ({ default: m.TestimonialReports })));
-const Positions = lazy(() => import('./pages/Positions').then(m => ({ default: m.Positions })));
-const ManageChapter = lazy(() => import('./pages/ManageChapter').then(m => ({ default: m.ManageChapter })));
-const OnboardMember = lazy(() => import('./pages/OnboardMember').then(m => ({ default: m.OnboardMember })));
-const SetPassword = lazy(() => import('./pages/SetPassword').then(m => ({ default: m.SetPassword })));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const Categories = lazy(() => import('./pages/Categories').then(m => ({ default: m.Categories })));
-const Admins = lazy(() => import('./pages/Admins').then(m => ({ default: m.Admins })));
-const Members = lazy(() => import('./pages/Members').then(m => ({ default: m.Members })));
-const Meetings = lazy(() => import('./pages/Meetings').then(m => ({ default: m.Meetings })));
-const Guests = lazy(() => import('./pages/Guests').then(m => ({ default: m.Guests })));
-const OneToOneMeetings = lazy(() => import('./pages/OneToOneMeetings').then(m => ({ default: m.OneToOneMeetings })));
-const Connections = lazy(() => import('./pages/Connections').then(m => ({ default: m.Connections })));
-const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
-const SubscriptionExpired = lazy(() => import('./pages/SubscriptionExpired').then(m => ({ default: m.SubscriptionExpired })));
-const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
-const ManageSubscriptions = lazy(() => import('./pages/ManageSubscriptions').then(m => ({ default: m.ManageSubscriptions })));
-const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
-const MemberTYS = lazy(() => import('./pages/MemberTYS').then(m => ({ default: m.MemberTYS })));
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Layout } from './components/Layout';
+import { Register } from './pages/Register';
+import { Login } from './pages/Login';
+import { Analytics } from './pages/Dashboard';
+import { MyReport } from './pages/MyReport';
+import { Activity } from './pages/Activity';
+import { Testimonials } from './pages/Testimonials';
+import { TestimonialReports } from './pages/TestimonialReports';
+import { Positions } from './pages/Positions';
+import { ManageChapter } from './pages/ManageChapter';
+import { OnboardMember } from './pages/OnboardMember';
+import { SetPassword } from './pages/SetPassword';
+import { Profile } from './pages/Profile';
+import { Categories } from './pages/Categories';
+import { Admins } from './pages/Admins';
+import { Members } from './pages/Members';
+import { Meetings } from './pages/Meetings';
+import { Guests } from './pages/Guests';
+import { OneToOneMeetings } from './pages/OneToOneMeetings';
+import { Connections } from './pages/Connections';
+import { Notifications } from './pages/Notifications';
+import { SubscriptionExpired } from './pages/SubscriptionExpired';
+import { Reports } from './pages/Reports';
+import { ManageSubscriptions } from './pages/ManageSubscriptions';
+import { Settings } from './pages/Settings';
+import { MemberTYS } from './pages/MemberTYS';
+import { FuturePresentations } from './pages/FuturePresentations';
+import { Wallet } from './pages/Wallet';
 
 function RouteFallback() {
   return (
@@ -122,6 +120,7 @@ export default function App() {
                   <Route path="/admins" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Admins /></ProtectedRoute>} />
                   <Route path="/members" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Members /></ProtectedRoute>} />
                   <Route path="/meetings" element={<Meetings />} />
+                  <Route path="/wallet" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><Wallet /></ProtectedRoute>} />
                   <Route path="/activity" element={<Activity />} />
                   <Route path="/refer" element={<Activity />} />
                   <Route path="/referrals" element={<Activity />} />
@@ -131,6 +130,7 @@ export default function App() {
                   <Route path="/positions" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><Positions /></ProtectedRoute>} />
                   <Route path="/manage-chapter" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><ManageChapter /></ProtectedRoute>} />
                   <Route path="/member-tys" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN', 'MASTER_ADMIN']}><MemberTYS /></ProtectedRoute>} />
+                  <Route path="/future-presentation" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN', 'MASTER_ADMIN']}><FuturePresentations /></ProtectedRoute>} />
                   <Route path="/add-member" element={<ProtectedRoute allowedRoles={['CHAPTER_ADMIN']}><Members /></ProtectedRoute>} />
                   <Route path="/onboard" element={<ProtectedRoute allowedRoles={['MASTER_ADMIN']}><OnboardMember /></ProtectedRoute>} />
                   <Route path="/set-password" element={<ProtectedRoute allowedRoles={['MEMBER', 'CHAPTER_ADMIN', 'MASTER_ADMIN']}><SetPassword /></ProtectedRoute>} />

@@ -324,10 +324,13 @@ export function getMeetingTimestampInIST(dateVal: any, timeStr: string = '07:30'
  */
 export function isMeetingCompleted(meeting: any): boolean {
   if (!meeting) return false;
-  const statusStr = String(meeting.status || '').trim().toUpperCase();
-  if (statusStr === 'COMPLETED' || statusStr === 'DONE') return true;
+  const notes = meeting.memberNotes || meeting.member_notes || {};
+  const noteStatus = String(notes.__status || '').trim().toUpperCase();
+  const statusStr = String(meeting.status || noteStatus || '').trim().toUpperCase();
+  if (statusStr === 'COMPLETED' || statusStr === 'DONE' || noteStatus === 'COMPLETED' || noteStatus === 'DONE') return true;
   if (meeting.isCompleted === true || meeting.isCompleted === 'true') return true;
   if (meeting.is_completed === true || meeting.is_completed === 'true') return true;
+  if (notes.__isCompleted === true || notes.__isCompleted === 'true') return true;
   return false;
 }
 
@@ -336,10 +339,13 @@ export function isMeetingCompleted(meeting: any): boolean {
  */
 export function isMeetingCancelled(meeting: any): boolean {
   if (!meeting) return false;
-  const statusStr = String(meeting.status || '').trim().toUpperCase();
-  if (statusStr === 'CANCELLED' || statusStr === 'CANCELED') return true;
+  const notes = meeting.memberNotes || meeting.member_notes || {};
+  const noteStatus = String(notes.__status || '').trim().toUpperCase();
+  const statusStr = String(meeting.status || noteStatus || '').trim().toUpperCase();
+  if (statusStr === 'CANCELLED' || statusStr === 'CANCELED' || noteStatus === 'CANCELLED' || noteStatus === 'CANCELED') return true;
   if (meeting.isCancelled === true || meeting.isCancelled === 'true') return true;
   if (meeting.is_cancelled === true || meeting.is_cancelled === 'true') return true;
+  if (notes.__isCancelled === true || notes.__isCancelled === 'true') return true;
   return false;
 }
 
@@ -367,17 +373,21 @@ export function isMeetingInPastInIST(meeting: any): boolean {
 export function isMeetingPending(meeting: any): boolean {
   if (!meeting) return false;
   if (isMeetingDone(meeting)) return false;
-  const statusStr = String(meeting.status || '').trim().toUpperCase();
+  const notes = meeting.memberNotes || meeting.member_notes || {};
+  const statusStr = String(notes.__status || meeting.status || '').trim().toUpperCase();
   if (statusStr === 'PENDING') return true;
   return isMeetingInPastInIST(meeting);
 }
 
 /**
- * Returns true if the meeting is an upcoming/future occurrence (not done and not in the past).
+ * Returns true if the meeting is an upcoming/future occurrence (not done, not pending, and status is Upcoming).
  */
 export function isMeetingUpcomingInIST(meeting: any): boolean {
   if (!meeting) return false;
   if (isMeetingDone(meeting)) return false;
+  const notes = meeting.memberNotes || meeting.member_notes || {};
+  const statusStr = String(notes.__status || meeting.status || '').trim().toUpperCase();
+  if (statusStr && statusStr !== 'UPCOMING' && statusStr !== 'SCHEDULED') return false;
   return !isMeetingInPastInIST(meeting);
 }
 

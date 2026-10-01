@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
 import { databaseService } from '../../services/databaseService';
 import { notificationService } from '../../services/notificationService';
 import { Modal } from '../Modal';
-import { Users, Building2, AlertCircle, CheckCircle2, Phone, User, FileText } from 'lucide-react';
+import { Users, Building2, AlertCircle, CheckCircle2, Phone, User, FileText, Search, ChevronDown, X, Check } from 'lucide-react';
 import { showError, showSuccess, scrollToError } from '../../services/toastService';
 import { cn } from '../../lib/utils';
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 interface PassReferralModalProps {
   isOpen: boolean;
@@ -36,6 +37,39 @@ export function PassReferralModal({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const memberDropdownRef = useRef<HTMLDivElement>(null);
+  const memberSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMemberDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMemberDropdownOpen) {
+      setTimeout(() => {
+        memberSearchInputRef.current?.focus();
+      }, 50);
+    } else {
+      setMemberSearchTerm('');
+    }
+  }, [isMemberDropdownOpen]);
 
   useEffect(() => {
     if (initialToUserId) {
@@ -46,6 +80,8 @@ export function PassReferralModal({
   useEffect(() => {
     if (!isOpen) {
       setError(null);
+      setIsMemberDropdownOpen(false);
+      setMemberSearchTerm('');
       return;
     }
 
@@ -81,14 +117,31 @@ export function PassReferralModal({
               return !isCurrentUser && !isMaster;
             })
             .map((u: any) => {
+              let extraData: any = {};
+              const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
+              if (typeof rawPhoto === 'string' && rawPhoto.includes('|||')) {
+                try {
+                  extraData = JSON.parse(rawPhoto.split('|||')[1] || '{}');
+                } catch (e) {}
+              }
               const chapId = u.chapter_id || u.chapterId || '';
               const chapName = chapId ? chapterMap.get(String(chapId).trim().toLowerCase()) || '' : '';
+              const category = u.category || extraData.category || u.business_category || extraData.business_category || u.businessName || u.business_name || extraData.business_name || 'Business Owner';
+              const rawPos = String(u.position || extraData.position || u.chapter_position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+              const rawRole = String(u.role || '').trim().toUpperCase();
+              let specificRole = '';
+              if (rawRole === 'PRESIDENT' || rawPos === 'president') specificRole = 'President';
+              else if (rawRole === 'VICE_PRESIDENT' || rawPos === 'vice president' || rawPos === 'vp') specificRole = 'Vice President';
+              else if (rawRole === 'TREASURER' || rawPos === 'treasurer') specificRole = 'Treasurer';
+              else if (rawRole === 'CHAPTER_ADMIN' || rawPos === 'chapter admin') specificRole = 'Chapter Admin';
+
               return {
                 ...u,
                 id: u.id || u.uid,
                 displayName: u.name || u.displayName || 'Member',
                 chapterName: chapName || u.chapterName || '',
-                position: u.position || u.role || 'Member',
+                category,
+                position: specificRole,
                 phone: u.phone || u.phoneNumber || ''
               };
             });
@@ -119,6 +172,16 @@ export function PassReferralModal({
     }
     return allMembers;
   }, [allMembers, memberFilter, effectiveUserChapterId]);
+
+  const searchableMembers = useMemo(() => {
+    if (!memberSearchTerm.trim()) return filteredMembers;
+    const query = memberSearchTerm.toLowerCase().trim();
+    return filteredMembers.filter((m) => {
+      const nameStr = (m.displayName || m.name || '').toLowerCase();
+      const catStr = (m.category || '').toLowerCase();
+      return nameStr.includes(query) || catStr.includes(query);
+    });
+  }, [filteredMembers, memberSearchTerm]);
 
   const allCount = allMembers.length;
   const myChapterCount = useMemo(() => {
@@ -338,26 +401,133 @@ export function PassReferralModal({
               {filteredMembers.length} member(s)
             </span>
           </div>
-          <select
-            id="referral-toUserId"
-            required
-            value={formData.toUserId}
-            onChange={(e) => setFormData({ ...formData, toUserId: e.target.value })}
-            className="w-full px-3.5 py-3 bg-[#151C2E] border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium"
-          >
-            <option value="" className="bg-[#111827] text-neutral-400">Choose a member...</option>
-            {filteredMembers.map((m) => {
-              const nameStr = m.displayName || m.name || 'Member';
-              const chapterStr = m.chapterName ? ` (${m.chapterName})` : '';
-              const posStr = m.position ? ` - ${m.position}` : '';
-              const phoneStr = m.phone ? ` • ${m.phone}` : '';
-              return (
-                <option key={m.id} value={m.id} className="bg-[#111827] text-white">
-                  {nameStr}{chapterStr}{posStr}{phoneStr}
-                </option>
-              );
-            })}
-          </select>
+          <div className="relative" ref={memberDropdownRef}>
+            <button
+              type="button"
+              id="referral-toUserId"
+              onClick={() => setIsMemberDropdownOpen(prev => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={isMemberDropdownOpen}
+              className="w-full px-3.5 py-3 bg-[#151C2E] border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm font-medium flex items-center justify-between text-left cursor-pointer"
+            >
+              <span className={cn("truncate pr-2", !formData.toUserId && "text-neutral-400")}>
+                {(() => {
+                  if (!formData.toUserId) return 'Choose a member...';
+                  const sel = filteredMembers.find(m => String(m.id) === String(formData.toUserId)) || allMembers.find(m => String(m.id) === String(formData.toUserId));
+                  if (!sel) return 'Choose a member...';
+                  const nameStr = sel.displayName || sel.name || 'Member';
+                  const categoryStr = sel.category ? ` — Category: ${sel.category}` : '';
+                  const posStr = sel.position ? ` (${sel.position})` : '';
+                  const chapterStr = sel.chapterName ? ` • ${sel.chapterName}` : '';
+                  return `${nameStr}${categoryStr}${posStr}${chapterStr}`;
+                })()}
+              </span>
+              <ChevronDown
+                size={16}
+                className={cn(
+                  "shrink-0 text-neutral-400 transition-transform duration-200",
+                  isMemberDropdownOpen && "rotate-180 text-primary"
+                )}
+              />
+            </button>
+
+            {isMemberDropdownOpen && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-[#151C2E] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in duration-150">
+                <div className="p-2.5 border-b border-white/10 bg-[#111827]">
+                  <div className="relative flex items-center">
+                    <Search size={15} className="absolute left-3 text-neutral-400 pointer-events-none" />
+                    <input
+                      ref={memberSearchInputRef}
+                      type="text"
+                      value={memberSearchTerm}
+                      onChange={(e) => setMemberSearchTerm(e.target.value)}
+                      placeholder="Search member by name or category..."
+                      className="w-full h-9 pl-9 pr-8 text-xs font-medium rounded-lg bg-[#151C2E] border border-white/10 text-white placeholder-neutral-400 focus:outline-none focus:border-primary transition-all"
+                    />
+                    {memberSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMemberSearchTerm('');
+                          memberSearchInputRef.current?.focus();
+                        }}
+                        className="absolute right-2.5 p-0.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5 custom-scrollbar bg-[#111827]">
+                  {!memberSearchTerm.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, toUserId: '' });
+                        setIsMemberDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-xs font-medium rounded-lg flex items-center justify-between transition-colors cursor-pointer",
+                        !formData.toUserId ? "bg-primary/20 text-primary font-bold" : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                      )}
+                    >
+                      <span>Choose a member...</span>
+                      {!formData.toUserId && <Check size={14} className="shrink-0 text-primary" />}
+                    </button>
+                  )}
+
+                  {searchableMembers.length > 0 ? (
+                    searchableMembers.map((m) => {
+                      const nameStr = m.displayName || m.name || 'Member';
+                      const categoryStr = m.category ? ` — Category: ${m.category}` : '';
+                      const posStr = m.position ? ` (${m.position})` : '';
+                      const chapterStr = m.chapterName ? ` • ${m.chapterName}` : '';
+                      const isSelected = String(formData.toUserId) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, toUserId: m.id });
+                            setIsMemberDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-2.5 text-xs font-medium rounded-lg flex items-center justify-between gap-2 transition-colors cursor-pointer",
+                            isSelected
+                              ? "bg-primary/20 text-primary font-bold"
+                              : "text-white hover:bg-[#151C2E]"
+                          )}
+                        >
+                          <span className="truncate">
+                            {nameStr}{categoryStr}{posStr}{chapterStr}
+                          </span>
+                          {isSelected && <Check size={14} className="shrink-0 text-primary" />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="py-6 text-center text-xs font-medium text-neutral-400">
+                      No members found matching "{memberSearchTerm}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {formData.toUserId && (() => {
+            const sel = filteredMembers.find(m => String(m.id) === String(formData.toUserId)) || allMembers.find(m => String(m.id) === String(formData.toUserId));
+            if (!sel) return null;
+            return (
+              <div className="p-3 bg-[#111827] rounded-xl border border-white/10 mt-2">
+                <p className="text-sm font-bold text-white leading-tight">{sel.displayName || sel.name}</p>
+                <p className="text-xs font-semibold text-primary mt-0.5">{sel.category || 'Business Owner'}</p>
+                {sel.position && (
+                  <p className="text-[10px] font-medium text-neutral-400 mt-0.5">{sel.position}</p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -379,15 +549,18 @@ export function PassReferralModal({
             <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
               Contact Phone <span className="text-red-400">*</span>
             </label>
-            <input
-              id="referral-contactPhone"
-              required
-              type="tel"
-              value={formData.contactPhone}
-              onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-              placeholder="Phone number"
-              className="w-full px-3.5 py-3 bg-[#151C2E] border border-white/10 text-white placeholder-neutral-500 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm"
-            />
+            <div className="relative">
+              <input
+                id="referral-contactPhone"
+                required
+                type="tel"
+                value={formData.contactPhone}
+                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                placeholder="Phone number"
+                className="w-full px-3.5 pr-11 py-3 bg-[#151C2E] border border-white/10 text-white placeholder-neutral-500 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-sm"
+              />
+              <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+            </div>
           </div>
         </div>
 

@@ -9,6 +9,7 @@ import { showError, showSuccess, scrollToError } from '../../services/toastServi
 import { cn } from '../../lib/utils';
 import { safeFormat as format } from '../../utils/dateUtils';
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
+import { ContactPickerButton } from '../PhoneInputWithPicker';
 
 interface InviteGuestModalProps {
   isOpen: boolean;
@@ -434,41 +435,57 @@ SSK Business Network`;
             <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
               Guest Phone <span className="text-red-400">*</span>
             </label>
-            <input
-              required
-              type="tel"
-              value={formData.guestPhone}
-              onChange={(e) => {
-                const val = e.target.value;
-                const prevPhone = formData.guestPhone;
-                setFormData(prev => ({
-                  ...prev,
-                  guestPhone: val,
-                  guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? val : prev.guestWhatsapp
-                }));
-                validatePhone(val, formData.meetingId);
-              }}
-              onBlur={() => validatePhone(formData.guestPhone, formData.meetingId)}
-              placeholder="e.g. +91 9876543210"
-              className={cn(
-                'w-full px-3.5 py-3 bg-[#151C2E] border text-white placeholder-neutral-500 rounded-xl outline-none text-sm',
-                matchedMember ? 'border-red-500 ring-1 ring-red-500' : 'border-white/10 focus:ring-2 focus:ring-primary'
-              )}
-            />
+            <div className="relative">
+              <input
+                required
+                type="tel"
+                value={formData.guestPhone}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const prevPhone = formData.guestPhone;
+                  setFormData(prev => ({
+                    ...prev,
+                    guestPhone: val,
+                    guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? val : prev.guestWhatsapp
+                  }));
+                  validatePhone(val, formData.meetingId);
+                }}
+                onBlur={() => validatePhone(formData.guestPhone, formData.meetingId)}
+                placeholder="e.g. +91 9876543210"
+                className={cn(
+                  'w-full px-3.5 pr-11 py-3 bg-[#151C2E] border text-white placeholder-neutral-500 rounded-xl outline-none text-sm',
+                  matchedMember ? 'border-red-500 ring-1 ring-red-500' : 'border-white/10 focus:ring-2 focus:ring-primary'
+                )}
+              />
+              <ContactPickerButton
+                onSelect={(phone) => {
+                  const prevPhone = formData.guestPhone;
+                  setFormData(prev => ({
+                    ...prev,
+                    guestPhone: phone,
+                    guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? phone : prev.guestWhatsapp
+                  }));
+                  validatePhone(phone, formData.meetingId);
+                }}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
               WhatsApp Number <span className="text-red-400">*</span>
             </label>
-            <input
-              required
-              type="tel"
-              value={formData.guestWhatsapp}
-              onChange={(e) => setFormData({ ...formData, guestWhatsapp: e.target.value })}
-              placeholder="For invitation messages"
-              className="w-full px-3.5 py-3 bg-[#151C2E] border border-white/10 text-white placeholder-neutral-500 rounded-xl focus:ring-2 focus:ring-primary outline-none text-sm"
-            />
+            <div className="relative">
+              <input
+                required
+                type="tel"
+                value={formData.guestWhatsapp}
+                onChange={(e) => setFormData({ ...formData, guestWhatsapp: e.target.value })}
+                placeholder="For invitation messages"
+                className="w-full px-3.5 pr-11 py-3 bg-[#151C2E] border border-white/10 text-white placeholder-neutral-500 rounded-xl focus:ring-2 focus:ring-primary outline-none text-sm"
+              />
+              <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, guestWhatsapp: phone }))} />
+            </div>
           </div>
         </div>
 

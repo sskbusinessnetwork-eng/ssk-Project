@@ -299,8 +299,11 @@ export function getWorkspaceChecklistTasks(
     }
 
     const hasGuestAuto = guestInvitations.some(g => {
-      const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
-      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && isDateInRange(g.created_at || g.createdAt || g.date);
+      const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.created_by || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
+      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && (
+        isDateInRange(g.created_at || g.createdAt || g.date) ||
+        isDateInRange(g.meeting_date || g.meetingDate)
+      );
     });
 
     rawTasks.push({
@@ -316,8 +319,8 @@ export function getWorkspaceChecklistTasks(
 
     const hasPassRefAuto = allReferrals.some(r => {
       if (!isNormalReferral(r)) return false;
-      const sender = r.fromUserId || r.sender_id || r.authorMemberId;
-      return sender === userId && isDateInRange(r.created_at || r.createdAt || r.date);
+      const sender = r.fromUserId || r.from_user_id || r.sender_id || r.authorMemberId;
+      return String(sender || '').trim() === String(userId) && isDateInRange(r.created_at || r.createdAt || r.date);
     });
 
     rawTasks.push({
@@ -332,19 +335,24 @@ export function getWorkspaceChecklistTasks(
     });
 
     const hasScheduleMeetingAuto = oneToOnes.some(m => {
-      const isCreator = m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || m.created_by === userId || m.createdBy === userId;
-      return isCreator && isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.date);
+      const isCreator = [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.created_by, m.createdBy]
+        .some(id => id && String(id).trim() === String(userId));
+      return isCreator && (
+        isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.scheduled_date || m.date) ||
+        isDateInRange(m.scheduled_date || m.meeting_date || m.date)
+      );
     });
 
     const has121Auto = oneToOnes.some(m => {
       const isParticipant = (
-        m.organizer_id === userId || m.creatorId === userId || m.sender_id === userId || 
-        m.member_id === userId || m.receiver_id === userId || (m.participantIds || []).includes(userId)
+        [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.member_id, m.receiver_id]
+          .some(id => id && String(id).trim() === String(userId)) ||
+        (m.participantIds || []).some((id: any) => String(id).trim() === String(userId))
       );
       if (!isParticipant) return false;
       const o2oUserAtt = (m.attendance || {})[userId];
-      const isCompleted = m.status === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
-      return isCompleted && isDateInRange(m.completed_at || m.meeting_date || m.date || m.created_at || m.createdAt);
+      const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
+      return isCompleted && isDateInRange(m.completed_at || m.scheduled_date || m.meeting_date || m.date || m.created_at || m.createdAt);
     });
 
     const isO2ODone = hasScheduleMeetingAuto || has121Auto;
@@ -699,8 +707,10 @@ export function calculateMemberGrowthScoreData(input: {
   let endStr = todayStr;
 
   if (input.activeDateRange) {
-    startStr = getISTDateString(input.activeDateRange.start);
-    endStr = getISTDateString(input.activeDateRange.end);
+    const rawStart = input.activeDateRange.start || input.activeDateRange.startDate;
+    const rawEnd = input.activeDateRange.end || input.activeDateRange.endDate;
+    if (rawStart) startStr = getISTDateString(rawStart);
+    if (rawEnd) endStr = getISTDateString(rawEnd);
   } else if (parsedSubStart) {
     startStr = getISTDateString(parsedSubStart);
     if (parsedSubEnd) {
@@ -711,7 +721,7 @@ export function calculateMemberGrowthScoreData(input: {
   let start = parseISTStrToUTC(startStr);
   let end = parseISTStrToUTC(endStr);
 
-  if (input.allUsers && input.allUsers.length > 0) {
+  if (!input.activeDateRange && input.allUsers && input.allUsers.length > 0) {
     let chapterCreatedAt = new Date();
     for (const u of input.allUsers) {
       const cd = parseSafeDate(u.chapter_createdAt || u.created_at || u.createdAt || u.subscriptionStart);

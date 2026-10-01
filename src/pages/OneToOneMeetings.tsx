@@ -29,7 +29,7 @@ import { where, orderBy, collection, getDocs, query, or } from '../lib/database'
 import { db } from '../lib/database';
 import { cn } from '../lib/utils';
 import { formatTime12h, parseTo12hParts, parseTimeTo24h } from '../utils/timeUtils';
-import { getCleanFullName } from '../utils/authUtils';
+import { getCleanFullName, isChapterLeaderRole } from '../utils/authUtils';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { isMemberActive } from '../utils/memberStatus';
 
@@ -155,7 +155,7 @@ const getUserFullAddress = (user: any): string => {
 export function OneToOneMeetings() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.role === 'CHAPTER_ADMIN' || (profile?.role === 'MEMBER' && profile?.position === 'chapter_admin');
+  const isChapterAdmin = isChapterLeaderRole(profile);
   const [meetings, setMeetings] = useState<OneToOneMeeting[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
@@ -170,7 +170,7 @@ export function OneToOneMeetings() {
   
   // Member Dropdown Tab Filter & Location Option State
   const [memberTab, setMemberTab] = useState<'my_chapter' | 'all'>('my_chapter');
-  const [locationType, setLocationType] = useState<'Online' | 'My Address' | 'Member Address'>('Online');
+  const [locationType, setLocationType] = useState<'' | 'Online' | 'My Address' | 'Member Address'>('');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -196,7 +196,8 @@ export function OneToOneMeetings() {
 
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
-  const [rescheduleLocationOption, setRescheduleLocationOption] = useState<'Online Meeting' | 'My Address' | 'Selected Member Address'>('Online Meeting');
+  const [rescheduleVenue, setRescheduleVenue] = useState('');
+  const [rescheduleLocationOption, setRescheduleLocationOption] = useState<'' | 'Online Meeting' | 'My Address' | 'Selected Member Address'>('');
 
 
   useEffect(() => {
@@ -584,10 +585,10 @@ export function OneToOneMeetings() {
       participantId: '',
       date: new Date().toISOString().split('T')[0],
       time: '10:00 AM',
-      venue: 'Online Meeting',
+      venue: '',
       notes: ''
     });
-    setLocationType('Online');
+    setLocationType('');
     setIsModalOpen(true);
   }
 
@@ -613,6 +614,14 @@ export function OneToOneMeetings() {
 
     if (!formData.time) {
       const msg = 'Please select a meeting time.';
+      setError(msg);
+      showError(msg);
+      scrollToError();
+      return;
+    }
+
+    if (!locationType) {
+      const msg = 'Please select a meeting location.';
       setError(msg);
       showError(msg);
       scrollToError();
@@ -715,14 +724,13 @@ export function OneToOneMeetings() {
 
       const chapter_id = senderRecord.chapter_id || receiverRecord.chapter_id || profile?.chapter_id;
 
-      const senderFullAddress = getUserFullAddress(senderRecord);
-      const receiverFullAddress = getUserFullAddress(receiverRecord);
+      const senderFullAddress = getUserFullAddress(senderRecord) || myAddress;
+      const receiverFullAddress = getUserFullAddress(receiverRecord) || memberAddress;
 
-      let finalLocation = "Online Meeting";
-      let finalLocationType = "Online Meeting";
-
-      if (locationType === 'My Address') {
-        finalLocationType = "My Address";
+      let finalLocation = '';
+      if (locationType === 'Online') {
+        finalLocation = 'Online Meeting';
+      } else if (locationType === 'My Address') {
         if (!senderFullAddress) {
           const msg = "Address not available. Please update your profile.";
           setError(msg);
@@ -733,9 +741,8 @@ export function OneToOneMeetings() {
         }
         finalLocation = senderFullAddress;
       } else if (locationType === 'Member Address') {
-        finalLocationType = "Member's Address";
         if (!receiverFullAddress) {
-          const msg = "Address not available. Please update your profile.";
+          const msg = "Selected member's address is not available.";
           setError(msg);
           showError(msg);
           scrollToError();
@@ -743,9 +750,6 @@ export function OneToOneMeetings() {
           return;
         }
         finalLocation = receiverFullAddress;
-      } else {
-        finalLocationType = "Online Meeting";
-        finalLocation = "Online Meeting";
       }
 
       const status = 'UPCOMING';
@@ -879,14 +883,8 @@ export function OneToOneMeetings() {
 
     setRescheduleDate(meeting.date || new Date().toISOString().split('T')[0]);
     setRescheduleTime(meeting.time || '10:00 AM');
-    
-    let locOpt: 'Online Meeting' | 'My Address' | 'Selected Member Address' = 'Online Meeting';
-    if (meeting.venue === 'My Address' || meeting.venue?.startsWith('My Address')) {
-      locOpt = 'My Address';
-    } else if (meeting.venue === 'Member Address' || meeting.venue?.includes("Member's Address") || meeting.venue?.includes("Selected Member Address")) {
-      locOpt = 'Selected Member Address';
-    }
-    setRescheduleLocationOption(locOpt);
+    setRescheduleVenue(meeting.venue || meeting.meeting_location || (meeting as any).location || '');
+    setRescheduleLocationOption('');
 
     setError(null);
     setIsAttendanceModalOpen(true);
@@ -1046,35 +1044,43 @@ export function OneToOneMeetings() {
       const senderId = updatingMeeting.sender_id || updatingMeeting.organizer_id || updatingMeeting.creatorId;
       const receiverId = updatingMeeting.receiver_id || updatingMeeting.member_id || (updatingMeeting.participantIds && updatingMeeting.participantIds[0]);
 
-      let senderRecord = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
-      let receiverRecord = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
+      if (!rescheduleLocationOption) {
+        const msg = "Please select a meeting location.";
+        setError(msg);
+        showError(msg);
+        scrollToError();
+        setIsSubmitting(false);
+        return;
+      }
 
-      const senderFullAddress = getUserFullAddress(senderRecord);
-      const receiverFullAddress = getUserFullAddress(receiverRecord);
+      const senderRecord = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
+      const receiverRecord = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
 
-      let finalLocation = 'Online Meeting';
-      if (rescheduleLocationOption === 'My Address') {
-        if (!senderFullAddress) {
-          const msg = "Address not available. Please update your profile.";
-          setError(msg);
-          showError(msg);
-          scrollToError();
-          setIsSubmitting(false);
-          return;
-        }
-        finalLocation = senderFullAddress;
-      } else if (rescheduleLocationOption === 'Selected Member Address') {
-        if (!receiverFullAddress) {
-          const msg = "Address not available. Please update your profile.";
-          setError(msg);
-          showError(msg);
-          scrollToError();
-          setIsSubmitting(false);
-          return;
-        }
-        finalLocation = receiverFullAddress;
-      } else {
+      let finalLocation = '';
+      if (rescheduleLocationOption === 'Online Meeting') {
         finalLocation = 'Online Meeting';
+      } else if (rescheduleLocationOption === 'My Address') {
+        const addr = getUserFullAddress(senderRecord) || myAddress;
+        if (!addr) {
+          const msg = "Address not available. Please update your profile.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = addr;
+      } else if (rescheduleLocationOption === 'Selected Member Address') {
+        const addr = getUserFullAddress(receiverRecord);
+        if (!addr) {
+          const msg = "Selected member's address is not available.";
+          setError(msg);
+          showError(msg);
+          scrollToError();
+          setIsSubmitting(false);
+          return;
+        }
+        finalLocation = addr;
       }
 
       const payload = {
@@ -1312,9 +1318,14 @@ export function OneToOneMeetings() {
               className="flex-1 px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-[12px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-bold text-xs sm:text-sm bg-[#151C2E] text-white"
             >
               <option value="" className="bg-[#111827] text-white">All Members (Overall Analytics)</option>
-              {memberFilterOptions.map(m => (
-                <option key={m.uid} value={m.uid} className="bg-[#111827] text-white">{m.name}</option>
-              ))}
+              {memberFilterOptions.map(m => {
+                const cat = m.category || (m as any).business_category || (m as any).businessCategory || 'No Category';
+                return (
+                  <option key={m.uid} value={m.uid} className="bg-[#111827] text-white">
+                    {m.name} — Category: {cat}
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>
@@ -1441,7 +1452,7 @@ export function OneToOneMeetings() {
           if (!isSubmitting) {
             setIsModalOpen(false);
             setFormData({ title: '', participantId: '', date: '', time: '', venue: '', notes: '' });
-            setLocationType('Online');
+            setLocationType('Custom');
             setSearchTerm('');
             setIsDropdownOpen(false);
           }
@@ -1498,7 +1509,7 @@ export function OneToOneMeetings() {
                             {getUserFullName(selectedMember)} <span className="text-xs font-semibold text-primary">({formatUserRoleOrPosition(selectedMember)})</span>
                           </p>
                           <p className="text-[10px] text-neutral-400 font-medium truncate">
-                            {selectedMember.category || selectedMember.business_category || selectedMember.businessName || selectedMember.business_name || 'General'} • {chapterMap.get(String(selectedMember.chapter_id)) || selectedMember.chapter_name || 'No Chapter'}
+                            Category: {selectedMember.category || selectedMember.business_category || selectedMember.businessName || 'General'} • {chapterMap.get(String(selectedMember.chapter_id)) || selectedMember.chapter_name || 'No Chapter'}
                           </p>
                         </div>
                       </div>
@@ -1643,9 +1654,15 @@ export function OneToOneMeetings() {
               <select
                 required
                 value={locationType}
-                onChange={(e) => setLocationType(e.target.value as 'Online' | 'My Address' | 'Member Address')}
-                className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white cursor-pointer"
+                onChange={(e) => setLocationType(e.target.value as '' | 'Online' | 'My Address' | 'Member Address')}
+                className={cn(
+                  "w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] cursor-pointer",
+                  locationType === '' ? "text-neutral-400" : "text-white"
+                )}
               >
+                <option value="" disabled className="bg-[#111827] text-neutral-400">
+                  Select meeting location...
+                </option>
                 <option value="Online" className="bg-[#111827] text-white">
                   1. Online Meeting
                 </option>
@@ -1657,20 +1674,22 @@ export function OneToOneMeetings() {
                 </option>
               </select>
 
-              <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 text-xs text-neutral-300">
-                <span className="font-bold text-primary mr-1">Selected Address:</span>
-                {locationType === 'Online' && 'Online Meeting'}
-                {locationType === 'My Address' && (
-                  myAddress ? myAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
-                )}
-                {locationType === 'Member Address' && (
-                  selectedMember ? (
-                    memberAddress ? memberAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
-                  ) : (
-                    <span className="text-neutral-400 italic">Please select a member first</span>
-                  )
-                )}
-              </div>
+              {locationType && (
+                <div className="p-3 bg-[#111827] rounded-[12px] border border-white/5 text-xs text-neutral-300">
+                  <span className="font-bold text-primary mr-1">Selected Address:</span>
+                  {locationType === 'Online' && 'Online Meeting'}
+                  {locationType === 'My Address' && (
+                    myAddress ? myAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
+                  )}
+                  {locationType === 'Member Address' && (
+                    selectedMember ? (
+                      memberAddress ? memberAddress : <span className="text-amber-400 font-semibold">Address not available. Please update your profile.</span>
+                    ) : (
+                      <span className="text-neutral-400 italic">Please select a member first</span>
+                    )
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2002,10 +2021,15 @@ export function OneToOneMeetings() {
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Meeting Location</label>
             <select
+              required
               value={rescheduleLocationOption}
               onChange={(e) => setRescheduleLocationOption(e.target.value as any)}
-              className="w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] text-white cursor-pointer"
+              className={cn(
+                "w-full px-4 py-4 rounded-[16px] border border-white/5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-medium text-sm bg-[#151C2E] cursor-pointer",
+                rescheduleLocationOption === '' ? "text-neutral-400" : "text-white"
+              )}
             >
+              <option value="" disabled className="bg-[#111827] text-neutral-400">Select meeting location...</option>
               <option value="Online Meeting" className="bg-[#111827] text-white">1. Online Meeting</option>
               <option value="My Address" className="bg-[#111827] text-white">2. My Address</option>
               <option value="Selected Member Address" className="bg-[#111827] text-white">3. Selected Member Address</option>

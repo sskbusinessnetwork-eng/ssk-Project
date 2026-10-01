@@ -849,16 +849,23 @@ async function startServer() {
       const { uid, updates } = req.body;
       
       if (user.id !== uid) {
-        const personalFields = ['name', 'email', 'phone', 'whatsapp_number', 'profile_photo', 'business_name', 'businessName', 'address', 'bio', 'photoURL', 'category', 'state', 'city', 'area', 'pincode', 'website', 'professionDesignation', 'profession_designation'];
+        const { data: caller } = await adminSupabase.from('users').select('role, position, chapter_position').eq('id', user.id).single();
+        const callerRole = String(caller?.role || '').toUpperCase().trim();
+        const callerPos = String(caller?.position || caller?.chapter_position || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+        const isAuthorizedLeader =
+          callerRole === 'MASTER_ADMIN' ||
+          callerRole === 'CHAPTER_ADMIN' ||
+          ['chapter_admin', 'president', 'vice_president', 'treasurer'].includes(callerPos);
+
+        if (!isAuthorizedLeader) {
+          return res.status(403).json({ error: "Unauthorized to edit other users." });
+        }
+
+        const personalFields = ['name', 'email', 'phone', 'whatsapp_number', 'business_name', 'businessName', 'address', 'bio', 'photoURL', 'category', 'state', 'city', 'area', 'pincode', 'website', 'professionDesignation', 'profession_designation'];
         const hasPersonalFields = Object.keys(updates).some(k => personalFields.includes(k));
         
-        if (hasPersonalFields) {
+        if (hasPersonalFields && callerRole !== 'MASTER_ADMIN' && callerRole !== 'CHAPTER_ADMIN') {
           return res.status(403).json({ error: "You can only edit your own profile." });
-        }
-        
-        const { data: caller } = await adminSupabase.from('users').select('role').eq('id', user.id).single();
-        if (!caller || (caller.role !== 'MASTER_ADMIN' && caller.role !== 'CHAPTER_ADMIN')) {
-          return res.status(403).json({ error: "Unauthorized to edit other users." });
         }
       }
 
@@ -873,6 +880,95 @@ async function startServer() {
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/wallet/update", async (req, res) => {
+    try {
+      const { callerId, memberId, walletTransactions, walletBalance } = req.body || {};
+      if (!callerId || !memberId || !Array.isArray(walletTransactions)) {
+        return res.status(400).json({ success: false, error: "Missing required wallet update parameters." });
+      }
+
+      const { data: caller } = await adminSupabase
+        .from('users')
+        .select('id, uid, role, position, chapter_position, chapter_id, name')
+        .or(`id.eq.${callerId},uid.eq.${callerId}`)
+        .maybeSingle();
+
+      const callerRole = String(caller?.role || '').toUpperCase().trim();
+      const callerPos = String(caller?.position || caller?.chapter_position || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+      const isAuthorized =
+        callerRole === 'CHAPTER_ADMIN' ||
+        callerRole === 'PRESIDENT' ||
+        callerRole === 'VICE_PRESIDENT' ||
+        callerRole === 'TREASURER' ||
+        ['chapter_admin', 'president', 'vice_president', 'treasurer'].includes(callerPos);
+
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          error: "Only Chapter Admin, Treasurer, Vice President, or President can modify member wallet balances."
+        });
+      }
+
+      const { data: memberRow, error: fetchErr } = await adminSupabase
+        .from('users')
+        .select('id, uid, profile_photo')
+        .or(`id.eq.${memberId},uid.eq.${memberId}`)
+        .maybeSingle();
+
+      if (fetchErr || !memberRow) {
+        return res.status(404).json({ success: false, error: "Member not found." });
+      }
+
+      let photoUrl = '';
+      let extraData: Record<string, any> = {};
+      const existingPhoto = String(memberRow.profile_photo || '').trim();
+      if (existingPhoto.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(existingPhoto);
+          if (parsed && typeof parsed === 'object') {
+            photoUrl = parsed.url || '';
+            extraData = parsed.extra && typeof parsed.extra === 'object' ? { ...parsed.extra } : {};
+          }
+        } catch {}
+      } else if (existingPhoto.includes('|||')) {
+        const parts = existingPhoto.split('|||');
+        photoUrl = parts[0] || '';
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch {}
+      } else {
+        photoUrl = existingPhoto;
+      }
+
+      extraData.wallet_transactions = walletTransactions;
+      extraData.walletTransactions = walletTransactions;
+      extraData.wallet_balance = Number(walletBalance) || 0;
+      extraData.walletBalance = Number(walletBalance) || 0;
+
+      const updatedProfilePhoto = JSON.stringify({ url: photoUrl, extra: extraData });
+      const { error: updateErr } = await adminSupabase
+        .from('users')
+        .update({
+          profile_photo: updatedProfilePhoto,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberRow.id);
+
+      if (updateErr) {
+        return res.status(500).json({ success: false, error: updateErr.message || "Failed to update wallet in Supabase." });
+      }
+
+      return res.json({
+        success: true,
+        walletBalance: Number(walletBalance) || 0,
+        walletTransactions
+      });
+    } catch (err: any) {
+      console.error("Error in /api/wallet/update:", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to update wallet." });
     }
   });
 
@@ -1190,7 +1286,7 @@ async function startServer() {
       const receiver_id = data.receiver_id || data.receiverId || data.member_id || data.memberId || data.participant_id || data.participantId;
       const date = data.date || data.scheduled_date || data.meeting_date;
       const time = data.time || data.scheduled_time || data.meeting_time;
-      const venue = data.venue || data.meeting_location || data.location || 'Online Meeting';
+      const venue = data.venue || data.meeting_location || data.location || '';
       const notes = data.notes || data.description || data.topics || '';
       const status = data.status || 'UPCOMING';
       const chapter_id = data.chapter_id || data.chapterId || null;
@@ -1322,7 +1418,7 @@ async function startServer() {
   // Meeting Attendance & Collection Update Endpoint
   app.post("/api/meetings/update", async (req, res) => {
     try {
-      const { meetingId, callerId, attendance, amountCollected, memberNotes, isCompleted, guestUpdates, date, time, location, memberCount, guestCount } = req.body || {};
+      const { meetingId, callerId, attendance, amountCollected, paymentStatus, paymentMethods, meetingAmount, memberNotes, isCompleted, guestUpdates, date, time, location, memberCount, guestCount } = req.body || {};
       if (!meetingId || !callerId) {
         return res.status(400).json({
           success: false,
@@ -1395,6 +1491,11 @@ async function startServer() {
         }
       }
 
+      const existingNotes = {
+        ...(meeting.member_notes || {}),
+        ...(memberNotes || {})
+      };
+
       const updatePayload: any = {
         updated_at: new Date().toISOString()
       };
@@ -1405,50 +1506,85 @@ async function startServer() {
 
       if (attendance) updatePayload.attendance = attendance;
       if (amountCollected) updatePayload.amount_collected = amountCollected;
-      if (memberNotes) updatePayload.member_notes = memberNotes;
-      if (memberCount !== undefined || guestCount !== undefined) {
-        const mCount = memberCount !== undefined ? (Number(memberCount) || 0) : undefined;
-        const gCount = guestCount !== undefined ? (Number(guestCount) || 0) : undefined;
-        const existingNotes = updatePayload.member_notes || memberNotes || {};
-        updatePayload.member_notes = {
-          ...existingNotes,
-          __counts: {
-            memberCount: mCount !== undefined ? mCount : existingNotes.__counts?.memberCount,
-            guestCount: gCount !== undefined ? gCount : existingNotes.__counts?.guestCount
-          },
-          ...(mCount !== undefined ? { __memberCount: mCount } : {}),
-          ...(gCount !== undefined ? { __guestCount: gCount } : {})
-        };
+
+      let targetStatus = req.body.status ? String(req.body.status).toUpperCase() : undefined;
+      let targetIsCompleted: boolean | undefined = isCompleted;
+      let targetIsCancelled: boolean = req.body.isCancelled === true || targetStatus === 'CANCELLED';
+
+      if (targetIsCancelled) {
+        targetStatus = 'CANCELLED';
+        targetIsCompleted = false;
+      } else if (targetStatus === 'COMPLETED' || isCompleted === true) {
+        targetStatus = 'COMPLETED';
+        targetIsCompleted = true;
+      } else if (targetStatus === 'UPCOMING' || targetStatus === 'PENDING' || isCompleted === false) {
+        targetStatus = targetStatus || 'UPCOMING';
+        targetIsCompleted = false;
+      } else if (isCompleted === undefined && attendance && Object.keys(attendance).length > 0) {
+        targetStatus = 'COMPLETED';
+        targetIsCompleted = true;
       }
-      if (req.body.isCancelled === true || req.body.status === 'CANCELLED') {
-        updatePayload.is_completed = false;
-        updatePayload.status = 'CANCELLED';
-      } else if (isCompleted === true || (isCompleted === undefined && attendance)) {
-        updatePayload.is_completed = true;
-        updatePayload.status = 'COMPLETED';
-      } else if (isCompleted === false) {
-        updatePayload.is_completed = false;
-        updatePayload.status = 'UPCOMING';
+
+      if (targetStatus !== undefined) {
+        updatePayload.status = targetStatus;
       }
+      if (targetIsCompleted !== undefined) {
+        updatePayload.is_completed = targetIsCompleted;
+      }
+
+      const mCount = memberCount !== undefined ? (Number(memberCount) || 0) : existingNotes.__counts?.memberCount;
+      const gCount = guestCount !== undefined ? (Number(guestCount) || 0) : existingNotes.__counts?.guestCount;
+
+      updatePayload.member_notes = {
+        ...existingNotes,
+        ...(meetingAmount !== undefined ? { __meetingAmount: Number(meetingAmount) || 0 } : {}),
+        ...(paymentStatus ? { __paymentStatus: paymentStatus } : {}),
+        ...(paymentMethods ? { __paymentMethods: paymentMethods } : {}),
+        ...(amountCollected ? { __amountCollected: amountCollected } : {}),
+        ...(attendance ? { __attendance: attendance } : {}),
+        ...(targetStatus !== undefined ? { __status: targetStatus } : {}),
+        ...(targetIsCompleted !== undefined ? { __isCompleted: targetIsCompleted } : {}),
+        __isCancelled: targetIsCancelled,
+        __counts: {
+          memberCount: mCount !== undefined ? mCount : 0,
+          guestCount: gCount !== undefined ? gCount : 0
+        },
+        ...(mCount !== undefined ? { __memberCount: mCount } : {}),
+        ...(gCount !== undefined ? { __guestCount: gCount } : {})
+      };
 
       let updateErr: any = null;
-      const { error: firstErr } = await adminSupabase
+      let updatedMeetingRow: any = null;
+      const { data: firstData, error: firstErr } = await adminSupabase
         .from('meetings')
         .update(updatePayload)
-        .eq('id', meetingId);
+        .eq('id', meetingId)
+        .select()
+        .maybeSingle();
 
-      if (firstErr) {
-        console.warn("First update failed, retrying without is_completed:", firstErr.message);
+      if (!firstErr) {
+        updatedMeetingRow = firstData;
+      } else {
+        console.warn("First update failed, retrying with trigger-safe payload:", firstErr.message);
         const fallbackPayload = { ...updatePayload };
         delete fallbackPayload.is_completed;
-        const { error: secondErr } = await adminSupabase
+        delete fallbackPayload.status;
+        delete fallbackPayload.attendance;
+        delete fallbackPayload.payment_status;
+        delete fallbackPayload.payment_methods;
+        delete fallbackPayload.meeting_amount;
+        const { data: secondData, error: secondErr } = await adminSupabase
           .from('meetings')
           .update(fallbackPayload)
-          .eq('id', meetingId);
+          .eq('id', meetingId)
+          .select()
+          .maybeSingle();
         updateErr = secondErr;
+        updatedMeetingRow = secondData;
       }
 
-      if (updateErr) { console.error("SUPABASE UPDATE ERR:", updateErr);
+      if (updateErr) {
+        console.error("SUPABASE UPDATE ERR:", updateErr);
         return res.status(500).json({
           success: false,
           message: "Failed to update meeting in database.",
@@ -1495,7 +1631,8 @@ async function startServer() {
 
       return res.json({
         success: true,
-        message: "Meeting attendance & collection updated successfully."
+        message: "Meeting attendance & collection updated successfully.",
+        data: updatedMeetingRow
       });
     } catch (err: any) {
       console.error("Error in /api/meetings/update:", err);
@@ -1583,19 +1720,19 @@ async function startServer() {
         }
       }
 
+      const existingNotes = meeting.member_notes || {};
       const updatePayload: any = {
         status: 'CANCELLED',
         is_completed: false,
-        updated_at: new Date().toISOString()
-      };
-
-      if (reason) {
-        const existingNotes = meeting.member_notes || {};
-        updatePayload.member_notes = {
+        updated_at: new Date().toISOString(),
+        member_notes: {
           ...existingNotes,
-          cancellation_reason: reason
-        };
-      }
+          __status: 'CANCELLED',
+          __isCompleted: false,
+          __isCancelled: true,
+          ...(reason ? { cancellation_reason: reason } : {})
+        }
+      };
 
       let cancelErr: any = null;
       const { error: firstErr } = await adminSupabase
@@ -1604,9 +1741,10 @@ async function startServer() {
         .eq('id', meetingId);
 
       if (firstErr) {
-        console.warn("First cancel update failed, retrying without is_completed:", firstErr.message);
+        console.warn("First cancel update failed, retrying with trigger-safe payload:", firstErr.message);
         const fallbackPayload = { ...updatePayload };
         delete fallbackPayload.is_completed;
+        delete fallbackPayload.status;
         const { error: secondErr } = await adminSupabase
           .from('meetings')
           .update(fallbackPayload)

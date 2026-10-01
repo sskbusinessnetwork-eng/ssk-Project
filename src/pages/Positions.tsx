@@ -186,6 +186,8 @@ export function Positions() {
     if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
     return (
       (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.businessName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.phone || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -266,7 +268,7 @@ export function Positions() {
                       </td>
                       <td className="p-4">
                         <div className="font-bold text-white text-sm">{member.name || member.displayName}</div>
-                        <div className="text-xs text-neutral-400">{member.businessName}</div>
+                        <div className="text-xs text-neutral-400">Category: {member.category || member.businessName || 'No Category'}</div>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-1.5 text-sm text-neutral-400">

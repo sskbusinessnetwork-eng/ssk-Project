@@ -327,7 +327,7 @@ export function MemberCompanionView({
     { 
       icon: Users, 
       label: 'Find Members', 
-      desc: 'Explore directory', 
+      desc: 'Explore members', 
       action: () => navigate('/directory'), 
       color: 'text-orange-400', 
       bg: 'bg-orange-500/10' 
@@ -582,6 +582,18 @@ export function MemberCompanionView({
                     displayDesc = `${act.senderName} closed ₹${Number(val).toLocaleString('en-IN')} business with ${act.receiverName}`;
                   }
                 }
+              } else if (act.type === 'testimonial') {
+                const isSender = currentUid && String(act.fromUserId || '').toLowerCase() === currentUid;
+                const isReceiver = currentUid && String(act.toUserId || '').toLowerCase() === currentUid;
+                const label = isReceiver && !isSender ? 'Testimonial Received' : 'Testimonial Sent';
+                const relevantMember = isSender
+                  ? (act.recipientName || act.memberName || 'Member')
+                  : isReceiver
+                  ? (act.authorName || act.memberName || 'Member')
+                  : `${act.authorName || 'Member'} ➔ ${act.recipientName || 'Member'}`;
+                const content = act.testimonialContent || act.desc || '';
+                displayTitle = `${label} • ${relevantMember}`;
+                displayDesc = content ? `${relevantMember}: "${content}"` : `${label} (${relevantMember})`;
               }
 
               return (

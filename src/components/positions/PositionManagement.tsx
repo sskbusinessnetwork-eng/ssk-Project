@@ -189,6 +189,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
 
   const filteredMembers = members.filter(m => 
     (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (m.businessName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -313,7 +314,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
                           )}>
                             {member.name || member.displayName}
                           </p>
-                          <p className="text-xs text-neutral-500 mt-0.5">{member.businessName || 'No business'}</p>
+                          <p className="text-xs text-neutral-500 mt-0.5">Category: {member.category || member.businessName || 'No Category'}</p>
                         </div>
                         
                         {updatingId === member.uid ? (

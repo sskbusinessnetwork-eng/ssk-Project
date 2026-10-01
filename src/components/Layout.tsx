@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
 import { 
   Menu, Search, Bell, MessageSquare, Plus, ChevronDown, Calendar, Users, LayoutDashboard, Share2, User,
-  FileText, Activity, Settings, Crown, LogOut, ChevronRight, X
+  FileText, Activity, Settings, Crown, LogOut, ChevronRight, X, Wallet
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
-import { getDashboardPath as getDashboardPathUtil } from '../utils/authUtils';
+import { getDashboardPath as getDashboardPathUtil, isChapterLeaderRole } from '../utils/authUtils';
 import { differenceInDays } from 'date-fns';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
@@ -119,12 +119,13 @@ export function Layout() {
 
   const userRole = profile?.role || 'MEMBER';
   const isMasterAdmin = userRole === 'MASTER_ADMIN';
-  const isChapterAdmin = profile?.position === 'chapter_admin' || userRole === 'CHAPTER_ADMIN';
+  const isChapterAdmin = isChapterLeaderRole(profile) || userRole === 'CHAPTER_ADMIN';
   const canAccessSettings = isMasterAdmin;
 
   const mobileNavItems: { icon: any; label: string; path?: string; isAction?: boolean; action?: () => void }[] = [
     { icon: LayoutDashboard, label: 'Home', path: getDashboardPath() },
-    { icon: Calendar, label: 'Meetings', path: '/meetings' },
+    { icon: Wallet, label: 'Wallet', path: '/wallet' },
+    { icon: FileText, label: 'Members', path: '/directory' },
     { icon: Activity, label: 'Activity', path: '/activity' },
   ];
 
@@ -280,7 +281,7 @@ export function Layout() {
                   strokeWidth={isSelected ? 2.5 : 2}
                 />
                 <span className={cn(
-                  "text-[10px] font-bold transition-all duration-300 relative z-10",
+                  "text-[11px] font-bold transition-all duration-300 relative z-10",
                   isSelected ? "text-[#E53935]" : "text-[#9CA3AF]"
                 )}>
                   {item.label}
@@ -306,7 +307,7 @@ export function Layout() {
                   strokeWidth={isActive ? 2.5 : 2}
                 />
                 <span className={cn(
-                  "text-[10px] font-bold transition-all duration-300 relative z-10",
+                  "text-[11px] font-bold transition-all duration-300 relative z-10",
                   isActive ? "text-[#E53935]" : "text-[#6B7280]"
                 )}>
                   {item.label}
@@ -380,7 +381,7 @@ export function Layout() {
                       <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
                         <FileText size={18} />
                       </div>
-                      <span className="font-bold text-[#E5E7EB]">Directory</span>
+                      <span className="font-bold text-[#E5E7EB]">Members</span>
                     </div>
                     <ChevronRight size={18} className="text-[#6B7280]" />
                   </Link>

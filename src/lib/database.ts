@@ -45,6 +45,7 @@ export const doc = (dbOrCollection: any, pathOrId?: string, optionalId?: string)
 // --- Key Mapping Helpers ---
 
 function camelToSnake(str: string): string {
+  if (str.startsWith('_') || str.includes('-')) return str;
   if (str === 'authorMemberId') return 'author_id';
   if (str === 'receiverMemberId') return 'receiver_id';
   if (str === 'chapterId') return 'chapter_id';
@@ -63,6 +64,7 @@ function camelToSnake(str: string): string {
 }
 
 function snakeToCamel(str: string): string {
+  if (str.startsWith('_') || str.includes('-')) return str;
   if (str === 'author_id') return 'authorMemberId';
   if (str === 'receiver_id') return 'receiverMemberId';
   if (str === 'chapter_id') return 'chapterId';
@@ -74,8 +76,8 @@ function snakeToCamel(str: string): string {
   if (str === 'participant_ids') return 'participantIds';
   if (str === 'is_read') return 'read';
   
-  return str.replace(/([-_][a-z])/g, group =>
-    group.toUpperCase().replace('-', '').replace('_', '')
+  return str.replace(/(_[a-z])/g, group =>
+    group.toUpperCase().replace('_', '')
   );
 }
 
@@ -110,6 +112,88 @@ export function keysToCamel(obj: any): any {
     return n;
   }
   return obj;
+}
+
+export function normalizeMeetingRecord(m: any): any {
+  if (!m || typeof m !== 'object') return m;
+  const mNotes = m.memberNotes || m.member_notes || {};
+  const counts = mNotes.__counts || {};
+  const mCount = m.memberCount !== undefined ? m.memberCount : (counts.memberCount !== undefined ? counts.memberCount : mNotes.__memberCount);
+  const gCount = m.guestCount !== undefined ? m.guestCount : (counts.guestCount !== undefined ? counts.guestCount : mNotes.__guestCount);
+  if (mCount !== undefined) {
+    m.memberCount = Number(mCount);
+    m.member_count = Number(mCount);
+  }
+  if (gCount !== undefined) {
+    m.guestCount = Number(gCount);
+    m.guest_count = Number(gCount);
+  }
+  if (mNotes.__status) {
+    m.status = String(mNotes.__status).toUpperCase();
+  }
+  if (mNotes.__isCompleted !== undefined) {
+    m.isCompleted = Boolean(mNotes.__isCompleted);
+    m.is_completed = Boolean(mNotes.__isCompleted);
+  }
+  if (mNotes.__isCancelled !== undefined) {
+    m.isCancelled = Boolean(mNotes.__isCancelled);
+    m.is_cancelled = Boolean(mNotes.__isCancelled);
+  }
+  if (m.status === 'CANCELLED' || m.status === 'CANCELED') {
+    m.isCancelled = true;
+    m.is_cancelled = true;
+    m.isCompleted = false;
+    m.is_completed = false;
+  } else if (m.status === 'COMPLETED' || m.status === 'DONE') {
+    m.isCompleted = true;
+    m.is_completed = true;
+    m.isCancelled = false;
+    m.is_cancelled = false;
+  } else if (m.status === 'UPCOMING' || m.status === 'PENDING') {
+    if (mNotes.__isCompleted === false) {
+      m.isCompleted = false;
+      m.is_completed = false;
+    }
+    if (mNotes.__isCancelled === false) {
+      m.isCancelled = false;
+      m.is_cancelled = false;
+    }
+  }
+  if (mNotes.__attendance && typeof mNotes.__attendance === 'object') {
+    m.attendance = { ...(m.attendance || {}), ...mNotes.__attendance };
+  }
+  const mAmt = m.meetingAmount !== undefined ? m.meetingAmount : (m.meeting_amount !== undefined ? m.meeting_amount : (mNotes.__meetingAmount !== undefined ? mNotes.__meetingAmount : mNotes.__meeting_amount));
+  if (mAmt !== undefined) {
+    m.meetingAmount = Number(mAmt);
+    m.meeting_amount = Number(mAmt);
+  }
+  const pStatus = mNotes.__paymentStatus || mNotes.__payment_status;
+  if ((!m.paymentStatus || Object.keys(m.paymentStatus).length === 0) && pStatus) {
+    m.paymentStatus = pStatus;
+    m.payment_status = pStatus;
+  } else if (pStatus) {
+    m.paymentStatus = { ...(m.paymentStatus || {}), ...pStatus };
+    m.payment_status = m.paymentStatus;
+  }
+  const pMethods = mNotes.__paymentMethods || mNotes.__payment_methods;
+  if ((!m.paymentMethods || Object.keys(m.paymentMethods).length === 0) && pMethods) {
+    m.paymentMethods = pMethods;
+    m.payment_methods = pMethods;
+  } else if (pMethods) {
+    m.paymentMethods = { ...(m.paymentMethods || {}), ...pMethods };
+    m.payment_methods = m.paymentMethods;
+  }
+  const aCollected = mNotes.__amountCollected || mNotes.__amount_collected;
+  if ((!m.amountCollected || Object.keys(m.amountCollected).length === 0) && aCollected) {
+    m.amountCollected = aCollected;
+    m.amount_collected = aCollected;
+  } else if (aCollected) {
+    m.amountCollected = { ...(m.amountCollected || {}), ...aCollected };
+    m.amount_collected = m.amountCollected;
+  }
+  m.memberNotes = mNotes;
+  m.member_notes = mNotes;
+  return m;
 }
 
 // --- Query Builder & Constraints ---
@@ -232,12 +316,49 @@ export async function getDocs(queryRef: any) {
 
   const { data, error } = await builder;
   if (error) {
+    if (collectionPath === 'future_presentations') {
+      try {
+        const localRaw = localStorage.getItem('ssk_future_presentations_fallback');
+        const localItems: any[] = localRaw ? JSON.parse(localRaw) : [];
+        const rows = localItems.map(item => keysToCamel(item));
+        const docs = rows.map(r => ({
+          id: r.id,
+          data: () => r,
+          exists: () => true
+        }));
+        return { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
+      } catch (e) {}
+    }
     console.warn("getDocs notice for", collectionPath, ":", error?.message || error);
     const emptyDocs: any[] = [];
     return { docs: emptyDocs, empty: true, forEach: (cb: any) => emptyDocs.forEach(cb) };
   }
   
   let rows = (data || []).map(row => keysToCamel(row));
+
+  if (collectionPath === 'future_presentations') {
+    try {
+      const localRaw = localStorage.getItem('ssk_future_presentations_fallback');
+      if (localRaw) {
+        const localItems: any[] = JSON.parse(localRaw);
+        const existingIds = new Set(rows.map((r: any) => String(r.id)));
+        localItems.forEach(item => {
+          const camelItem = keysToCamel(item);
+          if (!existingIds.has(String(camelItem.id))) {
+            rows.push(camelItem);
+          }
+        });
+      }
+      const statusMapRaw = localStorage.getItem('ssk_future_presentations_status_map');
+      if (statusMapRaw) {
+        const statusMap: Record<string, string> = JSON.parse(statusMapRaw);
+        rows = rows.map((r: any) => {
+          const overrideStatus = statusMap[String(r.id)];
+          return overrideStatus ? { ...r, status: overrideStatus } : r;
+        });
+      }
+    } catch (e) {}
+  }
   
   if (collectionPath === 'users') {
     rows = rows.map(r => {
@@ -342,24 +463,28 @@ export async function getDocs(queryRef: any) {
     });
   }
 
+  if (collectionPath === 'meetings') {
+    try {
+      const localMeetingsRaw = localStorage.getItem('ssk_meetings_fallback');
+      if (localMeetingsRaw) {
+        const localMap: Record<string, any> = JSON.parse(localMeetingsRaw);
+        const existingIds = new Set(rows.map((r: any) => String(r.id)));
+        rows = rows.map((r: any) => {
+          const patch = localMap[String(r.id)];
+          return patch ? { ...r, ...keysToCamel(patch) } : r;
+        });
+        Object.values(localMap).forEach((item: any) => {
+          if (item && item.id && !existingIds.has(String(item.id)) && item.__isNew) {
+            rows.push(keysToCamel(item));
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
   if (collectionPath === 'meetings' && rows.length > 0) {
     rows.forEach(m => {
-      const mNotes = m.memberNotes || m.member_notes || {};
-      const counts = mNotes.__counts || {};
-      const mCount = m.memberCount !== undefined ? m.memberCount : (counts.memberCount !== undefined ? counts.memberCount : mNotes.__memberCount);
-      const gCount = m.guestCount !== undefined ? m.guestCount : (counts.guestCount !== undefined ? counts.guestCount : mNotes.__guestCount);
-      if (mCount !== undefined) {
-        m.memberCount = Number(mCount);
-        m.member_count = Number(mCount);
-      }
-      if (gCount !== undefined) {
-        m.guestCount = Number(gCount);
-        m.guest_count = Number(gCount);
-      }
-      if (m.status === 'CANCELLED' || m.status === 'CANCELED') {
-        m.isCancelled = true;
-        m.isCompleted = false;
-      }
+      normalizeMeetingRecord(m);
     });
   }
   
@@ -394,6 +519,10 @@ const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
   defaultMeetingSetup: true,
   workspace_checklist: true,
   growth_score: true,
+  wallet_balance: true,
+  walletBalance: true,
+  wallet_transactions: true,
+  walletTransactions: true,
 };
 
 function prepareUserPayload(partialData: any, existingPhoto: string = '') {
@@ -465,7 +594,11 @@ export async function getDoc(docRef: any) {
       } catch (e) {}
     }
     const camelExtra = keysToCamel(extraData);
-    Object.assign(camelData, { photoURL: photo, name: getCleanFullName(camelData.name) }, camelExtra);
+    Object.assign(camelData, { photoURL: photo }, camelExtra);
+    camelData.name = getCleanFullName(camelData.name || camelExtra.name);
+    if (camelData.displayName) {
+      camelData.displayName = getCleanFullName(camelData.displayName);
+    }
   }
   
   if (path === 'one_to_one_meetings') {
@@ -492,22 +625,7 @@ export async function getDoc(docRef: any) {
   }
 
   if (path === 'meetings') {
-    const mNotes = camelData.memberNotes || camelData.member_notes || {};
-    const counts = mNotes.__counts || {};
-    const mCount = camelData.memberCount !== undefined ? camelData.memberCount : (counts.memberCount !== undefined ? counts.memberCount : mNotes.__memberCount);
-    const gCount = camelData.guestCount !== undefined ? camelData.guestCount : (counts.guestCount !== undefined ? counts.guestCount : mNotes.__guestCount);
-    if (mCount !== undefined) {
-      camelData.memberCount = Number(mCount);
-      camelData.member_count = Number(mCount);
-    }
-    if (gCount !== undefined) {
-      camelData.guestCount = Number(gCount);
-      camelData.guest_count = Number(gCount);
-    }
-    if (camelData.status === 'CANCELLED' || camelData.status === 'CANCELED') {
-      camelData.isCancelled = true;
-      camelData.isCompleted = false;
-    }
+    normalizeMeetingRecord(camelData);
   }
   
   return { exists: () => true, data: () => camelData, id };
@@ -540,25 +658,29 @@ export async function setDoc(docRef: any, data: any, options?: any) {
   }
 
   if (path === 'meetings') {
-    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
-      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
-      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
-      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
-      cleanData.member_notes = {
-        ...existingNotes,
-        __counts: {
-          memberCount: Number(mCount) || 0,
-          guestCount: Number(gCount) || 0
-        },
-        __memberCount: Number(mCount) || 0,
-        __guestCount: Number(gCount) || 0
-      };
-      delete cleanData.memberCount;
-      delete cleanData.member_count;
-      delete cleanData.guestCount;
-      delete cleanData.guest_count;
-      delete cleanData.memberNotes;
-    }
+    const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+    const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+    const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
+    const mAmt = cleanData.meetingAmount !== undefined ? cleanData.meetingAmount : cleanData.meeting_amount;
+    const pStatus = cleanData.paymentStatus || cleanData.payment_status;
+    const pMethods = cleanData.paymentMethods || cleanData.payment_methods;
+    cleanData.member_notes = {
+      ...existingNotes,
+      ...(mAmt !== undefined ? { __meetingAmount: Number(mAmt) } : {}),
+      ...(pStatus !== undefined ? { __paymentStatus: pStatus } : {}),
+      ...(pMethods !== undefined ? { __paymentMethods: pMethods } : {}),
+      __counts: {
+        memberCount: Number(mCount) || 0,
+        guestCount: Number(gCount) || 0
+      },
+      __memberCount: Number(mCount) || 0,
+      __guestCount: Number(gCount) || 0
+    };
+    delete cleanData.memberCount;
+    delete cleanData.member_count;
+    delete cleanData.guestCount;
+    delete cleanData.guest_count;
+    delete cleanData.memberNotes;
 
     if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
       cleanData.status = 'CANCELLED';
@@ -630,8 +752,8 @@ export async function addDoc(collectionRef: any, data: any) {
       time: cleanData.time || cleanData.scheduled_time || cleanData.scheduledTime || '',
       scheduled_date: cleanData.scheduled_date || cleanData.scheduledDate || cleanData.date || '',
       scheduled_time: cleanData.scheduled_time || cleanData.scheduledTime || cleanData.time || '',
-      venue: cleanData.venue || cleanData.meeting_location || cleanData.meetingLocation || cleanData.location || 'Online Meeting',
-      meeting_location: cleanData.meeting_location || cleanData.meetingLocation || cleanData.venue || cleanData.location || 'Online Meeting',
+      venue: cleanData.venue || cleanData.meeting_location || cleanData.meetingLocation || cleanData.location || '',
+      meeting_location: cleanData.meeting_location || cleanData.meetingLocation || cleanData.venue || cleanData.location || '',
       meeting_type: 'one_to_one',
       notes: cleanData.notes || cleanData.description || cleanData.topics || '',
       description: cleanData.description || cleanData.notes || cleanData.topics || '',
@@ -821,25 +943,29 @@ export async function addDoc(collectionRef: any, data: any) {
   }
 
   if (collectionPath === 'meetings') {
-    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
-      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
-      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
-      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
-      cleanData.member_notes = {
-        ...existingNotes,
-        __counts: {
-          memberCount: Number(mCount) || 0,
-          guestCount: Number(gCount) || 0
-        },
-        __memberCount: Number(mCount) || 0,
-        __guestCount: Number(gCount) || 0
-      };
-      delete cleanData.memberCount;
-      delete cleanData.member_count;
-      delete cleanData.guestCount;
-      delete cleanData.guest_count;
-      delete cleanData.memberNotes;
-    }
+    const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+    const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+    const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
+    const mAmt = cleanData.meetingAmount !== undefined ? cleanData.meetingAmount : cleanData.meeting_amount;
+    const pStatus = cleanData.paymentStatus || cleanData.payment_status;
+    const pMethods = cleanData.paymentMethods || cleanData.payment_methods;
+    cleanData.member_notes = {
+      ...existingNotes,
+      ...(mAmt !== undefined ? { __meetingAmount: Number(mAmt) } : {}),
+      ...(pStatus !== undefined ? { __paymentStatus: pStatus } : {}),
+      ...(pMethods !== undefined ? { __paymentMethods: pMethods } : {}),
+      __counts: {
+        memberCount: Number(mCount) || 0,
+        guestCount: Number(gCount) || 0
+      },
+      __memberCount: Number(mCount) || 0,
+      __guestCount: Number(gCount) || 0
+    };
+    delete cleanData.memberCount;
+    delete cleanData.member_count;
+    delete cleanData.guestCount;
+    delete cleanData.guest_count;
+    delete cleanData.memberNotes;
 
     if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
       cleanData.status = 'CANCELLED';
@@ -851,8 +977,65 @@ export async function addDoc(collectionRef: any, data: any) {
   }
 
   const snakeData = keysToSnake(cleanData);
-  const { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
+  let { data: result, error } = await supabase.from(collectionPath).insert(snakeData).select().single();
+  if (error && collectionPath === 'meetings') {
+    const fallbackData = { ...snakeData };
+    delete fallbackData.meeting_amount;
+    delete fallbackData.payment_status;
+    delete fallbackData.payment_methods;
+    const retry = await supabase.from(collectionPath).insert(fallbackData).select().single();
+    if (!retry.error) {
+      result = retry.data;
+      error = null;
+    }
+  }
+  if (error && collectionPath === 'future_presentations') {
+    const rawSt = String(snakeData.status || 'Upcoming');
+    const safeDbStatus = rawSt.toUpperCase() === 'COMPLETED' ? 'Completed' : rawSt.toUpperCase() === 'CANCELLED' ? 'Cancelled' : 'Scheduled';
+    const corePayload: Record<string, any> = {
+      member_id: snakeData.member_id,
+      presentation_date: snakeData.presentation_date,
+      status: safeDbStatus,
+      created_at: snakeData.created_at || new Date().toISOString()
+    };
+    if (snakeData.created_by) corePayload.created_by = snakeData.created_by;
+    if (snakeData.presentation_details !== undefined) corePayload.presentation_details = snakeData.presentation_details;
+    const retry = await supabase.from(collectionPath).insert(corePayload).select().single();
+    if (!retry.error) {
+      result = retry.data;
+      error = null;
+      if (result?.id && rawSt) {
+        try {
+          const statusMapRaw = localStorage.getItem('ssk_future_presentations_status_map');
+          const statusMap: Record<string, string> = statusMapRaw ? JSON.parse(statusMapRaw) : {};
+          statusMap[String(result.id)] = rawSt;
+          localStorage.setItem('ssk_future_presentations_status_map', JSON.stringify(statusMap));
+        } catch (e) {}
+      }
+    }
+  }
   if (error) {
+    if (collectionPath === 'future_presentations') {
+      try {
+        const fallbackId = Math.random().toString(36).substring(2, 15);
+        const localRaw = localStorage.getItem('ssk_future_presentations_fallback');
+        const localItems: any[] = localRaw ? JSON.parse(localRaw) : [];
+        const newItem = { id: fallbackId, ...snakeData, ...cleanData };
+        localItems.push(newItem);
+        localStorage.setItem('ssk_future_presentations_fallback', JSON.stringify(localItems));
+        return { id: fallbackId };
+      } catch (e) {}
+    }
+    if (collectionPath === 'meetings' && (error.code === '42804' || String(error.message || '').includes('COALESCE'))) {
+      try {
+        const fallbackId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+        const localMeetingsRaw = localStorage.getItem('ssk_meetings_fallback');
+        const localMap: Record<string, any> = localMeetingsRaw ? JSON.parse(localMeetingsRaw) : {};
+        localMap[fallbackId] = { id: fallbackId, __isNew: true, ...snakeData, ...cleanData };
+        localStorage.setItem('ssk_meetings_fallback', JSON.stringify(localMap));
+        return { id: fallbackId };
+      } catch (e) {}
+    }
     console.error("addDoc error:", error);
     throw new Error(error.message || 'Database insert failed');
   }
@@ -975,38 +1158,148 @@ export async function updateDoc(docRef: any, partialData: any) {
   }
 
   if (path === 'meetings') {
-    if (cleanData.memberCount !== undefined || cleanData.member_count !== undefined || cleanData.guestCount !== undefined || cleanData.guest_count !== undefined) {
-      const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
-      const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
-      const existingNotes = cleanData.memberNotes || cleanData.member_notes || {};
-      cleanData.member_notes = {
-        ...existingNotes,
-        __counts: {
-          memberCount: Number(mCount) || 0,
-          guestCount: Number(gCount) || 0
-        },
-        __memberCount: Number(mCount) || 0,
-        __guestCount: Number(gCount) || 0
-      };
-      delete cleanData.memberCount;
-      delete cleanData.member_count;
-      delete cleanData.guestCount;
-      delete cleanData.guest_count;
-      delete cleanData.memberNotes;
-    }
+    let existingDbNotes: Record<string, any> = {};
+    try {
+      const { data: existingRow } = await supabase.from('meetings').select('member_notes').eq('id', id).maybeSingle();
+      if (existingRow && existingRow.member_notes && typeof existingRow.member_notes === 'object') {
+        existingDbNotes = existingRow.member_notes;
+      }
+    } catch (e) {}
 
-    if (cleanData.isCancelled === true || cleanData.is_cancelled === true) {
+    const mCount = cleanData.memberCount !== undefined ? cleanData.memberCount : cleanData.member_count;
+    const gCount = cleanData.guestCount !== undefined ? cleanData.guestCount : cleanData.guest_count;
+    const existingNotes = {
+      ...existingDbNotes,
+      ...(cleanData.memberNotes || cleanData.member_notes || {})
+    };
+    const mAmt = cleanData.meetingAmount !== undefined ? cleanData.meetingAmount : cleanData.meeting_amount;
+    const pStatus = cleanData.paymentStatus || cleanData.payment_status;
+    const pMethods = cleanData.paymentMethods || cleanData.payment_methods;
+    const aCollected = cleanData.amountCollected || cleanData.amount_collected;
+    const att = cleanData.attendance;
+
+    if (cleanData.isCancelled === true || cleanData.is_cancelled === true || cleanData.status === 'CANCELLED') {
       cleanData.status = 'CANCELLED';
       cleanData.is_completed = false;
       delete cleanData.isCompleted;
+    } else if (cleanData.isCompleted === true || cleanData.is_completed === true || cleanData.status === 'COMPLETED') {
+      cleanData.status = 'COMPLETED';
+      cleanData.is_completed = true;
+      delete cleanData.isCompleted;
+    } else if (cleanData.status === 'UPCOMING' || cleanData.status === 'PENDING' || cleanData.isCompleted === false || cleanData.is_completed === false) {
+      cleanData.status = cleanData.status ? String(cleanData.status).toUpperCase() : 'UPCOMING';
+      cleanData.is_completed = false;
+      delete cleanData.isCompleted;
     }
+
+    const effectiveMCount = mCount !== undefined ? Number(mCount) : (existingNotes.__counts?.memberCount ?? existingNotes.__memberCount ?? 0);
+    const effectiveGCount = gCount !== undefined ? Number(gCount) : (existingNotes.__counts?.guestCount ?? existingNotes.__guestCount ?? 0);
+
+    cleanData.member_notes = {
+      ...existingNotes,
+      ...(mAmt !== undefined ? { __meetingAmount: Number(mAmt) } : {}),
+      ...(pStatus !== undefined ? { __paymentStatus: pStatus } : {}),
+      ...(pMethods !== undefined ? { __paymentMethods: pMethods } : {}),
+      ...(aCollected !== undefined ? { __amountCollected: aCollected } : {}),
+      ...(att !== undefined ? { __attendance: att } : {}),
+      ...(cleanData.status !== undefined ? { __status: String(cleanData.status).toUpperCase() } : {}),
+      ...(cleanData.is_completed !== undefined ? { __isCompleted: Boolean(cleanData.is_completed) } : {}),
+      ...(cleanData.status !== undefined ? { __isCancelled: String(cleanData.status).toUpperCase() === 'CANCELLED' } : {}),
+      __counts: {
+        memberCount: Number(effectiveMCount) || 0,
+        guestCount: Number(effectiveGCount) || 0
+      },
+      __memberCount: Number(effectiveMCount) || 0,
+      __guestCount: Number(effectiveGCount) || 0
+    };
+    delete cleanData.memberCount;
+    delete cleanData.member_count;
+    delete cleanData.guestCount;
+    delete cleanData.guest_count;
+    delete cleanData.memberNotes;
+    delete cleanData.meetingAmount;
+    delete cleanData.meeting_amount;
+    delete cleanData.paymentStatus;
+    delete cleanData.payment_status;
+    delete cleanData.paymentMethods;
+    delete cleanData.payment_methods;
     delete cleanData.isCancelled;
     delete cleanData.is_cancelled;
   }
   
   const snakeData = keysToSnake(cleanData);
-  const { error } = await supabase.from(path).update(snakeData).eq('id', id);
+  let { error } = await supabase.from(path).update(snakeData).eq('id', id);
+  if (error && path === 'meetings') {
+    const fallbackData = { ...snakeData };
+    delete fallbackData.meeting_amount;
+    delete fallbackData.payment_status;
+    delete fallbackData.payment_methods;
+    delete fallbackData.status;
+    delete fallbackData.is_completed;
+    delete fallbackData.attendance;
+    const retry = await supabase.from(path).update(fallbackData).eq('id', id);
+    if (!retry.error) {
+      error = null;
+    } else {
+      error = retry.error;
+    }
+  }
+  if (!error && path === 'meetings') {
+    try {
+      const localMeetingsRaw = localStorage.getItem('ssk_meetings_fallback');
+      if (localMeetingsRaw) {
+        const localMap: Record<string, any> = JSON.parse(localMeetingsRaw);
+        if (localMap[String(id)]) {
+          delete localMap[String(id)];
+          localStorage.setItem('ssk_meetings_fallback', JSON.stringify(localMap));
+        }
+      }
+    } catch (e) {}
+  }
+  if (error && path === 'future_presentations') {
+    const rawSt = String(snakeData.status || 'Upcoming');
+    const safeDbStatus = rawSt.toUpperCase() === 'COMPLETED' ? 'Completed' : rawSt.toUpperCase() === 'CANCELLED' ? 'Cancelled' : 'Scheduled';
+    const fallbackPayload: Record<string, any> = { ...snakeData, status: safeDbStatus };
+    delete fallbackPayload.member_name;
+    delete fallbackPayload.chapter_id;
+    const retry = await supabase.from(path).update(fallbackPayload).eq('id', id);
+    if (!retry.error) {
+      error = null;
+      try {
+        const statusMapRaw = localStorage.getItem('ssk_future_presentations_status_map');
+        const statusMap: Record<string, string> = statusMapRaw ? JSON.parse(statusMapRaw) : {};
+        statusMap[String(id)] = rawSt;
+        localStorage.setItem('ssk_future_presentations_status_map', JSON.stringify(statusMap));
+      } catch (e) {}
+    }
+  }
   if (error) {
+    if (path === 'future_presentations') {
+      try {
+        if (cleanData.status) {
+          const statusMapRaw = localStorage.getItem('ssk_future_presentations_status_map');
+          const statusMap: Record<string, string> = statusMapRaw ? JSON.parse(statusMapRaw) : {};
+          statusMap[String(id)] = String(cleanData.status);
+          localStorage.setItem('ssk_future_presentations_status_map', JSON.stringify(statusMap));
+        }
+        const localRaw = localStorage.getItem('ssk_future_presentations_fallback');
+        if (localRaw) {
+          const localItems: any[] = JSON.parse(localRaw);
+          const updated = localItems.map(item => String(item.id) === String(id) ? { ...item, ...snakeData, ...cleanData } : item);
+          localStorage.setItem('ssk_future_presentations_fallback', JSON.stringify(updated));
+        }
+        return;
+      } catch (e) {}
+    }
+    if (path === 'meetings' && (error.code === '42804' || String(error.message || '').includes('COALESCE'))) {
+      try {
+        const localMeetingsRaw = localStorage.getItem('ssk_meetings_fallback');
+        const localMap: Record<string, any> = localMeetingsRaw ? JSON.parse(localMeetingsRaw) : {};
+        localMap[String(id)] = { ...(localMap[String(id)] || {}), id, ...snakeData, ...cleanData };
+        localStorage.setItem('ssk_meetings_fallback', JSON.stringify(localMap));
+        return;
+      } catch (e) {}
+    }
     console.error("updateDoc error:", error);
     throw new Error(error.message || 'Database update failed');
   }
@@ -1033,6 +1326,16 @@ export async function deleteDoc(docRef: any) {
       console.warn("API delete notice:", e);
     }
     await supabase.from('member_subscriptions').delete().eq('user_id', id);
+  }
+  if (path === 'future_presentations') {
+    try {
+      const localRaw = localStorage.getItem('ssk_future_presentations_fallback');
+      if (localRaw) {
+        const localItems: any[] = JSON.parse(localRaw);
+        const filtered = localItems.filter(item => String(item.id) !== String(id));
+        localStorage.setItem('ssk_future_presentations_fallback', JSON.stringify(filtered));
+      }
+    } catch (e) {}
   }
   const { error } = await supabase.from(path).delete().eq('id', id);
   if (error) console.error("deleteDoc error:", error);

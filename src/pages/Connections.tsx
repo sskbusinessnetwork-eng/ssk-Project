@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { 
   Users, 
   Search, 
@@ -47,33 +48,36 @@ export function Connections() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const getPositionTitleAndStyle = (member: UserProfile) => {
-    const pos = String(member.position || (member as any).position_name || '').trim();
+    const mId = String(member.id || member.uid || '');
+    const mChapId = member.chapter_id || (member as any).chapterId;
+    const chapObj = chaptersList.find(c => String(c.id) === String(mChapId));
+
+    const pos = String(member.position || (member as any).chapter_position || (member as any).position_name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ');
     const role = String(member.role || '').trim().toUpperCase();
 
-    const label = getDisplayPosition(pos, role);
-    let classes = 'text-slate-400 bg-slate-500/10 border-slate-500/20';
-
-    if (label === 'President') {
-      classes = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-    } else if (label === 'Vice President') {
-      classes = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-    } else if (label === 'Treasurer') {
-      classes = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
-    } else if (label === 'Secretary') {
-      classes = 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-    } else if (label === 'Chapter Admin') {
-      classes = 'text-rose-400 bg-rose-500/10 border-rose-500/20';
-    } else if (label === 'Master Admin') {
-      classes = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-    } else if (label !== 'Member') {
-      classes = 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+    if (role === 'PRESIDENT' || pos === 'president' || (chapObj && mId && String(chapObj.president_id) === mId)) {
+      return { label: 'PRESIDENT', classes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+    }
+    if (role === 'VICE_PRESIDENT' || pos === 'vice president' || pos === 'vp' || (chapObj && mId && String(chapObj.vice_president_id) === mId)) {
+      return { label: 'VICE PRESIDENT', classes: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+    }
+    if (role === 'TREASURER' || pos === 'treasurer' || (chapObj && mId && String(chapObj.treasurer_id) === mId)) {
+      return { label: 'TREASURER', classes: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
+    }
+    if (role === 'CHAPTER_ADMIN' || pos === 'chapter admin' || (chapObj && mId && String(chapObj.chapter_admin_id) === mId)) {
+      return { label: 'CHAPTER ADMIN', classes: 'text-rose-400 bg-rose-500/10 border-rose-500/20' };
     }
 
-    return { label, classes };
+    return { label: 'MEMBER', classes: 'text-neutral-300 bg-white/5 border-white/10' };
   };
 
   const getPositionBadge = (member: UserProfile) => {
     const { label, classes } = getPositionTitleAndStyle(member);
+    if (!label) return null;
     return (
       <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border shrink-0", classes)}>
         {label}
@@ -262,8 +266,14 @@ export function Connections() {
 
         // Fetch Categories
         const { data: cats } = await supabase.from('categories').select('id, name').order('name');
+        const catMap: Record<string, string> = {};
         if (cats) {
           setCategories(cats as unknown as Category[]);
+          cats.forEach((c: any) => {
+            if (c.id && c.name) {
+              catMap[String(c.id).trim().toLowerCase()] = c.name;
+            }
+          });
         }
 
         // Fetch Chapters
@@ -330,30 +340,44 @@ export function Connections() {
             if (status === 'INACTIVE') return false;
             return true;
           })
-          .map((row: any) => ({
-            uid: row.id,
-            id: row.id,
-            name: getCleanFullName(row.name),
-            phone: row.phone,
-            whatsappNumber: row.whatsapp_number,
-            whatsapp_number: row.whatsapp_number,
-            email: row.email,
-            category: row.category,
-            role: row.role,
-            position: row.position,
-            status: row.status,
-            membershipStatus: row.status,
-            photoURL: row.profile_photo,
-            createdAt: row.created_at,
-            chapter_id: row.chapter_id,
-            chapter_name: row.chapter_name || row.chapter,
-            chapter: row.chapter || row.chapter_name || row.chapter_id,
-            businessName: row.businessName || row.business_name || '',
-            state: row.state || '',
-            city: row.city || '',
-            area: row.area || '',
-            chapterName: row.chapter_name || row.chapter || chapMap[row.chapter_id || ''] || 'SSK Chapter',
-          }))
+          .map((row: any) => {
+            let photo = row.profile_photo || row.photo_url || row.photoURL || '';
+            let extraData: any = {};
+            if (typeof photo === 'string' && photo.includes('|||')) {
+              const parts = photo.split('|||');
+              photo = parts[0];
+              try {
+                extraData = JSON.parse(parts[1] || '{}');
+              } catch (e) {}
+            }
+            const rawCategory = row.category || extraData.category || row.business_category || extraData.business_category || row.category_name || extraData.category_name || '';
+            const resolvedCategory = catMap[String(rawCategory).trim().toLowerCase()] || rawCategory || row.businessName || row.business_name || extraData.business_name || extraData.businessName || '';
+            const resolvedBusinessName = row.businessName || row.business_name || extraData.business_name || extraData.businessName || '';
+            return {
+              uid: row.id,
+              id: row.id,
+              name: getCleanFullName(row.name),
+              phone: row.phone,
+              whatsappNumber: row.whatsapp_number,
+              whatsapp_number: row.whatsapp_number,
+              email: row.email,
+              category: resolvedCategory,
+              role: row.role,
+              position: row.position || extraData.position,
+              status: row.status,
+              membershipStatus: row.status,
+              photoURL: photo,
+              createdAt: row.created_at,
+              chapter_id: row.chapter_id,
+              chapter_name: row.chapter_name || row.chapter,
+              chapter: row.chapter || row.chapter_name || row.chapter_id,
+              businessName: resolvedBusinessName,
+              state: row.state || extraData.state || '',
+              city: row.city || extraData.city || '',
+              area: row.area || extraData.area || '',
+              chapterName: row.chapter_name || row.chapter || chapMap[row.chapter_id || ''] || 'SSK Chapter',
+            };
+          })
           .filter(m => m.role !== 'MASTER_ADMIN');
         
         // Fetch Admin Names for All Members
@@ -426,19 +450,21 @@ export function Connections() {
       }
     }
 
-    // 2. Search filtering (covers Name, Business Name, Phone Number, Position, Chapter Name)
+    // 2. Search filtering (covers Name, Category, Business Name, Phone Number, Position, Chapter Name)
     const term = searchTerm.toLowerCase().trim();
     if (term) {
-      const displayPos = getDisplayPosition(member.position, member.role).toLowerCase();
+      const { label: posLabel } = getPositionTitleAndStyle(member);
+      const displayPos = posLabel.toLowerCase();
       const chName = (member.chapterName || member.chapter_name || (member as any).chapter || '').toLowerCase();
       
       const nameMatch = (member.name || '').toLowerCase().includes(term);
+      const categoryMatch = (member.category || '').toLowerCase().includes(term);
       const businessMatch = (member.businessName || '').toLowerCase().includes(term);
       const phoneMatch = (member.phone || '').includes(term) || (member.whatsappNumber || '').includes(term);
       const positionMatch = displayPos.includes(term);
       const chapterMatch = chName.includes(term);
       
-      if (!(nameMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
+      if (!(nameMatch || categoryMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
         return false;
       }
     }
@@ -552,7 +578,7 @@ export function Connections() {
         </div>
         <h2 className="text-3xl font-bold text-[#111827] tracking-tight">Account Pending Approval</h2>
         <p className="text-[#6B7280] mt-4 text-lg max-w-lg mx-auto leading-relaxed">
-          Your account is currently being reviewed by our team. You will be able to access the member directory and discover connections once your membership is activated.
+          Your account is currently being reviewed by our team. You will be able to access members and discover connections once your membership is activated.
         </p>
         <Link 
           to="/dashboard" 
@@ -638,7 +664,7 @@ export function Connections() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-500" />
           <input
             type="text"
-            placeholder="Search connections..."
+            placeholder="Search members..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 h-10 bg-[#161B22] border border-white/10 rounded-xl text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-primary"
@@ -804,24 +830,19 @@ export function Connections() {
                   className="border border-white/10 shadow-inner shrink-0" 
                 />
                 
-                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
-                      {member.name}
+                      {getCleanFullName(member.name)}
                     </h3>
                     {getPositionBadge(member)}
                   </div>
                   
-                  <div className="flex flex-col gap-1 text-[13px] font-medium text-neutral-400">
-                    <div className="flex items-center gap-1">
-                      <span className="text-neutral-500 font-semibold text-[11px] uppercase tracking-wider mr-1">Chapter:</span> 
-                      <span className="text-neutral-200 font-medium">
-                        {member.chapterName || chapterNames[member.chapter_id || ''] || 'SSK Chapter'}
-                      </span>
-                    </div>
-                  </div>
+                  <p className="text-xs sm:text-[13px] font-semibold text-primary truncate uppercase">
+                    {(member.category || member.businessName || 'Business Owner')} &bull; {(member.chapterName || chapterNames[member.chapter_id || ''] || 'SSK Chapter')}
+                  </p>
 
-                  {member.businessName && (
+                  {member.businessName && member.category && member.businessName !== member.category && (
                     <p className="text-[12px] font-medium text-neutral-500 truncate">
                       {member.businessName}
                     </p>
@@ -894,14 +915,17 @@ export function Connections() {
 
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider ml-1">Mobile Number</label>
-            <input
-              required
-              type="tel"
-              value={referralForm.mobileNumber}
-              onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
-              placeholder="Enter mobile number"
-              className="w-full px-6 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm"
-            />
+            <div className="relative">
+              <input
+                required
+                type="tel"
+                value={referralForm.mobileNumber}
+                onChange={(e) => setReferralForm(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                placeholder="Enter mobile number"
+                className="w-full px-6 pr-12 py-4 bg-[#0F172A] border border-white/10 rounded-xl focus:border-primary outline-none transition-all text-white placeholder-neutral-500 text-sm"
+              />
+              <ContactPickerButton onSelect={(phone) => setReferralForm(prev => ({ ...prev, mobileNumber: phone }))} />
+            </div>
           </div>
 
           <div className="space-y-3">

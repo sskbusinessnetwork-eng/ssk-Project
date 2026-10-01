@@ -140,7 +140,7 @@ export function MasterAdminCompanionView({
 
   const operations = [
     { icon: Crown, label: 'Manage Chapters', desc: 'Chapter setup & governance', path: '/manage-chapter', color: 'text-red-500', bg: 'bg-red-500/10' },
-    { icon: Users, label: 'Manage Members', desc: 'Global member directory', path: '/members', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { icon: Users, label: 'Manage Members', desc: 'Global members', path: '/members', color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { icon: Tags, label: 'Manage Categories', desc: 'Business classifications', path: '/categories', color: 'text-purple-400', bg: 'bg-purple-500/10' },
     { icon: CreditCard, label: 'Manage Subscriptions', desc: 'Plans & member renewals', path: '/subscriptions', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { icon: TrendingUp, label: 'Organization Analytics', desc: 'Network-wide statistics', path: '/admin/analytics', color: 'text-indigo-400', bg: 'bg-indigo-500/10' },

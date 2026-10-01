@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabaseClient';
 import { normalizePhoneNumber } from '../utils/phoneUtils';
 import { databaseService } from '../services/databaseService';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 
 export function OnboardMember() {
   const { profile } = useAuth();
@@ -488,24 +489,30 @@ export function OnboardMember() {
                   
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1">Mobile Number *</label>
-                    <input
-                      required
-                      type="tel"
-                      value={formData.phone}
-                      onChange={e => setFormData({...formData, phone: e.target.value})}
-                      className="w-full h-12 px-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm"
-                    />
+                    <div className="relative">
+                      <input
+                        required
+                        type="tel"
+                        value={formData.phone}
+                        onChange={e => setFormData({...formData, phone: e.target.value})}
+                        className="w-full h-12 px-4 pr-11 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm"
+                      />
+                      <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, phone }))} />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest ml-1">WhatsApp Number *</label>
-                    <input
-                      required
-                      type="tel"
-                      value={formData.whatsapp}
-                      onChange={e => setFormData({...formData, whatsapp: e.target.value})}
-                      className="w-full h-12 px-4 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm"
-                    />
+                    <div className="relative">
+                      <input
+                        required
+                        type="tel"
+                        value={formData.whatsapp}
+                        onChange={e => setFormData({...formData, whatsapp: e.target.value})}
+                        className="w-full h-12 px-4 pr-11 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm"
+                      />
+                      <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, whatsapp: phone }))} />
+                    </div>
                   </div>
 
                   <div className="space-y-2">

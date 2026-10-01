@@ -49,7 +49,30 @@ export default defineConfig(({mode}) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-router-dom',
+        'lucide-react',
+        'motion/react',
+        '@supabase/supabase-js',
+        'clsx',
+        'tailwind-merge',
+        'date-fns',
+        'recharts',
+        'jspdf',
+        'jspdf-autotable',
+        'xlsx',
+        'docx',
+        'bcryptjs',
+      ],
+    },
     resolve: {
+      dedupe: ['react', 'react-dom', 'react-router-dom'],
       alias: {
         '@': path.resolve(__dirname, '.'),
         'firebase/app': path.resolve(__dirname, './src/lib/supabaseClient.ts'),

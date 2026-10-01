@@ -11,9 +11,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../contexts/ThemeContext';
-import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
+import { getCleanFullName, getDisplayPosition, isChapterLeaderRole } from '../utils/authUtils';
 import { cn } from '../lib/utils';
-import {  where  } from '../lib/database';
+import { where, normalizeMeetingRecord } from '../lib/database';
 import { databaseService } from '../services/databaseService';
 import { MemberCompanionView } from '../components/MemberCompanionView';
 import { MasterAdminCompanionView } from '../components/MasterAdminCompanionView';
@@ -27,7 +27,7 @@ import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, c
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 import { isOfflineReferral, isNormalReferral } from '../types';
-import { parseMeetingDateParts } from '../utils/recurringMeetingUtils';
+import { parseMeetingDateParts, isSameMeetingDate } from '../utils/recurringMeetingUtils';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -113,6 +113,7 @@ const { theme } = useTheme();
 
   // Subscribed States for Live Member Data
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [futurePresentations, setFuturePresentations] = useState<any[]>([]);
   const [passedReferrals, setPassedReferrals] = useState<any[]>([]);
   const [receivedReferrals, setReceivedReferrals] = useState<any[]>([]);
   const [createdOneToOnes, setCreatedOneToOnes] = useState<any[]>([]);
@@ -173,8 +174,7 @@ const { theme } = useTheme();
   const [isInactiveModalOpen, setIsInactiveModalOpen] = useState(false);
   const [analyticsModalCategory, setAnalyticsModalCategory] = useState<string | null>(null);
   
-  const normPosForAdmin = String(profile?.position || '').toLowerCase();
-  const isStrictChapterAdmin = (profile?.role === 'CHAPTER_ADMIN' && !['president', 'vice_president', 'treasurer'].includes(normPosForAdmin)) || normPosForAdmin === 'chapter_admin';
+  const isStrictChapterAdmin = isChapterLeaderRole(profile);
   const isChapterAdminUser = isStrictChapterAdmin;
   const usePersonalStats = profile?.role !== 'MASTER_ADMIN';
 
@@ -321,9 +321,11 @@ const { theme } = useTheme();
 
   useEffect(() => {
     const handleRefresh = () => {
-      // The auth context's profile might update via refreshProfile, 
-      // but if we want to manually re-render we can add a state toggle.
-      // For now we will rely on profile reference change if refreshProfile is called.
+      databaseService.list<any>('meetings', []).then((freshMeetings) => {
+        if (freshMeetings) {
+          setMeetings(freshMeetings.map((m: any) => normalizeMeetingRecord({ ...m })));
+        }
+      }).catch(() => {});
     };
     window.addEventListener('dashboard-refresh', handleRefresh);
     return () => window.removeEventListener('dashboard-refresh', handleRefresh);
@@ -510,21 +512,9 @@ const { theme } = useTheme();
     );
 
     // 6. Subscribe to meetings
-    const unsubMeetings = databaseService.subscribe<any>('meetings', [], setMeetings);
-
-    supabase.from('meetings').select('*').then(
-      ({ data: sbMeetings }) => {
-        if (sbMeetings && sbMeetings.length > 0) {
-          setMeetings(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            sbMeetings.forEach((item: any) => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load meetings notice:", err)
-    );
+    const unsubMeetings = databaseService.subscribe<any>('meetings', [], (data) => {
+      setMeetings((data || []).map((m: any) => normalizeMeetingRecord({ ...m })));
+    });
 
     // 7. Subscribe to testimonials
     const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
@@ -560,6 +550,10 @@ const { theme } = useTheme();
       (err) => console.warn("Dashboard load chapters notice:", err)
     );
 
+    const unsubPresentations = databaseService.subscribe<any>('future_presentations', [], (data) => {
+      setFuturePresentations(data || []);
+    });
+
     return () => {
       unsubUsers();
       unsubSlips();
@@ -570,6 +564,7 @@ const { theme } = useTheme();
       unsubMeetings();
       unsubTestimonials();
       unsubChapters();
+      unsubPresentations();
     };
   }, [profile]);
 
@@ -789,10 +784,10 @@ const { theme } = useTheme();
 
   const testimonialsGivenList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
-      return effectiveTestimonials.filter(t => String(t.authorMemberId || t.author_id || t.fromUserId || '') === String(appliedMemberFilter));
+      return effectiveTestimonials.filter(t => String(t.sender_id || t.from_user_id || t.authorMemberId || t.author_id || t.fromUserId || t.giver_uid || t.giver_id || '') === String(appliedMemberFilter));
     }
     return effectiveTestimonials.filter(t => {
-      const authorId = String(t.authorMemberId || t.author_id || t.fromUserId || '');
+      const authorId = String(t.sender_id || t.from_user_id || t.authorMemberId || t.author_id || t.fromUserId || t.giver_uid || t.giver_id || '');
       return usePersonalStats ? userCandidateIds.includes(authorId) : chapterUserIds.includes(authorId);
     });
   }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
@@ -801,10 +796,10 @@ const { theme } = useTheme();
 
   const testimonialsReceivedList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
-      return effectiveTestimonials.filter(t => String(t.recipientMemberId || t.recipient_id || t.toUserId || '') === String(appliedMemberFilter));
+      return effectiveTestimonials.filter(t => String(t.receiver_id || t.to_user_id || t.recipientMemberId || t.recipient_id || t.toUserId || t.recipient_uid || '') === String(appliedMemberFilter));
     }
     return effectiveTestimonials.filter(t => {
-      const recipientId = String(t.recipientMemberId || t.recipient_id || t.toUserId || '');
+      const recipientId = String(t.receiver_id || t.to_user_id || t.recipientMemberId || t.recipient_id || t.toUserId || t.recipient_uid || '');
       return usePersonalStats ? userCandidateIds.includes(recipientId) : chapterUserIds.includes(recipientId);
     });
   }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
@@ -1013,10 +1008,14 @@ const { theme } = useTheme();
       : effectiveMeetings.filter(m => usePersonalStats ? (m.attendance && (m.attendance[profile?.id] || m.attendance[profile?.uid])) : m.chapter_id === profile?.chapter_id);
     const now = new Date();
     const upcomingMeetingsCount = chapterMeetings.filter(m => {
-      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
-                     m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      const normalized = normalizeMeetingRecord({ ...m });
+      const notes = normalized.memberNotes || normalized.member_notes || {};
+      const effectiveStatus = String(notes.__status || normalized.status || 'UPCOMING').trim().toUpperCase();
+      const isDone = normalized.isCompleted === true || (normalized.isCompleted as any) === 'true' || effectiveStatus === 'COMPLETED' ||
+                     normalized.isCancelled === true || (normalized.isCancelled as any) === 'true' || effectiveStatus === 'CANCELLED';
       if (isDone) return false;
-      return getMeetingExactDateTime(m) > now;
+      if (effectiveStatus !== 'UPCOMING' && effectiveStatus !== 'SCHEDULED') return false;
+      return getMeetingExactDateTime(normalized) > now;
     }).length;
 
     const chapterOneToOnes = profile?.role === 'MASTER_ADMIN'
@@ -1037,10 +1036,25 @@ const { theme } = useTheme();
     
     const now = new Date();
     const upcoming = chapterMeetings.filter(m => {
-      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' ||
-                     m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      const normalized = normalizeMeetingRecord({ ...m });
+      const notes = normalized.memberNotes || normalized.member_notes || {};
+      const effectiveStatus = String(notes.__status || normalized.status || 'UPCOMING').trim().toUpperCase();
+      const isDone =
+        normalized.isCompleted === true ||
+        (normalized.isCompleted as any) === 'true' ||
+        normalized.is_completed === true ||
+        notes.__isCompleted === true ||
+        effectiveStatus === 'COMPLETED' ||
+        effectiveStatus === 'DONE' ||
+        normalized.isCancelled === true ||
+        (normalized.isCancelled as any) === 'true' ||
+        normalized.is_cancelled === true ||
+        notes.__isCancelled === true ||
+        effectiveStatus === 'CANCELLED' ||
+        effectiveStatus === 'CANCELED';
       if (isDone) return false;
-      return getMeetingExactDateTime(m) > now;
+      if (effectiveStatus !== 'UPCOMING' && effectiveStatus !== 'SCHEDULED') return false;
+      return getMeetingExactDateTime(normalized) > now;
     });
     
     if (upcoming.length === 0) return null;
@@ -1097,9 +1111,13 @@ const { theme } = useTheme();
     return effectiveMeetings.filter(m => {
       const mChapId = String(m.chapter_id || m.chapterId || '').trim();
       if (userChapId && mChapId !== userChapId) return false;
-      const isDone = m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED' || m.isCancelled === true || (m.isCancelled as any) === 'true' || m.status === 'CANCELLED';
+      const normalized = normalizeMeetingRecord({ ...m });
+      const notes = normalized.memberNotes || normalized.member_notes || {};
+      const effectiveStatus = String(notes.__status || normalized.status || 'UPCOMING').trim().toUpperCase();
+      const isDone = normalized.isCompleted === true || (normalized.isCompleted as any) === 'true' || effectiveStatus === 'COMPLETED' || normalized.isCancelled === true || (normalized.isCancelled as any) === 'true' || effectiveStatus === 'CANCELLED';
       if (isDone) return false;
-      return getMeetingExactDateTime(m) > now;
+      if (effectiveStatus !== 'UPCOMING' && effectiveStatus !== 'SCHEDULED') return false;
+      return getMeetingExactDateTime(normalized) > now;
     }).length;
   }, [effectiveMeetings, profile]);
 
@@ -1695,21 +1713,27 @@ const { theme } = useTheme();
 
     // 9. Testimonials
     (allTestimonials || []).forEach(t => {
-      const authorId = t.authorMemberId || t.author_id || t.author_member_id || t.fromUserId || t.created_by || t.userId;
-      const recipientId = t.recipientMemberId || t.recipient_id || t.recipient_member_id || t.toUserId || t.member_id;
+      const authorId = t.sender_id || t.from_user_id || t.authorMemberId || t.author_id || t.author_member_id || t.fromUserId || t.giver_uid || t.giver_id || t.created_by || t.userId;
+      const recipientId = t.receiver_id || t.to_user_id || t.recipientMemberId || t.recipient_id || t.recipient_member_id || t.toUserId || t.recipient_uid || t.member_id;
       
-      const authorName = resolveMemberName(authorId, t.author_name || t.authorName || t.author);
-      const recipientName = resolveMemberName(recipientId, t.recipient_name || t.recipientName || t.recipient);
+      const authorName = resolveMemberName(authorId, t.sender_name || t.giver_name || t.author_name || t.authorName || t.author);
+      const recipientName = resolveMemberName(recipientId, t.receiver_name || t.recipient_name || t.recipientName || t.recipient);
+      const testimonialContent = String(t.testimonial || t.content || t.text || t.message || t.description || '').trim();
+      const isSentByMe = userCandidateIds.includes(String(authorId));
+      const isReceivedByMe = userCandidateIds.includes(String(recipientId));
+      const activityLabel = isReceivedByMe && !isSentByMe ? 'Testimonial Received' : 'Testimonial Sent';
       
       const tTime = new Date(t.created_at || t.createdAt || Date.now()).getTime();
       if (!isNaN(tTime)) {
         activities.push({
           id: 'test-' + t.id,
-          activity: `${authorName} submitted testimonial for ${recipientName}`,
-          title: `Testimonial for ${recipientName}`,
-          desc: `${authorName} submitted testimonial for ${recipientName}`,
+          activity: activityLabel,
+          title: activityLabel,
+          desc: testimonialContent || `${authorName} submitted testimonial for ${recipientName}`,
+          testimonialContent,
+          activityLabel,
           type: 'testimonial',
-          memberName: authorName,
+          memberName: isSentByMe ? recipientName : authorName,
           authorName: authorName,
           recipientName: recipientName,
           chapterName: t.chapterName || t.chapter_name || 'Chapter',
@@ -1905,14 +1929,14 @@ const { theme } = useTheme();
 
 
   const chapterAdminTasks = useMemo(() => {
-    if (profile?.role !== 'CHAPTER_ADMIN' && profile?.position !== 'chapter_admin') return [];
+    if (!isChapterLeaderRole(profile)) return [];
     const tasks: any[] = [];
     
     // Normal Chapter Admin tasks first
     tasks.push({ key: 't1', label: "Schedule Chapter Sync Assemblies", isDone: true, link: "/meetings", linkText: "View", iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-[#DC143C]' });
     tasks.push({ key: 't2', label: "Moderate Guest Onboarding Protocols", isDone: true, link: "/guests", linkText: "Guests", iconColor: 'text-emerald-400', bgColor: 'bg-emerald-500/10', icon: CheckSquare, activeClass: 'bg-[#DC143C]' });
     
-    const members = chapterUsers.filter(u => u.chapter_id === profile?.chapter_id && u.role !== 'MASTER_ADMIN' && u.role !== 'CHAPTER_ADMIN' && u.position !== 'chapter_admin');
+    const members = chapterUsers.filter(u => u.chapter_id === profile?.chapter_id && u.role !== 'MASTER_ADMIN' && !isChapterLeaderRole(u));
 
     // Subscription requests from new table
     const pendingRequests = subscriptionRequests.filter(r => r.chapter_id === profile?.chapter_id && r.status === 'PENDING');
@@ -2083,13 +2107,6 @@ const { theme } = useTheme();
       todayTasks
     });
   }, [chapterUsers, profile, growthScoreDateRange, allReferrals, oneToOnes, meetings, guestInvitations, effectiveSlips, allTestimonials, todayTasks]);
-
-  const isChapterLeaderRole = useMemo(() => {
-    if (!profile) return false;
-    const normRole = (profile.role || '').toUpperCase();
-    const normPos = (profile.position || '').toLowerCase();
-    return normRole === 'CHAPTER_ADMIN' || normRole === 'PRESIDENT' || normRole === 'VICE_PRESIDENT' || normRole === 'TREASURER' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(normPos);
-  }, [profile]);
 
   const showChapterScoreGauge = profile?.role === 'MASTER_ADMIN';
   const growthScoreData = showChapterScoreGauge ? chapterGrowthScoreData : memberGrowthScoreData;
@@ -2287,10 +2304,13 @@ const { theme } = useTheme();
       records = list.map(m => {
         const isSubActive = isMemberActive(m);
         const memName = resolveMemberName(m.uid || m.id, m.name || m.full_name || m.displayName);
+        const catName = m.category || m.business_category || m.businessName || m.company || 'Business Owner';
+        const roleLabel = formatRole(m.role, m.position);
+        const specificRole = ['Chapter Admin', 'President', 'Vice President', 'Treasurer'].includes(roleLabel) ? roleLabel : '';
         return {
           id: m.uid || m.id,
           title: memName,
-          subtitle: formatRole(m.role, m.position),
+          subtitle: specificRole ? `${catName} • ${specificRole}` : catName,
           icon: <User size={20} className="text-white/70" />,
           badgeText: isSubActive ? 'Active' : 'Inactive',
           badgeColor: isSubActive ? 'emerald' : 'red',
@@ -2924,6 +2944,53 @@ const getGreeting = () => {
                     <span className="truncate">{upcomingChapterMeeting.location || upcomingChapterMeeting.venue || 'TBA'}</span>
                   </div>
                 </div>
+                {(() => {
+                  const matchedPresentations = futurePresentations.filter(p => {
+                    const st = String(p.status || 'Scheduled').toUpperCase();
+                    if (st === 'CANCELLED') return false;
+                    const pDate = p.presentationDate || p.presentation_date;
+                    if (!isSameMeetingDate(pDate, upcomingChapterMeeting.date)) return false;
+                    const mChap = upcomingChapterMeeting.chapter_id || (upcomingChapterMeeting as any).chapterId;
+                    const mId = p.memberId || p.member_id;
+                    const memberObj = allUsersList.find(u => String(u.uid || u.id) === String(mId));
+                    const pChap = p.chapter_id || p.chapterId || memberObj?.chapter_id || memberObj?.chapterId;
+                    if (mChap && pChap && String(mChap) !== String(pChap)) return false;
+                    return true;
+                  });
+
+                  if (matchedPresentations.length === 0) return null;
+
+                  return (
+                    <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                      {matchedPresentations.map((p) => {
+                        const mId = p.memberId || p.member_id;
+                        const matchedMember =
+                          allUsersList.find(u => String(u.uid || u.id) === String(mId) || String(u.id) === String(mId) || String(u.uid) === String(mId)) ||
+                          chapterUsers.find(u => String(u.uid || u.id) === String(mId) || String(u.id) === String(mId) || String(u.uid) === String(mId)) ||
+                          (profile && (String(profile.uid || profile.id) === String(mId) || String(profile.id) === String(mId) || String(profile.uid) === String(mId)) ? profile : null);
+                        const memberName = p.memberName || p.member_name || (matchedMember ? getCleanFullName(matchedMember.name) : 'Member');
+                        const memberCategory =
+                          matchedMember?.category ||
+                          (matchedMember as any)?.business_category ||
+                          (matchedMember as any)?.businessCategory ||
+                          p.memberCategory ||
+                          p.member_category ||
+                          p.category ||
+                          'N/A';
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="inline-flex flex-col items-start gap-0.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-white"
+                          >
+                            <span className="text-red-400 font-extrabold">Feature Presentation by {memberName}</span>
+                            <span className="text-neutral-300 font-bold">Category: {memberCategory}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -3175,11 +3242,14 @@ const getGreeting = () => {
                   className="w-full h-11 px-3 rounded-xl bg-[#0F172A] border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-[#E53935] transition-colors"
                 >
                   <option value="ALL">All Members</option>
-                  {availableMembersForFilter.map((u) => (
-                    <option key={u.uid || u.id} value={u.uid || u.id}>
-                      {u.name || 'Unnamed Member'} {u.chapterName ? `(${u.chapterName})` : ''}
-                    </option>
-                  ))}
+                  {availableMembersForFilter.map((u) => {
+                    const cat = u.category || (u as any).business_category || 'No Category';
+                    return (
+                      <option key={u.uid || u.id} value={u.uid || u.id}>
+                        {u.name || 'Unnamed Member'} — Category: {cat} {u.chapterName ? `(${u.chapterName})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>

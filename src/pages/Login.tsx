@@ -11,6 +11,7 @@ import { databaseService } from '../services/databaseService';
 import {  db, doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs, limit  } from '../lib/database';
 import { UserProfile } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 
 export function Login() {
   const { user, profile, loading: authLoading, login } = useAuth();
@@ -392,8 +393,9 @@ export function Login() {
                       value={formData.identifier}
                       onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
                       placeholder="Enter 10 digit number"
-                      className="w-full pl-20 pr-5 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-600 text-sm"
+                      className="w-full pl-20 pr-12 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-600 text-sm"
                     />
+                    <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, identifier: phone })} />
                   </div>
                 </div>
 

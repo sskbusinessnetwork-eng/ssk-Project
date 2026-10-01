@@ -1,7 +1,7 @@
 export type UserRole = 'MASTER_ADMIN' | 'CHAPTER_ADMIN' | 'MEMBER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING';
 export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED' | 'Offline' | 'OFFLINE';
-export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'Present' | 'Absent' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE';
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'Present' | 'Absent' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE' | 'Late' | 'LATE' | 'Medical' | 'MEDICAL';
 
 export type ChapterPosition = 'member' | 'chapter_admin' | 'president' | 'vice_president' | 'treasurer' | string;
 
@@ -64,6 +64,12 @@ export interface Meeting {
   date: string;
   time?: string;
   location?: string;
+  meetingAmount?: number;
+  meeting_amount?: number;
+  paymentStatus?: Record<string, 'PAID' | 'NOT PAID' | string>;
+  payment_status?: Record<string, 'PAID' | 'NOT PAID' | string>;
+  paymentMethods?: Record<string, 'UPI' | 'CASH' | 'WALLET' | string>;
+  payment_methods?: Record<string, 'UPI' | 'CASH' | 'WALLET' | string>;
   attendance: Record<string, AttendanceStatus>;
   amountCollected?: Record<string, number>;
   memberNotes?: Record<string, any>;
@@ -204,6 +210,7 @@ export interface OneToOneMeeting {
   date?: string;
   time?: string;
   venue?: string;
+  meeting_location?: string;
   duration?: number;
   description?: string;
   notes?: string;
@@ -290,4 +297,36 @@ export interface SubscriptionRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   processed_date?: string;
   processed_by?: string;
+}
+
+export type WalletTransactionType = 'CREDIT' | 'DEBIT';
+export type WalletPaymentType = 'UPI' | 'CASH' | 'WALLET';
+
+export interface WalletTransaction {
+  id: string;
+  memberId: string;
+  memberName?: string;
+  chapterId?: string;
+  type: WalletTransactionType;
+  amount: number;
+  paymentType: WalletPaymentType;
+  date: string;
+  reason?: string;
+  description?: string;
+  meetingId?: string;
+  meetingDate?: string;
+  isReversed?: boolean;
+  createdBy?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt: string;
+}
+
+export interface WalletSummary {
+  memberId: string;
+  availableBalance: number;
+  totalCredits: number;
+  totalDebits: number;
+  transactions: WalletTransaction[];
+  depositHistory: WalletTransaction[];
 }

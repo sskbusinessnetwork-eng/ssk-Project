@@ -227,6 +227,7 @@ body.theme-day,
 /* Sidebar in Day Theme */
 .theme-day aside,
 .theme-day [class*="Sidebar"],
+.theme-day .sidebar-container,
 .theme-day .bg-\[\#11131A\] {
   background-color: #FFFFFF !important;
   border-right-color: #E2E8F0 !important;
@@ -426,26 +427,53 @@ body.theme-day,
 
 /* Sidebar Navigation Items in Day Theme */
 .theme-day aside a,
-.theme-day [class*="Sidebar"] a {
-  color: #475569 !important;
+.theme-day [class*="Sidebar"] a,
+.theme-day .sidebar-nav-item {
+  color: #334155 !important;
 }
 
 .theme-day aside a:hover,
-.theme-day [class*="Sidebar"] a:hover {
+.theme-day [class*="Sidebar"] a:hover,
+.theme-day .sidebar-nav-item:hover {
   background-color: #F1F5F9 !important;
   color: #0F172A !important;
 }
 
-.theme-day aside a.bg-\[\#E53935\]\/10,
-.theme-day [class*="Sidebar"] a.bg-\[\#E53935\]\/10 {
-  background-color: rgba(229, 57, 53, 0.08) !important;
-  color: #E53935 !important;
-  border-color: rgba(229, 57, 53, 0.2) !important;
+.theme-day aside a:hover svg,
+.theme-day [class*="Sidebar"] a:hover svg,
+.theme-day .sidebar-nav-item:hover svg {
+  color: #0F172A !important;
 }
 
-.theme-day aside a.bg-\[\#E53935\]\/10 svg,
-.theme-day [class*="Sidebar"] a.bg-\[\#E53935\]\/10 svg {
-  color: #E53935 !important;
+.theme-day aside a.sidebar-active-item,
+.theme-day [class*="Sidebar"] a.sidebar-active-item,
+.theme-day .sidebar-nav-item.sidebar-active-item,
+.theme-day aside a[data-active="true"],
+.theme-day [class*="Sidebar"] a[data-active="true"],
+.theme-day .sidebar-nav-item[data-active="true"] {
+  background-color: rgba(229, 57, 53, 0.08) !important;
+  color: #0F172A !important;
+  font-weight: 700 !important;
+  border-color: rgba(229, 57, 53, 0.25) !important;
+}
+
+.theme-day aside a.sidebar-active-item span,
+.theme-day [class*="Sidebar"] a.sidebar-active-item span,
+.theme-day .sidebar-nav-item.sidebar-active-item span,
+.theme-day aside a[data-active="true"] span,
+.theme-day [class*="Sidebar"] a[data-active="true"] span,
+.theme-day .sidebar-nav-item[data-active="true"] span {
+  color: #0F172A !important;
+  font-weight: 700 !important;
+}
+
+.theme-day aside a.sidebar-active-item svg,
+.theme-day [class*="Sidebar"] a.sidebar-active-item svg,
+.theme-day .sidebar-nav-item.sidebar-active-item svg,
+.theme-day aside a[data-active="true"] svg,
+.theme-day [class*="Sidebar"] a[data-active="true"] svg,
+.theme-day .sidebar-nav-item[data-active="true"] svg {
+  color: #DC2626 !important;
 }
 
 /* Status Badges & Chips in Day Theme */

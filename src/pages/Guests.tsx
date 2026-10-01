@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
@@ -20,9 +20,16 @@ import { Category } from '../types';
 import { Modal } from '../components/Modal';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
-import { db } from '../lib/database';
+import { db, normalizeMeetingRecord } from '../lib/database';
+import {
+  getISTNow,
+  parseMeetingDateParts,
+  isMeetingDone,
+  isSameMeetingDate
+} from '../utils/recurringMeetingUtils';
 import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
 import { cn } from '../lib/utils';
+import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 
 export function Guests() {
@@ -31,6 +38,7 @@ export function Guests() {
   
   const [invitations, setInvitations] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allMeetings, setAllMeetings] = useState<any[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [matchedMember, setMatchedMember] = useState<{ name: string; position: string; phone: string } | null>(null);
@@ -137,9 +145,9 @@ export function Guests() {
     return null;
   };
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = useCallback(async (silent = false) => {
     if (!profile) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       // 1. Fetch Categories
       const { data: cats } = await supabase.from('categories').select('id, name').order('name');
@@ -149,48 +157,42 @@ export function Guests() {
       
       const userId = profile.id || profile.uid;
       const userChapterId = profile.chapter_id || (profile as any).chapterId;
-      const isChapterAdmin = profile.role === 'CHAPTER_ADMIN' || profile.position === 'chapter_admin' || profile.role === 'MASTER_ADMIN';
 
       // 2. Fetch Directory of Users / Members for validation
-      let fetchedUsers: any[] = [];
       try {
         const { data: uData } = await supabase.from('users').select('*');
         if (uData) {
-          fetchedUsers = uData;
           setAllUsers(uData);
         }
       } catch (uErr) {
         console.warn("User directory fetch notice:", uErr);
       }
 
-      // 3. Fetch Upcoming Meetings for user's chapter
-      if (userChapterId) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: fetchedMeetings } = await supabase
-          .from('meetings')
-          .select('*')
-          .eq('chapter_id', userChapterId)
-          .gte('date', todayStr)
-          .neq('status', 'Completed')
-          .neq('status', 'COMPLETED')
-          .neq('status', 'Completed ')
-          .neq('status', 'Cancelled')
-          .neq('status', 'CANCELLED')
-          .order('date', { ascending: true });
-        
-        if (fetchedMeetings) {
-          const activeMeetings = fetchedMeetings.filter((m: any) => {
-            const s = String(m.status || '').trim().toUpperCase();
-            if (s === 'COMPLETED' || s === 'CANCELLED') return false;
-            if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
-            if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
-            return true;
-          });
-          setUpcomingMeetings(activeMeetings);
-        }
+      // 3. Fetch Meetings for status and date verification
+      const todayYMD = getISTNow().dateString;
+      let meetingsQuery = supabase.from('meetings').select('*').order('date', { ascending: true });
+      if (userChapterId && profile.role !== 'MASTER_ADMIN') {
+        meetingsQuery = meetingsQuery.eq('chapter_id', userChapterId);
+      }
+
+      const { data: fetchedMeetings } = await meetingsQuery;
+      if (fetchedMeetings) {
+        const normalizedMeetings = fetchedMeetings.map((m: any) => normalizeMeetingRecord({ ...m }));
+        setAllMeetings(normalizedMeetings);
+
+        const activeUpcomingMeetings = normalizedMeetings.filter((m: any) => {
+          if (userChapterId && String(m.chapter_id || m.chapterId || '').trim() !== String(userChapterId).trim()) {
+            return false;
+          }
+          if (isMeetingDone(m)) return false;
+          const mDateParts = parseMeetingDateParts(m.date || m.meeting_date);
+          if (!mDateParts || mDateParts.dateString < todayYMD) return false;
+          return true;
+        });
+        setUpcomingMeetings(activeUpcomingMeetings);
       }
       
-      // 4. Fetch Guest Invitations History
+      // 4. Fetch Guest Invitations
       let invsQuery = supabase.from('guest_invitations').select('*');
       if (profile.role === 'MASTER_ADMIN') {
         // Master Admin sees all in system view
@@ -225,13 +227,118 @@ export function Guests() {
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [profile]);
 
   useEffect(() => {
-    fetchInitialData();
-  }, [profile]);
+    fetchInitialData(false);
+
+    const handleRefresh = () => {
+      fetchInitialData(true);
+    };
+
+    window.addEventListener('dashboard-refresh', handleRefresh);
+    window.addEventListener('meetings-updated', handleRefresh);
+    window.addEventListener('profile-updated', handleRefresh);
+
+    const channel = supabase
+      .channel('guests-meetings-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => {
+        fetchInitialData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, () => {
+        fetchInitialData(true);
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+      window.removeEventListener('meetings-updated', handleRefresh);
+      window.removeEventListener('profile-updated', handleRefresh);
+      supabase.removeChannel(channel);
+    };
+  }, [fetchInitialData]);
+
+  // Filter invitations to show only guests invited for an upcoming/pending meeting
+  // whose meeting has NOT been completed/cancelled and whose meeting date has NOT passed.
+  const activeGuestInvitations = useMemo(() => {
+    const todayYMD = getISTNow().dateString;
+    const userChapterId = String(profile?.chapter_id || (profile as any)?.chapterId || '').trim();
+
+    return invitations.filter((inv: any) => {
+      if (!inv) return false;
+
+      // 1. Check guest invitation's own status / attendance status
+      const invStatus = String(
+        inv.status || inv.attendance_status || inv.attendanceStatus || ''
+      )
+        .trim()
+        .toUpperCase();
+
+      if (
+        invStatus === 'COMPLETED' ||
+        invStatus === 'DONE' ||
+        invStatus === 'CANCELLED' ||
+        invStatus === 'CANCELED' ||
+        invStatus === 'ATTENDED' ||
+        invStatus === 'PRESENT' ||
+        invStatus === 'ABSENT'
+      ) {
+        return false;
+      }
+
+      // 2. Match linked meeting from meetings table
+      const invMeetingId = String(inv.meeting_id || inv.meetingId || '').trim();
+      const invMeetingDateRaw = inv.meeting_date || inv.meetingDate;
+      const invChapterId = String(
+        inv.chapter_id || inv.invited_by_chapter || userChapterId || ''
+      ).trim();
+
+      let linkedMeeting = invMeetingId
+        ? allMeetings.find((m: any) => String(m.id).trim() === invMeetingId)
+        : undefined;
+
+      if (!linkedMeeting && invMeetingDateRaw) {
+        linkedMeeting = allMeetings.find((m: any) => {
+          const mChap = String(
+            m.chapter_id || m.chapterId || m.admin_id || m.adminId || ''
+          ).trim();
+          if (invChapterId && mChap && invChapterId !== mChap) return false;
+          const mDate = m.date || m.meeting_date;
+          return mDate && isSameMeetingDate(mDate, invMeetingDateRaw);
+        });
+      }
+
+      // If linked meeting is found and is completed or cancelled, hide the guest
+      if (linkedMeeting && isMeetingDone(linkedMeeting)) {
+        return false;
+      }
+
+      // If invitation had a meeting_id and meetings have loaded, but meeting doesn't exist anymore
+      if (invMeetingId && allMeetings.length > 0 && !linkedMeeting) {
+        return false;
+      }
+
+      // 3. Check meeting date: hide if meeting date is missing or has already passed
+      const effectiveMeetingDate =
+        linkedMeeting?.date || linkedMeeting?.meeting_date || invMeetingDateRaw;
+      if (!effectiveMeetingDate) {
+        return false;
+      }
+
+      const parsedMeetingDate = parseMeetingDateParts(effectiveMeetingDate);
+      if (!parsedMeetingDate) {
+        return false;
+      }
+
+      if (parsedMeetingDate.dateString < todayYMD) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [invitations, allMeetings, profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -474,20 +581,28 @@ SSK Business Network`;
         )}
       </header>
 
-      {/* Guest Invitation History */}
+      {/* Guest Invitations */}
       <div className="bg-[#111827] rounded-[16px] border border-white/5 overflow-hidden">
         <div className="p-6 border-b border-white/5">
-          <h2 className="text-lg font-bold text-white">Guest Invitation History</h2>
+          <h2 className="text-lg font-bold text-white">Guest Invitations</h2>
         </div>
         
         {loading ? (
           <div className="p-12 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
           </div>
-        ) : invitations.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {invitations.map((inv) => {
-              const statusLabel = inv.status || 'Upcoming';
+        ) : activeGuestInvitations.length > 0 ? (
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {activeGuestInvitations.map((inv) => {
+              const invMeetingId = String(inv.meeting_id || inv.meetingId || '').trim();
+              const linkedMeeting = invMeetingId
+                ? allMeetings.find((m: any) => String(m.id).trim() === invMeetingId)
+                : undefined;
+              const effectiveMeetingDate =
+                linkedMeeting?.date || linkedMeeting?.meeting_date || inv.meeting_date || inv.meetingDate;
+              const parsedDate = parseMeetingDateParts(effectiveMeetingDate);
+              const displayMeetingDate = parsedDate ? parsedDate.displayDate : 'Upcoming Meeting';
+
               return (
                 <div
                   key={inv.id}
@@ -495,29 +610,25 @@ SSK Business Network`;
                     setSelectedGuest(inv);
                     setIsDetailModalOpen(true);
                   }}
-                  className="p-4 bg-[#111827] rounded-xl border border-white/5 hover:border-white/10 transition-all cursor-pointer group flex flex-col gap-2"
+                  className="p-4 bg-[#151C2E]/60 rounded-xl border border-white/5 hover:border-white/15 transition-all cursor-pointer group flex flex-col gap-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <h4 className="text-sm font-bold text-white uppercase tracking-tight truncate group-hover:text-primary transition-colors">
-                        {inv.guest_name}
+                        {inv.guest_name || inv.guestName}
                       </h4>
                       <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate uppercase tracking-wider">
-                        Guest • {statusLabel.toLowerCase().includes('attended') ? 'Attended' : 'Visitor'}
+                        {inv.business_category || inv.businessCategory || 'Guest Visitor'}
                       </p>
                     </div>
-                    <span className={cn(
-                      "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0",
-                      statusLabel.toLowerCase().includes('attended') 
-                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                    )}>
-                      {statusLabel}
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 bg-blue-500/10 text-blue-400 border-blue-500/20">
+                      Upcoming
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-1 pt-2 border-t border-white/5">
-                    <span className="text-[10px] text-neutral-500 font-medium">
-                      {inv.createdAt ? format(new Date(inv.createdAt), 'dd MMM yyyy') : 'Date N/A'}
+                    <span className="text-[10px] text-neutral-400 font-medium flex items-center gap-1.5">
+                      <Calendar size={12} className="text-primary shrink-0" />
+                      {displayMeetingDate}
                     </span>
                     <span className="text-[10px] font-bold text-primary uppercase tracking-wider bg-primary/10 hover:bg-primary/20 transition-colors px-2 py-1 rounded-md">
                       VIEW
@@ -532,12 +643,12 @@ SSK Business Network`;
             <div className="w-16 h-16 bg-[#151C2E] rounded-full flex items-center justify-center mb-4 border border-white/5">
               <UserPlus size={24} className="text-neutral-500" />
             </div>
-            <p className="text-neutral-400 font-medium">No guests invited yet.</p>
+            <p className="text-neutral-400 font-medium">No upcoming guest invitations.</p>
             <button
               onClick={() => setIsModalOpen(true)}
               className="mt-4 text-primary text-sm font-bold uppercase tracking-widest hover:underline"
             >
-              Invite Your First Guest
+              Invite a New Guest
             </button>
           </div>
         )}
@@ -633,45 +744,61 @@ SSK Business Network`;
                     <span className="text-[10px] text-red-400 font-bold uppercase tracking-wider">Member Detected</span>
                   )}
                 </div>
-                <input
-                  required
-                  type="tel"
-                  value={formData.guestPhone}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const prevPhone = formData.guestPhone;
-                    setFormData(prev => ({
-                      ...prev,
-                      guestPhone: val,
-                      guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? val : prev.guestWhatsapp
-                    }));
-                    validatePhone(val, formData.meetingId);
-                  }}
-                  onBlur={() => {
-                    validatePhone(formData.guestPhone, formData.meetingId);
-                  }}
-                  placeholder="e.g. +91 9876543210"
-                  className={cn(
-                    "w-full px-4 py-3 bg-[#151C2E] text-white border rounded-[12px] outline-none transition-all placeholder:text-neutral-600 font-medium text-sm",
-                    matchedMember 
-                      ? "border-red-500/60 focus:ring-2 focus:ring-red-500" 
-                      : duplicateMeetingError
-                        ? "border-amber-500/60 focus:ring-2 focus:ring-amber-500"
-                        : "border-white/5 focus:ring-2 focus:ring-primary"
-                  )}
-                />
+                <div className="relative">
+                  <input
+                    required
+                    type="tel"
+                    value={formData.guestPhone}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const prevPhone = formData.guestPhone;
+                      setFormData(prev => ({
+                        ...prev,
+                        guestPhone: val,
+                        guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? val : prev.guestWhatsapp
+                      }));
+                      validatePhone(val, formData.meetingId);
+                    }}
+                    onBlur={() => {
+                      validatePhone(formData.guestPhone, formData.meetingId);
+                    }}
+                    placeholder="e.g. +91 9876543210"
+                    className={cn(
+                      "w-full px-4 pr-11 py-3 bg-[#151C2E] text-white border rounded-[12px] outline-none transition-all placeholder:text-neutral-600 font-medium text-sm",
+                      matchedMember 
+                        ? "border-red-500/60 focus:ring-2 focus:ring-red-500" 
+                        : duplicateMeetingError
+                          ? "border-amber-500/60 focus:ring-2 focus:ring-amber-500"
+                          : "border-white/5 focus:ring-2 focus:ring-primary"
+                    )}
+                  />
+                  <ContactPickerButton
+                    onSelect={(phone) => {
+                      const prevPhone = formData.guestPhone;
+                      setFormData(prev => ({
+                        ...prev,
+                        guestPhone: phone,
+                        guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? phone : prev.guestWhatsapp
+                      }));
+                      validatePhone(phone, formData.meetingId);
+                    }}
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">
                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">WhatsApp Number <span className="text-red-400">*</span></label>
-                <input
-                  required
-                  type="tel"
-                  value={formData.guestWhatsapp}
-                  onChange={(e) => setFormData({ ...formData, guestWhatsapp: e.target.value })}
-                  placeholder="For invitation message"
-                  className="w-full px-4 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-neutral-600 font-medium text-sm"
-                />
+                <div className="relative">
+                  <input
+                    required
+                    type="tel"
+                    value={formData.guestWhatsapp}
+                    onChange={(e) => setFormData({ ...formData, guestWhatsapp: e.target.value })}
+                    placeholder="For invitation message"
+                    className="w-full px-4 pr-11 py-3 bg-[#151C2E] text-white border border-white/5 rounded-[12px] focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-neutral-600 font-medium text-sm"
+                  />
+                  <ContactPickerButton onSelect={(phone) => setFormData(prev => ({ ...prev, guestWhatsapp: phone }))} />
+                </div>
               </div>
             </div>
             
