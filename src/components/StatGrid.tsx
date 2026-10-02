@@ -314,7 +314,17 @@ export default function StatGrid({
               {/* Bottom Row: Metrics with vertical divider */}
               <div className="flex items-center w-full pt-0.5">
                 {stat.rows[0] && (
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-1">
+                  <div 
+                    onClick={(e) => {
+                      if (isClickable) {
+                        e.stopPropagation();
+                        const rowLabel = stat.rows[0].label.replace(':', '').trim();
+                        onCardClick?.(`${stat.label} - ${rowLabel}`);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 flex-1 min-w-0 pr-1 ${isClickable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                    title={`View ${stat.label} ${stat.rows[0].label}`}
+                  >
                     <span className="text-[12px] font-medium text-gray-400 shrink-0">
                       {stat.rows[0].label.replace(':', '')}:
                     </span>
@@ -327,7 +337,17 @@ export default function StatGrid({
                 <div className="w-[1px] h-4 bg-white/15 shrink-0 mx-2.5 sm:mx-3" />
 
                 {stat.rows[1] && (
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0 pl-1">
+                  <div 
+                    onClick={(e) => {
+                      if (isClickable) {
+                        e.stopPropagation();
+                        const rowLabel = stat.rows[1].label.replace(':', '').trim();
+                        onCardClick?.(`${stat.label} - ${rowLabel}`);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 flex-1 min-w-0 pl-1 ${isClickable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                    title={`View ${stat.label} ${stat.rows[1].label}`}
+                  >
                     <span className="text-[12px] font-medium text-gray-400 shrink-0">
                       {stat.rows[1].label.replace(':', '')}:
                     </span>

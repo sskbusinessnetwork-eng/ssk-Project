@@ -114,6 +114,8 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   date: number;
   time: string;
   location: string;
+  meetingAmount?: number | string;
+  meeting_amount?: number | string;
   enabled: boolean;
 }, forceDateUpdate: boolean = false) {
   const targetChapterId = chapterId || adminId;
@@ -202,6 +204,10 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   const occurrenceIdsToPreserve = new Set<string>();
 
   // Loop to find the next valid occurrence date that isn't already "done" (completed or cancelled)
+  const defaultAmtNum = setup.meetingAmount !== undefined && setup.meetingAmount !== ''
+    ? Number(setup.meetingAmount)
+    : (setup.meeting_amount !== undefined && setup.meeting_amount !== '' ? Number(setup.meeting_amount) : 0);
+
   let safetyCounter = 0;
   while (safetyCounter < 5) {
     const existingDoneMeeting = allMeetings.find(m => 
@@ -250,6 +256,14 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       if (forceDateUpdate) {
         updatePayload.time = occurrenceTime;
         updatePayload.location = occurrenceLocation;
+        if (defaultAmtNum > 0) {
+          updatePayload.meetingAmount = defaultAmtNum;
+          updatePayload.meeting_amount = defaultAmtNum;
+          updatePayload.memberNotes = {
+            ...(exactUpcomingMeeting.memberNotes || {}),
+            __meetingAmount: defaultAmtNum
+          };
+        }
       }
       
       await databaseService.update('meetings', exactUpcomingMeeting.id, updatePayload);
@@ -263,6 +277,14 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         if (forceDateUpdate) {
           supabaseUpdatePayload.time = occurrenceTime;
           supabaseUpdatePayload.location = occurrenceLocation;
+          if (defaultAmtNum > 0) {
+            supabaseUpdatePayload.meeting_amount = defaultAmtNum;
+            supabaseUpdatePayload.meetingAmount = defaultAmtNum;
+            supabaseUpdatePayload.member_notes = {
+              ...(exactUpcomingMeeting.memberNotes || {}),
+              __meetingAmount: defaultAmtNum
+            };
+          }
         }
         await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', exactUpcomingMeeting.id);
       } catch (e) {}
@@ -289,6 +311,14 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         updatePayload.date = occurrenceDateString;
         updatePayload.time = occurrenceTime;
         updatePayload.location = occurrenceLocation;
+        if (defaultAmtNum > 0) {
+          updatePayload.meetingAmount = defaultAmtNum;
+          updatePayload.meeting_amount = defaultAmtNum;
+          updatePayload.memberNotes = {
+            ...(otherFutureRecurringMeeting.memberNotes || {}),
+            __meetingAmount: defaultAmtNum
+          };
+        }
       }
       
       await databaseService.update('meetings', otherFutureRecurringMeeting.id, updatePayload);
@@ -303,6 +333,14 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
           supabaseUpdatePayload.date = occurrenceDateString;
           supabaseUpdatePayload.time = occurrenceTime;
           supabaseUpdatePayload.location = occurrenceLocation;
+          if (defaultAmtNum > 0) {
+            supabaseUpdatePayload.meeting_amount = defaultAmtNum;
+            supabaseUpdatePayload.meetingAmount = defaultAmtNum;
+            supabaseUpdatePayload.member_notes = {
+              ...(otherFutureRecurringMeeting.memberNotes || {}),
+              __meetingAmount: defaultAmtNum
+            };
+          }
         }
         await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', otherFutureRecurringMeeting.id);
       } catch (e) {}
@@ -315,9 +353,13 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         date: occurrenceDateString,
         time: occurrenceTime,
         location: occurrenceLocation,
+        meetingAmount: defaultAmtNum,
+        meeting_amount: defaultAmtNum,
         attendance: {},
         amountCollected: {},
-        memberNotes: {},
+        memberNotes: {
+          __meetingAmount: defaultAmtNum
+        },
         notes: '',
         isCompleted: false,
         createdAt: new Date().toISOString(),
@@ -336,6 +378,11 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
           date: occurrenceDateString,
           time: occurrenceTime,
           location: occurrenceLocation,
+          meeting_amount: defaultAmtNum,
+          meetingAmount: defaultAmtNum,
+          member_notes: {
+            __meetingAmount: defaultAmtNum
+          },
           status: 'UPCOMING',
           is_recurring: true,
           created_at: new Date().toISOString()
@@ -426,6 +473,7 @@ export function Meetings() {
     date: 1,
     time: '',
     location: '',
+    meetingAmount: '' as number | string,
     enabled: false
   });
 
@@ -1090,7 +1138,25 @@ export function Meetings() {
           } catch (e) {}
         }
 
+        if (!setupDataObj && chapterId) {
+          try {
+            const { data: chapAdmins } = await supabase
+              .from('users')
+              .select('default_meeting_setup, defaultMeetingSetup')
+              .eq('chapter_id', chapterId)
+              .not('default_meeting_setup', 'is', null)
+              .limit(1);
+            if (chapAdmins && chapAdmins[0]) {
+              setupDataObj = chapAdmins[0].default_meeting_setup || chapAdmins[0].defaultMeetingSetup;
+            }
+          } catch (e) {}
+        }
+
         const isEnabled = setupDataObj && (setupDataObj.enabled === true || setupDataObj.enabled === 'true');
+        const rawAmt = setupDataObj
+          ? (setupDataObj.meetingAmount ?? setupDataObj.meeting_amount ?? '')
+          : '';
+        const savedAmountStr = rawAmt !== undefined && rawAmt !== null && rawAmt !== '' ? String(rawAmt) : '';
 
         if (isEnabled) {
           const setup = {
@@ -1100,6 +1166,7 @@ export function Meetings() {
             date: setupDataObj.date || 1,
             time: setupDataObj.time || '',
             location: setupDataObj.location || venue,
+            meetingAmount: savedAmountStr,
             enabled: true
           };
           setDefaultSetupData(setup);
@@ -1112,11 +1179,12 @@ export function Meetings() {
         } else {
           const disabledSetup = {
             adminId: adminUserId,
-            frequency: 'Weekly' as const,
-            day: 'Monday',
-            date: 1,
-            time: '',
-            location: '',
+            frequency: setupDataObj?.frequency || ('Weekly' as const),
+            day: setupDataObj?.day || 'Monday',
+            date: setupDataObj?.date || 1,
+            time: setupDataObj?.time || '',
+            location: setupDataObj?.location || venue || '',
+            meetingAmount: savedAmountStr,
             enabled: false
           };
           setDefaultSetupData(disabledSetup);
@@ -1138,15 +1206,19 @@ export function Meetings() {
   useEffect(() => {
     if (isScheduleModalOpen) {
       const chapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
+      const defaultAmtStr = defaultSetupData.meetingAmount !== '' && defaultSetupData.meetingAmount !== undefined && defaultSetupData.meetingAmount !== null
+        ? String(defaultSetupData.meetingAmount)
+        : '';
       fetchChapterMeetingVenue(chapterId).then(venue => {
         setScheduleData(prev => ({
           ...prev,
           adminId: chapterId || profile?.chapter_id || '',
-          location: venue
+          location: venue,
+          meetingAmount: prev.meetingAmount !== '' ? prev.meetingAmount : defaultAmtStr
         }));
       }).catch(err => console.warn("Meetings fetch venue notice:", err));
     }
-  }, [isScheduleModalOpen, isMasterAdmin, selectedAdminId, profile?.chapter_id]);
+  }, [isScheduleModalOpen, isMasterAdmin, selectedAdminId, profile?.chapter_id, defaultSetupData.meetingAmount]);
 
   useEffect(() => {
     if (!profile) return;
@@ -1323,7 +1395,12 @@ export function Meetings() {
         return;
       }
 
-      const meetingAmountNum = scheduleData.meetingAmount !== '' ? Number(scheduleData.meetingAmount) : 0;
+      const defaultAmtStr = defaultSetupData.meetingAmount !== '' && defaultSetupData.meetingAmount !== undefined && defaultSetupData.meetingAmount !== null
+        ? String(defaultSetupData.meetingAmount)
+        : '';
+      const meetingAmountNum = scheduleData.meetingAmount !== ''
+        ? Number(scheduleData.meetingAmount)
+        : (defaultAmtStr !== '' ? Number(defaultAmtStr) : 0);
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || profile?.uid || '',
         chapter_id: finalChapterId || adminId,
@@ -1393,29 +1470,36 @@ export function Meetings() {
       setupDataObj = profile.defaultMeetingSetup || (profile as any)?.default_meeting_setup;
     }
 
-    const isEnabled = setupDataObj && (setupDataObj.enabled === true || setupDataObj.enabled === 'true');
-
-    if (isEnabled) {
-      setDefaultSetupData({
-        adminId: targetAdminId || '',
-        frequency: setupDataObj.frequency || 'Weekly',
-        day: setupDataObj.day || 'Monday',
-        date: setupDataObj.date || 1,
-        time: setupDataObj.time || '',
-        location: setupDataObj.location || '',
-        enabled: true
-      });
-    } else {
-      setDefaultSetupData({
-        adminId: targetAdminId || '',
-        frequency: 'Weekly',
-        day: 'Monday',
-        date: 1,
-        time: '',
-        location: '',
-        enabled: false
-      });
+    if (!setupDataObj && chapterId) {
+      try {
+        const { data: chapAdmins } = await supabase
+          .from('users')
+          .select('default_meeting_setup, defaultMeetingSetup')
+          .eq('chapter_id', chapterId)
+          .not('default_meeting_setup', 'is', null)
+          .limit(1);
+        if (chapAdmins && chapAdmins[0]) {
+          setupDataObj = chapAdmins[0].default_meeting_setup || chapAdmins[0].defaultMeetingSetup;
+        }
+      } catch (e) {}
     }
+
+    const isEnabled = setupDataObj && (setupDataObj.enabled === true || setupDataObj.enabled === 'true');
+    const rawAmt = setupDataObj
+      ? (setupDataObj.meetingAmount ?? setupDataObj.meeting_amount ?? '')
+      : '';
+    const savedAmountStr = rawAmt !== undefined && rawAmt !== null && rawAmt !== '' ? String(rawAmt) : '';
+
+    setDefaultSetupData({
+      adminId: targetAdminId || '',
+      frequency: setupDataObj?.frequency || 'Weekly',
+      day: setupDataObj?.day || 'Monday',
+      date: setupDataObj?.date || 1,
+      time: setupDataObj?.time || '',
+      location: setupDataObj?.location || '',
+      meetingAmount: savedAmountStr,
+      enabled: Boolean(isEnabled)
+    });
     setIsDefaultSetupOpen(true);
   };
 
@@ -1437,14 +1521,20 @@ export function Meetings() {
         throw new Error('No chapter admin associated or selected.');
       }
 
+      const parsedAmount = defaultSetupData.meetingAmount !== '' && defaultSetupData.meetingAmount !== undefined && defaultSetupData.meetingAmount !== null
+        ? Number(defaultSetupData.meetingAmount)
+        : 0;
+
       // Turn OFF Recurring
       if (!defaultSetupData.enabled) {
         const disabledSetupDoc = {
-          frequency: 'Weekly' as const,
-          day: 'Monday',
-          date: 1,
-          time: '',
-          location: '',
+          frequency: defaultSetupData.frequency || ('Weekly' as const),
+          day: defaultSetupData.day || 'Monday',
+          date: defaultSetupData.date || 1,
+          time: defaultSetupData.time || '',
+          location: defaultSetupData.location || '',
+          meetingAmount: parsedAmount,
+          meeting_amount: parsedAmount,
           enabled: false
         };
 
@@ -1465,18 +1555,24 @@ export function Meetings() {
 
         setDefaultSetupData({
           adminId,
-          frequency: 'Weekly',
-          day: 'Monday',
-          date: 1,
-          time: '',
-          location: '',
+          frequency: defaultSetupData.frequency || 'Weekly',
+          day: defaultSetupData.day || 'Monday',
+          date: defaultSetupData.date || 1,
+          time: defaultSetupData.time || '',
+          location: defaultSetupData.location || '',
+          meetingAmount: defaultSetupData.meetingAmount !== '' ? String(defaultSetupData.meetingAmount) : '',
           enabled: false
         });
+
+        if (profile && (profile.uid === adminId || profile.id === adminId)) {
+          profile.defaultMeetingSetup = disabledSetupDoc;
+          (profile as any).default_meeting_setup = disabledSetupDoc;
+        }
 
         if (refreshProfile) await refreshProfile();
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
-        setSuccess('Recurring meetings disabled and future meetings cleared.');
+        setSuccess('Default setup saved successfully.');
         setTimeout(() => {
           setIsDefaultSetupOpen(false);
           setSuccess(null);
@@ -1500,6 +1596,8 @@ export function Meetings() {
         date: defaultSetupData.date,
         time: defaultSetupData.time,
         location: defaultSetupData.location,
+        meetingAmount: parsedAmount,
+        meeting_amount: parsedAmount,
         enabled: true
       };
 
@@ -1514,6 +1612,11 @@ export function Meetings() {
           defaultMeetingSetup: enabledSetupDoc
         }).or(`id.eq.${adminId},uid.eq.${adminId}`);
       } catch (e) {}
+
+      if (profile && (profile.uid === adminId || profile.id === adminId)) {
+        profile.defaultMeetingSetup = enabledSetupDoc;
+        (profile as any).default_meeting_setup = enabledSetupDoc;
+      }
 
       const targetChapterId = activeChapterId || adminId;
       await syncDefaultMeetings(adminId, targetChapterId, enabledSetupDoc, true);
@@ -2667,11 +2770,14 @@ export function Meetings() {
               onClick={async () => {
                 const targetChapterId = isMasterAdmin ? selectedAdminId : profile?.chapter_id;
                 const venue = await fetchChapterMeetingVenue(targetChapterId);
+                const defaultAmtStr = defaultSetupData.meetingAmount !== '' && defaultSetupData.meetingAmount !== undefined && defaultSetupData.meetingAmount !== null
+                  ? String(defaultSetupData.meetingAmount)
+                  : '';
                 setScheduleData(prev => ({ 
                   ...prev, 
                   adminId: targetChapterId || profile?.chapter_id || '',
                   location: venue,
-                  meetingAmount: ''
+                  meetingAmount: defaultAmtStr
                 }));
                 setIsScheduleModalOpen(true);
               }}
@@ -4175,6 +4281,21 @@ export function Meetings() {
                   value={defaultSetupData.location}
                   onChange={(e) => setDefaultSetupData({ ...defaultSetupData, location: e.target.value })}
                   className="w-full pl-12 pr-4 py-3 rounded-[12px] border border-white/5 bg-[#151C2E] text-white placeholder-neutral-500 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Meeting Amount (₹)</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-sm">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Enter default meeting amount (e.g. 500)"
+                  value={defaultSetupData.meetingAmount}
+                  onChange={(e) => setDefaultSetupData({ ...defaultSetupData, meetingAmount: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 rounded-[12px] border border-white/5 bg-[#151C2E] text-white placeholder-neutral-500 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
             </div>

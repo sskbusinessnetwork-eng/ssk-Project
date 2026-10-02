@@ -32,7 +32,8 @@ import {
   Filter,
   ChevronDown,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  Star
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -1589,6 +1590,7 @@ export function Reports() {
         totalBusiness: 0,
         totalOneToOnes: 0,
         totalVisitors: 0,
+        totalTestimonials: 0,
         dateLabel: ''
       };
     }
@@ -1864,11 +1866,44 @@ export function Reports() {
       }
     });
 
+    // 5. Total Testimonials (logged-in chapter: Sent & Received)
+    let totalTestimonials = 0;
+    const countededTestimonialIds = new Set<string>();
+    testimonials.forEach(t => {
+      if (!t) return;
+      const rawDate = t.createdAt || (t as any).created_at || (t as any).date;
+      if (!isDateInPeriod(rawDate)) return;
+
+      const tChap = String((t as any).chapter_id || (t as any).chapterId || '').trim();
+      if (tChap && tChap !== loggedInChapterId && (!chapAdminId || tChap !== chapAdminId)) {
+        return;
+      }
+
+      const authorId = String(
+        t.author_id || t.authorId || (t as any).sender_id || (t as any).from_user_id || ''
+      ).trim();
+      const receiverId = String(
+        t.receiver_id || t.receiverId || (t as any).to_user_id || (t as any).recipient_id || ''
+      ).trim();
+
+      const belongsToChapter =
+        isMemberOfLoggedInChapter(authorId) ||
+        isMemberOfLoggedInChapter(receiverId) ||
+        (tChap !== '' && (tChap === loggedInChapterId || (chapAdminId !== '' && tChap === chapAdminId)));
+      if (!belongsToChapter) return;
+
+      const key = String(t.id || `${authorId}_${receiverId}_${rawDate}`);
+      if (countededTestimonialIds.has(key)) return;
+      countededTestimonialIds.add(key);
+      totalTestimonials += 1;
+    });
+
     return {
       totalReferrals,
       totalBusiness,
       totalOneToOnes,
       totalVisitors,
+      totalTestimonials,
       dateLabel: weeklyChapterDateRangeInfo.label
     };
   }, [
@@ -1880,6 +1915,7 @@ export function Reports() {
     oneToOnes,
     guestInvitations,
     meetings,
+    testimonials,
     usersByIdMap,
     scopedChapterMemberIdsSet,
     resolveUserChapterId,
@@ -3046,10 +3082,10 @@ export function Reports() {
           </div>
         )}
 
-        {/* 4 Metrics: Total Referrals, Total Business, Total 1-to-1 Meetings, Total Visitors */}
+        {/* 5 Metrics: Total Referrals, Total Business, Total 1-to-1 Meetings, Total Visitors, Total Testimonials */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map(i => (
               <div
                 key={i}
                 className="bg-[#0B1220] border border-white/5 rounded-2xl p-6 h-28 animate-pulse flex flex-col justify-between"
@@ -3060,7 +3096,7 @@ export function Reports() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* 1. Total Referrals */}
             <div className="bg-[#0B1220] border border-white/5 rounded-2xl p-5 sm:p-6 flex items-center justify-between hover:border-[#E53935]/30 transition-colors">
               <div>
@@ -3133,6 +3169,27 @@ export function Reports() {
               </div>
               <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                 <UserPlus size={24} />
+              </div>
+            </div>
+
+            {/* 5. Total Testimonials (SENT + RECEIVED) */}
+            <div className="bg-[#0B1220] border border-white/5 rounded-2xl p-5 sm:p-6 flex items-center justify-between hover:border-amber-500/30 transition-colors">
+              <div>
+                <span className="text-xs font-extrabold text-[#9CA3AF] uppercase tracking-wider block">
+                  Total Testimonials
+                </span>
+                <span className="text-3xl sm:text-4xl font-black text-amber-400 mt-2 block">
+                  {weeklyChapterPerformanceStats.totalTestimonials}
+                </span>
+                <span className="text-[11px] font-semibold text-[#9CA3AF] mt-1 block">
+                  {weeklyChapterPerformanceStats.totalTestimonials === 1
+                    ? 'Testimonial'
+                    : 'Testimonials'}{' '}
+                  exchanged
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <Star size={24} />
               </div>
             </div>
           </div>

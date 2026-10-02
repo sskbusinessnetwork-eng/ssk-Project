@@ -35,23 +35,36 @@ export function cleanHeroName(name: string): string {
 
 export function isUserOneToOneParticipant(m: any, userCandidateIds: string[]): boolean {
   if (!m || !userCandidateIds || userCandidateIds.length === 0) return false;
-  const candidateSet = new Set(userCandidateIds.map(id => String(id || '').trim()).filter(Boolean));
+  const candidateSet = new Set(userCandidateIds.map(id => String(id || '').trim().toLowerCase()).filter(Boolean));
   if (candidateSet.size === 0) return false;
 
-  const senderId = String(m.sender_id || m.senderId || '').trim();
-  const receiverId = String(m.receiver_id || m.receiverId || '').trim();
-  const organizerId = String(m.organizer_id || m.organizerId || '').trim();
-  const memberId = String(m.member_id || m.memberId || '').trim();
-  const creatorId = String(m.creatorId || m.creator_id || m.createdBy || m.created_by || '').trim();
+  const senderId = String(m.sender_id || m.senderId || '').trim().toLowerCase();
+  const receiverId = String(m.receiver_id || m.receiverId || '').trim().toLowerCase();
+  const organizerId = String(m.organizer_id || m.organizerId || '').trim().toLowerCase();
+  const memberId = String(m.member_id || m.memberId || '').trim().toLowerCase();
+  const creatorId = String(m.creatorId || m.creator_id || m.createdBy || m.created_by || '').trim().toLowerCase();
+  const userId = String(m.userId || m.user_id || '').trim().toLowerCase();
 
   if (senderId && candidateSet.has(senderId)) return true;
   if (receiverId && candidateSet.has(receiverId)) return true;
   if (organizerId && candidateSet.has(organizerId)) return true;
   if (memberId && candidateSet.has(memberId)) return true;
   if (creatorId && candidateSet.has(creatorId)) return true;
+  if (userId && candidateSet.has(userId)) return true;
 
   if (Array.isArray(m.participantIds)) {
-    if (m.participantIds.some((pid: any) => candidateSet.has(String(pid || '').trim()))) return true;
+    if (m.participantIds.some((pid: any) => candidateSet.has(String(pid || '').trim().toLowerCase()))) return true;
+  }
+  if (Array.isArray(m.participant_ids)) {
+    if (m.participant_ids.some((pid: any) => candidateSet.has(String(pid || '').trim().toLowerCase()))) return true;
+  }
+  if (m.attendance) {
+    try {
+      const attObj = typeof m.attendance === 'string' ? JSON.parse(m.attendance) : m.attendance;
+      if (attObj && typeof attObj === 'object') {
+        if (Object.keys(attObj).some(k => candidateSet.has(String(k).trim().toLowerCase()))) return true;
+      }
+    } catch {}
   }
   return false;
 }
@@ -72,10 +85,30 @@ const isToday = (dateStr: string) => {
 
 export function Analytics() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
-const { theme } = useTheme();
+  const { user, profile } = useAuth();
+  const { theme } = useTheme();
   const [score, setScore] = useState(0);
   const [userName, setUserName] = useState<string>('');
+
+  const userCandidateIds = useMemo(() => {
+    const ids: string[] = [];
+    if (profile?.id) ids.push(String(profile.id));
+    if (profile?.uid) ids.push(String(profile.uid));
+    if (profile?.memberId) ids.push(String(profile.memberId));
+    if (user?.id) ids.push(String(user.id));
+    if (user?.uid) ids.push(String(user.uid));
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.id) ids.push(String(p.id));
+        if (p.uid) ids.push(String(p.uid));
+        if (p.profile?.id) ids.push(String(p.profile.id));
+        if (p.profile?.uid) ids.push(String(p.profile.uid));
+      }
+    } catch {}
+    return Array.from(new Set(ids.filter(Boolean)));
+  }, [profile, user]);
 
   // Fetch fresh user name from Supabase on mount/profile change
   useEffect(() => {
@@ -213,6 +246,7 @@ const { theme } = useTheme();
   const [isFilterLoading, setIsFilterLoading] = useState(false);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(false);
+  const [analyticsModalRecords, setAnalyticsModalRecords] = useState<any[]>([]);
 
   const availableMembersForFilter = useMemo(() => {
     let list = allUsersList.filter(u => u.role !== 'MASTER_ADMIN');
@@ -253,6 +287,12 @@ const { theme } = useTheme();
       setAppliedMemberFilter(selectedMemberFilter);
       setIsFilterLoading(false);
       setIsFilterModalOpen(false);
+      if (analyticsModalCategory) {
+        setAnalyticsLoading(true);
+        fetchAnalyticsDataForCategory(analyticsModalCategory, range)
+          .catch(() => setAnalyticsError(true))
+          .finally(() => setAnalyticsLoading(false));
+      }
     }, 200);
   };
 
@@ -279,6 +319,12 @@ const { theme } = useTheme();
       setActiveDateRange(null);
     }
     setIsFilterModalOpen(false);
+    if (analyticsModalCategory) {
+      setAnalyticsLoading(true);
+      fetchAnalyticsDataForCategory(analyticsModalCategory, null)
+        .catch(() => setAnalyticsError(true))
+        .finally(() => setAnalyticsLoading(false));
+    }
   };
 
   // Resolve chapter name dynamically
@@ -391,12 +437,30 @@ const { theme } = useTheme();
 
     // 2. Subscribe to thank you slips
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {
-      setAllSlips(deduplicateSlips(data));
+      const filtered = usePersonalStats
+        ? (data || []).filter(s => {
+            const sender = String(s.fromUserId || s.from_user_id || s.submitted_by || s.sender_id || '');
+            const receiver = String(s.toUserId || s.to_user_id || s.receiver_id || '');
+            return userCandidateIds.includes(sender) || userCandidateIds.includes(receiver);
+          })
+        : (data || []);
+      setAllSlips(deduplicateSlips(filtered));
     });
     const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
 
-    // Fetch thank_you_slips from Supabase as well
-    supabase.from('thank_you_slips').select('*').then(
+    // Fetch thank_you_slips from Supabase with member-level query filtering
+    let slipsQuery = supabase.from('thank_you_slips').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `from_user_id.eq.${id}`,
+        `to_user_id.eq.${id}`,
+        `sender_id.eq.${id}`,
+        `receiver_id.eq.${id}`,
+        `submitted_by.eq.${id}`
+      ]).join(',');
+      slipsQuery = slipsQuery.or(orConds);
+    }
+    slipsQuery.then(
       ({ data: sbSlips }) => {
         if (sbSlips && sbSlips.length > 0) {
           const mappedSbSlips = sbSlips.map((s: any) => {
@@ -423,21 +487,37 @@ const { theme } = useTheme();
 
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
+      const filtered = usePersonalStats
+        ? (data || []).filter(r => {
+            const sender = String(r.fromUserId || r.from_user_id || r.sender_id || '');
+            const receiver = String(r.toUserId || r.to_user_id || r.receiver_id || '');
+            return userCandidateIds.includes(sender) || userCandidateIds.includes(receiver);
+          })
+        : (data || []);
       setAllReferrals(prev => {
         const map = new Map<string, any>();
         (prev || []).forEach(r => map.set(String(r.id), r));
-        (data || []).forEach(r => map.set(String(r.id), r));
+        (filtered || []).forEach(r => map.set(String(r.id), r));
         return Array.from(map.values());
       });
       if (profile.role === 'MEMBER') {
-        const myUid = String(profile.uid || profile.id || '');
-        setPassedReferrals((data || []).filter(r => String(r.fromUserId || r.from_user_id || r.sender_id) === myUid));
-        setReceivedReferrals((data || []).filter(r => String(r.toUserId || r.to_user_id || r.receiver_id) === myUid));
+        setPassedReferrals((data || []).filter(r => userCandidateIds.includes(String(r.fromUserId || r.from_user_id || r.sender_id))));
+        setReceivedReferrals((data || []).filter(r => userCandidateIds.includes(String(r.toUserId || r.to_user_id || r.receiver_id))));
       }
     });
 
-    // Fetch referrals from Supabase as well
-    supabase.from('referrals').select('*').then(
+    // Fetch referrals from Supabase with member-level query filtering
+    let referralsQuery = supabase.from('referrals').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `from_user_id.eq.${id}`,
+        `to_user_id.eq.${id}`,
+        `sender_id.eq.${id}`,
+        `receiver_id.eq.${id}`
+      ]).join(',');
+      referralsQuery = referralsQuery.or(orConds);
+    }
+    referralsQuery.then(
       ({ data: sbReferrals }) => {
         if (sbReferrals && sbReferrals.length > 0) {
           const mapped = sbReferrals.map((r: any) => ({
@@ -472,13 +552,26 @@ const { theme } = useTheme();
 
     // 4. Subscribe to 1-to-1s
     const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
-      setOneToOnes(data);
-      const userCand = [profile.id, profile.uid].filter(Boolean).map(String);
-      setCreatedOneToOnes(data.filter(m => isUserOneToOneParticipant(m, userCand)));
-      setParticipatedOneToOnes(data.filter(m => isUserOneToOneParticipant(m, userCand)));
+      const filtered = usePersonalStats
+        ? (data || []).filter(m => isUserOneToOneParticipant(m, userCandidateIds))
+        : (data || []);
+      setOneToOnes(filtered);
+      setCreatedOneToOnes(filtered);
+      setParticipatedOneToOnes(filtered);
     });
 
-    supabase.from('one_to_one_meetings').select('*').then(
+    let otoQuery = supabase.from('one_to_one_meetings').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `organizer_id.eq.${id}`,
+        `member_id.eq.${id}`,
+        `creator_id.eq.${id}`,
+        `receiver_id.eq.${id}`,
+        `sender_id.eq.${id}`
+      ]).join(',');
+      otoQuery = otoQuery.or(orConds);
+    }
+    otoQuery.then(
       ({ data: sbOto }) => {
         if (sbOto && sbOto.length > 0) {
           setOneToOnes(prev => {
@@ -494,10 +587,26 @@ const { theme } = useTheme();
 
     // 5. Subscribe to guest invitations
     const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
-      setGuestInvitations(data);
+      const filtered = usePersonalStats
+        ? (data || []).filter(g => {
+            const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
+            return userCandidateIds.includes(invId);
+          })
+        : (data || []);
+      setGuestInvitations(filtered);
     });
 
-    supabase.from('guest_invitations').select('*').then(
+    let guestQuery = supabase.from('guest_invitations').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `invited_by_user_id.eq.${id}`,
+        `invited_by.eq.${id}`,
+        `created_by.eq.${id}`,
+        `member_id.eq.${id}`
+      ]).join(',');
+      guestQuery = guestQuery.or(orConds);
+    }
+    guestQuery.then(
       ({ data: sbGuests }) => {
         if (sbGuests && sbGuests.length > 0) {
           setGuestInvitations(prev => {
@@ -516,10 +625,52 @@ const { theme } = useTheme();
       setMeetings((data || []).map((m: any) => normalizeMeetingRecord({ ...m })));
     });
 
-    // 7. Subscribe to testimonials
-    const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], setAllTestimonials);
+    let meetQuery = supabase.from('meetings').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `admin_id.eq.${id}`,
+        `attendance->>${id}.neq.null`
+      ]).join(',');
+      meetQuery = meetQuery.or(orConds);
+    } else if (profile?.chapter_id) {
+      meetQuery = meetQuery.eq('chapter_id', profile.chapter_id);
+    }
+    meetQuery.then(
+      ({ data: sbMeetings }) => {
+        if (sbMeetings && sbMeetings.length > 0) {
+          const mapped = sbMeetings.map((m: any) => normalizeMeetingRecord({ ...m }));
+          setMeetings(prev => {
+            const map = new Map<string, any>();
+            (prev || []).forEach(item => map.set(String(item.id), item));
+            mapped.forEach(item => map.set(String(item.id), item));
+            return Array.from(map.values());
+          });
+        }
+      },
+      (err) => console.warn("Dashboard load meetings notice:", err)
+    );
 
-    supabase.from('testimonials').select('*').then(
+    // 7. Subscribe to testimonials
+    const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], (data) => {
+      const filtered = usePersonalStats
+        ? (data || []).filter(t => {
+            const authorId = String(t.author_id || t.authorId || t.giverId || t.giver_id || t.sender_id || '');
+            const recipientId = String(t.recipient_id || t.recipientId || t.receiver_id || t.receiverId || t.to_user_id || t.toUserId || '');
+            return userCandidateIds.includes(authorId) || userCandidateIds.includes(recipientId);
+          })
+        : (data || []);
+      setAllTestimonials(filtered);
+    });
+
+    let testQuery = supabase.from('testimonials').select('*');
+    if (usePersonalStats && userCandidateIds.length > 0) {
+      const orConds = userCandidateIds.flatMap(id => [
+        `author_id.eq.${id}`,
+        `receiver_id.eq.${id}`
+      ]).join(',');
+      testQuery = testQuery.or(orConds);
+    }
+    testQuery.then(
       ({ data: sbTestimonials }) => {
         if (sbTestimonials && sbTestimonials.length > 0) {
           setAllTestimonials(prev => {
@@ -623,9 +774,15 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(s => s.fromUserId === appliedMemberFilter || s.toUserId === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      list = list.filter(s => {
+        const sender = String(s.fromUserId || s.from_user_id || s.submitted_by || s.sender_id || '');
+        const receiver = String(s.toUserId || s.to_user_id || s.receiver_id || '');
+        return userCandidateIds.includes(sender) || userCandidateIds.includes(receiver);
+      });
     }
     return list;
-  }, [allSlips, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
+  }, [allSlips, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList, usePersonalStats, userCandidateIds]);
 
   const effectiveReferrals = useMemo(() => {
     let list = allReferrals;
@@ -640,9 +797,15 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(r => r.fromUserId === appliedMemberFilter || r.toUserId === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      list = list.filter(r => {
+        const sender = String(r.fromUserId || r.from_user_id || r.sender_id || '');
+        const receiver = String(r.toUserId || r.to_user_id || r.receiver_id || '');
+        return userCandidateIds.includes(sender) || userCandidateIds.includes(receiver);
+      });
     }
     return list;
-  }, [allReferrals, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
+  }, [allReferrals, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList, usePersonalStats, userCandidateIds]);
 
   const effectiveOneToOnes = useMemo(() => {
     let list = oneToOnes;
@@ -657,9 +820,11 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(m => (m.organizer_id || m.creatorId) === appliedMemberFilter || (m.participantIds && m.participantIds.includes(appliedMemberFilter)) || m.member_id === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      list = list.filter(m => isUserOneToOneParticipant(m, userCandidateIds));
     }
     return list;
-  }, [oneToOnes, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
+  }, [oneToOnes, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList, usePersonalStats, userCandidateIds]);
 
   const effectiveMeetings = useMemo(() => {
     let list = meetings;
@@ -673,9 +838,15 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(m => (m.attendance && !!m.attendance[appliedMemberFilter]) || m.createdBy === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      const userChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+      list = list.filter(m => {
+        const mChap = String(m.chapter_id || '').trim();
+        return !userChapId || !mChap || userChapId === mChap;
+      });
     }
     return list;
-  }, [meetings, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter]);
+  }, [meetings, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, usePersonalStats]);
 
   const effectiveGuestInvitations = useMemo(() => {
     let list = guestInvitations;
@@ -689,9 +860,14 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(g => g.createdBy === appliedMemberFilter || g.userId === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      list = list.filter(g => {
+        const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
+        return userCandidateIds.includes(invId);
+      });
     }
     return list;
-  }, [guestInvitations, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter]);
+  }, [guestInvitations, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, usePersonalStats, userCandidateIds]);
 
   const effectiveTestimonials = useMemo(() => {
     let list = allTestimonials;
@@ -706,13 +882,15 @@ const { theme } = useTheme();
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(t => t.authorMemberId === appliedMemberFilter || t.recipientMemberId === appliedMemberFilter);
       }
+    } else if (usePersonalStats) {
+      list = list.filter(t => {
+        const authorId = String(t.author_id || t.authorId || t.giverId || t.giver_id || t.sender_id || '');
+        const recipientId = String(t.recipient_id || t.recipientId || t.receiver_id || t.receiverId || t.to_user_id || t.toUserId || '');
+        return userCandidateIds.includes(authorId) || userCandidateIds.includes(recipientId);
+      });
     }
     return list;
-  }, [allTestimonials, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList]);
-
-    const userCandidateIds = useMemo(() => {
-    return [profile?.id, profile?.uid].filter(Boolean).map(String);
-  }, [profile]);
+  }, [allTestimonials, activeDateRange, profile, appliedChapterFilter, appliedMemberFilter, allUsersList, usePersonalStats, userCandidateIds]);
 
   const chapterSlips = useMemo(() => {
     return effectiveSlips.filter(slip => 
@@ -2194,7 +2372,614 @@ const { theme } = useTheme();
   };
   
   
-        const renderAnalyticsDetails = () => {
+  const getCleanModalTitle = (rawCategory: string | null) => {
+    if (!rawCategory) return '';
+    const norm = rawCategory.toLowerCase().trim();
+    if (norm.includes('referral') && norm.includes('sent')) return 'Referrals Sent';
+    if (norm.includes('referral') && norm.includes('received')) return 'Referrals Received';
+    if (norm.includes('referral')) return 'Referrals';
+    if (norm.includes('business') && (norm.includes('sent') || norm.includes('given'))) return 'Business Given';
+    if (norm.includes('business') && norm.includes('received')) return 'Business Received';
+    if (norm.includes('business')) return 'Business Records';
+    if (norm.includes('thank') && norm.includes('sent')) return 'Thank You Slips Sent';
+    if (norm.includes('thank') && norm.includes('received')) return 'Thank You Slips Received';
+    if (norm.includes('thank')) return 'Thank You Slips';
+    if (norm.includes('meeting') && norm.includes('scheduled')) return 'Meetings Scheduled';
+    if (norm.includes('meeting') && (norm.includes('attended') || norm.includes('attendance'))) return 'Meetings Attended';
+    if (norm.includes('one-to-one') || norm.includes('1-to-1') || norm.includes('1:1')) {
+      if (norm.includes('scheduled')) return '1-to-1 Meetings Scheduled';
+      if (norm.includes('completed')) return '1-to-1 Meetings Completed';
+      return '1-to-1 Meetings';
+    }
+    if (norm === 'meetings') return 'Chapter Meetings';
+    if (norm.includes('guest') && norm.includes('invited')) return 'Guests Invited';
+    if (norm.includes('visitor') || (norm.includes('guest') && norm.includes('attended'))) return 'Visitors Attended';
+    if (norm.includes('guest')) return 'Guests & Visitors';
+    if (norm.includes('testimonial')) {
+      if (norm.includes('given') || norm.includes('sent')) return 'Testimonials Given';
+      if (norm.includes('received')) return 'Testimonials Received';
+      return 'Testimonials';
+    }
+    return rawCategory;
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return null;
+    try {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return null;
+      return format(d, 'dd MMM yyyy');
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const formatTimeStr = (timeString: string, dateString: string) => {
+    if (!timeString && !dateString) return null;
+    try {
+      if (timeString) {
+        if (timeString.includes(':') && !timeString.includes('T')) {
+          const parts = timeString.split(':');
+          const timeD = new Date();
+          timeD.setHours(parseInt(parts[0], 10) || 0);
+          timeD.setMinutes(parseInt(parts[1], 10) || 0);
+          return format(timeD, 'h:mm a');
+        }
+      }
+      if (dateString) {
+        const dateD = new Date(dateString);
+        if (isNaN(dateD.getTime())) return null;
+        if (dateString.includes('T')) {
+          return format(dateD, 'h:mm a');
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const formatRole = (role: string, position: string) => {
+    if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
+    if (role === 'PRESIDENT') return 'President';
+    if (role === 'VICE_PRESIDENT') return 'Vice President';
+    if (role === 'TREASURER') return 'Treasurer';
+    if (position && position.toLowerCase() !== 'none') return position;
+    return 'Member';
+  };
+
+  const fetchAnalyticsDataForCategory = async (category: string, dateRangeOverride?: { start: Date; end: Date } | null) => {
+    if (!profile) return;
+    const norm = category.toLowerCase().trim();
+    const candidateIds = userCandidateIds;
+    if (candidateIds.length === 0) return;
+
+    const effectiveDate = dateRangeOverride !== undefined ? dateRangeOverride : activeDateRange;
+
+    try {
+      if (norm.includes('referral')) {
+        let query = supabase.from('referrals').select('*');
+        const isSentOnly = norm.includes('sent') || norm.includes('given') || norm.includes('passed');
+        const isReceivedOnly = norm.includes('received');
+
+        if (usePersonalStats) {
+          if (isSentOnly) {
+            const orConds = candidateIds.flatMap(id => [`from_user_id.eq.${id}`, `sender_id.eq.${id}`]).join(',');
+            query = query.or(orConds);
+          } else if (isReceivedOnly) {
+            const orConds = candidateIds.flatMap(id => [`to_user_id.eq.${id}`, `receiver_id.eq.${id}`]).join(',');
+            query = query.or(orConds);
+          } else {
+            const orConds = candidateIds.flatMap(id => [
+              `from_user_id.eq.${id}`,
+              `to_user_id.eq.${id}`,
+              `sender_id.eq.${id}`,
+              `receiver_id.eq.${id}`
+            ]).join(',');
+            query = query.or(orConds);
+          }
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+          if (appliedMemberFilter !== 'ALL') {
+            query = query.or(`from_user_id.eq.${appliedMemberFilter},to_user_id.eq.${appliedMemberFilter},sender_id.eq.${appliedMemberFilter},receiver_id.eq.${appliedMemberFilter}`);
+          }
+        }
+
+        if (effectiveDate) {
+          query = query.gte('created_at', effectiveDate.start.toISOString()).lte('created_at', effectiveDate.end.toISOString());
+        }
+
+        const { data: sbReferrals, error } = await query;
+        if (error) throw error;
+
+        let list = (sbReferrals || []).filter(isNormalReferral);
+        if (usePersonalStats) {
+          list = list.filter(r => {
+            const sId = String(r.from_user_id || r.sender_id || r.fromUserId || '');
+            const rId = String(r.to_user_id || r.receiver_id || r.toUserId || '');
+            if (isSentOnly) return candidateIds.includes(sId);
+            if (isReceivedOnly) return candidateIds.includes(rId);
+            return candidateIds.includes(sId) || candidateIds.includes(rId);
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(r => isDateInRange(r.created_at || r.createdAt || r.date, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map(ref => {
+          const senderId = String(ref.from_user_id || ref.sender_id || ref.fromUserId || '');
+          const receiverId = String(ref.to_user_id || ref.receiver_id || ref.toUserId || '');
+          const isSentByMe = candidateIds.includes(senderId);
+          const giverName = resolveMemberName(senderId, ref.from_user_name || ref.fromUserName || ref.sender_name);
+          const recipientName = resolveMemberName(receiverId, ref.to_user_name || ref.toUserName || ref.receiver_name);
+          const st = (ref.status || 'Pending').toLowerCase();
+          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = 'amber';
+          if (st === 'closed' || st === 'completed' || st === 'converted') bColor = 'emerald';
+          if (st === 'cancelled' || st === 'not_converted') bColor = 'red';
+
+          return {
+            id: String(ref.id),
+            title: isSentByMe ? `To: ${recipientName}` : `From: ${giverName}`,
+            subtitle: `Customer: ${ref.customer_name || ref.contact_name || 'Referral'}${usePersonalStats ? ` • ${isSentByMe ? 'Referral Given' : 'Referral Received'}` : ''}`,
+            icon: <Share2 size={20} className="text-purple-400" />,
+            badgeText: ref.status || 'Pending',
+            badgeColor: bColor,
+            date: ref.created_at ? formatDate(ref.created_at) : null,
+            time: ref.created_at ? formatTimeStr('', ref.created_at) : null,
+            notes: ref.notes || ref.requirement || ref.business_requirement || '-'
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('business') || norm.includes('thank')) {
+        let query = supabase.from('thank_you_slips').select('*');
+        const isThank = norm.includes('thank');
+        const isThankSent = isThank && (norm.includes('sent') || norm.includes('given'));
+        const isThankReceived = isThank && norm.includes('received');
+        const isBizSent = !isThank && (norm.includes('sent') || norm.includes('given'));
+        const isBizReceived = !isThank && norm.includes('received');
+
+        if (usePersonalStats) {
+          if (isBizSent || isThankReceived) {
+            const orConds = candidateIds.flatMap(id => [`to_user_id.eq.${id}`, `receiver_id.eq.${id}`]).join(',');
+            query = query.or(orConds);
+          } else if (isBizReceived || isThankSent) {
+            const orConds = candidateIds.flatMap(id => [`from_user_id.eq.${id}`, `sender_id.eq.${id}`, `submitted_by.eq.${id}`]).join(',');
+            query = query.or(orConds);
+          } else {
+            const orConds = candidateIds.flatMap(id => [
+              `from_user_id.eq.${id}`,
+              `to_user_id.eq.${id}`,
+              `sender_id.eq.${id}`,
+              `receiver_id.eq.${id}`,
+              `submitted_by.eq.${id}`
+            ]).join(',');
+            query = query.or(orConds);
+          }
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+          if (appliedMemberFilter !== 'ALL') {
+            query = query.or(`from_user_id.eq.${appliedMemberFilter},to_user_id.eq.${appliedMemberFilter},sender_id.eq.${appliedMemberFilter},receiver_id.eq.${appliedMemberFilter}`);
+          }
+        }
+
+        if (effectiveDate) {
+          query = query.gte('created_at', effectiveDate.start.toISOString()).lte('created_at', effectiveDate.end.toISOString());
+        }
+
+        const { data: sbSlips, error } = await query;
+        if (error) throw error;
+
+        let list = sbSlips || [];
+        if (usePersonalStats) {
+          list = list.filter((s: any) => {
+            const senderId = String(s.from_user_id || s.sender_id || s.submitted_by || s.fromUserId || '');
+            const receiverId = String(s.to_user_id || s.receiver_id || s.toUserId || '');
+            if (isBizSent || isThankReceived) return candidateIds.includes(receiverId);
+            if (isBizReceived || isThankSent) return candidateIds.includes(senderId);
+            return candidateIds.includes(senderId) || candidateIds.includes(receiverId);
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(s => isDateInRange(s.created_at || s.createdAt || s.date, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map((slip: any) => {
+          const senderId = String(slip.from_user_id || slip.sender_id || slip.submitted_by || slip.fromUserId || '');
+          const receiverId = String(slip.to_user_id || slip.receiver_id || slip.toUserId || '');
+          const senderName = resolveMemberName(senderId, slip.sender_name || slip.fromUserName);
+          const receiverName = resolveMemberName(receiverId, slip.receiver_name || slip.toUserName);
+          const isSender = candidateIds.includes(senderId);
+          const isReceiver = candidateIds.includes(receiverId);
+          const val = Number(slip.business_value || slip.businessValue || slip.amount || 0);
+
+          if (!isThank) {
+            const isGiver = isReceiver;
+            return {
+              id: String(slip.id),
+              title: slip.customer_name || slip.customerName || (isGiver ? `Business Given to ${receiverName}` : `Business Received from ${senderName}`),
+              subtitle: isGiver ? `To: ${receiverName} (Business Given)` : `From: ${senderName} (Business Received)`,
+              icon: <Briefcase size={20} className="text-emerald-400" />,
+              badgeText: `₹${val.toLocaleString('en-IN')}`,
+              badgeColor: 'emerald' as const,
+              date: slip.created_at ? formatDate(slip.created_at) : null,
+              time: slip.created_at ? formatTimeStr('', slip.created_at) : null,
+              notes: slip.notes || slip.thank_you_message || '-'
+            };
+          } else {
+            return {
+              id: String(slip.id),
+              title: slip.customer_name || slip.customerName ? `Client: ${slip.customer_name || slip.customerName}` : (isSender ? `Thank You to ${receiverName}` : `Thank You from ${senderName}`),
+              subtitle: isSender ? `Sent to: ${receiverName} (Thank You Given)` : `Received from: ${senderName} (Thank You Received)`,
+              icon: <FileText size={20} className="text-cyan-400" />,
+              badgeText: `₹${val.toLocaleString('en-IN')}`,
+              badgeColor: 'emerald' as const,
+              date: slip.created_at ? formatDate(slip.created_at) : null,
+              time: slip.created_at ? formatTimeStr('', slip.created_at) : null,
+              notes: slip.notes || slip.thank_you_message || '-'
+            };
+          }
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('one-to-one') || norm.includes('1-to-1') || norm.includes('1:1') || norm.includes('one to one')) {
+        let query = supabase.from('one_to_one_meetings').select('*');
+        const isScheduledOnly = norm.includes('scheduled');
+        const isCompletedOnly = norm.includes('completed');
+
+        if (usePersonalStats) {
+          const orConds = candidateIds.flatMap(id => [
+            `organizer_id.eq.${id}`,
+            `member_id.eq.${id}`,
+            `creator_id.eq.${id}`,
+            `receiver_id.eq.${id}`,
+            `sender_id.eq.${id}`
+          ]).join(',');
+          query = query.or(orConds);
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+        }
+
+        if (isCompletedOnly) {
+          query = query.or('status.eq.COMPLETED,status.eq.completed,is_completed.eq.true');
+        }
+
+        if (effectiveDate) {
+          query = query.gte('date', effectiveDate.start.toISOString().split('T')[0]).lte('date', effectiveDate.end.toISOString().split('T')[0]);
+        }
+
+        const { data: sbOto, error } = await query;
+        if (error) throw error;
+
+        let list = sbOto || [];
+        if (usePersonalStats) {
+          list = list.filter((m: any) => {
+            if (!isUserOneToOneParticipant(m, candidateIds)) return false;
+            const st = String(m.status || '').toUpperCase();
+            if (isScheduledOnly) {
+              return st !== 'CANCELLED' && st !== 'NOT_COMPLETED';
+            }
+            if (isCompletedOnly) {
+              return st === 'COMPLETED' || m.is_completed === true || m.isCompleted === true;
+            }
+            return true;
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(m => isDateInRange(m.date || m.scheduled_date || m.created_at, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map((m: any) => {
+          const senderId = String(m.sender_id || m.organizer_id || m.creator_id || m.userId || '');
+          const receiverId = String(m.receiver_id || m.member_id || (m.participant_ids && m.participant_ids[0]) || '');
+          let candSender = m.creator_name || m.organizer_name || m.host_name;
+          let candReceiver = m.partner_name || (m.participant_names && m.participant_names[0]);
+
+          const senderName = resolveMemberName(senderId, candSender);
+          const receiverName = resolveMemberName(receiverId, candReceiver);
+          const partnerName = candidateIds.includes(senderId) ? receiverName : senderName;
+
+          const st = (m.status || 'Scheduled').toLowerCase();
+          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = 'amber';
+          if (st === 'completed') bColor = 'emerald';
+          if (st === 'cancelled') bColor = 'red';
+
+          return {
+            id: String(m.id),
+            title: usePersonalStats ? `1-to-1 with ${partnerName || 'Member'}` : `${senderName} & ${receiverName}`,
+            subtitle: m.venue || m.meeting_location || m.locationType || 'In-Person / Online',
+            icon: <Handshake size={20} className="text-blue-400" />,
+            badgeText: m.status || 'Scheduled',
+            badgeColor: bColor,
+            date: m.date || m.scheduled_date ? formatDate(m.date || m.scheduled_date) : null,
+            time: formatTimeStr(m.time || m.scheduled_time || m.meeting_time, m.date || m.scheduled_date),
+            notes: m.notes || m.description || '-'
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('guest') || norm.includes('visitor') || norm.includes('invite')) {
+        let query = supabase.from('guest_invitations').select('*');
+        const isVisitorOnly = norm.includes('visitor') || norm.includes('attended');
+        const isInvitedOnly = norm.includes('invited');
+
+        if (usePersonalStats) {
+          const orConds = candidateIds.flatMap(id => [
+            `invited_by_user_id.eq.${id}`,
+            `invited_by.eq.${id}`,
+            `created_by.eq.${id}`,
+            `member_id.eq.${id}`
+          ]).join(',');
+          query = query.or(orConds);
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+        }
+
+        if (isVisitorOnly) {
+          query = query.or('status.eq.present,status.eq.attended,status.eq.Present,status.eq.Attended,attendance_status.eq.present,attendance_status.eq.attended');
+        }
+
+        if (effectiveDate) {
+          query = query.gte('meeting_date', effectiveDate.start.toISOString().split('T')[0]).lte('meeting_date', effectiveDate.end.toISOString().split('T')[0]);
+        }
+
+        const { data: sbGuests, error } = await query;
+        if (error) throw error;
+
+        let list = sbGuests || [];
+        if (usePersonalStats) {
+          list = list.filter((g: any) => {
+            const invId = String(g.invited_by_user_id || g.invited_by || g.created_by || g.member_id || '').trim();
+            if (!candidateIds.includes(invId)) return false;
+            if (isVisitorOnly) {
+              const st = String(g.status || g.attendance_status || '').toLowerCase();
+              return st === 'present' || st === 'attended';
+            }
+            return true;
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(g => isDateInRange(g.meeting_date || g.created_at || g.date, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map((g: any) => {
+          const invId = String(g.invited_by_user_id || g.invited_by || g.created_by || g.member_id || '').trim();
+          const inviterName = resolveMemberName(invId, g.invited_by_name || g.inviter_name);
+          const st = (g.status || g.attendance_status || '').toLowerCase();
+          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = 'amber';
+          if (st === 'attended' || st === 'present') bColor = 'emerald';
+          if (st === 'no-show' || st === 'absent') bColor = 'red';
+
+          return {
+            id: String(g.id),
+            title: g.guest_name || g.guestName || 'Guest',
+            subtitle: usePersonalStats
+              ? (g.business_category || g.guest_business || g.profession || 'Invited Visitor')
+              : `Invited By: ${inviterName}`,
+            icon: <UserPlus size={20} className="text-pink-400" />,
+            badgeText: (st === 'present' || st === 'attended') ? 'Present' : (g.status || 'Invited'),
+            badgeColor: bColor,
+            date: g.meeting_date || g.created_at ? formatDate(g.meeting_date || g.created_at) : null,
+            time: g.meeting_time ? formatTimeStr(g.meeting_time, '') : null,
+            notes: g.notes || (g.business_category || g.profession ? `Business: ${g.business_category || g.profession}` : '-')
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('meeting')) {
+        const isAttendedOnly = norm.includes('attended') || norm.includes('attendance');
+        const isScheduledOnly = norm.includes('scheduled');
+        const userChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+
+        let query = supabase.from('meetings').select('*');
+
+        if (usePersonalStats) {
+          if (isAttendedOnly) {
+            const orConds = candidateIds.map(id => `attendance->>${id}.in.("Present","PRESENT","Yes","YES","Substitute","SUBSTITUTE","Late")`).join(',');
+            query = query.or(orConds);
+          } else if (userChapId) {
+            query = query.eq('chapter_id', userChapId);
+          } else {
+            const orConds = candidateIds.flatMap(id => [`admin_id.eq.${id}`, `attendance->>${id}.neq.null`]).join(',');
+            query = query.or(orConds);
+          }
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+        }
+
+        if (effectiveDate) {
+          query = query.gte('date', effectiveDate.start.toISOString().split('T')[0]).lte('date', effectiveDate.end.toISOString().split('T')[0]);
+        }
+
+        const { data: sbMeetings, error } = await query;
+        if (error) throw error;
+
+        let list = (sbMeetings || []).map((m: any) => normalizeMeetingRecord({ ...m }));
+        if (usePersonalStats) {
+          list = list.filter((m: any) => {
+            const mChap = String(m.chapter_id || '').trim();
+            if (userChapId && mChap && userChapId !== mChap) return false;
+
+            if (isAttendedOnly) {
+              if (!m.attendance) return false;
+              return candidateIds.some(uid => {
+                const st = m.attendance[uid];
+                return st && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(st));
+              });
+            }
+            if (isScheduledOnly) {
+              const now = new Date();
+              const mDate = new Date(m.date || m.created_at || '');
+              const normalized = normalizeMeetingRecord({ ...m });
+              const notes = normalized.memberNotes || normalized.member_notes || {};
+              const effectiveStatus = String(notes.__status || normalized.status || 'UPCOMING').trim().toUpperCase();
+              const isDone = normalized.isCompleted === true || (normalized.isCompleted as any) === 'true' || effectiveStatus === 'COMPLETED' || normalized.isCancelled === true || (normalized.isCancelled as any) === 'true' || effectiveStatus === 'CANCELLED';
+              return !isDone && (effectiveStatus === 'UPCOMING' || effectiveStatus === 'SCHEDULED') && (getMeetingExactDateTime(normalized) > now || mDate >= now);
+            }
+            return true;
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(m => isDateInRange(m.date || m.meeting_date || m.created_at, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map((m: any) => {
+          let bText = m.status || 'Scheduled';
+          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = (m.status || '').toLowerCase() === 'completed' ? 'emerald' : 'amber';
+          if (usePersonalStats && m.attendance) {
+            const userAttStatus = candidateIds.map(uid => m.attendance[uid]).find(Boolean);
+            if (userAttStatus) {
+              bText = String(userAttStatus);
+              bColor = ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(userAttStatus)) ? 'emerald' : 'red';
+            } else if ((m.status || '').toLowerCase() === 'completed') {
+              bText = 'Absent';
+              bColor = 'red';
+            }
+          }
+
+          return {
+            id: String(m.id),
+            title: m.title || 'Chapter Meeting',
+            subtitle: m.venue || m.location || 'Meeting Venue',
+            icon: <Calendar size={20} className="text-orange-400" />,
+            badgeText: bText,
+            badgeColor: bColor,
+            date: m.date ? formatDate(m.date) : null,
+            time: m.startTime ? `${m.startTime} - ${m.endTime || 'End'}` : (m.time || null),
+            notes: m.location || m.notes || '-'
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('testimonial')) {
+        let query = supabase.from('testimonials').select('*');
+        const isGivenOnly = norm.includes('given') || norm.includes('sent');
+        const isReceivedOnly = norm.includes('received');
+
+        if (usePersonalStats) {
+          if (isGivenOnly) {
+            query = query.or(candidateIds.map(id => `author_id.eq.${id}`).join(','));
+          } else if (isReceivedOnly) {
+            query = query.or(candidateIds.map(id => `receiver_id.eq.${id}`).join(','));
+          } else {
+            query = query.or(candidateIds.flatMap(id => [`author_id.eq.${id}`, `receiver_id.eq.${id}`]).join(','));
+          }
+        } else {
+          if (appliedChapterFilter !== 'ALL') {
+            query = query.eq('chapter_id', appliedChapterFilter);
+          }
+        }
+
+        if (effectiveDate) {
+          query = query.gte('created_at', effectiveDate.start.toISOString()).lte('created_at', effectiveDate.end.toISOString());
+        }
+
+        const { data: sbTestimonials, error } = await query;
+        if (error) throw error;
+
+        let list = sbTestimonials || [];
+        if (usePersonalStats) {
+          list = list.filter((t: any) => {
+            const authorId = String(t.author_id || t.authorId || '');
+            const recipientId = String(t.receiver_id || t.receiverId || '');
+            if (isGivenOnly) return candidateIds.includes(authorId);
+            if (isReceivedOnly) return candidateIds.includes(recipientId);
+            return candidateIds.includes(authorId) || candidateIds.includes(recipientId);
+          });
+        }
+        if (effectiveDate) {
+          list = list.filter(t => isDateInRange(t.created_at || t.createdAt, effectiveDate.start, effectiveDate.end));
+        }
+
+        const mapped = list.map((t: any) => {
+          const authorId = String(t.author_id || t.authorId || '');
+          const recipientId = String(t.receiver_id || t.receiverId || '');
+          const isAuthor = candidateIds.includes(authorId);
+          const giverName = resolveMemberName(authorId, t.author_name || t.authorName);
+          const receiverName = resolveMemberName(recipientId, t.recipient_name || t.receiver_name);
+          let text = t.testimonial || '';
+          if (text.includes('|||')) {
+            const parts = text.split('|||');
+            text = parts[0];
+          }
+
+          return {
+            id: String(t.id),
+            title: isAuthor ? `To: ${receiverName}` : `From: ${giverName}`,
+            subtitle: isAuthor ? 'Testimonial Given' : 'Testimonial Received',
+            icon: <Star size={20} className="text-amber-400" />,
+            badgeText: t.status || 'Published',
+            badgeColor: 'blue' as const,
+            date: t.created_at ? formatDate(t.created_at) : null,
+            time: t.created_at ? formatTimeStr('', t.created_at) : null,
+            notes: text || '-'
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('member')) {
+        let list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
+        if (usePersonalStats) {
+          list = list.filter(u => candidateIds.includes(String(u.id || u.uid || '')));
+        } else {
+          if (norm.includes('active') && !norm.includes('inactive')) {
+            list = list.filter(u => isMemberActive(u));
+          } else if (norm.includes('inactive')) {
+            list = list.filter(u => !isMemberActive(u));
+          }
+        }
+
+        const mapped = list.map(m => {
+          const isSubActive = isMemberActive(m);
+          const memName = resolveMemberName(m.uid || m.id, m.name || m.full_name || m.displayName);
+          const catName = m.category || m.business_category || m.businessName || m.company || 'Business Owner';
+          const roleLabel = formatRole(m.role, m.position);
+          const specificRole = ['Chapter Admin', 'President', 'Vice President', 'Treasurer'].includes(roleLabel) ? roleLabel : '';
+          return {
+            id: String(m.uid || m.id),
+            title: memName,
+            subtitle: specificRole ? `${catName} • ${specificRole}` : catName,
+            icon: <User size={20} className="text-white/70" />,
+            badgeText: isSubActive ? 'Active' : 'Inactive',
+            badgeColor: isSubActive ? 'emerald' : 'red',
+            date: m.createdAt ? formatDate(m.createdAt) : null,
+            time: null,
+            notes: `Business: ${m.businessName || m.company || '-'}`
+          };
+        });
+
+        setAnalyticsModalRecords(mapped);
+      } else if (norm.includes('chapter') && !norm.includes('meeting')) {
+        const mapped = allChapters.map(c => ({
+          id: String(c.id),
+          title: c.chapterName || c.chapter_name || c.name || 'Chapter',
+          subtitle: c.region || 'Region',
+          icon: <Building2 size={20} className="text-white/70" />,
+          badgeText: 'Active',
+          badgeColor: 'blue' as const,
+          date: null,
+          time: c.meetingTime || null,
+          notes: `Meeting Day: ${c.meetingDay || '-'}`
+        }));
+        setAnalyticsModalRecords(mapped);
+      }
+    } catch (e) {
+      console.warn("Error fetching analytics data for category from Supabase:", e);
+      throw e;
+    }
+  };
+
+  const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
 
     if (analyticsLoading) {
@@ -2225,15 +3010,15 @@ const { theme } = useTheme();
           </div>
           <h3 className="text-lg font-bold text-white mb-2">Failed to load records</h3>
           <p className="text-neutral-400 text-sm max-w-xs mb-6">
-            There was an error while preparing the data. Please try again.
+            There was an error while loading records from the database. Please try again.
           </p>
           <button 
             onClick={() => {
               setAnalyticsLoading(true);
               setAnalyticsError(false);
-              setTimeout(() => setAnalyticsLoading(false), 600);
+              fetchAnalyticsDataForCategory(analyticsModalCategory, activeDateRange).finally(() => setAnalyticsLoading(false));
             }}
-            className="px-5 py-2.5 bg-[#1E293B] hover:bg-white/10 border border-white/5 text-white rounded-[10px] font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+            className="px-5 py-2.5 bg-[#1E293B] hover:bg-white/10 border border-white/5 text-white rounded-[10px] font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer"
           >
             <RotateCcw size={14} /> Retry
           </button>
@@ -2241,321 +3026,9 @@ const { theme } = useTheme();
       );
     }
 
-    const norm = analyticsModalCategory.toLowerCase().trim();
-    let records = [];
+    const records = analyticsModalRecords;
 
-    // Helper to format role
-    const formatRole = (role: string, position: string) => {
-      if (role === 'CHAPTER_ADMIN') return 'Chapter Admin';
-      if (role === 'PRESIDENT') return 'President';
-      if (role === 'VICE_PRESIDENT') return 'Vice President';
-      if (role === 'TREASURER') return 'Treasurer';
-      if (position && position.toLowerCase() !== 'none') return position;
-      return 'Member';
-    };
-
-    const formatDate = (dateString: string) => {
-      if (!dateString) return null;
-      try {
-        const d = new Date(dateString);
-        if (isNaN(d.getTime())) return null;
-        return format(d, 'dd MMM yyyy');
-      } catch (e) {
-        return null;
-      }
-    };
-
-    const formatTimeStr = (timeString: string, dateString: string) => {
-      if (!timeString && !dateString) return null;
-      try {
-        if (timeString) {
-          // If it's just a time like "15:00" or "15:00:00"
-          if (timeString.includes(':') && !timeString.includes('T')) {
-             const parts = timeString.split(':');
-             const timeD = new Date();
-             timeD.setHours(parseInt(parts[0], 10) || 0);
-             timeD.setMinutes(parseInt(parts[1], 10) || 0);
-             return format(timeD, 'h:mm a');
-          }
-        }
-        if (dateString) {
-          const dateD = new Date(dateString);
-          if (isNaN(dateD.getTime())) return null;
-          // check if time is explicitly set and not 00:00:00 (unless actually midnight)
-          // Simplified: just return time from the Date object
-          if (dateString.includes('T')) {
-            return format(dateD, 'h:mm a');
-          }
-        }
-        return null;
-      } catch (e) {
-        return null;
-      }
-    };
-
-    if (norm.includes('member')) {
-      let list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
-      if (norm.includes('active') && !norm.includes('inactive')) {
-        list = list.filter(u => isMemberActive(u));
-      } else if (norm.includes('inactive')) {
-        list = list.filter(u => !isMemberActive(u));
-      }
-      
-      records = list.map(m => {
-        const isSubActive = isMemberActive(m);
-        const memName = resolveMemberName(m.uid || m.id, m.name || m.full_name || m.displayName);
-        const catName = m.category || m.business_category || m.businessName || m.company || 'Business Owner';
-        const roleLabel = formatRole(m.role, m.position);
-        const specificRole = ['Chapter Admin', 'President', 'Vice President', 'Treasurer'].includes(roleLabel) ? roleLabel : '';
-        return {
-          id: m.uid || m.id,
-          title: memName,
-          subtitle: specificRole ? `${catName} • ${specificRole}` : catName,
-          icon: <User size={20} className="text-white/70" />,
-          badgeText: isSubActive ? 'Active' : 'Inactive',
-          badgeColor: isSubActive ? 'emerald' : 'red',
-          date: m.createdAt ? formatDate(m.createdAt) : null,
-          time: null,
-          notes: `Business: ${m.businessName || m.company || '-'}`
-        };
-      });
-    } else if (norm.includes('chapter') && !norm.includes('meeting')) {
-      records = allChapters.map(c => ({
-        id: c.id,
-        title: c.chapterName || c.chapter_name || c.name || 'Chapter',
-        subtitle: c.region || 'Region',
-        icon: <Building2 size={20} className="text-white/70" />,
-        badgeText: 'Active',
-        badgeColor: 'blue',
-        date: null,
-        time: c.meetingTime || null,
-        notes: `Meeting Day: ${c.meetingDay || '-'}`
-      }));
-    } else if (norm.includes('business') || norm.includes('thank you')) {
-      let list = effectiveSlips;
-      const uid = String(profile?.id || profile?.uid);
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-
-      if (!isGlobal) {
-        list = list.filter(s => String(s.fromUserId) === uid || String(s.toUserId) === uid || String(s.chapter_id) === profile?.chapter_id);
-      }
-
-      if (norm.includes('sent')) {
-        list = list.filter(s => String(s.fromUserId) === uid);
-      } else if (norm.includes('received')) {
-        list = list.filter(s => String(s.toUserId) === uid);
-      }
-
-      records = list.map(slip => {
-        const giverName = resolveMemberName(slip.fromUserId, slip.fromUserName);
-        const recipientName = resolveMemberName(slip.toUserId, slip.toUserName);
-        return {
-          id: slip.id,
-          title: slip.customerName || 'Business Given',
-          subtitle: norm.includes('sent') ? `To: ${recipientName}` : `From: ${giverName}`,
-          icon: <Briefcase size={20} className="text-white/70" />,
-          badgeText: `₹${Number(slip.businessValue || slip.business_value || slip.amount || 0).toLocaleString()}`,
-          badgeColor: 'emerald',
-          date: slip.createdAt ? formatDate(slip.createdAt) : null,
-          time: slip.createdAt ? formatTimeStr('', slip.createdAt) : null,
-          notes: slip.notes || '-'
-        };
-      });
-    } else if (norm.includes('referral')) {
-      let list = effectiveReferrals.filter(isNormalReferral);
-      const uid = String(profile?.id || profile?.uid);
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-
-      if (!isGlobal) {
-        list = list.filter(s => String(s.fromUserId) === uid || String(s.toUserId) === uid || String(s.chapter_id) === profile?.chapter_id);
-      }
-
-      if (norm.includes('sent')) {
-        list = list.filter(s => String(s.fromUserId) === uid);
-      } else if (norm.includes('received')) {
-        list = list.filter(s => String(s.toUserId) === uid);
-      }
-
-      records = list.map(ref => {
-        const giverName = resolveMemberName(ref.fromUserId, ref.fromUserName);
-        const recipientName = resolveMemberName(ref.toUserId, ref.toUserName);
-        const st = (ref.status || '').toLowerCase();
-        let bColor = 'amber';
-        if (st === 'closed' || st === 'completed') bColor = 'emerald';
-        if (st === 'cancelled') bColor = 'red';
-
-        return {
-          id: ref.id,
-          title: norm.includes('sent') ? `To: ${recipientName}` : `From: ${giverName}`,
-          subtitle: ref.customerName || 'Referral',
-          icon: <Share2 size={20} className="text-white/70" />,
-          badgeText: ref.status || 'Pending',
-          badgeColor: bColor,
-          date: ref.createdAt ? formatDate(ref.createdAt) : null,
-          time: ref.createdAt ? formatTimeStr('', ref.createdAt) : null,
-          notes: ref.notes || ref.requirement || '-'
-        };
-      });
-    } else if (norm.includes('one-to-one') || norm.includes('one to one') || norm.includes('1-to-1') || norm.includes('1:1') || norm.includes('1 to 1')) {
-      let list = effectiveOneToOnes;
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-
-      if (!isGlobal) {
-         list = list.filter(m => {
-            if (usePersonalStats) {
-                return isUserOneToOneParticipant(m, userCandidateIds);
-            }
-            const orgId = String(m.organizer_id || m.creatorId || m.sender_id || '');
-            const recId = String(m.member_id || m.receiver_id || '');
-            const pIds = (m.participantIds || []).map((id: string) => String(id));
-            return chapterUserIds.includes(orgId) || chapterUserIds.includes(recId) || pIds.some(pid => chapterUserIds.includes(pid));
-         });
-      }
-      
-      records = list.map(m => {
-        const senderId = String(m.sender_id || m.organizer_id || m.creatorId || m.userId || '');
-        const receiverId = String(m.receiver_id || m.member_id || (m.participantIds && m.participantIds[0]) || m.withMemberId || '');
-        
-        let candSender = m.creatorName || m.creator_name || m.organizer_name || m.host_name || m.userName;
-        let candReceiver = (m.participantNames && m.participantNames[0]) || m.withMemberName || m.partner_name;
-
-        if ((!candSender || !candReceiver) && m.title && typeof m.title === 'string') {
-          const titleMatch = m.title.match(/(?:1:?1\s*Meeting\s*-\s*|1-to-1:\s*)([^\&]+)\&(.+)/i);
-          if (titleMatch) {
-            if (!candSender) candSender = titleMatch[1].trim();
-            if (!candReceiver) candReceiver = titleMatch[2].trim();
-          }
-        }
-
-        const senderName = resolveMemberName(senderId, candSender);
-        const receiverName = resolveMemberName(receiverId, candReceiver);
-        
-        const st = (m.status || '').toLowerCase();
-        let bColor = 'amber';
-        if (st === 'completed') bColor = 'emerald';
-        if (st === 'cancelled') bColor = 'red';
-
-        return {
-          id: m.id,
-          title: `${senderName} & ${receiverName}`,
-          subtitle: m.venue || m.meetingLocation || m.locationType || 'Online Meeting',
-          icon: <Handshake size={20} className="text-white/70" />,
-          badgeText: m.status || 'Scheduled',
-          badgeColor: bColor,
-          date: m.date || m.scheduledDate ? formatDate(m.date || m.scheduledDate) : null,
-          time: formatTimeStr(m.time || m.meetingTime, m.date || m.scheduledDate),
-          notes: m.notes || '-'
-        };
-      });
-    } else if (norm.includes('guest') || norm.includes('visitor') || norm.includes('invite')) {
-      let list = effectiveGuestInvitations;
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-
-      if (isGlobal && appliedChapterFilter !== 'ALL') {
-        const targetChapId = String(appliedChapterFilter).trim();
-        list = list.filter(g => {
-          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
-          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-          return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
-        });
-      } else if (!isGlobal) {
-        list = list.filter(g => {
-          const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-          if (usePersonalStats) {
-             return userCandidateIds.includes(invId);
-          }
-          const targetChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
-          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
-          return chapterUserIds.includes(invId) || (gChapId && gChapId === targetChapId);
-        });
-      }
-
-      if (norm.includes('visitor') || norm.includes('attended')) {
-        list = list.filter(g => {
-          const st = String(g.status || g.attendance_status || '').toLowerCase();
-          return st === 'present' || st === 'attended';
-        });
-      }
-      
-      records = list.map(g => {
-        const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-        const inviterName = resolveMemberName(invId, g.invited_by_name || g.inviter_name || g.creatorName);
-        const inviterRole = g.invited_by_role || 'Member';
-        const st = (g.status || '').toLowerCase();
-        let bColor = 'amber';
-        if (st === 'attended') bColor = 'emerald';
-        if (st === 'no-show') bColor = 'red';
-
-        return {
-          id: g.id,
-          title: g.guest_name || g.guestName || g.name || 'Guest',
-          subtitle: `Invited By: ${inviterName}${inviterRole ? ` (${inviterRole})` : ''}`,
-          icon: <UserPlus size={20} className="text-white/70" />,
-          badgeText: g.status || 'Expected',
-          badgeColor: bColor,
-          date: g.created_at || g.visitDate ? formatDate(g.created_at || g.visitDate) : null,
-          time: null,
-          notes: g.business_category || g.profession ? `Business: ${g.business_category || g.profession}` : '-'
-        };
-      });
-    } else if (norm.includes('testimonial')) {
-      let list = effectiveTestimonials;
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-
-      if (!isGlobal) {
-         list = list.filter(t => String(t.chapter_id) === String(profile?.chapter_id));
-      }
-
-      if (norm.includes('given')) {
-        list = list.filter(s => s.giverId === (profile?.uid || profile?.id));
-      } else if (norm.includes('received')) {
-        list = list.filter(s => s.receiverId === (profile?.uid || profile?.id));
-      }
-
-      records = list.map(t => {
-        const giverName = resolveMemberName(t.giverId || t.author_id, t.author_name || t.authorName);
-        const receiverName = resolveMemberName(t.receiverId || t.recipient_id, t.recipient_name || t.recipientName);
-        let text = t.testimonial || '';
-        if (text.includes('|||')) {
-          const parts = text.split('|||');
-          text = parts[0];
-        }
-        return {
-          id: t.id,
-          title: norm.includes('given') ? `To: ${receiverName}` : `From: ${giverName}`,
-          subtitle: 'Testimonial',
-          icon: <Star size={20} className="text-white/70" />,
-          badgeText: 'Published',
-          badgeColor: 'blue',
-          date: t.createdAt ? formatDate(t.createdAt) : null,
-          time: t.createdAt ? formatTimeStr('', t.createdAt) : null,
-          notes: text || '-'
-        };
-      });
-    } else if (norm.includes('attendance') || norm.includes('meeting') || norm === 'meetings') {
-      let list = effectiveMeetings;
-      const isGlobal = profile?.role === 'MASTER_ADMIN';
-      
-      if (!isGlobal) {
-         list = list.filter(m => String(m.chapter_id) === String(profile?.chapter_id));
-      }
-      
-      records = list.map(m => {
-        return {
-          id: m.id,
-          title: m.title || 'Chapter Meeting',
-          subtitle: m.type || 'N/A',
-          icon: <Calendar size={20} className="text-white/70" />,
-          badgeText: m.status || 'Scheduled',
-          badgeColor: (m.status || '').toLowerCase() === 'completed' ? 'emerald' : 'amber',
-          date: m.date ? formatDate(m.date) : null,
-          time: m.startTime ? `${m.startTime} - ${m.endTime || 'End'}` : null,
-          notes: m.location || '-'
-        };
-      });
-    }
-
-    if (records.length === 0) {
+    if (!records || records.length === 0) {
       return (
         <div className="py-16 flex flex-col items-center justify-center text-center">
           <div className="w-20 h-20 bg-[#151C2E] rounded-full flex items-center justify-center mb-5 border border-white/5 shadow-inner">
@@ -3110,13 +3583,19 @@ const getGreeting = () => {
             meetingsAttendedCount={userMeetingsAttended}
             oneToOneScheduledCount={userOneToOnesScheduled}
             oneToOneCompletedCount={userOneToOnesCompleted}
-            onCardClick={(label) => {
+            onCardClick={async (label) => {
               setAnalyticsModalCategory(label);
               setAnalyticsLoading(true);
               setAnalyticsError(false);
-              setTimeout(() => {
+              setAnalyticsModalRecords([]);
+              try {
+                await fetchAnalyticsDataForCategory(label, activeDateRange);
+              } catch (e) {
+                console.error("Error loading analytics records:", e);
+                setAnalyticsError(true);
+              } finally {
                 setAnalyticsLoading(false);
-              }, 600);
+              }
             }}
           />
         </>
@@ -3345,7 +3824,7 @@ const getGreeting = () => {
                       <Activity size={24} className="text-primary" />
                     </div>
                     <div>
-                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">{analyticsModalCategory}</h2>
+                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">{getCleanModalTitle(analyticsModalCategory)}</h2>
                       <p className="text-[10px] sm:text-xs font-bold text-neutral-400 mt-1.5 uppercase tracking-widest">Detailed Activity & Records</p>
                     </div>
                   </div>

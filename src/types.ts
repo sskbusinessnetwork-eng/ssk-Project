@@ -43,6 +43,8 @@ export interface UserProfile {
   memberId?: string;
   whatsappNumber?: string;
   status?: string;
+  defaultMeetingSetup?: any;
+  default_meeting_setup?: any;
 }
 
 export interface Chapter {
