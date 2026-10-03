@@ -378,21 +378,24 @@ export function Login() {
               >
                 {/* Phone Input */}
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em] ml-1">
+                  <label htmlFor="login-identifier" className="flex items-center gap-2 text-[10px] font-black text-neutral-300 uppercase tracking-[0.2em] ml-1">
                     <Phone size={12} className="text-primary" /> Registered Phone
                   </label>
                   <div className="relative">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pr-3 border-r border-neutral-800">
-                      <img src="https://flagcdn.com/w20/in.png" alt="IN" className="w-4 h-auto rounded-sm" />
+                      <img src="https://flagcdn.com/w20/in.png" alt="India flag" className="w-4 h-auto rounded-sm" width="20" height="15" />
                       <ChevronDown size={11} className="text-neutral-500" />
                     </div>
                     <input
+                      id="login-identifier"
+                      name="identifier"
+                      autoComplete="tel"
                       required
                       type="tel"
                       value={formData.identifier}
                       onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
                       placeholder="Enter 10 digit number"
-                      className="w-full pl-20 pr-4 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-600 text-sm"
+                      className="w-full pl-20 pr-4 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-500 text-sm"
                     />
                   </div>
                 </div>
@@ -400,25 +403,30 @@ export function Login() {
                 {/* Password Input */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1">
-                    <label className="flex items-center gap-2 text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">
+                    <label htmlFor="login-password" className="flex items-center gap-2 text-[10px] font-black text-neutral-300 uppercase tracking-[0.2em]">
                       <Lock size={12} className="text-primary" /> Security Key
                     </label>
                   </div>
                   <div className="relative">
                     <input
+                      id="login-password"
+                      name="password"
+                      autoComplete="current-password"
                       required
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-5 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-600 tracking-widest text-sm pr-12"
+                      className="w-full px-5 py-3.5 rounded-2xl bg-neutral-900/50 border border-neutral-800 focus:bg-[#0E0E0E] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all font-bold text-white placeholder:text-neutral-500 tracking-widest text-sm pr-14"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 hover:text-neutral-400"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center text-neutral-400 hover:text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer transition-colors"
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
@@ -451,13 +459,13 @@ export function Login() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-[0.2em] text-xs hover:bg-primary/95 transition-all shadow-xl shadow-primary/10 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-4 bg-[#C62828] hover:bg-[#B71C1C] text-white rounded-2xl font-black uppercase tracking-[0.2em] text-xs transition-all shadow-xl shadow-red-900/20 active:scale-[0.98] disabled:opacity-70 flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-4 focus:ring-red-500/30"
                 >
                   {loading ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <LogIn size={14} />
+                      <LogIn size={14} aria-hidden="true" />
                       Verify & Open Dashboard
                     </>
                   )}

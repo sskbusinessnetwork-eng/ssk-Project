@@ -42,7 +42,7 @@ async function startServer() {
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co https://www.sskbusiness.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://*.supabase.co https://www.sskbusiness.com https://flagcdn.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com https://*.run.app",
       "frame-ancestors 'self' https://ai.studio https://*.google.com https://*.googleusercontent.com https://*.run.app",
       "base-uri 'self'",

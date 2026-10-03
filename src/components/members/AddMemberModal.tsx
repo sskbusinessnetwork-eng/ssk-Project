@@ -147,9 +147,11 @@ export function AddMemberModal({
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
             >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
             </button>
           </div>
           {errors.password && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.password}</p>}

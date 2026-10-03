@@ -215,9 +215,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-6 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            title={showPassword ? "Hide password" : "Show password"}
+            className="absolute right-4 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
           >
-            {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
+            {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
           </button>
         </div>
       </div>
@@ -238,9 +240,11 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-6 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            title={showConfirmPassword ? "Hide password" : "Show password"}
+            className="absolute right-4 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
           >
-            {showConfirmPassword ? <EyeOff size={22} /> : <Eye size={22} />}
+            {showConfirmPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
           </button>
         </div>
       </div>

@@ -675,8 +675,7 @@ export function Analytics() {
       const orConds = userCandidateIds.flatMap(id => [
         `invited_by_user_id.eq.${id}`,
         `invited_by.eq.${id}`,
-        `created_by.eq.${id}`,
-        `member_id.eq.${id}`
+        `created_by.eq.${id}`
       ]).join(',');
       guestQuery = guestQuery.or(orConds);
     }
@@ -2851,27 +2850,34 @@ export function Analytics() {
         const isVisitorOnly = norm.includes('visitor') || norm.includes('attended');
         const isInvitedOnly = norm.includes('invited');
 
-        if (usePersonalStats) {
-          const orConds = candidateIds.flatMap(id => [
-            `invited_by_user_id.eq.${id}`,
-            `invited_by.eq.${id}`,
-            `created_by.eq.${id}`,
-            `inviter_id.eq.${id}`,
-            `member_id.eq.${id}`,
-            `user_id.eq.${id}`
-          ]).join(',');
-          query = query.or(orConds);
-        } else {
-          if (appliedChapterFilter !== 'ALL') {
-            query = query.eq('chapter_id', appliedChapterFilter);
+        let sbGuests: any[] | null = null;
+        try {
+          if (usePersonalStats) {
+            const orConds = candidateIds.flatMap(id => [
+              `invited_by_user_id.eq.${id}`,
+              `invited_by.eq.${id}`,
+              `created_by.eq.${id}`
+            ]).join(',');
+            query = query.or(orConds);
+          } else {
+            if (appliedChapterFilter !== 'ALL') {
+              query = query.eq('chapter_id', appliedChapterFilter);
+            }
+            if (appliedMemberFilter !== 'ALL') {
+              query = query.or(`invited_by_user_id.eq.${appliedMemberFilter},invited_by.eq.${appliedMemberFilter},created_by.eq.${appliedMemberFilter}`);
+            }
           }
-          if (appliedMemberFilter !== 'ALL') {
-            query = query.or(`invited_by_user_id.eq.${appliedMemberFilter},invited_by.eq.${appliedMemberFilter},created_by.eq.${appliedMemberFilter},inviter_id.eq.${appliedMemberFilter},member_id.eq.${appliedMemberFilter},user_id.eq.${appliedMemberFilter}`);
-          }
-        }
 
-        const { data: sbGuests, error } = await query;
-        if (error) throw error;
+          const { data, error } = await query;
+          if (error) throw error;
+          sbGuests = data;
+        } catch (queryErr) {
+          console.warn("Scoped guest_invitations query notice, falling back to local/chapter data:", queryErr);
+          const { data: fallbackData } = appliedChapterFilter !== 'ALL'
+            ? await supabase.from('guest_invitations').select('*').eq('chapter_id', appliedChapterFilter)
+            : await supabase.from('guest_invitations').select('*');
+          sbGuests = fallbackData || guestInvitations || [];
+        }
 
         // Ensure we have meeting records to check upcoming meeting dates and completion status
         let currentMeetings = meetings;

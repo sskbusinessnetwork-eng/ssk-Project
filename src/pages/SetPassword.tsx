@@ -188,9 +188,11 @@ export function SetPassword() {
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+                aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                title={showCurrentPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
               >
-                {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showCurrentPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
               {errors.currentPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.currentPassword}</p>}
@@ -214,9 +216,11 @@ export function SetPassword() {
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+                aria-label={showNewPassword ? "Hide password" : "Show password"}
+                title={showNewPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
               >
-                {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showNewPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
               {errors.newPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.newPassword}</p>}
@@ -240,9 +244,11 @@ export function SetPassword() {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                title={showConfirmPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
               >
-                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showConfirmPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
               {errors.confirmPassword && <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.confirmPassword}</p>}

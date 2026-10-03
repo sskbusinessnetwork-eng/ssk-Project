@@ -1102,9 +1102,11 @@ export function Members() {
               <button
                 type="button"
                 onClick={() => setShowResetPassword(!showResetPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white transition-colors"
+                aria-label={showResetPassword ? "Hide password" : "Show password"}
+                title={showResetPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[36px] min-h-[36px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-colors"
               >
-                {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showResetPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
           </div>
