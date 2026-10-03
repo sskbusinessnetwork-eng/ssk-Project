@@ -190,7 +190,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     }
   }
 
-  // Look for any existing meeting on that exact upcoming date (whether recurring or standard)
+  // 1. Look for any existing meeting on that exact upcoming date (whether recurring or standard)
   const exactUpcomingMeeting = allMeetings.find(m => 
     !isMeetingDone(m) && 
     isSameMeetingDate(m.date, occurrenceDateString)
@@ -250,10 +250,54 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       } catch (e) {}
     }
   } else {
-    // Check if there is already another future non-done meeting for this chapter
-    const hasAnyUpcomingFuture = allMeetings.some(m => !isMeetingDone(m) && !isMeetingInPastInIST(m));
-    if (!hasAnyUpcomingFuture) {
-      // Create new upcoming meeting record
+    // If forceDateUpdate is true, check if there is an existing future recurring meeting (without attendance) on another date that should be shifted to the new nearest occurrence
+    const existingFutureRecurring = allMeetings.find(m => {
+      if (isMeetingDone(m) || isMeetingInPastInIST(m)) return false;
+      const isRec = Boolean(m.isRecurring || (m as any)?.is_recurring);
+      const hasAttendance = m.attendance && Object.keys(m.attendance).length > 0;
+      return isRec && !hasAttendance;
+    });
+
+    if (forceDateUpdate && existingFutureRecurring) {
+      // Reposition the existing unstarted recurring meeting to the correct next occurrence date
+      const updatePayload: any = {
+        date: occurrenceDateString,
+        time: occurrenceTime,
+        location: occurrenceLocation,
+        isRecurring: true,
+        chapter_id: targetChapterId,
+        adminId: adminId || targetChapterId
+      };
+      if (defaultAmtNum > 0) {
+        updatePayload.meetingAmount = defaultAmtNum;
+        updatePayload.meeting_amount = defaultAmtNum;
+        updatePayload.memberNotes = {
+          ...(existingFutureRecurring.memberNotes || {}),
+          __meetingAmount: defaultAmtNum
+        };
+      }
+      await databaseService.update('meetings', existingFutureRecurring.id, updatePayload);
+      try {
+        const supabaseUpdatePayload: any = {
+          date: occurrenceDateString,
+          time: occurrenceTime,
+          location: occurrenceLocation,
+          is_recurring: true,
+          chapter_id: targetChapterId,
+          admin_id: adminId || targetChapterId
+        };
+        if (defaultAmtNum > 0) {
+          supabaseUpdatePayload.meeting_amount = defaultAmtNum;
+          supabaseUpdatePayload.meetingAmount = defaultAmtNum;
+          supabaseUpdatePayload.member_notes = {
+            ...(existingFutureRecurring.memberNotes || {}),
+            __meetingAmount: defaultAmtNum
+          };
+        }
+        await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', existingFutureRecurring.id);
+      } catch (e) {}
+    } else {
+      // Create new upcoming meeting record on the calculated nearest occurrence date
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || targetChapterId,
         chapter_id: targetChapterId,
@@ -1534,8 +1578,20 @@ export function Meetings() {
       const targetChapterId = activeChapterId || adminId;
       await syncDefaultMeetings(adminId, targetChapterId, enabledSetupDoc, true);
 
+      // Instantly refresh chapter meetings in local state
+      try {
+        const refreshConstraints = isMasterAdmin
+          ? (selectedAdminId ? [where('chapter_id', '==', selectedAdminId), orderBy('date', 'desc')] : [orderBy('date', 'desc')])
+          : targetChapterId ? [where('chapter_id', '==', targetChapterId), orderBy('date', 'desc'), limit(50)] : [orderBy('date', 'desc'), limit(50)];
+        const latestMeetings = await databaseService.list<Meeting>('meetings', refreshConstraints);
+        if (latestMeetings && latestMeetings.length > 0) {
+          setMeetings(latestMeetings);
+        }
+      } catch (rErr) {}
+
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('meetings-updated'));
 
       setSuccess('Default setup saved successfully!');
       triggerSuccessToast('Default setup saved successfully!');
