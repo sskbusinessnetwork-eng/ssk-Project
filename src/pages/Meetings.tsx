@@ -77,7 +77,9 @@ export function getMeetingExactDateTime(meeting: Meeting): Date {
 }
 
 export function getAttendanceDisplay(status?: string) {
-  if (!status) return { label: 'Absent', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
+  if (!status || status.trim() === '' || status.toUpperCase() === 'PENDING' || status.toUpperCase() === 'NOT MARKED') {
+    return { label: 'Pending', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium' };
+  }
   
   const statusUpper = status.toUpperCase();
   if (statusUpper === 'PRESENT' || statusUpper === 'YES') {
@@ -87,15 +89,15 @@ export function getAttendanceDisplay(status?: string) {
     return { label: 'Absent', color: 'bg-red-500/10 text-red-400 border border-red-500/20' };
   }
   if (statusUpper === 'SUBSTITUTE') {
-    return { label: 'Substitute', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
+    return { label: 'Substitute', color: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
   }
   if (statusUpper === 'MEDICAL') {
-    return { label: 'Medical', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
+    return { label: 'Medical', color: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' };
   }
   if (statusUpper === 'LATE') {
-    return { label: 'Late', color: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' };
+    return { label: 'Late', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
   }
-  return { label: status, color: 'bg-[#151C2E] text-neutral-400 border border-white/5' };
+  return { label: status, color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium' };
 }
 
 function calculateOccurrences(
@@ -154,45 +156,8 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     }
   } catch (e) {}
 
-  // If recurring is disabled:
+  // If recurring is disabled, do not create any new recurring meetings
   if (!setup.enabled) {
-    // Purge only future/upcoming non-completed recurring meetings (preserve past history)
-    const toDelete = allMeetings.filter(m => 
-      !isMeetingDone(m) && 
-      !isMeetingInPastInIST(m) &&
-      (m.isRecurring || (m as any).is_recurring)
-    );
-    for (const m of toDelete) {
-      try {
-        await supabase.from('meetings').delete().eq('id', m.id);
-      } catch (e) {}
-      try {
-        await databaseService.delete('meetings', m.id);
-      } catch (e) {}
-    }
-    return;
-  }
-
-  // 1. Pending Meeting Check:
-  // If there is already a Pending Meeting that has not been updated/completed by Admin,
-  // do NOT allow the system to create or sync another upcoming meeting.
-  // The existing pending meeting must be completed/updated by Admin first!
-  const hasPendingMeeting = allMeetings.some(m => isMeetingPending(m));
-  if (hasPendingMeeting) {
-    // If a future recurring meeting was generated ahead of time while a pending meeting exists, clean it up
-    const prematureFutureRecurring = allMeetings.filter(m => 
-      !isMeetingDone(m) && 
-      !isMeetingPending(m) && 
-      (m.isRecurring || (m as any).is_recurring)
-    );
-    for (const m of prematureFutureRecurring) {
-      try {
-        await supabase.from('meetings').delete().eq('id', m.id);
-      } catch (e) {}
-      try {
-        await databaseService.delete('meetings', m.id);
-      } catch (e) {}
-    }
     return;
   }
 
@@ -201,7 +166,6 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
   let occurrenceDateString = occurrence.dateString; // YYYY-MM-DD
   let occurrenceTime = setup.time || occurrence.timeFormatted;
   let occurrenceLocation = setup.location || '';
-  const occurrenceIdsToPreserve = new Set<string>();
 
   // Loop to find the next valid occurrence date that isn't already "done" (completed or cancelled)
   const defaultAmtNum = setup.meetingAmount !== undefined && setup.meetingAmount !== ''
@@ -216,8 +180,6 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
     );
     
     if (existingDoneMeeting) {
-      // This occurrence was already generated and completed/cancelled.
-      // Move baseDate forward by 1 day and calculate again.
       const nextBase = new Date(occurrence.timestampMs + 24 * 60 * 60 * 1000);
       occurrence = calculateNextOccurrence(setup.frequency, setup.day, setup.date, setup.time, nextBase);
       occurrenceDateString = occurrence.dateString;
@@ -249,8 +211,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
       const updatePayload: any = {
         isRecurring: true,
         chapter_id: targetChapterId,
-        adminId: adminId || targetChapterId,
-        status: 'UPCOMING'
+        adminId: adminId || targetChapterId
       };
       
       if (forceDateUpdate) {
@@ -271,8 +232,7 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         const supabaseUpdatePayload: any = {
           is_recurring: true,
           chapter_id: targetChapterId,
-          admin_id: adminId || targetChapterId,
-          status: 'UPCOMING'
+          admin_id: adminId || targetChapterId
         };
         if (forceDateUpdate) {
           supabaseUpdatePayload.time = occurrenceTime;
@@ -289,63 +249,10 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', exactUpcomingMeeting.id);
       } catch (e) {}
     }
-    occurrenceIdsToPreserve.add(exactUpcomingMeeting.id);
   } else {
-    // Check if there is an existing FUTURE non-completed recurring meeting scheduled on an outdated date
-    const otherFutureRecurringMeeting = allMeetings.find(m => 
-      !isMeetingDone(m) && 
-      !isMeetingInPastInIST(m) && 
-      (m.isRecurring || (m as any).is_recurring)
-    );
-
-    if (otherFutureRecurringMeeting) {
-      // Re-align the existing future recurring meeting to the correct upcoming date
-      const updatePayload: any = {
-        isRecurring: true,
-        chapter_id: targetChapterId,
-        adminId: adminId || targetChapterId,
-        status: 'UPCOMING'
-      };
-      
-      if (forceDateUpdate) {
-        updatePayload.date = occurrenceDateString;
-        updatePayload.time = occurrenceTime;
-        updatePayload.location = occurrenceLocation;
-        if (defaultAmtNum > 0) {
-          updatePayload.meetingAmount = defaultAmtNum;
-          updatePayload.meeting_amount = defaultAmtNum;
-          updatePayload.memberNotes = {
-            ...(otherFutureRecurringMeeting.memberNotes || {}),
-            __meetingAmount: defaultAmtNum
-          };
-        }
-      }
-      
-      await databaseService.update('meetings', otherFutureRecurringMeeting.id, updatePayload);
-      try {
-        const supabaseUpdatePayload: any = {
-          is_recurring: true,
-          chapter_id: targetChapterId,
-          admin_id: adminId || targetChapterId,
-          status: 'UPCOMING'
-        };
-        if (forceDateUpdate) {
-          supabaseUpdatePayload.date = occurrenceDateString;
-          supabaseUpdatePayload.time = occurrenceTime;
-          supabaseUpdatePayload.location = occurrenceLocation;
-          if (defaultAmtNum > 0) {
-            supabaseUpdatePayload.meeting_amount = defaultAmtNum;
-            supabaseUpdatePayload.meetingAmount = defaultAmtNum;
-            supabaseUpdatePayload.member_notes = {
-              ...(otherFutureRecurringMeeting.memberNotes || {}),
-              __meetingAmount: defaultAmtNum
-            };
-          }
-        }
-        await supabase.from('meetings').update(supabaseUpdatePayload).eq('id', otherFutureRecurringMeeting.id);
-      } catch (e) {}
-      occurrenceIdsToPreserve.add(otherFutureRecurringMeeting.id);
-    } else {
+    // Check if there is already another future non-done meeting for this chapter
+    const hasAnyUpcomingFuture = allMeetings.some(m => !isMeetingDone(m) && !isMeetingInPastInIST(m));
+    if (!hasAnyUpcomingFuture) {
       // Create new upcoming meeting record
       const newMeeting: Omit<Meeting, 'id'> = {
         adminId: adminId || targetChapterId,
@@ -367,9 +274,6 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         isRecurring: true
       };
       const newId = await databaseService.create('meetings', newMeeting);
-      if (newId) {
-        occurrenceIdsToPreserve.add(newId);
-      }
       try {
         await supabase.from('meetings').insert([{
           id: newId,
@@ -389,24 +293,6 @@ async function syncDefaultMeetings(adminId: string, chapterId: string, setup: {
         }]);
       } catch (e) {}
     }
-  }
-
-  // Purge any excess FUTURE non-completed recurring meetings beyond the single preserved upcoming meeting
-  // (Past meetings are NEVER purged to preserve history & attendance records)
-  const obsoleteFutureMeetings = allMeetings.filter(m => 
-    !isMeetingDone(m) && 
-    !isMeetingInPastInIST(m) &&
-    (m.isRecurring || (m as any).is_recurring) && 
-    !occurrenceIdsToPreserve.has(m.id)
-  );
-
-  for (const m of obsoleteFutureMeetings) {
-    try {
-      await supabase.from('meetings').delete().eq('id', m.id);
-    } catch (e) {}
-    try {
-      await databaseService.delete('meetings', m.id);
-    } catch (e) {}
   }
 }
 
@@ -624,10 +510,17 @@ export function Meetings() {
   };
 
   const getUserAttendanceBadge = (m: Meeting, userUid?: string) => {
+    if (isMeetingCancelled(m)) {
+      return {
+        label: 'CANCELLED',
+        color: 'bg-red-500/10 text-red-400 border-red-500/20 font-bold'
+      };
+    }
+
     if (!userUid || !m.attendance) {
       return {
         label: 'PENDING',
-        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold'
       };
     }
 
@@ -640,7 +533,7 @@ export function Meetings() {
     if (!rawStatus) {
       return {
         label: 'PENDING',
-        color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold'
       };
     }
 
@@ -657,10 +550,16 @@ export function Meetings() {
         color: 'bg-red-500/10 text-red-400 border-red-500/20'
       };
     }
+    if (s === 'PENDING' || s === 'NOT MARKED') {
+      return {
+        label: 'PENDING',
+        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold'
+      };
+    }
     if (s === 'MEDICAL') {
       return {
         label: 'MEDICAL',
-        color: 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+        color: 'bg-purple-500/10 text-purple-400 border-purple-500/20'
       };
     }
     if (s === 'SUBSTITUTE') {
@@ -678,7 +577,7 @@ export function Meetings() {
 
     return {
       label: s,
-      color: 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+      color: 'bg-amber-500/10 text-amber-400 border-amber-500/20 font-bold'
     };
   };
 
@@ -938,6 +837,16 @@ export function Meetings() {
             });
 
             setModalChapterMembers(chapterMembersList);
+            setTempAttendance(prev => {
+              const updated = { ...prev };
+              chapterMembersList.forEach(m => {
+                const mId = m.id || m.uid;
+                if (!updated[mId]) {
+                  updated[mId] = 'Pending';
+                }
+              });
+              return updated;
+            });
             const mCount = selectedMeeting.memberCount !== undefined 
               ? selectedMeeting.memberCount 
               : ((selectedMeeting as any).member_count !== undefined 
@@ -992,10 +901,14 @@ export function Meetings() {
             // Initialize tempGuestAttendance
             const initialGuestAttendance: Record<string, string> = {};
             guests.forEach(g => {
-              if (g.status === 'Present' || g.status === 'Absent') {
-                initialGuestAttendance[g.id] = g.status;
-              } else if (g.attendance_status) {
-                initialGuestAttendance[g.id] = g.attendance_status;
+              const raw = String(g.status || g.attendance_status || '').trim();
+              const rawUpper = raw.toUpperCase();
+              if (rawUpper === 'PRESENT' || rawUpper === 'YES') {
+                initialGuestAttendance[g.id] = 'Present';
+              } else if (rawUpper === 'ABSENT' || rawUpper === 'NO') {
+                initialGuestAttendance[g.id] = 'Absent';
+              } else {
+                initialGuestAttendance[g.id] = 'Pending';
               }
             });
             setTempGuestAttendance(initialGuestAttendance);
@@ -1641,7 +1554,7 @@ export function Meetings() {
     }
   };
 
-  const handleSaveUpdate = async () => {
+  const handleSaveUpdate = async (completeRequested?: boolean) => {
     if (!selectedMeeting) return;
     if (!canUserUpdateMeeting(selectedMeeting)) {
       const msg = "Only the Chapter Admin of this chapter can update this meeting.";
@@ -1661,23 +1574,25 @@ export function Meetings() {
         return Boolean(mChap && meetingChapId && String(mChap).trim() === String(meetingChapId).trim());
       });
       
-      // Perform validation for all members
-      let allMembersFilled = true;
+      const cleanAttendance: Record<string, string> = {};
+      let hasPendingMembers = false;
+
+      // Process and validate member attendance individually
       for (const member of meetingMembers) {
         const mId = member.id || member.uid;
-        const status = tempAttendance[mId];
+        let status = tempAttendance[mId];
         const amount = tempAmount[mId];
         
-        if (!status || String(status).trim() === '') {
-          allMembersFilled = false;
-          delete tempAttendance[mId];
-          delete tempAmount[mId];
-          continue;
+        if (!status || String(status).trim() === '' || String(status).trim().toLowerCase() === 'not marked' || String(status).trim().toLowerCase() === 'pending') {
+          status = 'Pending';
+          hasPendingMembers = true;
         }
 
-        const finalAmount = amount === undefined ? 0 : amount;
-
-        const allowedStatuses = ['Present', 'Absent', 'Substitute', 'Medical', 'Late', 'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'LATE', 'Yes', 'No', 'YES', 'NO'];
+        const allowedStatuses = [
+          'Present', 'Absent', 'Substitute', 'Medical', 'Late', 'Pending',
+          'PRESENT', 'ABSENT', 'SUBSTITUTE', 'MEDICAL', 'LATE', 'PENDING',
+          'Yes', 'No', 'YES', 'NO'
+        ];
         if (!allowedStatuses.includes(status)) {
           const msg = `Invalid attendance status selected for ${member.name || member.displayName || 'member'}.`;
           setError(msg);
@@ -1686,6 +1601,8 @@ export function Meetings() {
           setIsSubmitting(false);
           return;
         }
+
+        cleanAttendance[mId] = status;
 
         // Validate Payment Method when marked as PAID
         const isAttended = ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
@@ -1704,25 +1621,21 @@ export function Meetings() {
           }
         }
         
-        // Save the assumed 0 back to tempAmount so it gets persisted correctly
-        tempAmount[mId] = finalAmount;
+        tempAmount[mId] = amount === undefined ? 0 : amount;
       }
 
       // Guest Attendance Save Logic & Validation
       const guestUpdates = [];
-      let allGuestsFilled = true;
       if (meetingGuests.length > 0) {
         for (const guest of meetingGuests) {
-          const gStatus = tempGuestAttendance[guest.id];
+          let gStatus = tempGuestAttendance[guest.id];
           const gAmount = tempAmount[guest.id];
           
-          if (!gStatus || String(gStatus).trim() === '') {
-            allGuestsFilled = false;
-            continue;
+          if (!gStatus || String(gStatus).trim() === '' || String(gStatus).trim().toLowerCase() === 'pending') {
+            gStatus = 'Pending';
           }
 
           const finalGAmount = gAmount === undefined ? 0 : gAmount;
-          
           tempAmount[guest.id] = finalGAmount;
           guestUpdates.push({
             id: guest.id,
@@ -1742,48 +1655,19 @@ export function Meetings() {
       const effectiveDate = tempDate || selectedMeeting.date;
       const effectiveTime = tempTime || selectedMeeting.time;
       const isDateTimeInPast = isMeetingInPastInIST({ date: effectiveDate, time: effectiveTime });
-      const wasPendingWhenOpened = isMeetingPending(selectedMeeting);
-      const shouldAutoCompletePending = wasPendingWhenOpened && isDateTimeInPast && tempStatus !== 'UPCOMING';
-      const shouldComplete =
-        tempStatus === 'COMPLETED' ||
-        shouldAutoCompletePending ||
-        (allMembersFilled && allGuestsFilled && meetingMembers.length > 0);
 
-      if (shouldComplete) {
-        // Default unselected members/guests to 'Absent' with amount 0 so completed record is complete
-        if (meetingMembers.length > 0) {
-          for (const member of meetingMembers) {
-            const mId = member.id || member.uid;
-            if (!tempAttendance[mId] || String(tempAttendance[mId]).trim() === '') {
-              tempAttendance[mId] = 'Absent';
-              tempAmount[mId] = 0;
-            }
-          }
-          allMembersFilled = true;
-        }
-        if (meetingGuests.length > 0) {
-          for (const guest of meetingGuests) {
-            if (!tempGuestAttendance[guest.id] || String(tempGuestAttendance[guest.id]).trim() === '') {
-              tempGuestAttendance[guest.id] = 'Absent';
-              tempAmount[guest.id] = 0;
-              guestUpdates.push({
-                id: guest.id,
-                status: 'Absent',
-                wasNotPresent: true,
-                inviterId: guest.invited_by
-              });
-            }
-          }
-          allGuestsFilled = true;
-        }
-      }
+      // Meeting status logic:
+      // 1. If one or more members are still Pending, meeting must remain Pending (or Upcoming if future).
+      // 2. Only after admin has updated EVERY member's attendance and clicks Submit/Complete (or selected Completed), mark as Completed.
+      // 3. Do not automatically convert Pending members to Absent.
+      const shouldComplete = !hasPendingMembers && (completeRequested === true || tempStatus === 'COMPLETED');
 
       const finalStatus = shouldComplete
         ? 'COMPLETED'
-        : (tempStatus === 'PENDING' && isDateTimeInPast ? 'PENDING' : 'UPCOMING');
+        : (isDateTimeInPast || tempStatus === 'PENDING' ? 'PENDING' : 'UPCOMING');
 
-      const finalMemberCount = tempMemberCount === '' ? 0 : Number(tempMemberCount);
-      const finalGuestCount = tempGuestCount === '' ? 0 : Number(tempGuestCount);
+      const finalMemberCount = tempMemberCount === '' ? meetingMembers.length : Number(tempMemberCount);
+      const finalGuestCount = tempGuestCount === '' ? meetingGuests.length : Number(tempGuestCount);
 
       const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined ? Number(tempMeetingAmount) : 0;
       const finalAmountCollected: Record<string, number> = {};
@@ -1792,7 +1676,7 @@ export function Meetings() {
 
       for (const member of meetingMembers) {
         const mId = member.id || member.uid;
-        const status = tempAttendance[mId];
+        const status = cleanAttendance[mId];
         const isAttended = status && ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
 
         if (isAttended) {
@@ -1808,7 +1692,6 @@ export function Meetings() {
                   : 0);
             finalAmountCollected[mId] = amt;
           } else {
-            // NOT PAID: No payment amount recorded as received
             finalAmountCollected[mId] = 0;
           }
         } else {
@@ -1837,7 +1720,7 @@ export function Meetings() {
         __status: finalStatus,
         __isCompleted: shouldComplete,
         __isCancelled: false,
-        __attendance: tempAttendance || {},
+        __attendance: cleanAttendance || {},
         __counts: {
           memberCount: finalMemberCount,
           guestCount: finalGuestCount
@@ -1861,7 +1744,7 @@ export function Meetings() {
         meetingDate: effectiveDate || new Date().toISOString().split('T')[0],
         meetingTitle: selectedMeeting.title || selectedMeeting.topic || `${getChapterName(selectedMeeting)} Meeting`,
         chapterMembers: meetingMembers,
-        attendanceMap: tempAttendance || {},
+        attendanceMap: cleanAttendance || {},
         paymentStatusMap: finalPaymentStatus,
         paymentMethodsMap: finalPaymentMethods,
         amountCollectedMap: finalAmountCollected,
@@ -1882,26 +1765,25 @@ export function Meetings() {
         updated_at: new Date().toISOString(),
         status: finalStatus,
         is_completed: shouldComplete,
-        isCompleted: shouldComplete
+        isCompleted: shouldComplete,
+        attendance: cleanAttendance,
+        amount_collected: finalAmountCollected,
+        amountCollected: finalAmountCollected,
+        payment_status: finalPaymentStatus,
+        paymentStatus: finalPaymentStatus,
+        payment_methods: finalPaymentMethods,
+        paymentMethods: finalPaymentMethods,
+        meeting_amount: configuredMeetingAmt,
+        meetingAmount: configuredMeetingAmt,
+        member_notes: updatedMemberNotes,
+        memberCount: finalMemberCount,
+        guestCount: finalGuestCount
       };
       if (tempDate) updatePayload.date = tempDate;
       if (tempTime) updatePayload.time = tempTime;
       if (tempLocation !== undefined) updatePayload.location = tempLocation;
-      if (tempAttendance) updatePayload.attendance = tempAttendance;
-      updatePayload.amount_collected = finalAmountCollected;
-      updatePayload.amountCollected = finalAmountCollected;
-      updatePayload.payment_status = finalPaymentStatus;
-      updatePayload.paymentStatus = finalPaymentStatus;
-      updatePayload.payment_methods = finalPaymentMethods;
-      updatePayload.paymentMethods = finalPaymentMethods;
-      updatePayload.meeting_amount = configuredMeetingAmt;
-      updatePayload.meetingAmount = configuredMeetingAmt;
-      updatePayload.member_notes = updatedMemberNotes;
-      updatePayload.memberCount = finalMemberCount;
-      updatePayload.guestCount = finalGuestCount;
 
       let apiSuccess = false;
-      let apiErrorMsg = '';
       // Try backend API endpoint first
       try {
         const callerId = profile?.uid || profile?.id;
@@ -1916,7 +1798,7 @@ export function Meetings() {
             location: tempLocation,
             status: finalStatus,
             meetingAmount: configuredMeetingAmt,
-            attendance: tempAttendance,
+            attendance: cleanAttendance,
             amountCollected: finalAmountCollected,
             paymentStatus: finalPaymentStatus,
             paymentMethods: finalPaymentMethods,
@@ -1945,8 +1827,6 @@ export function Meetings() {
           scrollToError();
           setIsSubmitting(false);
           return;
-        } else if (resData && (resData.error || resData.message)) {
-          apiErrorMsg = resData.message || resData.error;
         }
       } catch (apiErr: any) {
         console.warn("API meeting update attempt notice:", apiErr);
@@ -1982,7 +1862,6 @@ export function Meetings() {
 
       // Auto-sync matching Future Presentations status based on meeting status & member attendance
       try {
-        const effectiveDate = tempDate || selectedMeeting.date;
         const matchingPresentations = futurePresentations.filter(p => {
           const pDate = p.presentationDate || p.presentation_date;
           if (!isSameMeetingDate(pDate, effectiveDate) && !isSameMeetingDate(pDate, selectedMeeting.date)) return false;
@@ -1996,9 +1875,9 @@ export function Meetings() {
           const presMemberId = String(pres.memberId || pres.member_id || '');
           const matchedMemberObj = meetingMembers.find(m => String(m.id || m.uid) === presMemberId || String(m.uid) === presMemberId || String(m.id) === presMemberId);
           const rawAtt =
-            tempAttendance?.[presMemberId] ??
-            (matchedMemberObj?.id ? tempAttendance?.[matchedMemberObj.id] : undefined) ??
-            (matchedMemberObj?.uid ? tempAttendance?.[matchedMemberObj.uid] : undefined);
+            cleanAttendance?.[presMemberId] ??
+            (matchedMemberObj?.id ? cleanAttendance?.[matchedMemberObj.id] : undefined) ??
+            (matchedMemberObj?.uid ? cleanAttendance?.[matchedMemberObj.uid] : undefined);
           const attUpper = String(rawAtt || '').trim().toUpperCase();
           const isAbsent = attUpper === 'ABSENT' || attUpper === 'NO';
 
@@ -2023,7 +1902,6 @@ export function Meetings() {
       // Auto-generate next recurring meeting after completion if setup is enabled
       if (shouldComplete) {
         try {
-          const meetingChapId = selectedMeeting.chapter_id || (selectedMeeting as any).chapterId || profile?.chapter_id;
           const meetingAdminId = selectedMeeting.adminId || profile?.uid || '';
           if (meetingAdminId) {
             const adminProf = await databaseService.get<UserProfile & { defaultMeetingSetup?: any }>('users', meetingAdminId);
@@ -2037,6 +1915,13 @@ export function Meetings() {
         }
       }
 
+      const updatedMeetingObj: any = {
+        ...selectedMeeting,
+        ...updatePayload,
+        id: targetMeetingId
+      };
+      setMeetings(prev => prev.map(m => String(m.id) === String(targetMeetingId) ? { ...m, ...updatedMeetingObj } : m));
+
       // Immediately re-fetch the updated meeting record and refresh chapter meetings from Supabase
       const refreshedMeeting = await databaseService.get<Meeting>('meetings', targetMeetingId);
       const userChapIdNow = profile?.chapter_id || (profile as any)?.chapterId;
@@ -2046,7 +1931,12 @@ export function Meetings() {
         : chapterIdNow ? [where('chapter_id', '==', chapterIdNow), orderBy('date', 'desc'), limit(50)] : [orderBy('date', 'desc'), limit(50)];
       const latestMeetings = await databaseService.list<Meeting>('meetings', refreshConstraints);
       if (latestMeetings && latestMeetings.length > 0) {
-        setMeetings(latestMeetings);
+        const found = latestMeetings.some(m => String(m.id) === String(targetMeetingId));
+        if (!found && refreshedMeeting) {
+          setMeetings([refreshedMeeting, ...latestMeetings]);
+        } else {
+          setMeetings(latestMeetings);
+        }
       } else if (refreshedMeeting) {
         setMeetings(prev => prev.map(m => String(m.id) === String(targetMeetingId) ? refreshedMeeting : m));
       }
@@ -2054,7 +1944,12 @@ export function Meetings() {
       if (refreshProfile) await refreshProfile();
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
 
-      triggerSuccessToast('Meeting updated successfully!');
+      const successToastMsg = shouldComplete
+        ? 'Meeting completed and all attendance records saved successfully!'
+        : hasPendingMembers
+          ? 'Attendance updates saved. Meeting remains in Pending status until all members are updated.'
+          : 'Meeting attendance saved successfully!';
+      triggerSuccessToast(successToastMsg);
       setIsUpdateModalOpen(false);
       setSuccess(null);
       setSelectedMeeting(refreshedMeeting && !isMeetingDone(refreshedMeeting) ? refreshedMeeting : null);
@@ -2249,14 +2144,15 @@ export function Meetings() {
     }
   };
 
-  const userAttendance = meetings.map(m => {
+  const nonCancelledMeetings = meetings.filter(m => !isMeetingCancelled(m));
+  const userAttendance = nonCancelledMeetings.map(m => {
     const status = m.attendance?.[profile?.uid || ''];
     if (!status) return false;
     const statusUpper = status.toUpperCase();
     return statusUpper === 'PRESENT' || statusUpper === 'YES' || statusUpper === 'SUBSTITUTE' || statusUpper === 'LATE';
   });
-  const attendancePercentage = userAttendance.length > 0 
-    ? Math.round((userAttendance.filter(Boolean).length / userAttendance.length) * 100) 
+  const attendancePercentage = nonCancelledMeetings.length > 0 
+    ? Math.round((userAttendance.filter(Boolean).length / nonCancelledMeetings.length) * 100) 
     : 0;
 
   const getMeetingStatus = (meeting: Meeting) => {
@@ -2353,20 +2249,11 @@ export function Meetings() {
   };
 
   // Deduplicated Upcoming and Pending Meetings for table/list view (non-completed / non-cancelled)
-  // If a chapter has a pending meeting, only the pending meeting is shown until Admin updates/completes it
+  // All upcoming and pending meetings remain visible and manageable
   const upcomingTableMeetings = React.useMemo(() => {
     const nonDone = (isMasterAdmin ? meetings : filteredMeetings)
       .filter(m => !isMeetingDone(m))
       .sort((a, b) => getMeetingTimestampInIST(a.date, a.time) - getMeetingTimestampInIST(b.date, b.time));
-
-    // Find which chapters have an active Pending meeting that has not been completed/updated
-    const chaptersWithPending = new Set<string>();
-    for (const m of nonDone) {
-      if (isMeetingPending(m)) {
-        const chapKey = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
-        if (chapKey) chaptersWithPending.add(chapKey);
-      }
-    }
 
     const seenIds = new Set<string>();
     const result: Meeting[] = [];
@@ -2374,19 +2261,6 @@ export function Meetings() {
     for (const m of nonDone) {
       const mId = String(m.id);
       if (seenIds.has(mId)) continue;
-
-      const chapKey = String(m.chapter_id || (m as any)?.chapterId || m.adminId || '').trim();
-      
-      // If this chapter has a pending meeting:
-      // Allow only the pending meeting to be shown.
-      // Do NOT show another upcoming meeting for this chapter until the pending meeting is completed/updated!
-      if (chapKey && chaptersWithPending.has(chapKey)) {
-        if (!isMeetingPending(m)) {
-          // Suppress future upcoming meetings for this chapter while pending meeting exists
-          continue;
-        }
-      }
-
       seenIds.add(mId);
       result.push(m);
     }
@@ -2497,6 +2371,7 @@ export function Meetings() {
         else if (v === 'SUBSTITUTE' || v === 'Substitute') normalizedAttendance[uid] = 'Substitute';
         else if (v === 'MEDICAL' || v === 'Medical') normalizedAttendance[uid] = 'Medical';
         else if (v === 'LATE' || v === 'Late') normalizedAttendance[uid] = 'Late';
+        else if (v === 'PENDING' || v === 'Pending') normalizedAttendance[uid] = 'Pending';
         else normalizedAttendance[uid] = String(val);
       });
     }
@@ -3041,7 +2916,7 @@ export function Meetings() {
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-6 bg-primary rounded-full" />
               <h2 className="text-sm font-bold text-white uppercase tracking-widest font-display">
-                Upcoming Meetings {upcomingTableMeetings.length > 0 ? `(${upcomingTableMeetings.length})` : ''}
+                Upcoming &amp; Pending Meetings {upcomingTableMeetings.length > 0 ? `(${upcomingTableMeetings.length})` : ''}
               </h2>
             </div>
           </div>
@@ -3260,6 +3135,7 @@ export function Meetings() {
                     <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Attendance Count</p>
                     <p className="text-2xl font-bold text-white tracking-tight">
                       {completedMeetings.filter(m => {
+                        if (isMeetingCancelled(m)) return false;
                         const status = m.attendance?.[profile?.uid || ''];
                         if (!status) return false;
                         const uStatus = status.toUpperCase();
@@ -3557,8 +3433,9 @@ export function Meetings() {
                         if (s === 'present') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
                         if (s === 'absent') return 'text-red-400 bg-red-500/10 border-red-500/20';
                         if (s === 'substitute') return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                        if (s === 'medical') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                        if (s === 'medical') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
                         if (s === 'late') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+                        if (s === 'pending' || !s) return 'text-amber-400 bg-amber-500/10 border-amber-500/20 font-bold';
                         return 'text-neutral-400 bg-[#151C2E] border-white/10';
                       };
                       
@@ -3598,10 +3475,10 @@ export function Meetings() {
                             </div>
                             <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
                               <select
-                                value={attendanceVal}
+                                value={attendanceVal || 'Pending'}
                                 onChange={(e) => {
                                   const newStatus = e.target.value as any;
-                                  setTempAttendance({ ...tempAttendance, [mId]: newStatus });
+                                  setTempAttendance(prev => ({ ...prev, [mId]: newStatus }));
                                   if (newStatus === 'Present' || newStatus === 'Substitute' || newStatus === 'Late') {
                                     if (!tempPaymentStatus[mId]) {
                                       setTempPaymentStatus(prev => ({ ...prev, [mId]: 'NOT PAID' }));
@@ -3630,12 +3507,12 @@ export function Meetings() {
                                   getStatusColor(attendanceVal)
                                 )}
                               >
-                                <option value="" className="bg-[#111827] text-white">Not Marked</option>
-                                <option value="Present" className="bg-[#111827] text-white">Present</option>
-                                <option value="Absent" className="bg-[#111827] text-white">Absent</option>
-                                <option value="Substitute" className="bg-[#111827] text-white">Substitute</option>
-                                <option value="Medical" className="bg-[#111827] text-white">Medical</option>
-                                <option value="Late" className="bg-[#111827] text-white">Late</option>
+                                <option value="Pending" className="bg-[#111827] text-amber-400 font-bold">Pending</option>
+                                <option value="Present" className="bg-[#111827] text-emerald-400 font-bold">Present</option>
+                                <option value="Absent" className="bg-[#111827] text-red-400 font-bold">Absent</option>
+                                <option value="Substitute" className="bg-[#111827] text-blue-400 font-bold">Substitute</option>
+                                <option value="Medical" className="bg-[#111827] text-purple-400 font-bold">Medical</option>
+                                <option value="Late" className="bg-[#111827] text-purple-400 font-bold">Late</option>
                               </select>
                               
                               {isAttended && (
@@ -3761,18 +3638,18 @@ export function Meetings() {
                       </div>
                       <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 w-full sm:w-auto">
                         <select
-                          value={status}
+                          value={status || 'Pending'}
                           onChange={(e) => setTempGuestAttendance(prev => ({ ...prev, [guest.id]: e.target.value }))}
                           className={cn(
                             "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
-                            status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10" :
-                            status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10" :
-                            "border-white/5 text-neutral-400 bg-[#151C2E]"
+                            status === 'Present' ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10 font-bold" :
+                            status === 'Absent' ? "border-red-500/30 text-red-400 bg-red-500/10 font-bold" :
+                            "border-amber-500/30 text-amber-400 bg-amber-500/10 font-bold"
                           )}
                         >
-                          <option value="" className="bg-[#111827] text-white">Not Marked</option>
-                          <option value="Present" className="bg-[#111827] text-white">Present</option>
-                          <option value="Absent" className="bg-[#111827] text-white">Absent</option>
+                          <option value="Pending" className="bg-[#111827] text-amber-400 font-bold">Pending</option>
+                          <option value="Present" className="bg-[#111827] text-emerald-400 font-bold">Present</option>
+                          <option value="Absent" className="bg-[#111827] text-red-400 font-bold">Absent</option>
                         </select>
                         
                         {(status === 'Present' || status === 'Substitute') && (
@@ -3914,23 +3791,32 @@ export function Meetings() {
               </div>
             );
           })()}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap gap-3">
             {selectedMeeting && !isMeetingDone(selectedMeeting) && (
               <button
                 type="button"
                 onClick={() => setIsCancelConfirmOpen(true)}
                 disabled={isSubmitting}
-                className="px-4 py-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-[12px] font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 uppercase tracking-widest text-xs shrink-0 cursor-pointer"
+                className="px-4 py-3.5 sm:py-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-[12px] font-bold hover:bg-red-500/20 transition-all disabled:opacity-50 uppercase tracking-widest text-xs shrink-0 cursor-pointer"
               >
                 Cancel Meeting
               </button>
             )}
             <button
-              onClick={handleSaveUpdate}
+              type="button"
+              onClick={() => handleSaveUpdate(false)}
               disabled={isSubmitting}
-              className="flex-1 py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
+              className="flex-1 py-3.5 sm:py-4 bg-[#151C2E] hover:bg-[#1C2538] text-white border border-white/10 rounded-[12px] font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs cursor-pointer"
             >
-              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save Changes'}
+              {isSubmitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Save Progress'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveUpdate(true)}
+              disabled={isSubmitting}
+              className="flex-1 py-3.5 sm:py-4 bg-primary text-white rounded-[12px] font-bold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-widest text-xs cursor-pointer shadow-lg shadow-primary/20"
+            >
+              {isSubmitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Submit & Complete'}
             </button>
           </div>
         </div>
@@ -4521,7 +4407,7 @@ export function Meetings() {
                       </div>
                       <div className="shrink-0 text-right">
                         {(() => {
-                          const displayObj = getAttendanceDisplay(status);
+                          const displayObj = getUserAttendanceBadge(meeting, profile?.uid || profile?.id);
                           return (
                             <span className={cn(
                               "inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border",
@@ -4712,6 +4598,22 @@ export function Meetings() {
               <div className="p-4 bg-[#151C2E] rounded-[12px] border border-white/5 space-y-1">
                 <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Meeting Notes</h4>
                 <p className="text-xs text-neutral-200 whitespace-pre-wrap leading-relaxed">{reportMeeting.notes}</p>
+              </div>
+            )}
+
+            {canUserUpdateMeeting(reportMeeting) && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAttendanceReportOpen(false);
+                    handleOpenUpdateMeetingModal(reportMeeting);
+                  }}
+                  className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[12px] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Settings size={14} />
+                  Edit Meeting Attendance
+                </button>
               </div>
             )}
           </div>

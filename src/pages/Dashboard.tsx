@@ -27,7 +27,7 @@ import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, c
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 import { isOfflineReferral, isNormalReferral } from '../types';
-import { parseMeetingDateParts, isSameMeetingDate } from '../utils/recurringMeetingUtils';
+import { parseMeetingDateParts, isSameMeetingDate, isMeetingDone, isMeetingInPastInIST, isMeetingUpcomingInIST, getISTNow } from '../utils/recurringMeetingUtils';
 
 export function cleanHeroName(name: string): string {
   return getCleanFullName(name);
@@ -82,6 +82,80 @@ const isToday = (dateStr: string) => {
          parsedDate.getMonth() === parsedNow.getMonth() &&
          parsedDate.getDate() === parsedNow.getDate();
 };
+
+export function isGuestMarkedPresent(g: any): boolean {
+  if (!g) return false;
+  const st = String(g.status || g.attendance_status || g.attendanceStatus || '').trim().toLowerCase();
+  if (st === 'cancelled' || st === 'canceled' || st === 'invalid' || st === 'absent' || st === 'no-show' || st === 'no') {
+    return false;
+  }
+  return st === 'present' || st === 'attended' || st === 'yes' || st === 'converted' || g.is_converted === true || g.isConverted === true;
+}
+
+export function isGuestInvitedToUpcoming(g: any, allMeetings: any[] = []): boolean {
+  if (!g) return false;
+  const st = String(g.status || g.attendance_status || g.attendanceStatus || '').trim().toLowerCase();
+  // Exclude absent, pending, cancelled, invalid, or already marked present
+  if (
+    st === 'cancelled' ||
+    st === 'canceled' ||
+    st === 'absent' ||
+    st === 'pending' ||
+    st === 'no-show' ||
+    st === 'no' ||
+    st === 'invalid' ||
+    st === 'present' ||
+    st === 'attended' ||
+    st === 'converted' ||
+    g.is_converted === true ||
+    g.isConverted === true
+  ) {
+    return false;
+  }
+
+  const meetingId = String(g.meeting_id || g.meetingId || '').trim();
+  const guestMeetingDate = g.meeting_date || g.meetingDate || g.date;
+  const guestChapterId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+
+  let linkedMeeting = meetingId
+    ? allMeetings.find((m: any) => String(m.id).trim() === meetingId)
+    : undefined;
+
+  if (!linkedMeeting && guestMeetingDate) {
+    linkedMeeting = allMeetings.find((m: any) => {
+      const mChap = String(m.chapter_id || m.chapterId || m.admin_id || '').trim();
+      if (guestChapterId && mChap && guestChapterId !== mChap) return false;
+      const mDate = m.date || m.meeting_date;
+      return mDate && isSameMeetingDate(mDate, guestMeetingDate);
+    });
+  }
+
+  if (linkedMeeting) {
+    if (isMeetingDone(linkedMeeting)) return false;
+    const now = new Date();
+    const mDate = new Date(linkedMeeting.date || linkedMeeting.meeting_date || '');
+    return getMeetingExactDateTime(linkedMeeting) >= now || mDate >= now || isMeetingUpcomingInIST(linkedMeeting) || !isMeetingInPastInIST(linkedMeeting);
+  }
+
+  if (guestMeetingDate) {
+    const todayYMD = getISTNow().dateString;
+    const parts = parseMeetingDateParts(guestMeetingDate);
+    if (!parts) return false;
+    const gDateYMD = `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    return gDateYMD >= todayYMD;
+  }
+
+  return false;
+}
+
+export function isGuestUpcomingOrPresent(g: any, allMeetings: any[] = []): boolean {
+  if (!g) return false;
+  const st = String(g.status || g.attendance_status || g.attendanceStatus || '').trim().toLowerCase();
+  if (st === 'cancelled' || st === 'canceled' || st === 'absent' || st === 'pending' || st === 'no-show' || st === 'no' || st === 'invalid') {
+    return false;
+  }
+  return isGuestMarkedPresent(g) || isGuestInvitedToUpcoming(g, allMeetings);
+}
 
 export function Analytics() {
   const navigate = useNavigate();
@@ -1256,29 +1330,71 @@ export function Analytics() {
   }, [effectiveOneToOnes, chapterUserIds, userCandidateIds, profile, usePersonalStats]);
 
   const chapterGuestsList = useMemo(() => {
-    if (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter === 'ALL') {
-      return effectiveGuestInvitations;
+    let list = effectiveGuestInvitations;
+    if (usePersonalStats) {
+      list = list.filter(g => {
+        const inviterIds = [
+          g.invited_by_user_id,
+          (g as any).invitedByUserId,
+          g.invited_by,
+          (g as any).invitedBy,
+          g.created_by,
+          (g as any).createdBy,
+          (g as any).inviterId,
+          (g as any).inviter_id,
+          g.user_id,
+          (g as any).userId,
+          g.member_id,
+          (g as any).memberId
+        ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+        const isMine = userCandidateIds.some(cid => inviterIds.includes(String(cid).trim().toLowerCase()));
+        if (!isMine) return false;
+
+        const rawSt = String(g.status || g.attendance_status || (g as any).attendanceStatus || '').trim().toLowerCase();
+        if (rawSt === 'absent' || rawSt === 'pending' || rawSt === 'cancelled' || rawSt === 'canceled' || rawSt === 'no-show' || rawSt === 'invalid') {
+          return false;
+        }
+
+        return isGuestInvitedToUpcoming(g, meetings);
+      });
+    } else if (profile?.role === 'MASTER_ADMIN') {
+      if (appliedChapterFilter !== 'ALL') {
+        const targetChapId = String(appliedChapterFilter).trim();
+        list = list.filter(g => {
+          const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || (g as any).inviterId || (g as any).inviter_id || g.user_id || g.member_id || '').trim();
+          return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
+        });
+      }
+      if (appliedMemberFilter !== 'ALL') {
+        list = list.filter(g => {
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || (g as any).inviterId || (g as any).inviter_id || g.user_id || g.member_id || '').trim();
+          return inviter === appliedMemberFilter;
+        });
+      }
+      list = list.filter(g => isGuestInvitedToUpcoming(g, meetings));
+    } else {
+      const targetChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
+      list = list.filter(g => {
+        const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
+        const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || (g as any).inviterId || (g as any).inviter_id || g.user_id || g.member_id || '').trim();
+        return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
+      });
+      list = list.filter(g => isGuestInvitedToUpcoming(g, meetings));
     }
-    const targetChapId = (profile?.role === 'MASTER_ADMIN' && appliedChapterFilter !== 'ALL')
-      ? String(appliedChapterFilter).trim()
-      : String(profile?.chapter_id || profile?.chapterId || '').trim();
-    return effectiveGuestInvitations.filter(g => {
-      const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
-      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-      if (usePersonalStats) return userCandidateIds.includes(inviter);
-      return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
-    });
-  }, [effectiveGuestInvitations, chapterUserIds, userCandidateIds, profile, appliedChapterFilter, usePersonalStats]);
+
+    return list;
+  }, [effectiveGuestInvitations, meetings, chapterUserIds, userCandidateIds, profile, appliedChapterFilter, appliedMemberFilter, usePersonalStats]);
 
   const guestsInvitedCount = useMemo(() => chapterGuestsList.length, [chapterGuestsList]);
 
   const userGuestsJoined = useMemo(() => {
     if (!profile) return 0;
     return effectiveGuestInvitations.filter(g => {
-      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
       if (!userCandidateIds.includes(inviter)) return false;
-      const st = String(g.status || g.attendance_status || '').toLowerCase();
-      return st === 'present' || st === 'attended' || st === 'joined' || st === 'converted' || g.is_converted === true || g.isConverted === true;
+      return isGuestMarkedPresent(g);
     }).length;
   }, [effectiveGuestInvitations, userCandidateIds, profile]);
 
@@ -1329,16 +1445,43 @@ export function Analytics() {
   }, [effectiveOneToOnes, userCandidateIds, profile]);
 
   const visitorsAttendedCount = useMemo(() => {
-    let list = guestInvitations.filter(g => {
-      const st = String(g.status || g.attendance_status || '').toLowerCase();
-      return st === 'present' || st === 'attended';
-    });
+    let list = guestInvitations.filter(g => isGuestMarkedPresent(g));
 
     if (activeDateRange) {
       list = list.filter(g => {
-        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.date);
+        const d = new Date(g.attendance_updated_at || g.updated_at || g.createdAt || g.created_at || g.meeting_date || g.date);
         return isDateInRange(d, activeDateRange.start, activeDateRange.end);
       });
+    }
+
+    if (usePersonalStats) {
+      list = list.filter(g => {
+        const inviterIds = [
+          g.invited_by_user_id,
+          (g as any).invitedByUserId,
+          g.invited_by,
+          (g as any).invitedBy,
+          g.created_by,
+          (g as any).createdBy,
+          (g as any).inviterId,
+          (g as any).inviter_id,
+          g.user_id,
+          (g as any).userId,
+          g.member_id,
+          (g as any).memberId
+        ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+        const isMine = userCandidateIds.some(cid => inviterIds.includes(String(cid).trim().toLowerCase()));
+        if (!isMine) return false;
+
+        const rawSt = String(g.status || g.attendance_status || (g as any).attendanceStatus || '').trim().toLowerCase();
+        if (rawSt === 'absent' || rawSt === 'pending' || rawSt === 'cancelled' || rawSt === 'canceled' || rawSt === 'no-show' || rawSt === 'invalid') {
+          return false;
+        }
+
+        return isGuestMarkedPresent(g);
+      });
+      return list.length || 0;
     }
 
     if (profile?.role === 'MASTER_ADMIN') {
@@ -1346,24 +1489,23 @@ export function Analytics() {
         const targetChapId = String(appliedChapterFilter).trim();
         list = list.filter(g => {
           const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
-          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
           return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
         });
       }
       if (appliedMemberFilter !== 'ALL') {
         list = list.filter(g => {
-          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
+          const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
           return inviter === appliedMemberFilter || g.userId === appliedMemberFilter;
         });
       }
-      return list.length;
+      return list.length || 0;
     }
 
     const targetChapId = String(profile?.chapter_id || profile?.chapterId || '').trim();
     list = list.filter(g => {
       const gChapId = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || g.chapterId || '').trim();
-      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || '').trim();
-      if (usePersonalStats) return userCandidateIds.includes(inviter);
+      const inviter = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.inviterId || g.inviter_id || g.user_id || g.member_id || '').trim();
       return chapterUserIds.includes(inviter) || (gChapId && gChapId === targetChapId);
     });
 
@@ -1981,7 +2123,7 @@ export function Analytics() {
   const hasAttendedMeeting = useMemo(() => {
     if (!profile) return false;
     const relevantMeetings = profile.adminId ? meetings.filter(m => m.chapter_id === profile.chapter_id) : meetings;
-    return relevantMeetings.some(m => (m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED') && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE'].includes(m.attendance?.[profile.uid]));
+    return relevantMeetings.some(m => !m.isCancelled && m.status !== 'CANCELLED' && (m.isCompleted === true || (m.isCompleted as any) === 'true' || m.status === 'COMPLETED') && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(m.attendance?.[profile.uid]));
   }, [meetings, profile]);
 
   const hasPassedReferral = useMemo(() => {
@@ -2714,49 +2856,90 @@ export function Analytics() {
             `invited_by_user_id.eq.${id}`,
             `invited_by.eq.${id}`,
             `created_by.eq.${id}`,
-            `member_id.eq.${id}`
+            `inviter_id.eq.${id}`,
+            `member_id.eq.${id}`,
+            `user_id.eq.${id}`
           ]).join(',');
           query = query.or(orConds);
         } else {
           if (appliedChapterFilter !== 'ALL') {
             query = query.eq('chapter_id', appliedChapterFilter);
           }
-        }
-
-        if (isVisitorOnly) {
-          query = query.or('status.eq.present,status.eq.attended,status.eq.Present,status.eq.Attended,attendance_status.eq.present,attendance_status.eq.attended');
-        }
-
-        if (effectiveDate) {
-          query = query.gte('meeting_date', effectiveDate.start.toISOString().split('T')[0]).lte('meeting_date', effectiveDate.end.toISOString().split('T')[0]);
+          if (appliedMemberFilter !== 'ALL') {
+            query = query.or(`invited_by_user_id.eq.${appliedMemberFilter},invited_by.eq.${appliedMemberFilter},created_by.eq.${appliedMemberFilter},inviter_id.eq.${appliedMemberFilter},member_id.eq.${appliedMemberFilter},user_id.eq.${appliedMemberFilter}`);
+          }
         }
 
         const { data: sbGuests, error } = await query;
         if (error) throw error;
 
+        // Ensure we have meeting records to check upcoming meeting dates and completion status
+        let currentMeetings = meetings;
+        if (!currentMeetings || currentMeetings.length === 0) {
+          const { data: mData } = await supabase.from('meetings').select('*');
+          currentMeetings = (mData || []).map((m: any) => normalizeMeetingRecord({ ...m }));
+        }
+
         let list = sbGuests || [];
         if (usePersonalStats) {
           list = list.filter((g: any) => {
-            const invId = String(g.invited_by_user_id || g.invited_by || g.created_by || g.member_id || '').trim();
-            if (!candidateIds.includes(invId)) return false;
-            if (isVisitorOnly) {
-              const st = String(g.status || g.attendance_status || '').toLowerCase();
-              return st === 'present' || st === 'attended';
+            const inviterIds = [
+              g.invited_by_user_id,
+              g.invitedByUserId,
+              g.invited_by,
+              g.invitedBy,
+              g.created_by,
+              g.createdBy,
+              g.inviterId,
+              g.inviter_id,
+              g.user_id,
+              g.userId,
+              g.member_id,
+              g.memberId
+            ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+            const isMine = candidateIds.some(cid => inviterIds.includes(String(cid).trim().toLowerCase()));
+            if (!isMine) return false;
+
+            const rawSt = String(g.status || g.attendance_status || g.attendanceStatus || '').trim().toLowerCase();
+            if (rawSt === 'absent' || rawSt === 'pending' || rawSt === 'cancelled' || rawSt === 'canceled' || rawSt === 'no-show' || rawSt === 'invalid') {
+              return false;
             }
-            return true;
+
+            if (isVisitorOnly) {
+              return isGuestMarkedPresent(g);
+            }
+            if (isInvitedOnly) {
+              return isGuestInvitedToUpcoming(g, currentMeetings);
+            }
+            return isGuestMarkedPresent(g) || isGuestInvitedToUpcoming(g, currentMeetings);
+          });
+        } else {
+          list = list.filter((g: any) => {
+            const rawSt = String(g.status || g.attendance_status || g.attendanceStatus || '').trim().toLowerCase();
+            if (rawSt === 'absent' || rawSt === 'pending' || rawSt === 'cancelled' || rawSt === 'canceled' || rawSt === 'no-show' || rawSt === 'invalid') {
+              return false;
+            }
+            if (isVisitorOnly) {
+              return isGuestMarkedPresent(g);
+            }
+            if (isInvitedOnly) {
+              return isGuestInvitedToUpcoming(g, currentMeetings);
+            }
+            return isGuestMarkedPresent(g) || isGuestInvitedToUpcoming(g, currentMeetings);
           });
         }
+
         if (effectiveDate) {
-          list = list.filter(g => isDateInRange(g.meeting_date || g.created_at || g.date, effectiveDate.start, effectiveDate.end));
+          list = list.filter(g => isDateInRange(g.meeting_date || g.attendance_updated_at || g.created_at || g.date, effectiveDate.start, effectiveDate.end));
         }
 
         const mapped = list.map((g: any) => {
-          const invId = String(g.invited_by_user_id || g.invited_by || g.created_by || g.member_id || '').trim();
+          const invId = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.member_id || g.user_id || '').trim();
           const inviterName = resolveMemberName(invId, g.invited_by_name || g.inviter_name);
-          const st = (g.status || g.attendance_status || '').toLowerCase();
-          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = 'amber';
-          if (st === 'attended' || st === 'present') bColor = 'emerald';
-          if (st === 'no-show' || st === 'absent') bColor = 'red';
+          const isPresent = isGuestMarkedPresent(g);
+          const st = isPresent ? 'Present' : (g.status || 'Invited');
+          const bColor: 'emerald' | 'red' | 'amber' | 'blue' = isPresent ? 'emerald' : 'amber';
 
           return {
             id: String(g.id),
@@ -2765,7 +2948,7 @@ export function Analytics() {
               ? (g.business_category || g.guest_business || g.profession || 'Invited Visitor')
               : `Invited By: ${inviterName}`,
             icon: <UserPlus size={20} className="text-pink-400" />,
-            badgeText: (st === 'present' || st === 'attended') ? 'Present' : (g.status || 'Invited'),
+            badgeText: st,
             badgeColor: bColor,
             date: g.meeting_date || g.created_at ? formatDate(g.meeting_date || g.created_at) : null,
             time: g.meeting_time ? formatTimeStr(g.meeting_time, '') : null,
@@ -2812,6 +2995,7 @@ export function Analytics() {
 
             if (isAttendedOnly) {
               if (!m.attendance) return false;
+              if (m.isCancelled || m.status === 'CANCELLED') return false;
               return candidateIds.some(uid => {
                 const st = m.attendance[uid];
                 return st && ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(st));
@@ -2834,16 +3018,29 @@ export function Analytics() {
         }
 
         const mapped = list.map((m: any) => {
-          let bText = m.status || 'Scheduled';
-          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = (m.status || '').toLowerCase() === 'completed' ? 'emerald' : 'amber';
-          if (usePersonalStats && m.attendance) {
-            const userAttStatus = candidateIds.map(uid => m.attendance[uid]).find(Boolean);
+          const isCancelled = m.isCancelled === true || (m.isCancelled as any) === 'true' || String(m.status).toUpperCase() === 'CANCELLED';
+          let bText = isCancelled ? 'Cancelled' : (m.status || 'Scheduled');
+          let bColor: 'emerald' | 'red' | 'amber' | 'blue' = isCancelled ? 'red' : ((m.status || '').toLowerCase() === 'completed' ? 'emerald' : 'amber');
+          if (isCancelled) {
+            bText = 'Cancelled';
+            bColor = 'red';
+          } else if (usePersonalStats) {
+            const userAttStatus = m.attendance ? candidateIds.map(uid => m.attendance[uid]).find(Boolean) : undefined;
             if (userAttStatus) {
-              bText = String(userAttStatus);
-              bColor = ['PRESENT', 'Yes', 'Substitute', 'Late', 'YES', 'SUBSTITUTE', 'Present'].includes(String(userAttStatus)) ? 'emerald' : 'red';
-            } else if ((m.status || '').toLowerCase() === 'completed') {
-              bText = 'Absent';
-              bColor = 'red';
+              const uUpper = String(userAttStatus).toUpperCase();
+              if (['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(uUpper)) {
+                bText = String(userAttStatus);
+                bColor = 'emerald';
+              } else if (['ABSENT', 'MEDICAL', 'NO'].includes(uUpper)) {
+                bText = String(userAttStatus);
+                bColor = 'red';
+              } else {
+                bText = 'Pending';
+                bColor = 'amber';
+              }
+            } else {
+              bText = 'Pending';
+              bColor = 'amber';
             }
           }
 

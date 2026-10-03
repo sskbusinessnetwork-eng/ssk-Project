@@ -1518,11 +1518,11 @@ async function startServer() {
         targetStatus = 'COMPLETED';
         targetIsCompleted = true;
       } else if (targetStatus === 'UPCOMING' || targetStatus === 'PENDING' || isCompleted === false) {
-        targetStatus = targetStatus || 'UPCOMING';
+        targetStatus = targetStatus || (isCompleted === false ? 'PENDING' : 'UPCOMING');
         targetIsCompleted = false;
-      } else if (isCompleted === undefined && attendance && Object.keys(attendance).length > 0) {
-        targetStatus = 'COMPLETED';
-        targetIsCompleted = true;
+      } else if (isCompleted === false || targetStatus === 'PENDING') {
+        targetStatus = 'PENDING';
+        targetIsCompleted = false;
       }
 
       if (targetStatus !== undefined) {

@@ -324,6 +324,7 @@ export function getMeetingTimestampInIST(dateVal: any, timeStr: string = '07:30'
  */
 export function isMeetingCompleted(meeting: any): boolean {
   if (!meeting) return false;
+  if (isMeetingCancelled(meeting)) return false;
   const notes = meeting.memberNotes || meeting.member_notes || {};
   const noteStatus = String(notes.__status || '').trim().toUpperCase();
   const statusStr = String(meeting.status || noteStatus || '').trim().toUpperCase();

@@ -1,7 +1,7 @@
 export type UserRole = 'MASTER_ADMIN' | 'CHAPTER_ADMIN' | 'MEMBER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING';
 export type ReferralStatus = 'PENDING' | 'CONTACTED' | 'CONVERTED' | 'CLOSED' | 'NOT_CONVERTED' | 'COMPLETED' | 'Offline' | 'OFFLINE';
-export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'Present' | 'Absent' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE' | 'Late' | 'LATE' | 'Medical' | 'MEDICAL';
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'Present' | 'Absent' | 'PENDING' | 'Pending' | 'VISITOR' | 'Yes' | 'No' | 'Substitute' | 'YES' | 'NO' | 'SUBSTITUTE' | 'Late' | 'LATE' | 'Medical' | 'MEDICAL';
 
 export type ChapterPosition = 'member' | 'chapter_admin' | 'president' | 'vice_president' | 'treasurer' | string;
 
