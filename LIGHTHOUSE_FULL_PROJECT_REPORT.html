@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSK Business Network — Lighthouse Audit Report</title>
+  <style>
+    :root {
+      --bg: #0B0F19;
+      --card-bg: #151C2E;
+      --card-border: #232D42;
+      --text: #F8FAFC;
+      --text-dim: #94A3B8;
+      --primary: #FF6321;
+      --emerald: #10B981;
+      --amber: #F59E0B;
+      --red: #EF4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 1280px; margin: 0 auto; }
+    header { margin-bottom: 32px; border-bottom: 1px solid var(--card-border); padding-bottom: 24px; }
+    h1 { font-size: 28px; font-weight: 800; color: #FFF; margin-bottom: 8px; }
+    .subtitle { color: var(--text-dim); font-size: 14px; }
+    .grid-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .card-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 8px; }
+    .card-value { font-size: 32px; font-weight: 800; color: #FFF; }
+    .score-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .score-high { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .score-med { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .score-low { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+    th {
+      background: #0E1424;
+      color: var(--text-dim);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+    .tag-protected { background: rgba(99, 102, 241, 0.15); color: #818CF8; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; }
+    .tag-public { background: rgba(16, 185, 129, 0.15); color: #34D399; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; }
+    .problem-box {
+      margin-top: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .problem-item {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .problem-item:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SSK Business Network — Full Lighthouse Audit Dashboard</h1>
+      <p class="subtitle">Automated Mobile & Desktop Performance, Accessibility, Best Practices, and SEO Report</p>
+    </header>
+
+    <div class="grid-summary">
+      <div class="card">
+        <div class="card-title">Mobile Avg Performance</div>
+        <div class="card-value" style="color: #34D399;">86</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Desktop Avg Performance</div>
+        <div class="card-value" style="color: #34D399;">97</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Accessibility Avg</div>
+        <div class="card-value" style="color: #60A5FA;">99</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Discovered Routes</div>
+        <div class="card-value">28</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 32px;">
+      <h2 style="font-size: 18px; margin-bottom: 16px;">Page-by-Page Audit Table</h2>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Page Name</th>
+              <th>Route</th>
+              <th>Access</th>
+              <th>Device</th>
+              <th>Perf</th>
+              <th>A11y</th>
+              <th>Best Prac</th>
+              <th>SEO</th>
+              <th>FCP</th>
+              <th>LCP</th>
+              <th>TBT</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Chapter Admin Home</strong></td>
+              <td><code>/chapter-admin/home</code></td>
+              <td><span class="tag-protected">Protected</span></td>
+              <td>Mobile</td>
+              <td><span class="score-badge score-med">78</span></td>
+              <td>100</td>
+              <td>96</td>
+              <td>61</td>
+              <td>3.4s</td>
+              <td>4.0s</td>
+              <td>0ms</td>
+              <td><span class="score-badge score-high">PASS</span></td>
+            </tr>
+            <tr>
+              <td><strong>Chapter Admin Home</strong></td>
+              <td><code>/chapter-admin/home</code></td>
+              <td><span class="tag-protected">Protected</span></td>
+              <td>Desktop</td>
+              <td><span class="score-badge score-high">96</span></td>
+              <td>100</td>
+              <td>96</td>
+              <td>61</td>
+              <td>1.1s</td>
+              <td>1.4s</td>
+              <td>0ms</td>
+              <td><span class="score-badge score-high">PASS</span></td>
+            </tr>
+            <tr>
+              <td><strong>Landing Page</strong></td>
+              <td><code>/</code></td>
+              <td><span class="tag-public">Public</span></td>
+              <td>Mobile</td>
+              <td><span class="score-badge score-high">92</span></td>
+              <td>100</td>
+              <td>100</td>
+              <td>92</td>
+              <td>1.4s</td>
+              <td>1.8s</td>
+              <td>0ms</td>
+              <td><span class="score-badge score-high">PASS</span></td>
+            </tr>
+            <tr>
+              <td><strong>Login Portal</strong></td>
+              <td><code>/login</code></td>
+              <td><span class="tag-public">Public</span></td>
+              <td>Mobile</td>
+              <td><span class="score-badge score-high">94</span></td>
+              <td>100</td>
+              <td>100</td>
+              <td>92</td>
+              <td>1.2s</td>
+              <td>1.5s</td>
+              <td>0ms</td>
+              <td><span class="score-badge score-high">PASS</span></td>
+            </tr>
+            <tr>
+              <td><strong>Chapter Meetings</strong></td>
+              <td><code>/meetings</code></td>
+              <td><span class="tag-protected">Protected</span></td>
+              <td>Mobile</td>
+              <td><span class="score-badge score-high">82</span></td>
+              <td>96</td>
+              <td>96</td>
+              <td>61</td>
+              <td>2.2s</td>
+              <td>2.8s</td>
+              <td>0ms</td>
+              <td><span class="score-badge score-high">PASS</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="problem-box">
+      <h2 style="font-size: 18px; margin-bottom: 16px;">Key Audit Insights</h2>
+      <div class="problem-item">
+        <h3 style="font-size: 15px; font-weight: 700; color: #FFF;">Protected Dashboard Audit Integrity</h3>
+        <p style="font-size: 13px; color: #CBD5E1; margin-top: 4px;">
+          Lighthouse connects directly to the authenticated Playwright browser session via Chrome DevTools Protocol (CDP port 9222). Protected pages never bounce to <code>/login</code> during testing, ensuring accurate telemetry for logged-in Chapter Admins and Members.
+        </p>
+      </div>
+      <div class="problem-item">
+        <h3 style="font-size: 15px; font-weight: 700; color: #FFF;">Route-based Code Splitting</h3>
+        <p style="font-size: 13px; color: #CBD5E1; margin-top: 4px;">
+          All 28 route modules are lazily loaded with <code>React.lazy</code>, reducing unused JavaScript by over 340 KiB on initial load.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

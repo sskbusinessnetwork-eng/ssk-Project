@@ -863,15 +863,19 @@ export function OneToOneMeetings() {
 
   function handleOpenAttendanceModal(meeting: OneToOneMeeting) {
     const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
-    const isCreator = String(senderId) === String(profile?.id) || String(senderId) === String(profile?.uid) || String(senderId) === String(currentUserRecord?.id) || String(senderId) === String(currentUserRecord?.uid);
+    const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
+    
+    const isAuthorized = 
+      String(senderId) === String(profile?.id) || String(senderId) === String(profile?.uid) || 
+      String(receiverId) === String(profile?.id) || String(receiverId) === String(profile?.uid) ||
+      String(senderId) === String(currentUserRecord?.id) || String(senderId) === String(currentUserRecord?.uid) ||
+      String(receiverId) === String(currentUserRecord?.id) || String(receiverId) === String(currentUserRecord?.uid);
 
-    if (!isCreator && !isAdmin) {
+    if (!isAuthorized && !isAdmin) {
       return;
     }
 
     setUpdatingMeeting(meeting);
-
-    const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
 
     const existingAttendance = meeting.attendance || {};
     setCreatorAttendance(existingAttendance[senderId] || 'PRESENT');
@@ -1350,9 +1354,12 @@ export function OneToOneMeetings() {
                   allUsersList={allUsersList}
                   chapterMap={chapterMap}
                   isCreator={
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.id) ||
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.uid) ||
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(currentUserRecord?.id)
+                    (() => {
+                      const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
+                      const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
+                      const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
+                      return myIds.includes(senderId) || myIds.includes(receiverId);
+                    })()
                   }
                   isAdmin={isAdmin}
                   onUpdate={() => handleOpenAttendanceModal(meeting)}
@@ -1425,9 +1432,12 @@ export function OneToOneMeetings() {
                   allUsersList={allUsersList}
                   chapterMap={chapterMap}
                   isCreator={
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.id) ||
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(profile?.uid) ||
-                    String(meeting.sender_id || meeting.organizer_id || meeting.creatorId) === String(currentUserRecord?.id)
+                    (() => {
+                      const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
+                      const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
+                      const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
+                      return myIds.includes(senderId) || myIds.includes(receiverId);
+                    })()
                   }
                   isAdmin={isAdmin}
                   onUpdate={() => handleOpenAttendanceModal(meeting)}

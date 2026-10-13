@@ -1506,6 +1506,9 @@ async function startServer() {
 
       if (attendance) updatePayload.attendance = attendance;
       if (amountCollected) updatePayload.amount_collected = amountCollected;
+      if (paymentStatus) updatePayload.payment_status = paymentStatus;
+      if (paymentMethods) updatePayload.payment_methods = paymentMethods;
+      if (meetingAmount !== undefined) updatePayload.meeting_amount = Number(meetingAmount) || 0;
 
       let targetStatus = req.body.status ? String(req.body.status).toUpperCase() : undefined;
       let targetIsCompleted: boolean | undefined = isCompleted;

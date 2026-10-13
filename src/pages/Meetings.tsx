@@ -378,8 +378,7 @@ export function Meetings() {
   const [isMeetingDetailsModalOpen, setIsMeetingDetailsModalOpen] = useState(false);
   const [detailsMeeting, setDetailsMeeting] = useState<Meeting | null>(null);
   const [tempMeetingAmount, setTempMeetingAmount] = useState<number | ''>('');
-  const [tempPaymentStatus, setTempPaymentStatus] = useState<Record<string, 'PAID' | 'NOT PAID' | string>>({});
-  const [tempPaymentMethods, setTempPaymentMethods] = useState<Record<string, 'UPI' | 'CASH' | string>>({});
+  const [tempPaymentOptions, setTempPaymentOptions] = useState<Record<string, string>>({});
   const [tempAttendance, setTempAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [tempAmount, setTempAmount] = useState<Record<string, number>>({});
   const [tempMemberNotes, setTempMemberNotes] = useState<Record<string, string>>({});
@@ -1633,6 +1632,8 @@ export function Meetings() {
       const cleanAttendance: Record<string, string> = {};
       let hasPendingMembers = false;
 
+      const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined ? Number(tempMeetingAmount) : 0;
+
       // Process and validate member attendance individually
       for (const member of meetingMembers) {
         const mId = member.id || member.uid;
@@ -1660,14 +1661,20 @@ export function Meetings() {
 
         cleanAttendance[mId] = status;
 
-        // Validate Payment Method when marked as PAID
+        // Validate wallet balance if Wallet selected
         const isAttended = ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
         if (isAttended) {
-          const pStatus = tempPaymentStatus[mId] || 'NOT PAID';
-          if (pStatus === 'PAID') {
-            const pMethod = tempPaymentMethods[mId];
-            if (!pMethod || (pMethod !== 'UPI' && pMethod !== 'CASH' && pMethod !== 'WALLET')) {
-              const msg = `Please select a Payment Method (UPI, Cash, or Wallet) for ${member.name || member.displayName || 'member'} marked as PAID.`;
+          const pOption = tempPaymentOptions[mId] || '';
+          if (pOption === 'Wallet') {
+            const walletSummary = walletService.getMemberWalletSummary(member);
+            const existingMeetingDebit = selectedMeeting?.id
+              ? walletSummary.transactions.find(
+                  tx => tx.type === 'DEBIT' && String(tx.meetingId || '') === String(selectedMeeting.id) && !tx.isReversed
+                )
+              : undefined;
+            const effectiveWalletAvailable = walletSummary.availableBalance + (existingMeetingDebit ? Number(existingMeetingDebit.amount) || 0 : 0);
+            if (configuredMeetingAmt > 0 && effectiveWalletAvailable < configuredMeetingAmt) {
+              const msg = `Insufficient wallet balance for ${member.name || member.displayName || 'member'}. Available: ₹${walletSummary.availableBalance}.`;
               setError(msg);
               showError(msg);
               scrollToError();
@@ -1725,7 +1732,6 @@ export function Meetings() {
       const finalMemberCount = tempMemberCount === '' ? meetingMembers.length : Number(tempMemberCount);
       const finalGuestCount = tempGuestCount === '' ? meetingGuests.length : Number(tempGuestCount);
 
-      const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined ? Number(tempMeetingAmount) : 0;
       const finalAmountCollected: Record<string, number> = {};
       const finalPaymentStatus: Record<string, string> = {};
       const finalPaymentMethods: Record<string, string> = {};
@@ -1736,11 +1742,14 @@ export function Meetings() {
         const isAttended = status && ['Present', 'Substitute', 'Late', 'PRESENT', 'SUBSTITUTE', 'LATE', 'Yes', 'YES'].includes(String(status));
 
         if (isAttended) {
-          const pStatus = tempPaymentStatus[mId] || 'NOT PAID';
-          finalPaymentStatus[mId] = pStatus;
-          if (pStatus === 'PAID') {
-            const pMethod = tempPaymentMethods[mId] || 'UPI';
-            finalPaymentMethods[mId] = pMethod;
+          const pOption = tempPaymentOptions[mId] || '';
+          if (pOption.startsWith('Paid') || pOption === 'Wallet') {
+            finalPaymentStatus[mId] = 'PAID';
+            if (pOption === 'Paid UPI') finalPaymentMethods[mId] = 'UPI';
+            else if (pOption === 'Paid Cash') finalPaymentMethods[mId] = 'CASH';
+            else if (pOption === 'Wallet') finalPaymentMethods[mId] = 'WALLET';
+            else finalPaymentMethods[mId] = 'UPI';
+            
             const amt = configuredMeetingAmt > 0
               ? configuredMeetingAmt
               : (tempAmount[mId] !== undefined && tempAmount[mId] !== '' && Number(tempAmount[mId]) > 0
@@ -1748,6 +1757,7 @@ export function Meetings() {
                   : 0);
             finalAmountCollected[mId] = amt;
           } else {
+            finalPaymentStatus[mId] = 'NOT PAID';
             finalAmountCollected[mId] = 0;
           }
         } else {
@@ -1764,8 +1774,16 @@ export function Meetings() {
             const gAmt = Number(tempAmount[guest.id]) || 0;
             finalAmountCollected[guest.id] = gAmt;
             if (gAmt > 0) {
-              finalPaymentStatus[guest.id] = 'PAID';
-              finalPaymentMethods[guest.id] = tempPaymentMethods[guest.id] || 'CASH';
+              const gOption = tempPaymentOptions[guest.id] || '';
+              if (gOption.startsWith('Paid') || gOption === 'Wallet') {
+                finalPaymentStatus[guest.id] = 'PAID';
+                if (gOption === 'Paid UPI') finalPaymentMethods[guest.id] = 'UPI';
+                else if (gOption === 'Paid Cash') finalPaymentMethods[guest.id] = 'CASH';
+                else if (gOption === 'Wallet') finalPaymentMethods[guest.id] = 'WALLET';
+                else finalPaymentMethods[guest.id] = 'UPI';
+              } else {
+                finalPaymentStatus[guest.id] = 'NOT PAID';
+              }
             }
           }
         }
@@ -2478,8 +2496,7 @@ export function Meetings() {
       rawNotes._PaymentMethods ||
       {};
 
-    const initPaymentStatus: Record<string, string> = {};
-    const initPaymentMethods: Record<string, string> = {};
+    const initPaymentOptions: Record<string, string> = {};
     const initAmount: Record<string, number> = { ...cleanAmountMap };
 
     const allUids = new Set<string>([
@@ -2492,31 +2509,18 @@ export function Meetings() {
     allUids.forEach(uid => {
       if (uid.startsWith('_')) return;
       if (uid.includes('-') && uid !== uid.toLowerCase() && allUids.has(uid.toLowerCase())) return;
-      const st = savedPaymentStatus[uid];
-      if (st) {
-        initPaymentStatus[uid] = String(st).toUpperCase();
-      } else if (Number(cleanAmountMap[uid]) > 0) {
-        initPaymentStatus[uid] = 'PAID';
-      } else {
-        initPaymentStatus[uid] = 'NOT PAID';
-      }
+      
+      initPaymentOptions[uid] = '';
 
-      if (savedPaymentMethods[uid]) {
-        initPaymentMethods[uid] = String(savedPaymentMethods[uid]).toUpperCase();
-      } else if (initPaymentStatus[uid] === 'PAID' && Number(cleanAmountMap[uid]) > 0) {
-        initPaymentMethods[uid] = 'UPI';
-      }
-
-      if (initPaymentStatus[uid] === 'PAID') {
-        initAmount[uid] = Number(cleanAmountMap[uid]) > 0 ? Number(cleanAmountMap[uid]) : (Number(mAmt) || 0);
+      if (Number(cleanAmountMap[uid]) > 0) {
+        initAmount[uid] = Number(cleanAmountMap[uid]);
       } else {
         initAmount[uid] = 0;
       }
     });
 
     setTempAmount(initAmount);
-    setTempPaymentStatus(initPaymentStatus);
-    setTempPaymentMethods(initPaymentMethods);
+    setTempPaymentOptions(initPaymentOptions);
     setTempMemberNotes(rawNotes);
     setTempDate(meeting.date || '');
     setTempTime(meeting.time || '');
@@ -3390,8 +3394,9 @@ export function Meetings() {
                       setTempMeetingAmount(val);
                       setTempAmount(prev => {
                         const updated = { ...prev };
-                        Object.keys(tempPaymentStatus).forEach(uid => {
-                          if (tempPaymentStatus[uid] === 'PAID') {
+                        Object.keys(tempPaymentOptions).forEach(uid => {
+                          const opt = tempPaymentOptions[uid];
+                          if (opt && (opt.startsWith('Paid') || opt === 'Wallet')) {
                             updated[uid] = Number(val) || 0;
                           }
                         });
@@ -3481,8 +3486,7 @@ export function Meetings() {
                       const mId = member.id || member.uid;
                       const attendanceVal = tempAttendance[mId] || '';
                       const isAttended = attendanceVal === 'Present' || attendanceVal === 'Substitute' || attendanceVal === 'Late';
-                      const memberPayStatus = tempPaymentStatus[mId] || 'NOT PAID';
-                      const memberPayMethod = tempPaymentMethods[mId] || '';
+                      const memberPayOption = tempPaymentOptions[mId] || '';
                       
                       const getStatusColor = (status: string) => {
                         const s = String(status || '').toLowerCase();
@@ -3505,8 +3509,7 @@ export function Meetings() {
                       const effectiveWalletAvailable = walletSummary.availableBalance + (existingMeetingDebit ? Number(existingMeetingDebit.amount) || 0 : 0);
                       const isWalletInsufficient =
                         isAttended &&
-                        memberPayStatus === 'PAID' &&
-                        memberPayMethod === 'WALLET' &&
+                        memberPayOption === 'Wallet' &&
                         configuredMeetingAmt > 0 &&
                         effectiveWalletAvailable < configuredMeetingAmt;
                       
@@ -3536,21 +3539,14 @@ export function Meetings() {
                                   const newStatus = e.target.value as any;
                                   setTempAttendance(prev => ({ ...prev, [mId]: newStatus }));
                                   if (newStatus === 'Present' || newStatus === 'Substitute' || newStatus === 'Late') {
-                                    if (!tempPaymentStatus[mId]) {
-                                      setTempPaymentStatus(prev => ({ ...prev, [mId]: 'NOT PAID' }));
-                                    }
-                                    if (tempPaymentStatus[mId] === 'PAID') {
+                                    const opt = tempPaymentOptions[mId] || '';
+                                    if (opt && (opt.startsWith('Paid') || opt === 'Wallet')) {
                                       setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt }));
                                     } else {
                                       setTempAmount(prev => ({ ...prev, [mId]: 0 }));
                                     }
                                   } else {
-                                    setTempPaymentStatus(prev => ({ ...prev, [mId]: 'NOT PAID' }));
-                                    setTempPaymentMethods(prev => {
-                                      const next = { ...prev };
-                                      delete next[mId];
-                                      return next;
-                                    });
+                                    setTempPaymentOptions(prev => ({ ...prev, [mId]: '' }));
                                     setTempAmount(prev => {
                                       const next = { ...prev };
                                       delete next[mId];
@@ -3581,78 +3577,45 @@ export function Meetings() {
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Payment:</span>
                                     <select
-                                      value={memberPayStatus}
+                                      value={memberPayOption}
                                       onChange={(e) => {
-                                        const val = e.target.value as 'PAID' | 'NOT PAID';
-                                        setTempPaymentStatus(prev => ({ ...prev, [mId]: val }));
-                                        if (val === 'PAID') {
-                                          setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt }));
+                                        const option = e.target.value;
+                                        setTempPaymentOptions(prev => ({ ...prev, [mId]: option }));
+                                        if (option === 'Paid UPI' || option === 'Paid Cash' || option === 'Wallet') {
+                                            setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt > 0 ? configuredMeetingAmt : (Number(prev[mId]) || 0) }));
                                         } else {
-                                          setTempPaymentMethods(prev => {
-                                            const next = { ...prev };
-                                            delete next[mId];
-                                            return next;
-                                          });
-                                          setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+                                            setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+                                        }
+                                        if (option === 'Wallet') {
+                                          if (configuredMeetingAmt > 0 && effectiveWalletAvailable < configuredMeetingAmt) {
+                                            const insufficientMsg = `Insufficient wallet balance. Available balance: ₹${walletSummary.availableBalance}.`;
+                                            setError(insufficientMsg);
+                                            showError(insufficientMsg);
+                                          } else {
+                                            setError(null);
+                                          }
+                                        } else {
                                           setError(null);
                                         }
                                       }}
                                       className={cn(
                                         "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
-                                        memberPayStatus === 'PAID'
-                                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                          : "bg-red-500/10 text-red-400 border-red-500/30"
+                                        memberPayOption === 'Not Paid' || memberPayOption === ''
+                                          ? "bg-red-500/10 text-red-400 border-red-500/30"
+                                          : isWalletInsufficient
+                                            ? "bg-red-500/10 text-red-400 border-red-500/40 ring-1 ring-red-500/40"
+                                            : memberPayOption === 'Wallet'
+                                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                              : "bg-blue-500/10 text-blue-400 border-blue-500/30"
                                       )}
                                     >
-                                      <option value="NOT PAID" className="bg-[#111827] text-white">NOT PAID</option>
-                                      <option value="PAID" className="bg-[#111827] text-white">PAID</option>
+                                      <option value="" className="bg-[#111827] text-neutral-400">Select Payment *</option>
+                                      <option value="Not Paid" className="bg-[#111827] text-white">Not Paid</option>
+                                      <option value="Paid UPI" className="bg-[#111827] text-white">Paid UPI</option>
+                                      <option value="Paid Cash" className="bg-[#111827] text-white">Paid Cash</option>
+                                      <option value="Wallet" className="bg-[#111827] text-white">Wallet (₹{walletSummary.availableBalance})</option>
                                     </select>
                                   </div>
-
-                                  {memberPayStatus === 'PAID' && (
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                      <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Method:</span>
-                                      <select
-                                        value={memberPayMethod}
-                                        onChange={(e) => {
-                                          const methodVal = e.target.value as 'UPI' | 'CASH' | 'WALLET';
-                                          setTempPaymentMethods(prev => ({ ...prev, [mId]: methodVal }));
-                                          if (methodVal === 'UPI' || methodVal === 'CASH' || methodVal === 'WALLET') {
-                                            setTempAmount(prev => ({
-                                              ...prev,
-                                              [mId]: configuredMeetingAmt > 0 ? configuredMeetingAmt : (Number(prev[mId]) || 0)
-                                            }));
-                                          }
-                                          if (methodVal === 'WALLET') {
-                                            if (configuredMeetingAmt > 0 && effectiveWalletAvailable < configuredMeetingAmt) {
-                                              const insufficientMsg = `Insufficient wallet balance. Available balance: ₹${walletSummary.availableBalance}.`;
-                                              setError(insufficientMsg);
-                                              showError(insufficientMsg);
-                                            } else {
-                                              setError(null);
-                                            }
-                                          } else {
-                                            setError(null);
-                                          }
-                                        }}
-                                        className={cn(
-                                          "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
-                                          isWalletInsufficient
-                                            ? "bg-red-500/10 text-red-400 border-red-500/40 ring-1 ring-red-500/40"
-                                            : memberPayMethod === 'WALLET'
-                                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                              : memberPayMethod
-                                                ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                                                : "bg-amber-500/10 text-amber-300 border-amber-500/40 ring-1 ring-amber-500/40 animate-pulse"
-                                        )}
-                                      >
-                                        <option value="" className="bg-[#111827] text-white">Select Method *</option>
-                                        <option value="UPI" className="bg-[#111827] text-white">UPI</option>
-                                        <option value="CASH" className="bg-[#111827] text-white">Cash</option>
-                                        <option value="WALLET" className="bg-[#111827] text-white">Wallet (₹{walletSummary.availableBalance})</option>
-                                      </select>
-                                    </div>
-                                  )}
                                 </>
                               )}
                             </div>
@@ -3760,10 +3723,7 @@ export function Meetings() {
             Object.keys(tempAttendance || {}).forEach(k => {
               if (!k.startsWith('_')) allMemberIds.add(String(k));
             });
-            Object.keys(tempPaymentStatus || {}).forEach(k => {
-              if (!k.startsWith('_')) allMemberIds.add(String(k));
-            });
-            Object.keys(tempPaymentMethods || {}).forEach(k => {
+            Object.keys(tempPaymentOptions || {}).forEach(k => {
               if (!k.startsWith('_')) allMemberIds.add(String(k));
             });
 
@@ -3776,10 +3736,9 @@ export function Meetings() {
 
               const att = String(tempAttendance[mId] ?? tempAttendance[lowerId] ?? '').toUpperCase();
               const isAttended = ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(att);
-              const payStatus = String(tempPaymentStatus[mId] ?? tempPaymentStatus[lowerId] ?? '').toUpperCase();
-              const payMethod = String(tempPaymentMethods[mId] ?? tempPaymentMethods[lowerId] ?? '').toUpperCase();
+              const payOpt = String(tempPaymentOptions[mId] ?? tempPaymentOptions[lowerId] ?? '').trim();
 
-              if (isAttended && payStatus === 'PAID') {
+              if (isAttended && (payOpt.startsWith('Paid') || payOpt === 'Wallet')) {
                 const rawMemberAmt = Number(tempAmount[mId] ?? tempAmount[lowerId] ?? 0) || 0;
                 const memberAmt =
                   tempMeetingAmount !== '' && tempMeetingAmount !== undefined
@@ -3788,11 +3747,11 @@ export function Meetings() {
                       ? rawMemberAmt
                       : configuredAmt;
 
-                if (payMethod === 'UPI') {
+                if (payOpt === 'Paid UPI') {
                   totalUpiPayment += memberAmt;
-                } else if (payMethod === 'CASH') {
+                } else if (payOpt === 'Paid Cash') {
                   totalCashPayment += memberAmt;
-                } else if (payMethod === 'WALLET') {
+                } else if (payOpt === 'Wallet') {
                   totalWalletPayment += memberAmt;
                 }
               }
@@ -3804,10 +3763,10 @@ export function Meetings() {
               if (gAtt === 'PRESENT' || gAtt === 'SUBSTITUTE') {
                 const gAmt = Number(tempAmount[gId]) || 0;
                 if (gAmt > 0) {
-                  const gMethod = String(tempPaymentMethods[gId] || 'CASH').toUpperCase();
-                  if (gMethod === 'UPI') {
+                  const gOpt = String(tempPaymentOptions[gId] || '').toUpperCase();
+                  if (gOpt.includes('UPI')) {
                     totalUpiPayment += gAmt;
-                  } else if (gMethod === 'WALLET') {
+                  } else if (gOpt.includes('WALLET')) {
                     totalWalletPayment += gAmt;
                   } else {
                     totalCashPayment += gAmt;
