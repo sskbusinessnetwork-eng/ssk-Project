@@ -9,6 +9,12 @@ import { showError, showSuccess, scrollToError } from '../../services/toastServi
 import { cn } from '../../lib/utils';
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { ContactPickerButton } from '../PhoneInputWithPicker';
+import {
+  extractMemberExtraData,
+  buildCategoryLookup,
+  resolveMemberCategory
+} from '../OfflineReferralMemberSelect';
+import { getCleanFullName } from '../../utils/authUtils';
 
 interface PassReferralModalProps {
   isOpen: boolean;
@@ -88,25 +94,25 @@ export function PassReferralModal({
     let isMounted = true;
     const fetchMembers = async () => {
       try {
-        const { data: usersData, error: usersErr } = await supabase
-          .from('users')
-          .select('*')
-          .order('name', { ascending: true });
+        const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+          supabase.from('users').select('*').order('name', { ascending: true }),
+          supabase.from('chapters').select('id, chapter_name'),
+          supabase.from('categories').select('id, name')
+        ]);
 
-        if (usersErr) throw usersErr;
-
-        const { data: chaptersData } = await supabase
-          .from('chapters')
-          .select('id, chapter_name, name');
+        if (usersRes.error) throw usersRes.error;
+        const usersData = usersRes.data;
 
         const chapterMap = new Map<string, string>();
-        if (chaptersData) {
-          chaptersData.forEach(c => {
+        if (chaptersRes.data) {
+          chaptersRes.data.forEach((c: any) => {
             if (c.id) {
-              chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+              chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
             }
           });
         }
+
+        const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
 
         if (isMounted && usersData) {
           const mapped = usersData
@@ -117,16 +123,11 @@ export function PassReferralModal({
               return !isCurrentUser && !isMaster;
             })
             .map((u: any) => {
-              let extraData: any = {};
-              const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
-              if (typeof rawPhoto === 'string' && rawPhoto.includes('|||')) {
-                try {
-                  extraData = JSON.parse(rawPhoto.split('|||')[1] || '{}');
-                } catch (e) {}
-              }
-              const chapId = u.chapter_id || u.chapterId || '';
-              const chapName = chapId ? chapterMap.get(String(chapId).trim().toLowerCase()) || '' : '';
-              const category = u.category || extraData.category || u.business_category || extraData.business_category || u.businessName || u.business_name || extraData.business_name || 'Business Owner';
+              const extraData = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
+              const chapId = String(u.chapter_id || u.chapterId || extraData.chapter_id || extraData.chapterId || '').trim();
+              const chapName = chapId ? chapterMap.get(chapId.toLowerCase()) || '' : '';
+              const category = resolveMemberCategory(u, extraData, categoryMap, validCategoryNames);
+
               const rawPos = String(u.position || extraData.position || u.chapter_position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
               const rawRole = String(u.role || '').trim().toUpperCase();
               let specificRole = '';
@@ -138,13 +139,16 @@ export function PassReferralModal({
               return {
                 ...u,
                 id: u.id || u.uid,
-                displayName: u.name || u.displayName || 'Member',
-                chapterName: chapName || u.chapterName || '',
+                displayName: getCleanFullName(u.name || u.displayName || extraData.name || 'Member'),
+                chapterName: chapName || u.chapterName || u.chapter_name || extraData.chapter_name || '',
                 category,
                 position: specificRole,
                 phone: u.phone || u.phoneNumber || ''
               };
-            });
+            })
+            .sort((a: any, b: any) =>
+              String(a.displayName || '').localeCompare(String(b.displayName || ''), undefined, { sensitivity: 'base' })
+            );
           setAllMembers(mapped);
         }
       } catch (err: any) {

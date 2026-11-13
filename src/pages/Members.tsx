@@ -514,6 +514,8 @@ export function Members() {
       setIsEditModalOpen(false);
       setSelectedMember(null);
       window.dispatchEvent(new Event('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
+      window.dispatchEvent(new CustomEvent('members-refresh'));
       setSuccessMessage('Member updated successfully!');
       triggerSuccessToast('Member updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);

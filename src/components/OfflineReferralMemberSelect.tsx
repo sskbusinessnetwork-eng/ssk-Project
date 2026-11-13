@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, ChevronDown, X, Check, Building2, Users, Tag } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getCleanFullName } from '../utils/authUtils';
+import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
 
 export interface NormalizedMemberOption {
   id: string;
@@ -11,10 +11,24 @@ export interface NormalizedMemberOption {
   chapterName: string;
   position: string;
   phone: string;
+  photoURL: string;
 }
 
 export function extractMemberExtraData(rawPhoto: any): Record<string, any> {
-  if (typeof rawPhoto === 'string' && rawPhoto.includes('|||')) {
+  if (typeof rawPhoto !== 'string') return {};
+  const trimmed = rawPhoto.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.extra && typeof parsed.extra === 'object') return parsed.extra;
+        return parsed;
+      }
+    } catch {
+      return {};
+    }
+  }
+  if (rawPhoto.includes('|||')) {
     try {
       return JSON.parse(rawPhoto.split('|||')[1] || '{}') || {};
     } catch {
@@ -24,15 +38,126 @@ export function extractMemberExtraData(rawPhoto: any): Record<string, any> {
   return {};
 }
 
+export function extractCleanPhotoUrl(rawPhoto: any): string {
+  if (typeof rawPhoto !== 'string') return '';
+  const trimmed = rawPhoto.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        return typeof parsed.url === 'string' ? parsed.url : '';
+      }
+    } catch {
+      return '';
+    }
+  }
+  return rawPhoto.includes('|||') ? rawPhoto.split('|||')[0] : rawPhoto;
+}
+
+export function buildCategoryLookup(categoriesRows: any[] | null | undefined): {
+  categoryMap: Map<string, string>;
+  validCategoryNames: Set<string>;
+} {
+  const categoryMap = new Map<string, string>();
+  const validCategoryNames = new Set<string>();
+  (categoriesRows || []).forEach((cat: any) => {
+    const cleanName = String(cat?.name || '').trim();
+    if (cleanName) {
+      validCategoryNames.add(cleanName.toLowerCase());
+      if (cat?.id) {
+        categoryMap.set(String(cat.id).trim().toLowerCase(), cleanName);
+      }
+    }
+  });
+  return { categoryMap, validCategoryNames };
+}
+
+function firstNonEmpty(...values: any[]): string {
+  for (const v of values) {
+    if (v !== undefined && v !== null) {
+      const s = String(v).trim();
+      if (s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') {
+        return s;
+      }
+    }
+  }
+  return '';
+}
+
+export function resolveMemberCategory(
+  u: any,
+  extraDataInput?: Record<string, any>,
+  categoryMap?: Map<string, string>,
+  validCategoryNames?: Set<string>
+): string {
+  const extraData =
+    extraDataInput || extractMemberExtraData(u?.profile_photo || u?.photo_url || u?.photoURL || '');
+
+  const rawDbCat = firstNonEmpty(u?.category);
+  const rawExtraCat = firstNonEmpty(extraData?.category);
+
+  let primaryCat = '';
+  if (rawExtraCat && rawDbCat) {
+    if (rawExtraCat.toLowerCase() === rawDbCat.toLowerCase()) {
+      primaryCat = rawExtraCat;
+    } else if (
+      validCategoryNames &&
+      validCategoryNames.size > 0 &&
+      validCategoryNames.has(rawDbCat.toLowerCase()) &&
+      !validCategoryNames.has(rawExtraCat.toLowerCase())
+    ) {
+      // Admin renamed a category on users.category while profile_photo extraData kept the old name
+      primaryCat = rawDbCat;
+    } else {
+      // Historically database.ts stripped category on profile/member edits and wrote it only into extraData.category
+      primaryCat = rawExtraCat;
+    }
+  } else {
+    primaryCat = rawExtraCat || rawDbCat;
+  }
+
+  const rawCategoryId = firstNonEmpty(
+    u?.category_id,
+    u?.categoryId,
+    extraData?.category_id,
+    extraData?.categoryId
+  );
+  const mappedCatFromId =
+    rawCategoryId && categoryMap ? categoryMap.get(rawCategoryId.toLowerCase()) || '' : '';
+
+  return (
+    firstNonEmpty(
+      primaryCat,
+      extraData?.business_category,
+      u?.business_category,
+      extraData?.businessCategory,
+      u?.businessCategory,
+      mappedCatFromId,
+      extraData?.profession_designation,
+      u?.profession_designation,
+      extraData?.designation,
+      u?.designation,
+      extraData?.business_name,
+      u?.business_name,
+      u?.businessName,
+      extraData?.businessName,
+      u?.companyName
+    ) || 'Business Owner'
+  );
+}
+
 export function normalizeMemberOption(
   u: any,
   chapterMap: Map<string, string>,
-  categoryMap?: Map<string, string>
+  categoryMap?: Map<string, string>,
+  validCategoryNames?: Set<string>
 ): NormalizedMemberOption | null {
   const id = String(u?.id || u?.uid || '').trim();
   if (!id) return null;
 
-  const extraData = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
+  const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
+  const extraData = extractMemberExtraData(rawPhoto);
+  const photoURL = extractCleanPhotoUrl(rawPhoto);
   const rawName = u.name || u.full_name || u.displayName || extraData.name || extraData.full_name || '';
   const displayName = getCleanFullName(rawName);
 
@@ -47,24 +172,7 @@ export function normalizeMemberOption(
       ''
   ).trim();
 
-  const rawCategoryId = String(u.category_id || u.categoryId || extraData.category_id || extraData.categoryId || '').trim();
-  const mappedCatFromId = rawCategoryId && categoryMap ? categoryMap.get(rawCategoryId.toLowerCase()) || '' : '';
-
-  const category = String(
-    u.category ||
-      extraData.category ||
-      u.business_category ||
-      extraData.business_category ||
-      u.businessCategory ||
-      extraData.businessCategory ||
-      mappedCatFromId ||
-      u.business_name ||
-      u.businessName ||
-      extraData.business_name ||
-      extraData.businessName ||
-      u.companyName ||
-      ''
-  ).trim() || 'Business Owner';
+  const category = resolveMemberCategory(u, extraData, categoryMap, validCategoryNames);
 
   const rawPos = String(u.position || extraData.position || u.chapter_position || extraData.chapter_position || '')
     .trim()
@@ -76,6 +184,7 @@ export function normalizeMemberOption(
   else if (rawRole === 'VICE_PRESIDENT' || rawPos === 'vice president' || rawPos === 'vp') position = 'Vice President';
   else if (rawRole === 'TREASURER' || rawPos === 'treasurer') position = 'Treasurer';
   else if (rawRole === 'CHAPTER_ADMIN' || rawPos === 'chapter admin') position = 'Chapter Admin';
+  else if (rawPos && rawPos !== 'member') position = getDisplayPosition(rawPos, rawRole);
 
   return {
     id,
@@ -85,6 +194,7 @@ export function normalizeMemberOption(
     chapterName: chapterName || 'General Chapter',
     position,
     phone: String(u.phone || u.phoneNumber || u.mobile || '').trim(),
+    photoURL,
   };
 }
 

@@ -1,6 +1,6 @@
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -32,6 +32,12 @@ import { formatTime12h, parseTo12hParts, parseTimeTo24h } from '../utils/timeUti
 import { getCleanFullName, isChapterLeaderRole } from '../utils/authUtils';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { isMemberActive } from '../utils/memberStatus';
+import {
+  extractMemberExtraData,
+  extractCleanPhotoUrl,
+  buildCategoryLookup,
+  resolveMemberCategory
+} from '../components/OfflineReferralMemberSelect';
 
 const WEEKDAYS: Record<string, number> = {
   'Sunday': 0,
@@ -160,6 +166,10 @@ export function OneToOneMeetings() {
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+  const categoryLookupRef = useRef<{ categoryMap: Map<string, string>; validCategoryNames: Set<string> }>({
+    categoryMap: new Map(),
+    validCategoryNames: new Set()
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -220,34 +230,67 @@ export function OneToOneMeetings() {
     }
   }, [meetings]);
 
-  const fetchMeetingsAndUsers = async () => {
-    try {
-      setLoading(true);
-      // 1. Fetch Users directly from Supabase
-      const { data: usersData, error: uErr } = await supabase
-        .from('users')
-        .select('*');
+  const normalizeFetchedUser = useCallback(
+    (doc: any, categoryMap: Map<string, string>, validCategoryNames: Set<string>, cmap: Map<string, string>) => {
+      const rawPhoto = doc.profile_photo || doc.photo_url || doc.photoURL || doc.profilePhoto || '';
+      const extraData = extractMemberExtraData(rawPhoto);
+      const photo = extractCleanPhotoUrl(rawPhoto);
 
-      if (usersData && !uErr) {
-        const processedUsers = usersData.map((doc: any) => {
-          let photo = doc.profile_photo || doc.photo_url || doc.photoURL || '';
-          let extraData: any = {};
-          if (typeof photo === 'string' && photo.includes('|||')) {
-            const parts = photo.split('|||');
-            photo = parts[0];
-            try {
-              extraData = JSON.parse(parts[1] || '{}');
-            } catch (e) {}
+      const merged: any = { ...doc };
+      Object.keys(extraData).forEach((k) => {
+        const v = extraData[k];
+        if (v !== undefined && v !== null && (typeof v !== 'string' || v.trim() !== '')) {
+          merged[k] = v;
+        }
+      });
+
+      const resolvedCategory = resolveMemberCategory(doc, extraData, categoryMap, validCategoryNames);
+      const chapId = String(merged.chapter_id || merged.chapterId || '').trim();
+      const mappedChapName = chapId ? cmap.get(chapId.toLowerCase()) || cmap.get(chapId) || '' : '';
+
+      return {
+        ...merged,
+        category: resolvedCategory,
+        business_category: resolvedCategory,
+        businessCategory: resolvedCategory,
+        chapter_name: mappedChapName || merged.chapter_name || merged.chapterName || '',
+        chapterName: mappedChapName || merged.chapterName || merged.chapter_name || '',
+        photoURL: photo,
+        profile_photo: photo,
+        photo_url: photo,
+        uid: doc.id
+      };
+    },
+    []
+  );
+
+  const refreshUsersAndChapters = useCallback(async () => {
+    try {
+      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+        supabase.from('users').select('*').order('name', { ascending: true }),
+        supabase.from('chapters').select('id, chapter_name'),
+        supabase.from('categories').select('id, name')
+      ]);
+
+      const cmap = new Map<string, string>();
+      if (chaptersRes.data) {
+        chaptersRes.data.forEach((c: any) => {
+          const chapLabel = c.chapter_name || c.name || '';
+          if (c.id && chapLabel) {
+            cmap.set(String(c.id).trim().toLowerCase(), chapLabel);
+            cmap.set(String(c.id).trim(), chapLabel);
           }
-          return {
-            ...doc,
-            ...extraData,
-            photoURL: photo,
-            profile_photo: photo,
-            photo_url: photo,
-            uid: doc.id
-          };
         });
+        setChapterMap(cmap);
+      }
+
+      const catLookup = buildCategoryLookup(categoriesRes.data);
+      categoryLookupRef.current = catLookup;
+
+      if (usersRes.data && !usersRes.error) {
+        const processedUsers = usersRes.data.map((doc: any) =>
+          normalizeFetchedUser(doc, catLookup.categoryMap, catLookup.validCategoryNames, cmap)
+        );
 
         setAllUsersList(processedUsers);
 
@@ -274,24 +317,17 @@ export function OneToOneMeetings() {
 
         setMembers(memberList);
       }
+    } catch (err) {
+      console.error("Refresh users and chapters error:", err);
+    }
+  }, [profile?.chapter_id, profile?.chapterId, profile?.role, normalizeFetchedUser]);
 
-      // 2. Fetch Chapters
-      const { data: chaptersData } = await supabase
-        .from('chapters')
-        .select('*');
-      
-      const cmap = new Map<string, string>();
-      if (chaptersData) {
-        chaptersData.forEach((c: any) => {
-          if (c.id && c.name) {
-            cmap.set(String(c.id).trim().toLowerCase(), c.name);
-            cmap.set(String(c.id).trim(), c.name);
-          }
-        });
-        setChapterMap(cmap);
-      }
+  const fetchMeetingsAndUsers = async () => {
+    try {
+      setLoading(true);
+      await refreshUsersAndChapters();
 
-      // 3. Fetch Meetings directly from Supabase
+      // Fetch Meetings directly from Supabase
       const { data: meetingsData, error: mErr } = await supabase
         .from('one_to_one_meetings')
         .select('*')
@@ -362,15 +398,17 @@ export function OneToOneMeetings() {
     return () => unsubscribe();
   }, [profile, isAdmin, isChapterAdmin]);
 
-  // Listen for profile-updated and dashboard-refresh events
+  // Listen for profile-updated, members-refresh, and dashboard-refresh events
   useEffect(() => {
     const handleRefresh = () => {
       fetchMeetingsAndUsers();
     };
     window.addEventListener('profile-updated', handleRefresh);
+    window.addEventListener('members-refresh', handleRefresh);
     window.addEventListener('dashboard-refresh', handleRefresh);
     return () => {
       window.removeEventListener('profile-updated', handleRefresh);
+      window.removeEventListener('members-refresh', handleRefresh);
       window.removeEventListener('dashboard-refresh', handleRefresh);
     };
   }, []);
@@ -399,16 +437,8 @@ export function OneToOneMeetings() {
       .then(
         ({ data, error }) => {
           if (data && !error) {
-            let photo = data.profile_photo || data.photo_url || data.photoURL || '';
-            let extraData: any = {};
-            if (typeof photo === 'string' && photo.includes('|||')) {
-              const parts = photo.split('|||');
-              photo = parts[0];
-              try {
-                extraData = JSON.parse(parts[1] || '{}');
-              } catch (e) {}
-            }
-            const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+            const { categoryMap, validCategoryNames } = categoryLookupRef.current;
+            const updatedUser = normalizeFetchedUser(data, categoryMap, validCategoryNames, chapterMap);
             setAllUsersList(prev => {
               const idx = prev.findIndex(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
               if (idx >= 0) {
@@ -422,7 +452,7 @@ export function OneToOneMeetings() {
         },
         (err) => console.warn("OneToOneMeetings current user sync notice:", err)
       );
-  }, [currentAuthId]);
+  }, [currentAuthId, normalizeFetchedUser, chapterMap]);
 
   const currentUserId = currentUserRecord?.id || profile?.id;
   const currentUserChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;
@@ -513,20 +543,25 @@ export function OneToOneMeetings() {
     });
   }, [allUsersList, memberTab, currentUserChapterId, currentUserId, currentAuthId, profile]);
 
-  // Search Filtered Members
+  // Search Filtered Members (sorted alphabetically)
   const filteredMembers = useMemo(() => {
-    if (!searchTerm.trim()) return availableMembers;
+    const sorted = [...availableMembers].sort((a, b) =>
+      getUserFullName(a).localeCompare(getUserFullName(b), undefined, { sensitivity: 'base' })
+    );
+    if (!searchTerm.trim()) return sorted;
     const q = searchTerm.toLowerCase().trim();
 
-    return availableMembers.filter(m => {
+    return sorted.filter(m => {
       const fullName = (getUserFullName(m) || m.name || m.full_name || '').toLowerCase();
       const phone = (m.phone || m.contact_phone || m.whatsappNumber || m.mobile || '').toLowerCase();
-      const chapterName = (chapterMap.get(String(m.chapter_id)) || m.chapter_name || '').toLowerCase();
+      const chapterName = (chapterMap.get(String(m.chapter_id)) || chapterMap.get(String(m.chapter_id || '').toLowerCase()) || m.chapter_name || '').toLowerCase();
+      const cat = String(m.category || m.business_category || m.businessCategory || '').toLowerCase();
 
       return (
         fullName.includes(q) ||
         phone.includes(q) ||
-        chapterName.includes(q)
+        chapterName.includes(q) ||
+        cat.includes(q)
       );
     });
   }, [availableMembers, searchTerm, chapterMap]);
@@ -551,16 +586,8 @@ export function OneToOneMeetings() {
       .then(
         ({ data, error }) => {
           if (data && !error) {
-            let photo = data.profile_photo || data.photo_url || data.photoURL || '';
-            let extraData: any = {};
-            if (typeof photo === 'string' && photo.includes('|||')) {
-              const parts = photo.split('|||');
-              photo = parts[0];
-              try {
-                extraData = JSON.parse(parts[1] || '{}');
-              } catch (e) {}
-            }
-            const updatedUser = { ...data, ...extraData, photoURL: photo, profile_photo: photo, photo_url: photo, uid: data.id };
+            const { categoryMap, validCategoryNames } = categoryLookupRef.current;
+            const updatedUser = normalizeFetchedUser(data, categoryMap, validCategoryNames, chapterMap);
             setAllUsersList(prev => {
               const idx = prev.findIndex(u => String(u.id) === String(pid) || String(u.uid) === String(pid));
               if (idx >= 0) {
@@ -574,7 +601,7 @@ export function OneToOneMeetings() {
         },
         (err) => console.warn("OneToOneMeetings participant sync notice:", err)
       );
-  }, [formData.participantId]);
+  }, [formData.participantId, normalizeFetchedUser, chapterMap]);
 
   const memberAddress = useMemo(() => getUserFullAddress(selectedMember), [selectedMember]);
 
@@ -590,6 +617,7 @@ export function OneToOneMeetings() {
     });
     setLocationType('');
     setIsModalOpen(true);
+    refreshUsersAndChapters();
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1495,7 +1523,11 @@ export function OneToOneMeetings() {
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.2em]">Select Member</label>
               <div className="relative">
                 <div 
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  onClick={() => {
+                    const nextOpen = !isDropdownOpen;
+                    setIsDropdownOpen(nextOpen);
+                    if (nextOpen) refreshUsersAndChapters();
+                  }}
                   className="w-full px-4 py-4 rounded-[16px] border border-white/5 bg-[#151C2E] cursor-pointer flex items-center justify-between group hover:border-primary/50 transition-all"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
@@ -1516,10 +1548,10 @@ export function OneToOneMeetings() {
                         )}
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-white truncate">
-                            {getUserFullName(selectedMember)} <span className="text-xs font-semibold text-primary">({formatUserRoleOrPosition(selectedMember)})</span>
+                            {getUserFullName(selectedMember)}
                           </p>
                           <p className="text-[10px] text-neutral-400 font-medium truncate">
-                            Category: {selectedMember.category || selectedMember.business_category || selectedMember.businessName || 'General'} • {chapterMap.get(String(selectedMember.chapter_id)) || selectedMember.chapter_name || 'No Chapter'}
+                            Category: <span className="text-primary font-semibold">{selectedMember.category || selectedMember.business_category || 'Business Owner'}</span> • {chapterMap.get(String(selectedMember.chapter_id)) || chapterMap.get(String(selectedMember.chapter_id || '').toLowerCase()) || selectedMember.chapter_name || 'General Chapter'}
                           </p>
                         </div>
                       </div>
@@ -1586,9 +1618,8 @@ export function OneToOneMeetings() {
                       {filteredMembers.length > 0 ? (
                         filteredMembers.map((member) => {
                           const mName = getUserFullName(member);
-                          const mRole = formatUserRoleOrPosition(member);
-                          const mCategory = member.category || member.business_category || member.businessName || member.business_name || 'General';
-                          const mChapter = chapterMap.get(String(member.chapter_id)) || member.chapter_name || 'No Chapter';
+                          const mCategory = member.category || member.business_category || member.businessName || member.business_name || 'Business Owner';
+                          const mChapter = chapterMap.get(String(member.chapter_id)) || chapterMap.get(String(member.chapter_id || '').toLowerCase()) || member.chapter_name || 'General Chapter';
                           const mPhoto = member.photo_url || member.photoURL || member.avatar_url || member.profile_photo;
                           const memberIdToUse = member.id || member.uid;
 
@@ -1621,23 +1652,11 @@ export function OneToOneMeetings() {
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <p className="text-xs font-bold text-white uppercase tracking-tight truncate">
-                                      {mName}
-                                    </p>
-                                    <span className={cn(
-                                      "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0",
-                                      mRole === 'President' ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
-                                      mRole === 'Vice President' ? "bg-blue-500/20 text-blue-400 border border-blue-500/20" :
-                                      mRole === 'Treasurer' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" :
-                                      mRole === 'Chapter Admin' ? "bg-red-500/20 text-red-400 border border-red-500/20" :
-                                      "bg-neutral-500/20 text-neutral-400 border border-neutral-500/20"
-                                    )}>
-                                      {mRole}
-                                    </span>
-                                  </div>
-                                  <p className="text-[8px] font-bold text-neutral-400 uppercase tracking-widest truncate mt-0.5">
-                                    {mCategory} • {mChapter}
+                                  <p className="text-xs font-bold text-white uppercase tracking-tight truncate">
+                                    {mName}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-neutral-400 truncate mt-0.5">
+                                    Category: <span className="text-primary">{mCategory}</span> • {mChapter}
                                   </p>
                                 </div>
                               </div>

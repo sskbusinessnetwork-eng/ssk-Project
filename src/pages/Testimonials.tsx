@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -13,8 +13,13 @@ import { Avatar } from '../components/Avatar';
 import { Modal } from '../components/Modal';
 import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 import { showError, showSuccess as triggerSuccessToast } from '../services/toastService';
-
-import { getDisplayPosition as formatPosition, isChapterLeaderRole } from "../utils/authUtils";
+import {
+  extractMemberExtraData,
+  extractCleanPhotoUrl,
+  buildCategoryLookup,
+  resolveMemberCategory
+} from '../components/OfflineReferralMemberSelect';
+import { getCleanFullName, getDisplayPosition as formatPosition, isChapterLeaderRole } from "../utils/authUtils";
 
 export function Testimonials() {
   const { profile } = useAuth();
@@ -99,35 +104,70 @@ export function Testimonials() {
     return () => { isMounted = false; };
   }, [urlReferralId, urlRecipientId, users]);
 
+  const loadUsersAndChapters = useCallback(async () => {
+    try {
+      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+        supabase.from('users').select('*').order('name', { ascending: true }),
+        supabase.from('chapters').select('id, chapter_name'),
+        supabase.from('categories').select('id, name')
+      ]);
+
+      const chapMap: Record<string, Chapter> = {};
+      const chapNameLookup = new Map<string, string>();
+      (chaptersRes.data || []).forEach((c: any) => {
+        if (c.id) {
+          chapMap[c.id] = c;
+          chapNameLookup.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+        }
+      });
+      setChaptersMap(chapMap);
+
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+
+      const userMap: Record<string, UserProfile> = {};
+      (usersRes.data || []).forEach((u: any) => {
+        const uId = u.id || u.uid;
+        if (!uId) return;
+
+        const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
+        const extraData = extractMemberExtraData(rawPhoto);
+        const cleanPhoto = extractCleanPhotoUrl(rawPhoto);
+
+        const chapId = String(u.chapter_id || u.chapterId || extraData.chapter_id || extraData.chapterId || '').trim();
+        const mappedChapName = chapId ? chapNameLookup.get(chapId.toLowerCase()) || '' : '';
+        const chapName = String(
+          mappedChapName || u.chapter_name || u.chapterName || extraData.chapter_name || extraData.chapterName || ''
+        ).trim();
+
+        const resolvedCat = resolveMemberCategory(u, extraData, categoryMap, validCategoryNames);
+        const cleanName = getCleanFullName(u.name || u.full_name || u.displayName || extraData.name || 'Member');
+        const resolvedBusiness = String(
+          u.business_name || u.businessName || extraData.business_name || extraData.businessName || ''
+        ).trim();
+
+        userMap[uId] = {
+          ...u,
+          uid: uId,
+          id: uId,
+          name: cleanName,
+          photoURL: cleanPhoto,
+          chapter_id: chapId || u.chapter_id,
+          chapterName: chapName || u.chapterName || '',
+          category: resolvedCat,
+          businessName: resolvedBusiness
+        } as UserProfile;
+      });
+      setUsers(userMap);
+    } catch (e) {
+      console.error("Error loading users or chapters", e);
+    }
+  }, []);
+
   useEffect(() => {
     if (!profile) return;
-    
-    // Load users and chapters
-    const loadData = async () => {
-      try {
-        const [allUsers, allChapters] = await Promise.all([
-          databaseService.list<UserProfile>('users'),
-          databaseService.list<Chapter>('chapters')
-        ]);
 
-        const userMap: Record<string, UserProfile> = {};
-        allUsers.forEach(u => {
-          const uId = u.uid || (u as any).id;
-          if (uId) userMap[uId] = u;
-        });
-        setUsers(userMap);
+    loadUsersAndChapters();
 
-        const chapMap: Record<string, Chapter> = {};
-        allChapters.forEach(c => {
-          if (c.id) chapMap[c.id] = c;
-        });
-        setChaptersMap(chapMap);
-      } catch (e) {
-        console.error("Error loading users or chapters", e);
-      }
-    };
-    loadData();
-    
     // Subscribe to testimonials
     const unsubscribe = databaseService.subscribe(
       'testimonials',
@@ -140,7 +180,10 @@ export function Testimonials() {
 
     const handleRefresh = async () => {
       try {
-        const freshData = await databaseService.list<Testimonial>('testimonials');
+        const [freshData] = await Promise.all([
+          databaseService.list<Testimonial>('testimonials'),
+          loadUsersAndChapters()
+        ]);
         setTestimonials(freshData);
       } catch (e) {
         console.warn("Refresh testimonials notice:", e);
@@ -149,13 +192,17 @@ export function Testimonials() {
 
     window.addEventListener('testimonials-updated', handleRefresh);
     window.addEventListener('dashboard-refresh', handleRefresh);
-    
+    window.addEventListener('profile-updated', loadUsersAndChapters);
+    window.addEventListener('members-refresh', loadUsersAndChapters);
+
     return () => {
       unsubscribe();
       window.removeEventListener('testimonials-updated', handleRefresh);
       window.removeEventListener('dashboard-refresh', handleRefresh);
+      window.removeEventListener('profile-updated', loadUsersAndChapters);
+      window.removeEventListener('members-refresh', loadUsersAndChapters);
     };
-  }, [profile]);
+  }, [profile, loadUsersAndChapters]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this testimonial?')) {
@@ -177,6 +224,7 @@ export function Testimonials() {
       setShowMemberSelectModal(false);
     } else {
       setShowMemberSelectModal(true);
+      loadUsersAndChapters();
     }
   };
 
@@ -225,10 +273,12 @@ export function Testimonials() {
 
   // Active members list for selection
   const selectableMembers = useMemo(() => {
-    const list: UserProfile[] = (Object.values(users) as UserProfile[]).filter((u: UserProfile) => {
-      const uId = u.uid || (u as any).id;
-      return uId && uId !== currentUserId;
-    });
+    const list: UserProfile[] = (Object.values(users) as UserProfile[])
+      .filter((u: UserProfile) => {
+        const uId = u.uid || (u as any).id;
+        return uId && uId !== currentUserId && u.role !== 'MASTER_ADMIN';
+      })
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
 
     if (!memberSearchQuery.trim()) return list;
 
@@ -493,8 +543,6 @@ export function Testimonials() {
                 const memId = member.uid || (member as any).id;
                 const photo = member.photoURL || (member as any).avatar_url;
                 const cat = member.category || (member as any).business_category || member.businessName || 'Business Owner';
-                const rawPos = formatPosition(member.position, member.role);
-                const specificRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos) ? rawPos : '';
                 const chap = member.chapterName || chaptersMap[member.chapter_id || '']?.chapter_name || 'Chapter';
 
                 return (
@@ -509,11 +557,9 @@ export function Testimonials() {
                         <div className="text-xs font-bold text-white group-hover:text-primary transition-colors">
                           {member.name}
                         </div>
-                        {specificRole && (
-                          <div className="text-[10px] text-primary font-semibold">
-                            {specificRole}
-                          </div>
-                        )}
+                        <div className="text-[10px] text-primary font-semibold">
+                          Category: {cat}
+                        </div>
                         <div className="text-[10px] text-[#9CA3AF]">
                           {chap} {member.businessName && member.businessName !== cat ? `• ${member.businessName}` : ''}
                         </div>

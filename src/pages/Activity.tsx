@@ -39,6 +39,7 @@ import { PassReferralModal } from '../components/modals/PassReferralModal';
 import { SubmitThankYouSlipModal } from '../components/modals/SubmitThankYouSlipModal';
 import { GiveTestimonialModal } from '../components/modals/GiveTestimonialModal';
 import { ScheduleOneToOneModal } from '../components/modals/ScheduleOneToOneModal';
+import { extractMemberExtraData, resolveMemberCategory } from '../components/OfflineReferralMemberSelect';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { showError, showSuccess } from '../services/toastService';
@@ -221,12 +222,8 @@ export function Activity() {
           };
           const getCat = (u: any) => {
             if (!u) return '';
-            let extra: any = {};
-            const p = u.profile_photo || u.photo_url || u.photoURL || '';
-            if (typeof p === 'string' && p.includes('|||')) {
-              try { extra = JSON.parse(p.split('|||')[1] || '{}'); } catch (e) {}
-            }
-            return u.category || extra.category || u.business_category || extra.business_category || u.businessName || u.business_name || extra.business_name || '';
+            const extra = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
+            return resolveMemberCategory(u, extra);
           };
           return {
             id: String(r.id),
@@ -394,13 +391,11 @@ export function Activity() {
   const getMemberCategory = useCallback((userId: string, fallbackCategory?: string) => {
     if (userId && usersMap[userId]) {
       const u: any = usersMap[userId];
-      let extra: any = {};
-      const p = u.profile_photo || u.photo_url || u.photoURL || '';
-      if (typeof p === 'string' && p.includes('|||')) {
-        try { extra = JSON.parse(p.split('|||')[1] || '{}'); } catch (e) {}
-      }
-      const cat = u.category || extra.category || u.business_category || extra.business_category || u.businessName || u.business_name || extra.business_name || '';
-      if (cat) return cat;
+      const extra = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
+      const cat = resolveMemberCategory(u, extra);
+      if (cat && cat !== 'Business Owner') return cat;
+      if (fallbackCategory) return fallbackCategory;
+      return cat;
     }
     return fallbackCategory || 'Business Owner';
   }, [usersMap]);

@@ -242,15 +242,23 @@ function ContactPickerFallbackModal({
     const loadDirectoryContacts = async () => {
       setLoadingMembers(true);
       try {
-        const [usersRes, chaptersRes] = await Promise.all([
-          supabase.from('users').select('id, uid, name, full_name, phone, role, chapter_id, category, business_category, profile_photo'),
-          supabase.from('chapters').select('id, chapter_name, name')
+        const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+          supabase.from('users').select('*'),
+          supabase.from('chapters').select('id, chapter_name'),
+          supabase.from('categories').select('id, name')
         ]);
 
         const chapMap = new Map<string, string>();
         if (chaptersRes.data) {
           chaptersRes.data.forEach((c: any) => {
-            if (c.id) chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+            if (c.id) chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
+          });
+        }
+
+        const catMap = new Map<string, string>();
+        if (categoriesRes.data) {
+          categoriesRes.data.forEach((cat: any) => {
+            if (cat.id && cat.name) catMap.set(String(cat.id).trim().toLowerCase(), String(cat.name));
           });
         }
 
@@ -258,23 +266,33 @@ function ContactPickerFallbackModal({
           const parsed: DirectoryContactItem[] = usersRes.data
             .filter((u: any) => String(u.role || '').toUpperCase() !== 'MASTER_ADMIN')
             .map((u: any) => {
-              const extra = extractMemberExtraData(u.profile_photo || '');
+              const extra = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
               const rawPhone = String(u.phone || extra.phone || '').trim();
               const normalizedPhone = normalizePhoneDigits(rawPhone) || rawPhone;
               const chapId = String(u.chapter_id || extra.chapter_id || '').trim().toLowerCase();
-              const chapName = (chapId && chapMap.get(chapId)) || extra.chapter_name || 'Chapter Member';
+              const chapName = (chapId && chapMap.get(chapId)) || u.chapter_name || extra.chapter_name || 'Chapter Member';
+              const rawCatId = String(u.category_id || extra.category_id || '').trim().toLowerCase();
+              const mappedCat = rawCatId ? catMap.get(rawCatId) || '' : '';
               const category = String(
                 u.category ||
                   extra.category ||
                   u.business_category ||
                   extra.business_category ||
+                  u.businessCategory ||
+                  extra.businessCategory ||
+                  mappedCat ||
+                  u.business_name ||
+                  u.businessName ||
                   extra.business_name ||
+                  extra.businessName ||
+                  u.profession_designation ||
+                  extra.profession_designation ||
                   'Business Owner'
               ).trim();
 
               return {
                 id: String(u.id || u.uid),
-                name: getCleanFullName(u.name || u.full_name || ''),
+                name: getCleanFullName(u.name || u.full_name || extra.name || ''),
                 phone: normalizedPhone,
                 category,
                 chapterName: chapName

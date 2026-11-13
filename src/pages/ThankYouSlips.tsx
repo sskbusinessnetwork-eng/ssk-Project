@@ -369,12 +369,12 @@ export function ThankYouSlips() {
     }
 
     // Fetch chapters & categories for member selector resolution
-    supabase.from('chapters').select('id, chapter_name, name').then(
+    supabase.from('chapters').select('id, chapter_name').then(
       ({ data: chapData }) => {
         if (chapData) {
           const map = new Map<string, string>();
           chapData.forEach((c: any) => {
-            if (c.id) map.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+            if (c.id) map.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
           });
           setChapterMap(map);
         }

@@ -623,6 +623,8 @@ export function Profile() {
       }
       
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('profile-updated'));
+      window.dispatchEvent(new CustomEvent('members-refresh'));
 
       setSuccessMessage("Profile updated successfully.");
       triggerSuccessToast("Profile updated successfully.");

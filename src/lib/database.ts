@@ -362,21 +362,38 @@ export async function getDocs(queryRef: any) {
   
   if (collectionPath === 'users') {
     rows = rows.map(r => {
-      let photo = r.photoURL || '';
+      let photo = r.photoURL || r.profilePhoto || r.photoUrl || '';
       let extraData: any = {};
-      if (photo.includes('|||')) {
-        const parts = photo.split('|||');
-        photo = parts[0];
-        try {
-          extraData = JSON.parse(parts[1] || '{}');
-        } catch (e) {}
+      if (typeof photo === 'string') {
+        const trimmed = photo.trim();
+        if (trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed && typeof parsed === 'object') {
+              photo = parsed.url || '';
+              extraData = parsed.extra && typeof parsed.extra === 'object' ? parsed.extra : {};
+            }
+          } catch (e) {}
+        } else if (photo.includes('|||')) {
+          const parts = photo.split('|||');
+          photo = parts[0];
+          try {
+            extraData = JSON.parse(parts[1] || '{}');
+          } catch (e) {}
+        }
       }
       const camelExtra = keysToCamel(extraData);
+      const merged: any = { ...r };
+      Object.keys(camelExtra).forEach(k => {
+        const v = camelExtra[k];
+        if (v !== undefined && v !== null && (typeof v !== 'string' || v.trim() !== '')) {
+          merged[k] = v;
+        }
+      });
       return {
-        ...r,
-        name: getCleanFullName(r.name),
-        photoURL: photo,
-        ...camelExtra
+        ...merged,
+        name: getCleanFullName(merged.name || r.name),
+        photoURL: photo
       };
     });
   }
@@ -531,7 +548,18 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
   
   // ALWAYS extract existing extraData from existingPhoto first!
   let currentActualPhoto = '';
-  if (existingPhoto && existingPhoto.includes('|||')) {
+  const trimmedExisting = String(existingPhoto || '').trim();
+  if (trimmedExisting.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmedExisting);
+      if (parsed && typeof parsed === 'object') {
+        currentActualPhoto = parsed.url || '';
+        if (parsed.extra && typeof parsed.extra === 'object') {
+          Object.assign(extraToSave, parsed.extra);
+        }
+      }
+    } catch (e) {}
+  } else if (existingPhoto && existingPhoto.includes('|||')) {
     const parts = existingPhoto.split('|||');
     currentActualPhoto = parts[0];
     try {
@@ -543,8 +571,18 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
 
   let photo = cleanData.profile_photo !== undefined ? cleanData.profile_photo : currentActualPhoto;
   
-  // If the passed photo happens to contain ||| (unlikely but possible), parse it too
-  if (photo && photo.includes('|||')) {
+  // If the passed photo happens to contain ||| or JSON (unlikely but possible), parse it too
+  if (typeof photo === 'string' && photo.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(photo.trim());
+      if (parsed && typeof parsed === 'object') {
+        photo = parsed.url || '';
+        if (parsed.extra && typeof parsed.extra === 'object') {
+          Object.assign(extraToSave, parsed.extra);
+        }
+      }
+    } catch (e) {}
+  } else if (photo && photo.includes('|||')) {
     const parts = photo.split('|||');
     photo = parts[0];
     try {
@@ -561,6 +599,7 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
     cleanData.membership_status = (ms === 'INACTIVE') ? 'SUSPENDED' : ms;
   }
 
+  const preservedCategory = cleanData.category;
 
   Object.keys(EXTRA_USER_FIELDS_MAP).forEach(k => {
     if (cleanData[k] !== undefined) {
@@ -568,6 +607,11 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
       delete cleanData[k];
     }
   });
+
+  // Also keep users.category column synced so direct Supabase queries stay accurate
+  if (preservedCategory !== undefined) {
+    cleanData.category = preservedCategory;
+  }
 
   if (Object.keys(extraToSave).length > 0 || photo) {
     cleanData.profile_photo = `${photo || ''}|||${JSON.stringify(extraToSave)}`;
@@ -584,17 +628,34 @@ export async function getDoc(docRef: any) {
   const camelData = keysToCamel(data);
   
   if (path === 'users') {
-    let photo = camelData.photoURL || '';
+    let photo = camelData.photoURL || camelData.profilePhoto || '';
     let extraData: any = {};
-    if (photo.includes('|||')) {
-      const parts = photo.split('|||');
-      photo = parts[0];
-      try {
-        extraData = JSON.parse(parts[1] || '{}');
-      } catch (e) {}
+    if (typeof photo === 'string') {
+      const trimmed = photo.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') {
+            photo = parsed.url || '';
+            extraData = parsed.extra && typeof parsed.extra === 'object' ? parsed.extra : {};
+          }
+        } catch (e) {}
+      } else if (photo.includes('|||')) {
+        const parts = photo.split('|||');
+        photo = parts[0];
+        try {
+          extraData = JSON.parse(parts[1] || '{}');
+        } catch (e) {}
+      }
     }
     const camelExtra = keysToCamel(extraData);
-    Object.assign(camelData, { photoURL: photo }, camelExtra);
+    Object.keys(camelExtra).forEach(k => {
+      const v = camelExtra[k];
+      if (v !== undefined && v !== null && (typeof v !== 'string' || v.trim() !== '')) {
+        camelData[k] = v;
+      }
+    });
+    camelData.photoURL = photo;
     camelData.name = getCleanFullName(camelData.name || camelExtra.name);
     if (camelData.displayName) {
       camelData.displayName = getCleanFullName(camelData.displayName);

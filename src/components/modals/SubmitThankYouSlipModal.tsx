@@ -73,7 +73,7 @@ export function SubmitThankYouSlipModal({
         // Fetch users, chapters, and categories in parallel
         const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
           supabase.from('users').select('*'),
-          supabase.from('chapters').select('id, chapter_name, name'),
+          supabase.from('chapters').select('id, chapter_name'),
           supabase.from('categories').select('id, name')
         ]);
 
@@ -81,7 +81,7 @@ export function SubmitThankYouSlipModal({
         if (chaptersRes.data) {
           chaptersRes.data.forEach((c: any) => {
             if (c.id) {
-              chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+              chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
             }
           });
         }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
 import { databaseService } from '../../services/databaseService';
@@ -9,6 +9,13 @@ import { Star, AlertCircle, CheckCircle2, Search, ChevronRight, MessageSquare, S
 import { showError, showSuccess, scrollToError } from '../../services/toastService';
 import { cn } from '../../lib/utils';
 import { UserProfile } from '../../types';
+import {
+  extractMemberExtraData,
+  extractCleanPhotoUrl,
+  buildCategoryLookup,
+  resolveMemberCategory
+} from '../OfflineReferralMemberSelect';
+import { getCleanFullName, getDisplayPosition } from '../../utils/authUtils';
 
 interface GiveTestimonialModalProps {
   isOpen: boolean;
@@ -39,83 +46,110 @@ export function GiveTestimonialModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
     if (initialReceiverId) {
       setSelectedReceiverId(initialReceiverId);
     }
   }, [initialReceiverId]);
 
+  const fetchMembers = useCallback(async () => {
+    try {
+      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+        supabase.from('users').select('*').order('name', { ascending: true }),
+        supabase.from('chapters').select('id, chapter_name'),
+        supabase.from('categories').select('id, name')
+      ]);
+
+      if (usersRes.error) throw usersRes.error;
+      const usersData = usersRes.data;
+
+      const chapterMap = new Map<string, string>();
+      if (chaptersRes.data) {
+        chaptersRes.data.forEach((c: any) => {
+          if (c.id) {
+            chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
+          }
+        });
+      }
+
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+
+      if (isMountedRef.current && usersData) {
+        const mapped = usersData
+          .filter((u: any) => {
+            const uId = u.id || u.uid;
+            const isCurrentUser = String(uId).trim().toLowerCase() === String(currentUserId).trim().toLowerCase();
+            const isMaster = u.role === 'MASTER_ADMIN';
+            return !isCurrentUser && !isMaster;
+          })
+          .map((u: any) => {
+            const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
+            const extraData = extractMemberExtraData(rawPhoto);
+            const cleanPhoto = extractCleanPhotoUrl(rawPhoto);
+
+            const chapId = String(u.chapter_id || u.chapterId || extraData.chapter_id || extraData.chapterId || '').trim();
+            const mappedChapName = chapId ? chapterMap.get(chapId.toLowerCase()) || '' : '';
+            const chapName = String(mappedChapName || u.chapter_name || u.chapterName || extraData.chapter_name || extraData.chapterName || '').trim();
+
+            const category = resolveMemberCategory(u, extraData, categoryMap, validCategoryNames);
+
+            const formattedPos = getDisplayPosition(
+              u.position || extraData.position || u.chapter_position || extraData.chapter_position,
+              u.role
+            );
+
+            return {
+              ...u,
+              id: u.id || u.uid,
+              uid: u.uid || u.id,
+              photoURL: cleanPhoto,
+              displayName: getCleanFullName(u.name || u.full_name || u.displayName || extraData.name || 'Member'),
+              chapterName: chapName || 'General Chapter',
+              position: formattedPos,
+              category,
+              businessName: String(u.business_name || u.businessName || extraData.business_name || extraData.businessName || category).trim()
+            };
+          })
+          .sort((a: any, b: any) =>
+            String(a.displayName || '').localeCompare(String(b.displayName || ''), undefined, { sensitivity: 'base' })
+          );
+        setAllMembers(mapped);
+      }
+    } catch (err: any) {
+      console.warn('Error loading members for testimonial modal:', err);
+    }
+  }, [currentUserId]);
+
   useEffect(() => {
+    isMountedRef.current = true;
     if (!isOpen) {
       setError(null);
       setIsMemberDropdownOpen(false);
       return;
     }
 
-    let isMounted = true;
-    const fetchMembers = async () => {
-      try {
-        const { data: usersData, error: usersErr } = await supabase
-          .from('users')
-          .select('*')
-          .order('name', { ascending: true });
-
-        if (usersErr) throw usersErr;
-
-        const { data: chaptersData } = await supabase
-          .from('chapters')
-          .select('id, chapter_name, name');
-
-        const chapterMap = new Map<string, string>();
-        if (chaptersData) {
-          chaptersData.forEach(c => {
-            if (c.id) {
-              chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
-            }
-          });
-        }
-
-        if (isMounted && usersData) {
-          const mapped = usersData
-            .filter((u: any) => {
-              const uId = u.id || u.uid;
-              const isCurrentUser = String(uId).trim().toLowerCase() === String(currentUserId).trim().toLowerCase();
-              const isMaster = u.role === 'MASTER_ADMIN';
-              return !isCurrentUser && !isMaster;
-            })
-            .map((u: any) => {
-              const chapId = u.chapter_id || u.chapterId || '';
-              const chapName = chapId ? chapterMap.get(String(chapId).trim().toLowerCase()) || '' : '';
-              return {
-                ...u,
-                id: u.id || u.uid,
-                uid: u.uid || u.id,
-                displayName: u.name || u.displayName || 'Member',
-                chapterName: chapName || u.chapterName || '',
-                position: u.position || u.role || 'Member',
-                businessName: u.business_name || u.businessName || u.category || ''
-              };
-            });
-          setAllMembers(mapped);
-        }
-      } catch (err: any) {
-        console.warn('Error loading members for testimonial modal:', err);
-      }
-    };
-
     fetchMembers();
-    return () => { isMounted = false; };
-  }, [isOpen, currentUserId]);
+    window.addEventListener('profile-updated', fetchMembers);
+    window.addEventListener('members-refresh', fetchMembers);
+    return () => {
+      isMountedRef.current = false;
+      window.removeEventListener('profile-updated', fetchMembers);
+      window.removeEventListener('members-refresh', fetchMembers);
+    };
+  }, [isOpen, fetchMembers]);
 
   const filteredMembers = useMemo(() => {
     if (!memberSearchQuery.trim()) return allMembers;
-    const q = memberSearchQuery.toLowerCase();
+    const q = memberSearchQuery.toLowerCase().trim();
     return allMembers.filter(m => {
       const name = (m.displayName || m.name || '').toLowerCase();
+      const cat = (m.category || '').toLowerCase();
       const pos = (m.position || '').toLowerCase();
       const chap = (m.chapterName || '').toLowerCase();
       const bus = (m.businessName || '').toLowerCase();
-      return name.includes(q) || pos.includes(q) || chap.includes(q) || bus.includes(q);
+      return name.includes(q) || cat.includes(q) || pos.includes(q) || chap.includes(q) || bus.includes(q);
     });
   }, [allMembers, memberSearchQuery]);
 
@@ -244,7 +278,11 @@ export function GiveTestimonialModal({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setIsMemberDropdownOpen(!isMemberDropdownOpen)}
+              onClick={() => {
+                const nextOpen = !isMemberDropdownOpen;
+                setIsMemberDropdownOpen(nextOpen);
+                if (nextOpen) fetchMembers();
+              }}
               className="w-full px-3.5 py-3 rounded-xl border border-white/10 bg-[#151C2E] cursor-pointer flex items-center justify-between text-left transition-all hover:border-primary/50"
             >
               {selectedReceiver ? (
@@ -256,10 +294,10 @@ export function GiveTestimonialModal({
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-white truncate">
-                      {selectedReceiver.displayName} <span className="text-xs font-semibold text-primary">({selectedReceiver.position})</span>
+                      {selectedReceiver.displayName}
                     </p>
                     <p className="text-[10px] text-neutral-400 truncate">
-                      Category: {selectedReceiver.category || selectedReceiver.businessName || 'Business Owner'} • {selectedReceiver.chapterName || 'Chapter'}
+                      Category: <span className="text-primary font-semibold">{selectedReceiver.category || 'Business Owner'}</span> • {selectedReceiver.chapterName || 'Chapter'}
                     </p>
                   </div>
                 </div>
@@ -279,7 +317,7 @@ export function GiveTestimonialModal({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={13} />
                     <input
                       type="text"
-                      placeholder="Search by name, position, chapter..."
+                      placeholder="Search by name, category, chapter..."
                       value={memberSearchQuery}
                       onChange={(e) => setMemberSearchQuery(e.target.value)}
                       className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-white/5 bg-[#111827] text-white focus:outline-none focus:border-primary"
@@ -309,7 +347,7 @@ export function GiveTestimonialModal({
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-white truncate">{member.displayName}</p>
                           <p className="text-[10px] text-neutral-400 truncate">
-                            Category: {member.category || member.businessName || 'Business Owner'} • {member.position} • {member.chapterName}
+                            Category: <span className="text-primary font-semibold">{member.category || 'Business Owner'}</span> • {member.chapterName}
                           </p>
                         </div>
                       </div>

@@ -115,6 +115,16 @@ export function Categories() {
           if (updateErr) {
             console.error("Failed to propagate category rename to members:", updateErr);
           }
+
+          // Also update any members whose category was stored in packed profile_photo metadata
+          const affectedUsers = users.filter(
+            (u: any) => String(u.category || '').trim().toLowerCase() === oldName.toLowerCase()
+          );
+          await Promise.all(
+            affectedUsers.map((u: any) =>
+              databaseService.update('users', u.uid || u.id, { category: cleanName }).catch(() => null)
+            )
+          );
         }
 
         setSuccess('Category updated successfully and propagated to members!');

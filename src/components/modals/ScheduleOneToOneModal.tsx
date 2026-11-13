@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
 import { databaseService } from '../../services/databaseService';
@@ -8,6 +8,13 @@ import { Users, Building2, AlertCircle, Calendar, Clock, MapPin, Video, Search, 
 import { showError, showSuccess, scrollToError } from '../../services/toastService';
 import { cn } from '../../lib/utils';
 import { Avatar } from '../Avatar';
+import {
+  extractMemberExtraData,
+  extractCleanPhotoUrl,
+  buildCategoryLookup,
+  resolveMemberCategory
+} from '../OfflineReferralMemberSelect';
+import { getCleanFullName, getDisplayPosition } from '../../utils/authUtils';
 
 interface ScheduleOneToOneModalProps {
   isOpen: boolean;
@@ -43,73 +50,94 @@ export function ScheduleOneToOneModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
     if (initialParticipantId) {
       setFormData(prev => ({ ...prev, participantId: initialParticipantId }));
     }
   }, [initialParticipantId]);
 
+  const fetchMembers = useCallback(async () => {
+    try {
+      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+        supabase.from('users').select('*').order('name', { ascending: true }),
+        supabase.from('chapters').select('id, chapter_name'),
+        supabase.from('categories').select('id, name')
+      ]);
+
+      if (usersRes.error) throw usersRes.error;
+      const usersData = usersRes.data;
+
+      const chapterMap = new Map<string, string>();
+      if (chaptersRes.data) {
+        chaptersRes.data.forEach((c: any) => {
+          if (c.id) {
+            chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
+          }
+        });
+      }
+
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+
+      if (isMountedRef.current && usersData) {
+        const mapped = usersData
+          .filter((u: any) => {
+            const uId = u.id || u.uid;
+            const isCurrentUser = String(uId).trim().toLowerCase() === String(currentUserId).trim().toLowerCase();
+            const isMaster = u.role === 'MASTER_ADMIN';
+            return !isCurrentUser && !isMaster;
+          })
+          .map((u: any) => {
+            const rawPhoto = u.profile_photo || u.photo_url || u.photoURL || '';
+            const extraData = extractMemberExtraData(rawPhoto);
+            const cleanPhoto = extractCleanPhotoUrl(rawPhoto);
+
+            const chapId = String(u.chapter_id || u.chapterId || extraData.chapter_id || extraData.chapterId || '').trim();
+            const mappedChapName = chapId ? chapterMap.get(chapId.toLowerCase()) || '' : '';
+            const chapName = String(mappedChapName || u.chapter_name || u.chapterName || extraData.chapter_name || extraData.chapterName || '').trim();
+
+            const category = resolveMemberCategory(u, extraData, categoryMap, validCategoryNames);
+
+            return {
+              ...u,
+              id: u.id || u.uid,
+              photoURL: cleanPhoto,
+              displayName: getCleanFullName(u.name || u.full_name || u.displayName || extraData.name || 'Member'),
+              chapterName: chapName || 'General Chapter',
+              position: getDisplayPosition(u.position || extraData.position || u.chapter_position || extraData.chapter_position, u.role),
+              phone: u.phone || u.phoneNumber || '',
+              category,
+              businessCategory: category
+            };
+          })
+          .sort((a: any, b: any) =>
+            String(a.displayName || '').localeCompare(String(b.displayName || ''), undefined, { sensitivity: 'base' })
+          );
+        setAllMembers(mapped);
+      }
+    } catch (err: any) {
+      console.warn('Error loading members for 1-to-1 modal:', err);
+    }
+  }, [currentUserId]);
+
   useEffect(() => {
+    isMountedRef.current = true;
     if (!isOpen) {
       setError(null);
       setIsDropdownOpen(false);
       return;
     }
 
-    let isMounted = true;
-    const fetchMembers = async () => {
-      try {
-        const { data: usersData, error: usersErr } = await supabase
-          .from('users')
-          .select('*')
-          .order('name', { ascending: true });
-
-        if (usersErr) throw usersErr;
-
-        const { data: chaptersData } = await supabase
-          .from('chapters')
-          .select('id, chapter_name, name');
-
-        const chapterMap = new Map<string, string>();
-        if (chaptersData) {
-          chaptersData.forEach(c => {
-            if (c.id) {
-              chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
-            }
-          });
-        }
-
-        if (isMounted && usersData) {
-          const mapped = usersData
-            .filter((u: any) => {
-              const uId = u.id || u.uid;
-              const isCurrentUser = String(uId).trim().toLowerCase() === String(currentUserId).trim().toLowerCase();
-              const isMaster = u.role === 'MASTER_ADMIN';
-              return !isCurrentUser && !isMaster;
-            })
-            .map((u: any) => {
-              const chapId = u.chapter_id || u.chapterId || '';
-              const chapName = chapId ? chapterMap.get(String(chapId).trim().toLowerCase()) || '' : '';
-              return {
-                ...u,
-                id: u.id || u.uid,
-                displayName: u.name || u.displayName || 'Member',
-                chapterName: chapName || u.chapterName || '',
-                position: u.position || u.role || 'Member',
-                phone: u.phone || u.phoneNumber || '',
-                businessCategory: u.category || u.business_category || u.businessName || u.business_name || 'General'
-              };
-            });
-          setAllMembers(mapped);
-        }
-      } catch (err: any) {
-        console.warn('Error loading members for 1-to-1 modal:', err);
-      }
-    };
-
     fetchMembers();
-    return () => { isMounted = false; };
-  }, [isOpen, currentUserId]);
+    window.addEventListener('profile-updated', fetchMembers);
+    window.addEventListener('members-refresh', fetchMembers);
+    return () => {
+      isMountedRef.current = false;
+      window.removeEventListener('profile-updated', fetchMembers);
+      window.removeEventListener('members-refresh', fetchMembers);
+    };
+  }, [isOpen, fetchMembers]);
 
   const effectiveUserChapterId = useMemo(() => {
     return profile?.chapter_id || (profile as any)?.chapterId || (profile as any)?.adminId || '';
@@ -333,7 +361,11 @@ export function ScheduleOneToOneModal({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              onClick={() => {
+                const nextOpen = !isDropdownOpen;
+                setIsDropdownOpen(nextOpen);
+                if (nextOpen) fetchMembers();
+              }}
               className="w-full px-3.5 py-3 rounded-xl border border-white/10 bg-[#151C2E] cursor-pointer flex items-center justify-between text-left transition-all hover:border-primary/50"
             >
               {selectedMember ? (
@@ -345,10 +377,10 @@ export function ScheduleOneToOneModal({
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-white truncate">
-                      {selectedMember.displayName} <span className="text-xs font-semibold text-primary">({selectedMember.position})</span>
+                      {selectedMember.displayName}
                     </p>
                     <p className="text-[10px] text-neutral-400 truncate">
-                      Category: {selectedMember.businessCategory || selectedMember.category || 'General'} • {selectedMember.chapterName || 'Chapter'}
+                      Category: <span className="text-primary font-semibold">{selectedMember.category || selectedMember.businessCategory || 'Business Owner'}</span> • {selectedMember.chapterName || 'Chapter'}
                     </p>
                   </div>
                 </div>
@@ -424,7 +456,7 @@ export function ScheduleOneToOneModal({
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-white truncate">{member.displayName}</p>
                           <p className="text-[10px] text-neutral-400 truncate">
-                            Category: {member.businessCategory || member.category || 'General'} • {member.position} • {member.chapterName}
+                            Category: <span className="text-primary font-semibold">{member.category || member.businessCategory || 'Business Owner'}</span> • {member.chapterName}
                           </p>
                         </div>
                       </div>
