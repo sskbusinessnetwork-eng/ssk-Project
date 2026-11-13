@@ -10,6 +10,11 @@ import { safeFormat as format } from '../../utils/dateUtils';
 import { cn } from '../../lib/utils';
 import { isOfflineReferral } from '../../types';
 import { ContactPickerButton } from '../PhoneInputWithPicker';
+import {
+  OfflineReferralMemberSelect,
+  NormalizedMemberOption,
+  normalizeMemberOption,
+} from '../OfflineReferralMemberSelect';
 
 interface SubmitThankYouSlipModalProps {
   isOpen: boolean;
@@ -33,6 +38,8 @@ export function SubmitThankYouSlipModal({
 
   const [referrals, setReferrals] = useState<any[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
+  const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+  const [categoryMap, setCategoryMap] = useState<Map<string, string>>(new Map());
   const [usersMap, setUsersMap] = useState<Record<string, any>>({});
   const [formData, setFormData] = useState({
     referralId: initialReferralId || '',
@@ -63,11 +70,37 @@ export function SubmitThankYouSlipModal({
         const uId = effectiveSenderId;
         if (!uId) return;
 
-        // Fetch users map for sender names
-        const { data: usersData } = await supabase.from('users').select('*');
+        // Fetch users, chapters, and categories in parallel
+        const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
+          supabase.from('users').select('*'),
+          supabase.from('chapters').select('id, chapter_name, name'),
+          supabase.from('categories').select('id, name')
+        ]);
+
+        const chapMap = new Map<string, string>();
+        if (chaptersRes.data) {
+          chaptersRes.data.forEach((c: any) => {
+            if (c.id) {
+              chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+            }
+          });
+        }
+        if (isMounted) setChapterMap(chapMap);
+
+        const catMap = new Map<string, string>();
+        if (categoriesRes.data) {
+          categoriesRes.data.forEach((cat: any) => {
+            if (cat.id && cat.name) {
+              catMap.set(String(cat.id).trim().toLowerCase(), String(cat.name));
+            }
+          });
+        }
+        if (isMounted) setCategoryMap(catMap);
+
+        const usersData = usersRes.data;
         const uMap: Record<string, any> = {};
         if (usersData) {
-          setAllUsersList(usersData);
+          if (isMounted) setAllUsersList(usersData);
           usersData.forEach((u: any) => {
             if (u.id) uMap[String(u.id).toLowerCase()] = u;
             if (u.uid) uMap[String(u.uid).toLowerCase()] = u;
@@ -359,12 +392,22 @@ export function SubmitThankYouSlipModal({
     }
   };
 
-  const eligibleMembersList = useMemo(() => {
-    return allUsersList.filter(u => {
-      const uId = String(u.uid || u.id || '');
-      return uId && uId !== effectiveSenderId;
-    });
-  }, [allUsersList, effectiveSenderId]);
+  const eligibleMembersList = useMemo<NormalizedMemberOption[]>(() => {
+    const normalizedSelfId = String(effectiveSenderId || '').trim().toLowerCase();
+    return allUsersList
+      .filter((u) => {
+        const uId = String(u.uid || u.id || '').trim().toLowerCase();
+        const isMaster = String(u.role || '').trim().toUpperCase() === 'MASTER_ADMIN';
+        return Boolean(uId) && uId !== normalizedSelfId && !isMaster;
+      })
+      .map((u) => normalizeMemberOption(u, chapterMap, categoryMap))
+      .filter((m): m is NormalizedMemberOption => Boolean(m))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+  }, [allUsersList, effectiveSenderId, chapterMap, categoryMap]);
+
+  const effectiveUserChapterId = String(
+    effectiveSender?.chapter_id || (effectiveSender as any)?.chapterId || profile?.chapter_id || (profile as any)?.chapterId || ''
+  );
 
   return (
     <Modal
@@ -499,32 +542,20 @@ export function SubmitThankYouSlipModal({
                 <label className="text-neutral-400 block text-[10px] uppercase font-semibold">
                   Referral Given By (Member) <span className="text-red-400">*</span>
                 </label>
-                <select
-                  required
+                <OfflineReferralMemberSelect
+                  members={eligibleMembersList}
                   value={offlineMemberId}
-                  onChange={(e) => {
-                    const mId = e.target.value;
+                  userChapterId={effectiveUserChapterId}
+                  onChange={(mId, memberObj) => {
                     setOfflineMemberId(mId);
-                    const mObj = allUsersList.find(u => String(u.uid || u.id) === String(mId));
-                    const mName = mObj?.name || mObj?.displayName || mObj?.full_name || 'Member';
+                    const mName = memberObj?.displayName || 'Member';
                     setFormData(prev => ({
                       ...prev,
                       senderName: mName,
                       senderId: mId
                     }));
                   }}
-                  className="w-full px-3 py-2.5 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary font-medium"
-                >
-                  <option value="" className="bg-[#111827]">Select member who gave the referral...</option>
-                  {eligibleMembersList.map((m) => {
-                    const cat = m.category || m.businessCategory || m.business_category || m.companyName || 'No Category';
-                    return (
-                      <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
-                        {m.name || m.displayName || m.full_name} — Category: {cat}
-                      </option>
-                    );
-                  })}
-                </select>
+                />
               </div>
 
               <div className="space-y-1">
@@ -548,7 +579,16 @@ export function SubmitThankYouSlipModal({
                     placeholder="e.g. +91 98765 43210"
                     className="w-full px-3 pr-10 py-2 rounded-lg border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary"
                   />
-                  <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                  <ContactPickerButton
+                    onSelect={(phone) => setFormData(prev => ({ ...prev, contactPhone: phone }))}
+                    onContactSelect={({ phone, name }) =>
+                      setFormData(prev => ({
+                        ...prev,
+                        contactPhone: phone,
+                        customerName: !prev.customerName.trim() && name ? name : prev.customerName
+                      }))
+                    }
+                  />
                 </div>
               </div>
 

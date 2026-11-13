@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -30,6 +30,11 @@ import { WriteTestimonialModal } from '../components/WriteTestimonialModal';
 import { notificationService } from '../services/notificationService';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { isChapterLeaderRole } from '../utils/authUtils';
+import {
+  OfflineReferralMemberSelect,
+  NormalizedMemberOption,
+  normalizeMemberOption,
+} from '../components/OfflineReferralMemberSelect';
 
 export function ThankYouSlips() {
   const { profile } = useAuth();
@@ -53,6 +58,8 @@ export function ThankYouSlips() {
   const [loading, setLoading] = useState(true);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+  const [categoryMap, setCategoryMap] = useState<Map<string, string>>(new Map());
 
   const getUserName = (userId?: string | null): string => {
     if (!userId || userId === 'null' || userId === 'undefined') return 'Unknown Member';
@@ -361,6 +368,34 @@ export function ThankYouSlips() {
       );
     }
 
+    // Fetch chapters & categories for member selector resolution
+    supabase.from('chapters').select('id, chapter_name, name').then(
+      ({ data: chapData }) => {
+        if (chapData) {
+          const map = new Map<string, string>();
+          chapData.forEach((c: any) => {
+            if (c.id) map.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
+          });
+          setChapterMap(map);
+        }
+      },
+      err => console.warn("ThankYouSlips load chapters notice:", err)
+    );
+
+    supabase.from('categories').select('id, name').order('name').then(
+      ({ data: catData }) => {
+        if (catData) {
+          setAllCategories(catData as unknown as Category[]);
+          const map = new Map<string, string>();
+          catData.forEach((cat: any) => {
+            if (cat.id && cat.name) map.set(String(cat.id).trim().toLowerCase(), String(cat.name));
+          });
+          setCategoryMap(map);
+        }
+      },
+      err => console.warn("ThankYouSlips load categories notice:", err)
+    );
+
     // Fetch members to show names
     databaseService.list<UserProfile>('users', []).then(users => {
       const names: Record<string, string> = {};
@@ -372,18 +407,24 @@ export function ThankYouSlips() {
       setMemberNames(prev => ({ ...prev, ...names }));
     }).catch(err => console.warn("ThankYouSlips load members notice:", err));
 
-    // Also fetch users from Supabase for complete name resolution
+    // Also fetch users from Supabase for complete name/category/chapter resolution
     supabase.from('users').select('*').then(
       ({ data: sbUsers }) => {
         if (sbUsers) {
           setAllUsers(prev => {
-            const combined = [...prev];
+            const byId = new Map<string, UserProfile>();
+            prev.forEach(existing => {
+              const eid = String(existing.id || existing.uid || '');
+              if (eid) byId.set(eid, existing);
+            });
             sbUsers.forEach((u: any) => {
-              if (!combined.some(existing => String(existing.id) === String(u.id) || String(existing.uid) === String(u.id) || (u.uid && String(existing.uid) === String(u.uid)))) {
-                combined.push(u as unknown as UserProfile);
+              const uid = String(u.id || u.uid || '');
+              if (uid) {
+                const existing = byId.get(uid) || {};
+                byId.set(uid, { ...u, ...existing } as unknown as UserProfile);
               }
             });
-            return combined;
+            return Array.from(byId.values());
           });
           const sbNames: Record<string, string> = {};
           sbUsers.forEach((u: any) => {
@@ -432,6 +473,19 @@ export function ThankYouSlips() {
       }));
     }
   };
+
+  const eligibleOfflineMembers = useMemo<NormalizedMemberOption[]>(() => {
+    const selfId = String(profile?.uid || profile?.id || '').trim().toLowerCase();
+    return allUsers
+      .filter((u: any) => {
+        const uId = String(u.uid || u.id || '').trim().toLowerCase();
+        const isMaster = String(u.role || '').trim().toUpperCase() === 'MASTER_ADMIN';
+        return Boolean(uId) && uId !== selfId && !isMaster;
+      })
+      .map((u: any) => normalizeMemberOption(u, chapterMap, categoryMap))
+      .filter((m): m is NormalizedMemberOption => Boolean(m))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+  }, [allUsers, profile?.uid, profile?.id, chapterMap, categoryMap]);
 
   useEffect(() => {
     const paramRefId = searchParams.get('referralId');
@@ -1313,34 +1367,19 @@ export function ThankYouSlips() {
                     <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                       Referral Given By (Member) <span className="text-red-400">*</span>
                     </label>
-                    <select
-                      required
+                    <OfflineReferralMemberSelect
+                      members={eligibleOfflineMembers}
                       value={offlineMemberId}
-                      onChange={(e) => {
-                        const mId = e.target.value;
+                      userChapterId={String(profile?.chapter_id || (profile as any)?.chapterId || '')}
+                      onChange={(mId, memberObj) => {
                         setOfflineMemberId(mId);
-                        const mObj = allUsers.find(u => String(u.uid || u.id) === String(mId));
-                        const mName = mObj?.name || (mObj as any)?.full_name || mObj?.displayName || memberNames[mId] || 'Member';
+                        const mName = memberObj?.displayName || memberNames[mId] || 'Member';
                         setFormData(prev => ({
                           ...prev,
                           senderName: mName
                         }));
                       }}
-                      className="w-full px-3 py-2.5 rounded-[8px] border border-white/10 bg-[#111827] text-white text-xs outline-none focus:border-primary font-medium"
-                    >
-                      <option value="" className="bg-[#111827]">Select member who gave the referral...</option>
-                      {allUsers.filter(u => {
-                        const uId = String(u.uid || u.id || '');
-                        return uId && uId !== String(profile?.uid || profile?.id);
-                      }).map((m) => {
-                        const cat = m.category || m.businessCategory || (m as any).business_category || (m as any).companyName || 'No Category';
-                        return (
-                          <option key={m.id || m.uid} value={m.id || m.uid} className="bg-[#111827]">
-                            {m.name || (m as any).full_name || m.displayName} — Category: {cat}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    />
                   </div>
 
                   <div className="space-y-1">
@@ -1364,7 +1403,16 @@ export function ThankYouSlips() {
                         placeholder="e.g. +91 98765 43210"
                         className="w-full px-3 pr-10 py-2 rounded-[8px] border border-white/5 bg-[#111827] text-white text-xs outline-none focus:border-primary"
                       />
-                      <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                      <ContactPickerButton
+                        onSelect={(phone) => setFormData(prev => ({ ...prev, contactPhone: phone }))}
+                        onContactSelect={({ phone, name }) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            contactPhone: phone,
+                            customerName: !prev.customerName.trim() && name ? name : prev.customerName
+                          }))
+                        }
+                      />
                     </div>
                   </div>
 

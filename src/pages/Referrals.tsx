@@ -1709,7 +1709,16 @@ export function Referrals() {
                   placeholder="Phone number"
                   className="w-full px-4 pr-11 py-3 bg-[#151C2E] border border-white/5 text-white placeholder-neutral-500 rounded-[12px] focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                 />
-                <ContactPickerButton onSelect={(phone) => setFormData({ ...formData, contactPhone: phone })} />
+                <ContactPickerButton
+                  onSelect={(phone) => setFormData(prev => ({ ...prev, contactPhone: phone }))}
+                  onContactSelect={({ phone, name }) =>
+                    setFormData(prev => ({
+                      ...prev,
+                      contactPhone: phone,
+                      contactName: !prev.contactName.trim() && name ? name : prev.contactName
+                    }))
+                  }
+                />
               </div>
             </div>
           </div>

@@ -782,6 +782,16 @@ SSK Business Network`;
                       }));
                       validatePhone(phone, formData.meetingId);
                     }}
+                    onContactSelect={({ phone, name }) => {
+                      const prevPhone = formData.guestPhone;
+                      setFormData(prev => ({
+                        ...prev,
+                        guestName: !prev.guestName.trim() && name ? name : prev.guestName,
+                        guestPhone: phone,
+                        guestWhatsapp: prev.guestWhatsapp === '' || prev.guestWhatsapp === prevPhone ? phone : prev.guestWhatsapp
+                      }));
+                      validatePhone(phone, formData.meetingId);
+                    }}
                   />
                 </div>
               </div>
