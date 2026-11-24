@@ -96,22 +96,27 @@ export function keysToSnake(obj: any): any {
 }
 
 export function keysToCamel(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) return obj.map(keysToCamel);
-  if (typeof obj === 'object') {
-    if (obj instanceof Date) return obj;
-    const n: any = {};
-    Object.keys(obj).forEach(k => {
-      const camelKey = snakeToCamel(k);
-      const val = keysToCamel(obj[k]);
-      n[camelKey] = val;
-      if (k !== camelKey) {
-        n[k] = val;
-      }
-    });
-    return n;
+  if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) {
+    const len = obj.length;
+    const res = new Array(len);
+    for (let i = 0; i < len; i++) {
+      res[i] = keysToCamel(obj[i]);
+    }
+    return res;
   }
-  return obj;
+  if (obj instanceof Date) return obj;
+  const n: any = {};
+  for (const k in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+    const camelKey = snakeToCamel(k);
+    const val = keysToCamel(obj[k]);
+    n[camelKey] = val;
+    if (k !== camelKey) {
+      n[k] = val;
+    }
+  }
+  return n;
 }
 
 export function normalizeMeetingRecord(m: any): any {
@@ -246,16 +251,21 @@ function applyConstraints(queryBuilder: any, constraints: QueryConstraint[], mee
 let cachedProfileSessionId: string | null = null;
 let cachedProfileData: { role?: string; chapter_id?: string } | null = null;
 let cachedProfileTimestamp = 0;
+let cachedRawUserJson: string | null = null;
 
 async function getCachedUserProfileForQuery() {
   const now = Date.now();
-  if (cachedProfileData && (now - cachedProfileTimestamp < 30000)) {
+  let savedUser: string | null = null;
+  try {
+    savedUser = localStorage.getItem('user');
+  } catch (e) {}
+
+  if (savedUser && savedUser === cachedRawUserJson && cachedProfileData && (now - cachedProfileTimestamp < 30000)) {
     return cachedProfileData;
   }
-  
-  try {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+
+  if (savedUser) {
+    try {
       const parsed = JSON.parse(savedUser);
       const prof = parsed.profile || (parsed.role ? parsed : null);
       if (prof && prof.role && (prof.chapter_id || prof.chapterId || prof.role === 'MASTER_ADMIN')) {
@@ -263,18 +273,28 @@ async function getCachedUserProfileForQuery() {
           role: prof.role,
           chapter_id: prof.chapter_id || prof.chapterId
         };
+        cachedRawUserJson = savedUser;
         cachedProfileData = cData;
         cachedProfileTimestamp = now;
         return cData;
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
+
+  if (!savedUser && cachedProfileData && (now - cachedProfileTimestamp < 30000)) {
+    return cachedProfileData;
+  }
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) {
     cachedProfileSessionId = null;
     cachedProfileData = null;
+    cachedRawUserJson = null;
     return null;
+  }
+
+  if (cachedProfileSessionId === session.user.id && cachedProfileData && (now - cachedProfileTimestamp < 30000)) {
+    return cachedProfileData;
   }
 
   const { data: userProfile } = await supabase
@@ -289,16 +309,34 @@ async function getCachedUserProfileForQuery() {
   return cachedProfileData;
 }
 
+const inFlightGetDocs = new Map<string, Promise<any>>();
+
+function buildQueryDedupeKey(collectionPath: string, constraints: QueryConstraint[], userProfile: { role?: string; chapter_id?: string } | null): string {
+  const roleKey = userProfile?.role || '';
+  const chapKey = userProfile?.chapter_id || '';
+  if (!constraints || constraints.length === 0) {
+    return `${collectionPath}|${roleKey}|${chapKey}|`;
+  }
+  return `${collectionPath}|${roleKey}|${chapKey}|${JSON.stringify(constraints)}`;
+}
+
 export async function getDocs(queryRef: any) {
   const collectionPath = queryRef.path;
-  let finalConstraints = [...(queryRef.constraints || [])];
-  let meetingIdsFiltered: string[] | null = null;
-  
-  let builder = supabase.from(collectionPath).select('*');
-  builder = applyConstraints(builder, finalConstraints, meetingIdsFiltered);
-  
+  const finalConstraints = [...(queryRef.constraints || [])];
   const userProfile = await getCachedUserProfileForQuery();
-  if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
+
+  const dedupeKey = buildQueryDedupeKey(collectionPath, finalConstraints, userProfile);
+  const existingInFlight = inFlightGetDocs.get(dedupeKey);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const execPromise = (async () => {
+    const meetingIdsFiltered: string[] | null = null;
+    let builder = supabase.from(collectionPath).select('*');
+    builder = applyConstraints(builder, finalConstraints, meetingIdsFiltered);
+    
+    if (userProfile && userProfile.role !== 'MASTER_ADMIN' && userProfile.chapter_id) {
     const userChapterId = userProfile.chapter_id;
     const hasChapterFilter = finalConstraints.some(c => c.type === 'where' && (c.field === 'chapter_id' || c.field === 'chapterId'));
     
@@ -505,12 +543,20 @@ export async function getDocs(queryRef: any) {
     });
   }
   
-  const docs = rows.map(row => ({
-    id: row.id,
-    data: () => row,
-    exists: () => true
-  }));
-  return { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
+    const docs = rows.map(row => ({
+      id: row.id,
+      data: () => row,
+      exists: () => true
+    }));
+    return { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
+  })();
+
+  inFlightGetDocs.set(dedupeKey, execPromise);
+  try {
+    return await execPromise;
+  } finally {
+    inFlightGetDocs.delete(dedupeKey);
+  }
 }
 
 const EXTRA_USER_FIELDS_MAP: Record<string, boolean> = {
@@ -1403,11 +1449,28 @@ export async function deleteDoc(docRef: any) {
 }
 
 export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
+  let isDisposed = false;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   const fetchAndCallback = () => {
-    getDocs(queryRef).then(callback).catch(err => {
-      console.warn("onSnapshot fetch error:", err);
-      callback({ docs: [], empty: true, forEach: () => {} });
+    if (isDisposed) return;
+    getDocs(queryRef).then((snap) => {
+      if (!isDisposed) callback(snap);
+    }).catch(err => {
+      if (!isDisposed) {
+        console.warn("onSnapshot fetch error:", err);
+        callback({ docs: [], empty: true, forEach: () => {} });
+      }
     });
+  };
+
+  const scheduleFetch = () => {
+    if (isDisposed) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      fetchAndCallback();
+    }, 180);
   };
   
   fetchAndCallback();
@@ -1417,19 +1480,22 @@ export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
   if (tableName && typeof tableName === 'string') {
     channel = supabase
       .channel(`realtime-snapshot-${tableName}-${Math.random().toString(36).substring(2, 7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => {
-        fetchAndCallback();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, scheduleFetch)
       .subscribe();
   }
   
-  window.addEventListener('dashboard-refresh', fetchAndCallback);
+  window.addEventListener('dashboard-refresh', scheduleFetch);
   
   return () => {
+    isDisposed = true;
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
     if (channel) {
       supabase.removeChannel(channel);
     }
-    window.removeEventListener('dashboard-refresh', fetchAndCallback);
+    window.removeEventListener('dashboard-refresh', scheduleFetch);
   };
 }
 

@@ -115,6 +115,8 @@ export function Members() {
       setLoading(false);
     });
 
+    let unsubInvites: (() => void) | undefined;
+
     if (profile.role === 'MASTER_ADMIN' || isChapterAdminUser) {
       supabase.from('categories').select('id, name').order('name').then(
         ({ data }) => {
@@ -154,14 +156,17 @@ export function Members() {
           where('createdByRole', '==', 'MEMBER'),
           orderBy('createdAt', 'desc')
         ];
-        databaseService.subscribe<GuestInvitation>('guest_invitations', invitesConstraints, (data) => {
+        unsubInvites = databaseService.subscribe<GuestInvitation>('guest_invitations', invitesConstraints, (data) => {
           setMemberInvites(data);
         });
       }
     }
 
-    return () => unsubscribe();
-  }, [profile]);
+    return () => {
+      unsubscribe();
+      if (unsubInvites) unsubInvites();
+    };
+  }, [profile?.uid, profile?.id, profile?.role, profile?.chapter_id, profile?.position]);
 
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

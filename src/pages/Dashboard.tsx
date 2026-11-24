@@ -157,11 +157,111 @@ export function isGuestUpcomingOrPresent(g: any, allMeetings: any[] = []): boole
   return isGuestMarkedPresent(g) || isGuestInvitedToUpcoming(g, allMeetings);
 }
 
+const STATIC_DYNAMIC_CONTEXT = { period: 'Weekly', priority: 'Engage', tip: '', badge: '' };
+const STATIC_COUNTDOWN = { days: 0, hours: 0, minutes: 0 };
+const STATIC_CURRENT_MONTH_METRICS = {};
+const STATIC_RECOMMENDATION = {
+  title: 'Schedule 1-to-1',
+  description: 'Schedule 1-to-1 sessions to boost network visibility.',
+  action: 'Schedule',
+  link: '/one-to-one'
+};
+const NOOP_CALLBACK = () => {};
+
+const GrowthScoreGauge = React.memo(function GrowthScoreGauge({
+  targetScore,
+  showChapterScoreGauge,
+  growthStatus,
+  growthStatusColor,
+}: {
+  targetScore: number;
+  showChapterScoreGauge: boolean;
+  growthStatus: string;
+  growthStatusColor: string;
+}) {
+  const [score, setScore] = useState(0);
+
+  useEffect(() => {
+    const end = targetScore;
+    const duration = 1500;
+    const startTime = performance.now();
+    let rafId = 0;
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setScore(Math.floor(ease * end));
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(animate);
+      }
+    };
+
+    rafId = requestAnimationFrame(animate);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [targetScore]);
+
+  return (
+    <div className="relative z-10 flex items-center justify-center shrink-0 w-[115px] md:w-[130px] h-[115px] md:h-[130px] md:mr-16 lg:mr-24 mt-3 md:mt-0">
+      {/* Circular Gauge */}
+      <div className="absolute inset-0 rounded-full border-[6px] border-[#111827] shadow-[0_0_20px_rgba(0,0,0,0.4)]" />
+
+      {/* Spinning/pulsing subtle gradient circle glow */}
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-[-4px] rounded-full opacity-40 blur-[8px] border-2 border-dashed border-[#E53935]"
+      />
+
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 relative z-10">
+        <defs>
+          <linearGradient id="score-grad-new" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#E53935" />
+            <stop offset="50%" stopColor="#8B5CF6" />
+            <stop offset="100%" stopColor="#10B981" />
+          </linearGradient>
+        </defs>
+        {/* Background Track */}
+        <circle
+          cx="50"
+          cy="50"
+          r="44"
+          stroke="#1a2233"
+          strokeWidth="6"
+          fill="none"
+        />
+        {/* Progress Ring */}
+        <circle
+          cx="50"
+          cy="50"
+          r="44"
+          stroke="url(#score-grad-new)"
+          strokeWidth="6"
+          fill="none"
+          strokeDasharray="276"
+          strokeDashoffset={276 - (276 * Math.min(100, Math.max(0, score))) / 100}
+          strokeLinecap="round"
+          className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(229,57,53,0.6)]"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
+        <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
+        <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{showChapterScoreGauge ? 'GLOBAL SCORE' : 'MY GROWTH SCORE'}</span>
+        <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
+          {growthStatus}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export function Analytics() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { theme } = useTheme();
-  const [score, setScore] = useState(0);
   const [userName, setUserName] = useState<string>('');
 
   const userCandidateIds = useMemo(() => {
@@ -214,7 +314,7 @@ export function Analytics() {
     };
 
     fetchFreshName();
-  }, [profile]);
+  }, [profile?.uid, profile?.id, profile?.name]);
   const [isRocketHovered, setIsRocketHovered] = useState(false);
   const [isReportHovered, setIsReportHovered] = useState(false);
 
@@ -312,7 +412,7 @@ export function Analytics() {
       }
       setHasInitializedDate(true);
     }
-  }, [profile, hasInitializedDate]);
+  }, [profile?.role, hasInitializedDate]);
 
 
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -427,7 +527,7 @@ export function Analytics() {
       }
     };
     fetchChapterName();
-  }, [profile]);
+  }, [profile?.uid, profile?.role, profile?.chapterName, profile?.chapter_id, isChapterAdminUser]);
 
   const chapterHeading = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') return 'Organization Analytics';
@@ -438,18 +538,6 @@ export function Analytics() {
       : `${resolvedChapterName} Chapter Analytics`;
   }, [resolvedChapterName, profile, usePersonalStats]);
 
-
-  useEffect(() => {
-    const handleRefresh = () => {
-      databaseService.list<any>('meetings', []).then((freshMeetings) => {
-        if (freshMeetings) {
-          setMeetings(freshMeetings.map((m: any) => normalizeMeetingRecord({ ...m })));
-        }
-      }).catch(() => {});
-    };
-    window.addEventListener('dashboard-refresh', handleRefresh);
-    return () => window.removeEventListener('dashboard-refresh', handleRefresh);
-  }, []);
 
   // Unified dynamic subscriptions
   useEffect(() => {
@@ -485,29 +573,31 @@ export function Analytics() {
       setChapterUsers(chapterMems);
     });
 
-    // Also fetch all users from Supabase users table
-    supabase.from('users').select('*').then(
-      ({ data: sbUsers }) => {
-        if (sbUsers && sbUsers.length > 0) {
-          setAllUsersList(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(u => {
-              const k = String(u.id || u.uid || '');
-              if (k) map.set(k.toLowerCase(), u);
+    // For non-MASTER_ADMIN users, also fetch all users so cross-chapter names resolve accurately
+    if (profile.role !== 'MASTER_ADMIN') {
+      supabase.from('users').select('*').then(
+        ({ data: sbUsers }) => {
+          if (sbUsers && sbUsers.length > 0) {
+            setAllUsersList(prev => {
+              const map = new Map<string, any>();
+              (prev || []).forEach(u => {
+                const k = String(u.id || u.uid || '');
+                if (k) map.set(k.toLowerCase(), u);
+              });
+              sbUsers.forEach((u: any) => {
+                const k = String(u.id || u.uid || '');
+                if (k) {
+                  const existing = map.get(k.toLowerCase()) || {};
+                  map.set(k.toLowerCase(), { ...existing, ...u });
+                }
+              });
+              return Array.from(map.values());
             });
-            sbUsers.forEach((u: any) => {
-              const k = String(u.id || u.uid || '');
-              if (k) {
-                const existing = map.get(k.toLowerCase()) || {};
-                map.set(k.toLowerCase(), { ...existing, ...u });
-              }
-            });
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load users notice:", err)
-    );
+          }
+        },
+        (err) => console.warn("Dashboard load users notice:", err)
+      );
+    }
 
     // 2. Subscribe to thank you slips
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {
@@ -521,43 +611,6 @@ export function Analytics() {
       setAllSlips(deduplicateSlips(filtered));
     });
     const unsubSubRequests = databaseService.subscribe<any>('subscription_requests', [], setSubscriptionRequests);
-
-    // Fetch thank_you_slips from Supabase with member-level query filtering
-    let slipsQuery = supabase.from('thank_you_slips').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `from_user_id.eq.${id}`,
-        `to_user_id.eq.${id}`,
-        `sender_id.eq.${id}`,
-        `receiver_id.eq.${id}`,
-        `submitted_by.eq.${id}`
-      ]).join(',');
-      slipsQuery = slipsQuery.or(orConds);
-    }
-    slipsQuery.then(
-      ({ data: sbSlips }) => {
-        if (sbSlips && sbSlips.length > 0) {
-          const mappedSbSlips = sbSlips.map((s: any) => {
-            const slipSender = String(s.from_user_id || s.fromUserId || s.submitted_by || s.sender_id || '');
-            const slipReceiver = String(s.to_user_id || s.toUserId || s.receiver_id || s.recipient_id || '');
-            return {
-              id: String(s.id),
-              referralId: String(s.referral_id || s.referralId || ''),
-              fromUserId: slipSender,
-              toUserId: slipReceiver,
-              customerName: s.customer_name || s.customerName || '',
-              businessValue: Number(s.business_value || s.businessValue || s.amount || 0),
-              notes: s.notes || '',
-              createdAt: s.created_at || s.createdAt || new Date().toISOString()
-            };
-          });
-          setAllSlips(prev => {
-            return deduplicateSlips([...prev, ...mappedSbSlips]);
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load slips notice:", err)
-    );
 
     // 3. Subscribe to referrals
     const unsubReferrals = databaseService.subscribe<any>('referrals', [], (data) => {
@@ -580,50 +633,6 @@ export function Analytics() {
       }
     });
 
-    // Fetch referrals from Supabase with member-level query filtering
-    let referralsQuery = supabase.from('referrals').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `from_user_id.eq.${id}`,
-        `to_user_id.eq.${id}`,
-        `sender_id.eq.${id}`,
-        `receiver_id.eq.${id}`
-      ]).join(',');
-      referralsQuery = referralsQuery.or(orConds);
-    }
-    referralsQuery.then(
-      ({ data: sbReferrals }) => {
-        if (sbReferrals && sbReferrals.length > 0) {
-          const mapped = sbReferrals.map((r: any) => ({
-            id: String(r.id),
-            fromUserId: String(r.from_user_id || r.sender_id || r.fromUserId || ''),
-            toUserId: String(r.to_user_id || r.receiver_id || r.toUserId || ''),
-            sender_id: r.sender_id,
-            receiver_id: r.receiver_id,
-            chapter_id: r.chapter_id || r.chapterId || null,
-            chapterName: r.chapter_name || r.chapterName || '',
-            status: r.status || 'Pending',
-            notes: r.notes || r.requirement || '',
-            business_requirement: r.business_requirement || r.requirement || '',
-            contact_name: r.contact_name || r.customer_name || '',
-            contact_phone: r.contact_phone || r.customer_mobile || '',
-            customerName: r.customer_name || r.contact_name || '',
-            fromUserName: r.from_user_name || r.fromUserName || r.sender_name || '',
-            toUserName: r.to_user_name || r.toUserName || r.receiver_name || '',
-            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-            updatedAt: r.updated_at || r.updatedAt || r.created_at || r.createdAt
-          }));
-          setAllReferrals(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            mapped.forEach(item => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load referrals notice:", err)
-    );
-
     // 4. Subscribe to 1-to-1s
     const unsub1to1s = databaseService.subscribe<any>('one_to_one_meetings', [], (data) => {
       const filtered = usePersonalStats
@@ -633,31 +642,6 @@ export function Analytics() {
       setCreatedOneToOnes(filtered);
       setParticipatedOneToOnes(filtered);
     });
-
-    let otoQuery = supabase.from('one_to_one_meetings').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `organizer_id.eq.${id}`,
-        `member_id.eq.${id}`,
-        `creator_id.eq.${id}`,
-        `receiver_id.eq.${id}`,
-        `sender_id.eq.${id}`
-      ]).join(',');
-      otoQuery = otoQuery.or(orConds);
-    }
-    otoQuery.then(
-      ({ data: sbOto }) => {
-        if (sbOto && sbOto.length > 0) {
-          setOneToOnes(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            sbOto.forEach((item: any) => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load 1-to-1s notice:", err)
-    );
 
     // 5. Subscribe to guest invitations
     const unsubGuests = databaseService.subscribe<any>('guest_invitations', [], (data) => {
@@ -670,58 +654,10 @@ export function Analytics() {
       setGuestInvitations(filtered);
     });
 
-    let guestQuery = supabase.from('guest_invitations').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `invited_by_user_id.eq.${id}`,
-        `invited_by.eq.${id}`,
-        `created_by.eq.${id}`
-      ]).join(',');
-      guestQuery = guestQuery.or(orConds);
-    }
-    guestQuery.then(
-      ({ data: sbGuests }) => {
-        if (sbGuests && sbGuests.length > 0) {
-          setGuestInvitations(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            sbGuests.forEach((item: any) => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load guest invitations notice:", err)
-    );
-
     // 6. Subscribe to meetings
     const unsubMeetings = databaseService.subscribe<any>('meetings', [], (data) => {
       setMeetings((data || []).map((m: any) => normalizeMeetingRecord({ ...m })));
     });
-
-    let meetQuery = supabase.from('meetings').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `admin_id.eq.${id}`,
-        `attendance->>${id}.neq.null`
-      ]).join(',');
-      meetQuery = meetQuery.or(orConds);
-    } else if (profile?.chapter_id) {
-      meetQuery = meetQuery.eq('chapter_id', profile.chapter_id);
-    }
-    meetQuery.then(
-      ({ data: sbMeetings }) => {
-        if (sbMeetings && sbMeetings.length > 0) {
-          const mapped = sbMeetings.map((m: any) => normalizeMeetingRecord({ ...m }));
-          setMeetings(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            mapped.forEach(item => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load meetings notice:", err)
-    );
 
     // 7. Subscribe to testimonials
     const unsubTestimonials = databaseService.subscribe<any>('testimonials', [], (data) => {
@@ -735,44 +671,8 @@ export function Analytics() {
       setAllTestimonials(filtered);
     });
 
-    let testQuery = supabase.from('testimonials').select('*');
-    if (usePersonalStats && userCandidateIds.length > 0) {
-      const orConds = userCandidateIds.flatMap(id => [
-        `author_id.eq.${id}`,
-        `receiver_id.eq.${id}`
-      ]).join(',');
-      testQuery = testQuery.or(orConds);
-    }
-    testQuery.then(
-      ({ data: sbTestimonials }) => {
-        if (sbTestimonials && sbTestimonials.length > 0) {
-          setAllTestimonials(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            sbTestimonials.forEach((item: any) => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load testimonials notice:", err)
-    );
-
     // 8. Subscribe to chapters
     const unsubChapters = databaseService.subscribe<any>('chapters', [], setAllChapters);
-
-    supabase.from('chapters').select('*').then(
-      ({ data: sbChapters }) => {
-        if (sbChapters && sbChapters.length > 0) {
-          setAllChapters(prev => {
-            const map = new Map<string, any>();
-            (prev || []).forEach(item => map.set(String(item.id), item));
-            sbChapters.forEach((item: any) => map.set(String(item.id), item));
-            return Array.from(map.values());
-          });
-        }
-      },
-      (err) => console.warn("Dashboard load chapters notice:", err)
-    );
 
     const unsubPresentations = databaseService.subscribe<any>('future_presentations', [], (data) => {
       setFuturePresentations(data || []);
@@ -790,7 +690,7 @@ export function Analytics() {
       unsubChapters();
       unsubPresentations();
     };
-  }, [profile]);
+  }, [profile?.uid, profile?.id, profile?.role, profile?.chapter_id, profile?.chapterId, usePersonalStats]);
 
   // Derive chapter-specific user IDs
   const chapterUserIds = useMemo(() => {
@@ -977,35 +877,52 @@ export function Analytics() {
     );
   }, [effectiveReferrals, chapterUserIds, userCandidateIds, usePersonalStats]);
 
+  const userCandidateIdSet = useMemo(() => new Set(userCandidateIds), [userCandidateIds]);
+  const chapterUserIdSet = useMemo(() => new Set(chapterUserIds), [chapterUserIds]);
+  const referralByIdMap = useMemo(() => {
+    const map = new Map<string, any>();
+    for (let i = 0; i < effectiveReferrals.length; i++) {
+      const r = effectiveReferrals[i];
+      if (r && r.id != null) map.set(String(r.id), r);
+    }
+    return map;
+  }, [effectiveReferrals]);
+
   const businessSentSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      const target = String(appliedMemberFilter);
       return effectiveSlips.filter(s => {
-        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const refId = s.referralId || s.referral_id;
+        const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
         const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
-        return senderId === String(appliedMemberFilter);
+        return senderId === target;
       });
     }
     return effectiveSlips.filter(s => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const refId = s.referralId || s.referral_id;
+      const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
       const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
-      return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
+      return usePersonalStats ? userCandidateIdSet.has(senderId) : chapterUserIdSet.has(senderId);
     });
-  }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
+  }, [effectiveSlips, referralByIdMap, chapterUserIdSet, userCandidateIdSet, appliedMemberFilter, profile?.role, usePersonalStats]);
 
   const businessReceivedSlips = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
+      const target = String(appliedMemberFilter);
       return effectiveSlips.filter(s => {
-        const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+        const refId = s.referralId || s.referral_id;
+        const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
         const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-        return receiverId === String(appliedMemberFilter);
+        return receiverId === target;
       });
     }
     return effectiveSlips.filter(s => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const refId = s.referralId || s.referral_id;
+      const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
       const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
-      return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
+      return usePersonalStats ? userCandidateIdSet.has(receiverId) : chapterUserIdSet.has(receiverId);
     });
-  }, [effectiveSlips, effectiveReferrals, chapterUserIds, userCandidateIds, appliedMemberFilter, profile, usePersonalStats]);
+  }, [effectiveSlips, referralByIdMap, chapterUserIdSet, userCandidateIdSet, appliedMemberFilter, profile?.role, usePersonalStats]);
 
   const referralsSentList = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN' && appliedMemberFilter !== 'ALL') {
@@ -1014,9 +931,9 @@ export function Analytics() {
     return effectiveReferrals.filter(r => {
       if (!isNormalReferral(r)) return false;
       const senderId = String(r.fromUserId || r.sender_id || r.from_user_id || '');
-      return usePersonalStats ? userCandidateIds.includes(senderId) : chapterUserIds.includes(senderId);
+      return usePersonalStats ? userCandidateIdSet.has(senderId) : chapterUserIdSet.has(senderId);
     });
-  }, [effectiveReferrals, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
+  }, [effectiveReferrals, chapterUserIdSet, userCandidateIdSet, profile?.role, appliedMemberFilter, usePersonalStats]);
 
   const referralsSentCount = useMemo(() => referralsSentList.length, [referralsSentList]);
 
@@ -1027,9 +944,9 @@ export function Analytics() {
     return effectiveReferrals.filter(r => {
       if (!isNormalReferral(r)) return false;
       const receiverId = String(r.toUserId || r.receiver_id || r.to_user_id || '');
-      return usePersonalStats ? userCandidateIds.includes(receiverId) : chapterUserIds.includes(receiverId);
+      return usePersonalStats ? userCandidateIdSet.has(receiverId) : chapterUserIdSet.has(receiverId);
     });
-  }, [effectiveReferrals, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
+  }, [effectiveReferrals, chapterUserIdSet, userCandidateIdSet, profile?.role, appliedMemberFilter, usePersonalStats]);
 
   const referralsReceivedCount = useMemo(() => referralsReceivedList.length, [referralsReceivedList]);
 
@@ -1039,9 +956,9 @@ export function Analytics() {
     }
     return effectiveTestimonials.filter(t => {
       const authorId = String(t.sender_id || t.from_user_id || t.authorMemberId || t.author_id || t.fromUserId || t.giver_uid || t.giver_id || '');
-      return usePersonalStats ? userCandidateIds.includes(authorId) : chapterUserIds.includes(authorId);
+      return usePersonalStats ? userCandidateIdSet.has(authorId) : chapterUserIdSet.has(authorId);
     });
-  }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
+  }, [effectiveTestimonials, chapterUserIdSet, userCandidateIdSet, profile?.role, appliedMemberFilter, usePersonalStats]);
 
   const testimonialsGivenCount = useMemo(() => testimonialsGivenList.length, [testimonialsGivenList]);
 
@@ -1051,19 +968,20 @@ export function Analytics() {
     }
     return effectiveTestimonials.filter(t => {
       const recipientId = String(t.receiver_id || t.to_user_id || t.recipientMemberId || t.recipient_id || t.toUserId || t.recipient_uid || '');
-      return usePersonalStats ? userCandidateIds.includes(recipientId) : chapterUserIds.includes(recipientId);
+      return usePersonalStats ? userCandidateIdSet.has(recipientId) : chapterUserIdSet.has(recipientId);
     });
-  }, [effectiveTestimonials, chapterUserIds, userCandidateIds, profile, appliedMemberFilter, usePersonalStats]);
+  }, [effectiveTestimonials, chapterUserIdSet, userCandidateIdSet, profile?.role, appliedMemberFilter, usePersonalStats]);
 
   const testimonialsReceivedCount = useMemo(() => testimonialsReceivedList.length, [testimonialsReceivedList]);
 
   const businessSentTotal = useMemo(() => {
     return businessSentSlips.reduce((sum, s) => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const refId = s.referralId || s.referral_id;
+      const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
       const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.transactionValue || 0);
       return sum + val;
     }, 0);
-  }, [businessSentSlips]);
+  }, [businessSentSlips, referralByIdMap]);
 
   // Business Generated is synchronized with Business Sent
   const businessGeneratedTotal = businessSentTotal;
@@ -1074,11 +992,12 @@ export function Analytics() {
 
   const businessReceivedTotal = useMemo(() => {
     return businessReceivedSlips.reduce((sum, s) => {
-      const ref = effectiveReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const refId = s.referralId || s.referral_id;
+      const ref = refId ? referralByIdMap.get(String(refId)) : undefined;
       const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.transactionValue || 0);
       return sum + val;
     }, 0);
-  }, [businessReceivedSlips]);
+  }, [businessReceivedSlips, referralByIdMap]);
 
   const businessReceivedCount = useMemo(() => {
     return businessReceivedSlips.length;
@@ -1313,6 +1232,39 @@ export function Analytics() {
     upcoming.sort((a, b) => getMeetingExactDateTime(a).getTime() - getMeetingExactDateTime(b).getTime());
     return upcoming[0];
   }, [effectiveMeetings, profile]);
+
+  const matchedUpcomingPresentations = useMemo(() => {
+    if (!upcomingChapterMeeting || futurePresentations.length === 0) return [];
+    const mChap = upcomingChapterMeeting.chapter_id || (upcomingChapterMeeting as any).chapterId;
+    return futurePresentations
+      .filter(p => {
+        const st = String(p.status || 'Scheduled').toUpperCase();
+        if (st === 'CANCELLED') return false;
+        const pDate = p.presentationDate || p.presentation_date;
+        if (!isSameMeetingDate(pDate, upcomingChapterMeeting.date)) return false;
+        const mId = String(p.memberId || p.member_id || '');
+        const memberObj = mId ? userMap.get(mId.toLowerCase()) : undefined;
+        const pChap = p.chapter_id || p.chapterId || memberObj?.chapter_id || memberObj?.chapterId;
+        if (mChap && pChap && String(mChap) !== String(pChap)) return false;
+        return true;
+      })
+      .map(p => {
+        const mId = String(p.memberId || p.member_id || '');
+        const matchedMember =
+          (mId ? userMap.get(mId.toLowerCase()) : undefined) ||
+          (profile && (String(profile.uid || profile.id) === mId || String(profile.id) === mId || String(profile.uid) === mId) ? profile : null);
+        const memberName = p.memberName || p.member_name || (matchedMember ? getCleanFullName(matchedMember.name) : 'Member');
+        const memberCategory =
+          matchedMember?.category ||
+          (matchedMember as any)?.business_category ||
+          (matchedMember as any)?.businessCategory ||
+          p.memberCategory ||
+          p.member_category ||
+          p.category ||
+          'N/A';
+        return { id: p.id, memberName, memberCategory };
+      });
+  }, [upcomingChapterMeeting, futurePresentations, userMap, profile]);
 
   const oneToOneMeetingsCount = useMemo(() => {
     if (profile?.role === 'MASTER_ADMIN') {
@@ -2480,26 +2432,17 @@ export function Analytics() {
     };
   }, [allReferrals, allSlips, oneToOnes, guestInvitations, allTestimonials, profile]);
 
-  // Count up animation to dynamicGrowthScore
-  useEffect(() => {
-    let start = 0;
-    const end = dynamicGrowthScore;
-    const duration = 1500; // 1.5 seconds
-    const startTime = performance.now();
+  const activeFocusTasks = useMemo(() => ({
+    attendMeeting: hasAttendedMeeting,
+    passReferral: hasPassedReferral,
+    scheduleOneToOne: hasScheduledOneToOne,
+    followUpReferral: hasFollowedUpReferral,
+    inviteGuest: hasInvitedGuest
+  }), [hasAttendedMeeting, hasPassedReferral, hasScheduledOneToOne, hasFollowedUpReferral, hasInvitedGuest]);
 
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3); // easeOutCubic
-      setScore(Math.floor(ease * end));
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [dynamicGrowthScore, profile]);
+  const handleOpenFilterModal = useCallback(() => {
+    setIsFilterModalOpen(true);
+  }, []);
 
   const handleGrowScoreClick = () => {
     const element = document.getElementById('workspace-checklist');
@@ -3182,6 +3125,21 @@ export function Analytics() {
     }
   };
 
+  const handleStatCardClick = useCallback(async (label: string) => {
+    setAnalyticsModalCategory(label);
+    setAnalyticsLoading(true);
+    setAnalyticsError(false);
+    setAnalyticsModalRecords([]);
+    try {
+      await fetchAnalyticsDataForCategory(label, activeDateRange);
+    } catch (e) {
+      console.error("Error loading analytics records:", e);
+      setAnalyticsError(true);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [activeDateRange, fetchAnalyticsDataForCategory]);
+
   const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
 
@@ -3439,78 +3397,12 @@ const getGreeting = () => {
           </div>
 
           {/* Center Block: Health Score Circle (Reduced Size by 10%) */}
-          <div className="relative z-10 flex items-center justify-center shrink-0 w-[115px] md:w-[130px] h-[115px] md:h-[130px] md:mr-16 lg:mr-24 mt-3 md:mt-0">
-             {/* Circular Gauge */}
-             <div className="absolute inset-0 rounded-full border-[6px] border-[#111827] shadow-[0_0_20px_rgba(0,0,0,0.4)]" />
-             
-             {/* Spinning/pulsing subtle gradient circle glow */}
-             <motion.div 
-               animate={{ rotate: 360 }}
-               transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-               className="absolute inset-[-4px] rounded-full opacity-40 blur-[8px] border-2 border-dashed border-[#E53935]"
-             />
-
-             <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 relative z-10">
-               <defs>
-                 <linearGradient id="score-grad-new" x1="0" y1="0" x2="1" y2="1">
-                   <stop offset="0%" stopColor="#E53935" />
-                   <stop offset="50%" stopColor="#8B5CF6" />
-                   <stop offset="100%" stopColor="#10B981" />
-                 </linearGradient>
-               </defs>
-               {/* Background Track */}
-               <circle 
-                 cx="50" 
-                 cy="50" 
-                 r="44" 
-                 stroke="#1a2233" 
-                 strokeWidth="6" 
-                 fill="none" 
-               />
-               {/* Progress Ring */}
-               <circle 
-                 cx="50" 
-                 cy="50" 
-                 r="44" 
-                 stroke="url(#score-grad-new)" 
-                 strokeWidth="6" 
-                 fill="none" 
-                 strokeDasharray="276" 
-                 strokeDashoffset={276 - (276 * Math.min(100, Math.max(0, score))) / 100}
-                 strokeLinecap="round" 
-                 className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(229,57,53,0.6)]" 
-               />
-             </svg>
-             <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
-               <span className="text-[26px] md:text-[30px] font-extrabold text-white leading-none tracking-tighter">{score}%</span>
-               <span className="text-[7px] md:text-[8px] font-bold text-[#9CA3AF] uppercase tracking-widest mt-0.5">{showChapterScoreGauge ? 'GLOBAL SCORE' : 'MY GROWTH SCORE'}</span>
-               <div className={cn("mt-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold tracking-wider border", growthStatusColor)}>
-                 {growthStatus}
-               </div>
-             </div>
-             
-             {/* Trend Indicators (Right Side Desktop Sync) - Hidden per user request */}
-             {/* 
-             <div className="absolute -right-20 top-1/2 -translate-y-1/2 flex flex-col gap-3.5 hidden md:flex">
-                <div className="flex flex-col">
-                  <div className={cn("flex items-center gap-1 font-bold text-[11px]", weeklyGrowth.isPositive ? "text-emerald-400" : weeklyGrowth.isNegative ? "text-red-400" : "text-[#9CA3AF]")}>
-                    {weeklyGrowth.isPositive && <TrendingUp size={13} strokeWidth={3} />}
-                    {weeklyGrowth.isNegative && <TrendingDown size={13} strokeWidth={3} />}
-                    {weeklyGrowth.formatted}
-                  </div>
-                  <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Weekly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last week</span></span>
-                </div>
-                <div className="flex flex-col">
-                  <div className={cn("flex items-center gap-1 font-bold text-[11px]", monthlyGrowth.isPositive ? "text-emerald-400" : monthlyGrowth.isNegative ? "text-red-400" : "text-[#9CA3AF]")}>
-                    {monthlyGrowth.isPositive && <TrendingUp size={13} strokeWidth={3} />}
-                    {monthlyGrowth.isNegative && <TrendingDown size={13} strokeWidth={3} />}
-                    {monthlyGrowth.formatted}
-                  </div>
-                  <span className="text-[10px] font-bold text-[#D1D5DB] mt-0.5 leading-tight">Monthly<br/><span className="text-[#9CA3AF] font-medium text-[8px]">vs last month</span></span>
-                </div>
-             </div>
-             */}
-          </div>
+          <GrowthScoreGauge
+            targetScore={dynamicGrowthScore}
+            showChapterScoreGauge={showChapterScoreGauge}
+            growthStatus={growthStatus}
+            growthStatusColor={growthStatusColor}
+          />
         </div>
 
         {/* Right Block: Platinum Membership Card (Floating, Glow, Animated Fill) */}
@@ -3620,53 +3512,19 @@ const getGreeting = () => {
                     <span className="truncate">{upcomingChapterMeeting.location || upcomingChapterMeeting.venue || 'TBA'}</span>
                   </div>
                 </div>
-                {(() => {
-                  const matchedPresentations = futurePresentations.filter(p => {
-                    const st = String(p.status || 'Scheduled').toUpperCase();
-                    if (st === 'CANCELLED') return false;
-                    const pDate = p.presentationDate || p.presentation_date;
-                    if (!isSameMeetingDate(pDate, upcomingChapterMeeting.date)) return false;
-                    const mChap = upcomingChapterMeeting.chapter_id || (upcomingChapterMeeting as any).chapterId;
-                    const mId = p.memberId || p.member_id;
-                    const memberObj = allUsersList.find(u => String(u.uid || u.id) === String(mId));
-                    const pChap = p.chapter_id || p.chapterId || memberObj?.chapter_id || memberObj?.chapterId;
-                    if (mChap && pChap && String(mChap) !== String(pChap)) return false;
-                    return true;
-                  });
-
-                  if (matchedPresentations.length === 0) return null;
-
-                  return (
-                    <div className="flex flex-wrap items-center gap-2 mt-2.5">
-                      {matchedPresentations.map((p) => {
-                        const mId = p.memberId || p.member_id;
-                        const matchedMember =
-                          allUsersList.find(u => String(u.uid || u.id) === String(mId) || String(u.id) === String(mId) || String(u.uid) === String(mId)) ||
-                          chapterUsers.find(u => String(u.uid || u.id) === String(mId) || String(u.id) === String(mId) || String(u.uid) === String(mId)) ||
-                          (profile && (String(profile.uid || profile.id) === String(mId) || String(profile.id) === String(mId) || String(profile.uid) === String(mId)) ? profile : null);
-                        const memberName = p.memberName || p.member_name || (matchedMember ? getCleanFullName(matchedMember.name) : 'Member');
-                        const memberCategory =
-                          matchedMember?.category ||
-                          (matchedMember as any)?.business_category ||
-                          (matchedMember as any)?.businessCategory ||
-                          p.memberCategory ||
-                          p.member_category ||
-                          p.category ||
-                          'N/A';
-
-                        return (
-                          <div
-                            key={p.id}
-                            className="inline-flex flex-col items-start gap-0.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-white"
-                          >
-                            <span className="text-red-400 font-extrabold">Feature Presentation by {memberName}</span>
-                            <span className="text-neutral-300 font-bold">Category: {memberCategory}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
+                {matchedUpcomingPresentations.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    {matchedUpcomingPresentations.map((p) => (
+                      <div
+                        key={p.id}
+                        className="inline-flex flex-col items-start gap-0.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs font-bold text-white"
+                      >
+                        <span className="text-red-400 font-extrabold">Feature Presentation by {p.memberName}</span>
+                        <span className="text-neutral-300 font-bold">Category: {p.memberCategory}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3786,20 +3644,7 @@ const getGreeting = () => {
             meetingsAttendedCount={userMeetingsAttended}
             oneToOneScheduledCount={userOneToOnesScheduled}
             oneToOneCompletedCount={userOneToOnesCompleted}
-            onCardClick={async (label) => {
-              setAnalyticsModalCategory(label);
-              setAnalyticsLoading(true);
-              setAnalyticsError(false);
-              setAnalyticsModalRecords([]);
-              try {
-                await fetchAnalyticsDataForCategory(label, activeDateRange);
-              } catch (e) {
-                console.error("Error loading analytics records:", e);
-                setAnalyticsError(true);
-              } finally {
-                setAnalyticsLoading(false);
-              }
-            }}
+            onCardClick={handleStatCardClick}
           />
         </>
       )}
@@ -3808,28 +3653,22 @@ const getGreeting = () => {
       {profile?.role !== 'MASTER_ADMIN' && (
         <MemberCompanionView
           profile={profile}
-          dynamicContext={{ period: 'Weekly', priority: 'Engage', tip: '', badge: '' }}
+          dynamicContext={STATIC_DYNAMIC_CONTEXT}
           completedFocusCount={completedFocusCount}
           focusProgressPercent={focusProgressPercent}
-          activeFocusTasks={{ 
-            attendMeeting: hasAttendedMeeting, 
-            passReferral: hasPassedReferral, 
-            scheduleOneToOne: hasScheduledOneToOne, 
-            followUpReferral: hasFollowedUpReferral, 
-            inviteGuest: hasInvitedGuest 
-          }}
+          activeFocusTasks={activeFocusTasks}
           handleToggleTask={handleToggleTask}
           nextMeeting={upcomingChapterMeeting}
-          countdown={{ days: 0, hours: 0, minutes: 0 }}
+          countdown={STATIC_COUNTDOWN}
           finalRecentActivities={filteredRecentActivities}
           businessGrowthScore={memberGrowthScoreData.score}
           daysAnalysedText={memberGrowthScoreData.daysAnalysedText}
           scoreText={memberGrowthScoreData.scoreText}
-          onOpenFilterModal={() => setIsFilterModalOpen(true)}
-          currentMonthMetrics={{}}
+          onOpenFilterModal={handleOpenFilterModal}
+          currentMonthMetrics={STATIC_CURRENT_MONTH_METRICS}
           hasLoggedOneToOne={hasScheduledOneToOne}
           hasSentThankYouSlip={false}
-          recommendation={{ title: 'Schedule 1-to-1', description: 'Schedule 1-to-1 sessions to boost network visibility.', action: 'Schedule', link: '/one-to-one' }}
+          recommendation={STATIC_RECOMMENDATION}
           isHighlightActive={isChecklistHighlighted}
           chapterName={resolvedChapterName}
           todayTasks={todayTasks}
@@ -3854,7 +3693,7 @@ const getGreeting = () => {
           globalBusinessGenerated={businessGeneratedTotal}
           globalReferralsCount={referralsPassedCount}
           finalRecentActivities={filteredRecentActivities}
-          setActiveTab={() => {}}
+          setActiveTab={NOOP_CALLBACK}
           topPerformingChapters={topPerformingChapters}
           allSlips={effectiveSlips}
           allReferrals={effectiveReferrals}
@@ -4009,7 +3848,7 @@ const getGreeting = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setAnalyticsModalCategory(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-md transition-all duration-500"
+              className="absolute inset-0 bg-black/75 transition-opacity duration-150"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}

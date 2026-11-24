@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
@@ -10,10 +10,8 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil, isChapterLeaderRole } from '../utils/authUtils';
-import { differenceInDays } from 'date-fns';
-import { databaseService } from '../services/databaseService';
+import { Notification } from '../types';
 import { notificationService } from '../services/notificationService';
-import {  where  } from '../lib/database';
 import { BrandLogo } from './BrandLogo';
 import { NotificationPopover } from './notifications/NotificationPopover';
 import { ThemeToggle } from './ThemeToggle';
@@ -32,7 +30,7 @@ export function Layout() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
 
-  const toggleDesktopCollapsed = () => {
+  const toggleDesktopCollapsed = useCallback(() => {
     setIsDesktopCollapsed((prev: boolean) => {
       const next = !prev;
       try {
@@ -40,23 +38,36 @@ export function Layout() {
       } catch (e) {}
       return next;
     });
-  };
+  }, []);
   
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, logout } = useAuth();
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+
+  const unreadCount = useMemo(
+    () => notifications.filter(n => !n.read && !n.is_read).length,
+    [notifications]
+  );
 
   useEffect(() => {
     const userId = profile?.uid || profile?.id;
-    if (!userId) return;
+    if (!userId) {
+      setNotifications([]);
+      setNotificationsLoading(false);
+      return;
+    }
 
+    setNotificationsLoading(true);
     const unsubscribe = notificationService.subscribeUserNotifications(
       userId,
-      undefined,
+      (newNotif) => {
+        setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+      },
       (list) => {
-        const unread = list.filter(n => !n.read && !n.is_read).length;
-        setUnreadCount(unread);
+        setNotifications(list);
+        setNotificationsLoading(false);
       }
     );
 
@@ -142,13 +153,13 @@ export function Layout() {
       
       {/* Main Content Area */}
       <main className={cn(
-        "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-all duration-300",
+        "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-[margin] duration-200",
         "pb-[110px] lg:pb-0", // padding for floating mobile bottom nav
         isDesktopCollapsed ? "lg:ml-[78px]" : "lg:ml-[280px]"
       )}>
         
         {/* Top Header */}
-        <header className="bg-[#05070E]/80 backdrop-blur-xl sticky top-0 z-40 px-3 sm:px-5 lg:px-8 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5 transition-all">
+        <header className="bg-[#05070E]/90 backdrop-blur-md sticky top-0 z-40 px-3 sm:px-5 lg:px-8 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5">
           
           <div className="flex items-center gap-3 sm:gap-5 lg:gap-6 min-w-0 flex-1">
             <button 
@@ -219,6 +230,9 @@ export function Layout() {
                 isOpen={isNotificationOpen} 
                 onClose={() => setIsNotificationOpen(false)} 
                 anchorRef={bellButtonRef}
+                notifications={notifications}
+                loading={notificationsLoading}
+                onNotificationsChange={setNotifications}
               />
             </div>
 
@@ -261,7 +275,7 @@ export function Layout() {
       </main>
 
       {/* Mobile Bottom Navigation Menu */}
-      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-[74px] rounded-[20px] bg-[#111827]/85 backdrop-blur-xl border border-white/5 px-2 flex items-center justify-around z-40 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-[74px] rounded-[20px] bg-[#111827]/95 backdrop-blur-md border border-white/5 px-2 flex items-center justify-around z-40 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
         {mobileNavItems.map((item, idx) => {
           const isActive = item.path ? location.pathname === item.path : false;
           const isSelected = item.isAction ? isBottomSheetOpen : isActive;
@@ -329,8 +343,8 @@ export function Layout() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-[#000000]/80 backdrop-blur-md z-[50] md:hidden cursor-pointer"
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-[#000000]/80 z-[50] md:hidden cursor-pointer"
               onClick={() => setIsBottomSheetOpen(false)}
             />
             <motion.div

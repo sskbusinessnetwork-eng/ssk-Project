@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { Search, ChevronDown, X, Check, Building2, Users, Tag } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCleanFullName, getDisplayPosition } from '../utils/authUtils';
@@ -215,6 +215,7 @@ export function OfflineReferralMemberSelect({
 }: OfflineReferralMemberSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [chapterFilter, setChapterFilter] = useState<string>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -297,8 +298,8 @@ export function OfflineReferralMemberSelect({
       list = list.filter((m) => m.chapterName === chapterFilter);
     }
 
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase().trim();
+    if (deferredSearchTerm.trim()) {
+      const q = deferredSearchTerm.toLowerCase().trim();
       list = list.filter((m) => {
         return (
           m.displayName.toLowerCase().includes(q) ||
@@ -310,7 +311,7 @@ export function OfflineReferralMemberSelect({
     }
 
     return list;
-  }, [sortedMembers, chapterFilter, normalizedUserChapId, searchTerm]);
+  }, [sortedMembers, chapterFilter, normalizedUserChapId, deferredSearchTerm]);
 
   // Group filtered members chapter-wise (My Chapter first, then alphabetical chapters; members A-Z inside each)
   const groupedByChapter = useMemo(() => {

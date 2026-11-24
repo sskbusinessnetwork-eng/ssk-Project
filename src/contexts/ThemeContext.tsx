@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 export type AppTheme = 'default' | 'day';
 
@@ -24,18 +24,26 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  const setTheme = (newTheme: AppTheme) => {
+  const setTheme = useCallback((newTheme: AppTheme) => {
     setThemeState(newTheme);
     try {
       localStorage.setItem('ssk_app_theme', newTheme);
     } catch (e) {
       console.warn('Failed to save theme in localStorage', e);
     }
-  };
+  }, []);
 
-  const toggleTheme = () => {
-    setTheme(theme === 'day' ? 'default' : 'day');
-  };
+  const toggleTheme = useCallback(() => {
+    setThemeState(prev => {
+      const next = prev === 'day' ? 'default' : 'day';
+      try {
+        localStorage.setItem('ssk_app_theme', next);
+      } catch (e) {
+        console.warn('Failed to save theme in localStorage', e);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -54,8 +62,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [theme]);
 
+  const contextValue = useMemo(
+    () => ({ theme, setTheme, toggleTheme }),
+    [theme, setTheme, toggleTheme]
+  );
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );

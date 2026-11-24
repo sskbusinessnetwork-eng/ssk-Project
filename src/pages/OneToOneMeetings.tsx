@@ -166,6 +166,7 @@ export function OneToOneMeetings() {
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
   const [chapterMap, setChapterMap] = useState<Map<string, string>>(new Map());
+  const chapterMapRef = useRef<Map<string, string>>(new Map());
   const categoryLookupRef = useRef<{ categoryMap: Map<string, string>; validCategoryNames: Set<string> }>({
     categoryMap: new Map(),
     validCategoryNames: new Set()
@@ -281,6 +282,7 @@ export function OneToOneMeetings() {
             cmap.set(String(c.id).trim(), chapLabel);
           }
         });
+        chapterMapRef.current = cmap;
         setChapterMap(cmap);
       }
 
@@ -322,7 +324,35 @@ export function OneToOneMeetings() {
     }
   }, [profile?.chapter_id, profile?.chapterId, profile?.role, normalizeFetchedUser]);
 
-  const fetchMeetingsAndUsers = async () => {
+  const formatOneToOneMeetingsList = useCallback((rows: any[]): OneToOneMeeting[] => {
+    return (rows || []).map((m: any) => {
+      const senderId = m.sender_id || m.organizer_id || m.creatorId;
+      const receiverId = m.receiver_id || m.member_id || (m.participant_ids && m.participant_ids[0]) || (m.participantIds && m.participantIds[0]);
+
+      return {
+        id: m.id,
+        title: m.title || '1:1 Meeting',
+        organizer_id: senderId,
+        creatorId: senderId,
+        sender_id: senderId,
+        member_id: receiverId,
+        receiver_id: receiverId,
+        participantIds: [receiverId].filter(Boolean),
+        chapter_id: m.chapter_id,
+        date: m.scheduled_date || m.date || new Date().toISOString().split('T')[0],
+        time: m.scheduled_time || m.meeting_time || m.time || '10:00 AM',
+        venue: m.meeting_location || m.venue || 'Online Meeting',
+        notes: m.notes || '',
+        status: m.status || 'UPCOMING',
+        attendance: m.attendance || {},
+        is_recurring: m.is_recurring || false,
+        recurring_schedule_id: m.recurring_schedule_id || null,
+        createdAt: m.created_at || m.createdAt
+      } as OneToOneMeeting;
+    });
+  }, []);
+
+  const fetchMeetingsAndUsers = useCallback(async () => {
     try {
       setLoading(true);
       await refreshUsersAndChapters();
@@ -334,47 +364,21 @@ export function OneToOneMeetings() {
         .order('scheduled_date', { ascending: false });
 
       if (meetingsData && !mErr) {
-        const formattedMeetings = meetingsData.map((m: any) => {
-          const senderId = m.sender_id || m.organizer_id || m.creatorId;
-          const receiverId = m.receiver_id || m.member_id || (m.participant_ids && m.participant_ids[0]) || (m.participantIds && m.participantIds[0]);
-
-          return {
-            id: m.id,
-            title: m.title || '1:1 Meeting',
-            organizer_id: senderId,
-            creatorId: senderId,
-            sender_id: senderId,
-            member_id: receiverId,
-            receiver_id: receiverId,
-            participantIds: [receiverId].filter(Boolean),
-            chapter_id: m.chapter_id,
-            date: m.scheduled_date || m.date || new Date().toISOString().split('T')[0],
-            time: m.scheduled_time || m.meeting_time || m.time || '10:00 AM',
-            venue: m.meeting_location || m.venue || 'Online Meeting',
-            notes: m.notes || '',
-            status: m.status || 'UPCOMING',
-            attendance: m.attendance || {},
-            is_recurring: m.is_recurring || false,
-            recurring_schedule_id: m.recurring_schedule_id || null,
-            createdAt: m.created_at || m.createdAt
-          } as OneToOneMeeting;
-        });
-
-        setMeetings(formattedMeetings);
+        setMeetings(formatOneToOneMeetingsList(meetingsData));
       }
     } catch (err) {
       console.error("Fetch meetings and users error:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshUsersAndChapters, formatOneToOneMeetingsList]);
 
   useEffect(() => {
     if (!profile) return;
 
-    fetchMeetingsAndUsers();
+    refreshUsersAndChapters();
 
-    // Fetch meetings subscription
+    // Fetch & subscribe to meetings (databaseService.subscribe handles initial load + realtime + dashboard-refresh)
     const meetingsConstraints = (isAdmin || isChapterAdmin)
       ? [orderBy('scheduled_date', 'desc')]
       : [
@@ -390,28 +394,32 @@ export function OneToOneMeetings() {
     const unsubscribe = databaseService.subscribe<OneToOneMeeting>(
       'one_to_one_meetings',
       meetingsConstraints,
-      () => {
-        fetchMeetingsAndUsers();
+      (data) => {
+        setMeetings(formatOneToOneMeetingsList(data || []));
+        setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [profile, isAdmin, isChapterAdmin]);
+  }, [profile?.uid, profile?.chapter_id, profile?.role, isAdmin, isChapterAdmin, refreshUsersAndChapters, formatOneToOneMeetingsList]);
 
-  // Listen for profile-updated, members-refresh, and dashboard-refresh events
+  // Listen for profile-updated and members-refresh events (debounced); dashboard-refresh is already handled by subscribe()
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const handleRefresh = () => {
-      fetchMeetingsAndUsers();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        refreshUsersAndChapters();
+      }, 200);
     };
     window.addEventListener('profile-updated', handleRefresh);
     window.addEventListener('members-refresh', handleRefresh);
-    window.addEventListener('dashboard-refresh', handleRefresh);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('profile-updated', handleRefresh);
       window.removeEventListener('members-refresh', handleRefresh);
-      window.removeEventListener('dashboard-refresh', handleRefresh);
     };
-  }, []);
+  }, [refreshUsersAndChapters]);
 
   // Derive Logged In User Record & Chapter ID
   const currentAuthId = profile?.id || profile?.uid;
@@ -438,7 +446,7 @@ export function OneToOneMeetings() {
         ({ data, error }) => {
           if (data && !error) {
             const { categoryMap, validCategoryNames } = categoryLookupRef.current;
-            const updatedUser = normalizeFetchedUser(data, categoryMap, validCategoryNames, chapterMap);
+            const updatedUser = normalizeFetchedUser(data, categoryMap, validCategoryNames, chapterMapRef.current);
             setAllUsersList(prev => {
               const idx = prev.findIndex(u => String(u.id) === String(currentAuthId) || String(u.uid) === String(currentAuthId));
               if (idx >= 0) {
@@ -452,7 +460,7 @@ export function OneToOneMeetings() {
         },
         (err) => console.warn("OneToOneMeetings current user sync notice:", err)
       );
-  }, [currentAuthId, normalizeFetchedUser, chapterMap]);
+  }, [currentAuthId, normalizeFetchedUser]);
 
   const currentUserId = currentUserRecord?.id || profile?.id;
   const currentUserChapterId = currentUserRecord?.chapter_id || profile?.chapter_id;

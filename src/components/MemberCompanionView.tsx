@@ -55,7 +55,7 @@ interface MemberCompanionViewProps {
   allReferrals?: any[];
 }
 
-export function MemberCompanionView({
+export const MemberCompanionView = React.memo(function MemberCompanionView({
   profile,
   completedFocusCount,
   focusProgressPercent,
@@ -126,12 +126,18 @@ export function MemberCompanionView({
     let todayBusiness = 0;
 
     const todayStr = now.toDateString();
+    const referralById = new Map<string, any>();
+    for (let i = 0; i < allReferrals.length; i++) {
+      const r = allReferrals[i];
+      if (r && r.id != null) referralById.set(String(r.id), r);
+    }
 
     userSlips.forEach(s => {
       const val = Number(s.businessValue || s.business_value || s.transactionValue) || 0;
       const d = new Date(s.createdAt || s.date);
       
-      const ref = allReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+      const slipRefId = s.referralId || s.referral_id;
+      const ref = slipRefId ? referralById.get(String(slipRefId)) : undefined;
       const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id || '');
       const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by || '');
       
@@ -949,4 +955,4 @@ export function MemberCompanionView({
 
     </div>
   );
-}
+});

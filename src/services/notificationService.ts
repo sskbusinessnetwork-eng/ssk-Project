@@ -450,8 +450,21 @@ export const notificationService = {
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {
+      const [
+        { data: rawMeetings },
+        { data: rawReferrals },
+        { data: rawChapters },
+        { data: rawGuests }
+      ] = await Promise.all([
+        supabase.from('one_to_one_meetings').select('creator_id, sender_id, member_id, receiver_id, date, scheduled_date, status'),
+        supabase.from('referrals').select('from_user_id, sender_id, to_user_id, receiver_id, status, created_at'),
+        userProfile?.chapter_id
+          ? supabase.from('chapters').select('id, chapter_name, next_meeting_date, meeting_date, meeting_venue').eq('id', userProfile.chapter_id)
+          : Promise.resolve({ data: null }),
+        supabase.from('guest_registrations').select('admin_id, user_id, meeting_date')
+      ]);
+
       // 1. One-to-One Meetings Today
-      const { data: rawMeetings } = await supabase.from('one_to_one_meetings').select('*');
       if (rawMeetings) {
         const userMeetingsToday = rawMeetings.filter(m => {
           const isParticipant = String(m.creator_id || m.sender_id) === String(userId) || String(m.member_id || m.receiver_id) === String(userId);
@@ -492,7 +505,6 @@ export const notificationService = {
       }
 
       // 3. Pending Referrals
-      const { data: rawReferrals } = await supabase.from('referrals').select('*');
       if (rawReferrals) {
         const pendingRefs = rawReferrals.filter(r => {
           const isUser = String(r.from_user_id || r.sender_id) === String(userId) || String(r.to_user_id || r.receiver_id) === String(userId);
@@ -529,9 +541,8 @@ export const notificationService = {
       }
 
       // 5. Chapter Meeting Today
-      const { data: rawChapters } = await supabase.from('chapters').select('*');
       if (rawChapters && userProfile?.chapter_id) {
-        const userChap = rawChapters.find(c => String(c.id) === String(userProfile.chapter_id));
+        const userChap = (rawChapters as any[]).find(c => String(c.id) === String(userProfile.chapter_id));
         if (userChap && (userChap.next_meeting_date === todayStr || userChap.meeting_date === todayStr)) {
           items.push({
             id: 'task-chapter-meeting-today',
@@ -579,9 +590,8 @@ export const notificationService = {
       }
 
       // 8. Pending Guest Meetings / Invitations Today
-      const { data: rawGuests } = await supabase.from('guest_registrations').select('*');
       if (rawGuests) {
-        const guestsToday = rawGuests.filter(g => {
+        const guestsToday = (rawGuests as any[]).filter(g => {
           const isHost = String(g.admin_id) === String(userId) || String(g.user_id) === String(userId);
           const gDate = g.meeting_date || g.meetingDate;
           return isHost && gDate === todayStr;
@@ -633,7 +643,9 @@ export const notificationService = {
       }
 
       // 2. One-to-One Meeting Reminders (1 Day, 1 Hour, 15 Mins, Attendance Pending)
-      const { data: meetings } = await supabase.from('one_to_one_meetings').select('*');
+      const { data: meetings } = await supabase
+        .from('one_to_one_meetings')
+        .select('id, creator_id, sender_id, member_id, receiver_id, status, date, scheduled_date, time, scheduled_time');
       if (meetings) {
         for (const m of meetings) {
           const isParticipant = String(m.creator_id || m.sender_id) === String(userId) || String(m.member_id || m.receiver_id) === String(userId);

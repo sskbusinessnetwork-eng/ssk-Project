@@ -59,7 +59,7 @@ export function GlobalToast() {
               exit={{ opacity: 0, scale: 0.9, y: -16 }}
               transition={{ type: 'spring', stiffness: 450, damping: 30 }}
               role="alert"
-              className={`pointer-events-auto relative w-full rounded-2xl border ${borderColor} shadow-2xl backdrop-blur-2xl overflow-hidden p-4 sm:p-5 flex flex-col gap-3 text-white`}
+              className={`pointer-events-auto relative w-full rounded-2xl border ${borderColor} shadow-2xl overflow-hidden p-4 sm:p-5 flex flex-col gap-3 text-white`}
               style={{
                 boxShadow: isError 
                   ? '0 20px 40px -15px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(239, 68, 68, 0.15)'

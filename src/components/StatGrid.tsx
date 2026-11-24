@@ -39,7 +39,7 @@ interface StatGridProps {
   onCardClick?: (label: string) => void;
 }
 
-export default function StatGrid({
+const StatGrid = React.memo(function StatGrid({
   role = 'MEMBER',
   position = '',
   totalChaptersCount = 0,
@@ -299,7 +299,7 @@ export default function StatGrid({
               } : undefined}
               whileTap={isClickable ? { scale: 0.98 } : undefined}
               transition={{ type: "spring", stiffness: 220, damping: 20 }}
-              className={`bg-[#080d1a]/95 backdrop-blur-xl rounded-[16px] px-3.5 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-between transition-all duration-300 group col-span-1 w-full gap-2.5 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
+              className={`bg-[#080d1a]/95 rounded-[16px] px-3.5 py-3 shadow-[0_6px_20px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-between transition-colors duration-150 group col-span-1 w-full gap-2.5 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
             >
               {/* Top Row: Icon + Title */}
               <div className="flex items-center gap-3 w-full">
@@ -383,7 +383,7 @@ export default function StatGrid({
             } : undefined}
             whileTap={isClickable ? { scale: 0.97 } : undefined}
             transition={{ type: "spring", stiffness: 220, damping: 20 }}
-            className={`bg-[#0F172A]/80 backdrop-blur-md rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[82px] sm:h-[135px] transition-all duration-300 group col-span-1 w-full gap-1 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
+            className={`bg-[#0F172A]/95 rounded-[14px] px-[12px] py-[10px] sm:p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.5)] border border-white/10 flex flex-col justify-center items-center text-center h-[82px] sm:h-[135px] transition-colors duration-150 group col-span-1 w-full gap-1 ${isClickable ? 'cursor-pointer hover:border-white/25 active:scale-[0.98]' : 'cursor-default'}`}
           >
             <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${stat.bg}`}>
               <Icon size={15} strokeWidth={2.5} />
@@ -412,4 +412,6 @@ export default function StatGrid({
       })}
     </motion.div>
   );
-}
+});
+
+export default StatGrid;

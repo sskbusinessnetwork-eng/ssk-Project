@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setDoc } from '../lib/database';
 import { UserProfile } from '../types';
 import { supabase } from '../lib/supabaseClient';
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const login = async (userProfile: UserProfile) => {
+  const login = useCallback(async (userProfile: UserProfile) => {
     const verifiedProfile = await ensureUserChapterId(userProfile);
     const userId = verifiedProfile.id || verifiedProfile.uid;
     const finalProfile = {
@@ -84,9 +84,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       phone: finalProfile.phone,
       profile: finalProfile
     }));
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch(e) {}
     setUser(null);
     setProfile(null);
@@ -97,9 +97,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .replace(/^ +/, "")
         .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
-  };
+  }, []);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     const savedUser = localStorage.getItem('user');
     if (!savedUser) return;
     try {
@@ -153,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error("Error refreshing profile:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const syncProfile = async () => {
@@ -261,8 +261,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     syncProfile();
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ user, profile, loading, error, login, logout, refreshProfile }),
+    [user, profile, loading, error, login, logout, refreshProfile]
+  );
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, error, login, logout, refreshProfile }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

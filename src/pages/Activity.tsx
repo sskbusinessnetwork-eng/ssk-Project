@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -139,6 +139,7 @@ export function Activity() {
   // Filters
   const [filterType, setFilterType] = useState<'all' | 'referrals' | 'slips' | 'testimonials'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -187,13 +188,13 @@ export function Activity() {
   }, []);
 
   // Fetch all Referrals and Thank You Slips
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(async (silent = false) => {
     if (!currentUserId && profile?.role !== 'MASTER_ADMIN') {
-      setLoading(false);
+      if (!silent) setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       // 1. Fetch Referrals
       let refQuery = supabase
@@ -348,31 +349,34 @@ export function Activity() {
     } catch (err) {
       console.error('Error fetching activities:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [currentUserId, profile?.role]);
 
   useEffect(() => {
     fetchUsers();
-    fetchActivities();
+    fetchActivities(false);
   }, [fetchUsers, fetchActivities]);
 
-  // Real-time listener on referrals & thank_you_slips
+  // Real-time listener on referrals & thank_you_slips (debounced silent refresh)
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleSilentRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchActivities(true);
+      }, 250);
+    };
+
     const channel = supabase
       .channel('activity-feed-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () => {
-        fetchActivities();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () => {
-        fetchActivities();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => {
-        fetchActivities();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, scheduleSilentRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, scheduleSilentRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, scheduleSilentRefresh)
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [fetchActivities]);
@@ -583,8 +587,8 @@ export function Activity() {
       if (filterType === 'testimonials' && item.type !== 'testimonial') return false;
 
       // 3. Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
+      if (deferredSearchQuery.trim()) {
+        const q = deferredSearchQuery.toLowerCase().trim();
         const matchesName = item.personName.toLowerCase().includes(q);
         const matchesSender = item.senderName.toLowerCase().includes(q);
         const matchesReceiver = item.receiverName.toLowerCase().includes(q);
@@ -613,7 +617,7 @@ export function Activity() {
 
       return true;
     });
-  }, [allActivities, activeTab, currentUserId, profile?.role, filterType, searchQuery, startDate, endDate]);
+  }, [allActivities, activeTab, currentUserId, profile?.role, filterType, deferredSearchQuery, startDate, endDate]);
 
   // Aggregate stats for the current tab
   const stats = useMemo(() => {

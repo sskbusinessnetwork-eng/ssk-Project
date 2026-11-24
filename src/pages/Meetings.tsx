@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -804,35 +804,89 @@ export function Meetings() {
   };
 
 
+  const isAnyModalOpenRef = useRef(false);
+  useEffect(() => {
+    isAnyModalOpenRef.current =
+      isUpdateModalOpen ||
+      isScheduleModalOpen ||
+      isDefaultSetupOpen ||
+      isCancelConfirmOpen ||
+      isNotesModalOpen ||
+      isMemberHistoryModalOpen ||
+      isAttendanceDetailsOpen ||
+      isAmountDetailsOpen ||
+      isMeetingDetailsModalOpen ||
+      isAttendanceReportOpen ||
+      isReadOnlyModalOpen;
+  }, [
+    isUpdateModalOpen,
+    isScheduleModalOpen,
+    isDefaultSetupOpen,
+    isCancelConfirmOpen,
+    isNotesModalOpen,
+    isMemberHistoryModalOpen,
+    isAttendanceDetailsOpen,
+    isAmountDetailsOpen,
+    isMeetingDetailsModalOpen,
+    isAttendanceReportOpen,
+    isReadOnlyModalOpen
+  ]);
+
   useEffect(() => {
     if (isUpdateModalOpen && selectedMeeting) {
+      let isCancelled = false;
+      const getPositionRank = (u: any) => {
+        const role = String(u.role || '').toUpperCase();
+        const pos = String(u.position || u.chapter_position || '').toLowerCase();
+        if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
+        if (pos === 'president') return 2;
+        if (pos.includes('vice')) return 3;
+        if (pos === 'secretary') return 4;
+        if (pos === 'treasurer') return 5;
+        return 6;
+      };
+
       const fetchModalData = async () => {
         try {
-          // 1. Fetch meeting's chapter members directly from users table using chapter_id
           const meetingChapId = 
             selectedMeeting.chapter_id || 
             (selectedMeeting as any).chapterId || 
             (selectedMeeting.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || 
             (profile?.chapter_id);
 
+          // Immediately pre-seed modal checklist from already-loaded allUsers so UI responds with zero delay
+          if (meetingChapId && allUsers.length > 0) {
+            const preSeeded = allUsers
+              .filter((u: any) => u.role !== 'MASTER_ADMIN' && String(u.chapter_id || '') === String(meetingChapId))
+              .sort((a, b) => {
+                const rankA = getPositionRank(a);
+                const rankB = getPositionRank(b);
+                if (rankA !== rankB) return rankA - rankB;
+                return (a.name || '').localeCompare(b.name || '');
+              });
+            if (preSeeded.length > 0) {
+              setModalChapterMembers(preSeeded);
+            }
+          }
+
+          // Run chapter members, optional admin fallback, and meeting guests concurrently
+          const [cUsersRes, adminUserRes, guestsRes] = await Promise.all([
+            meetingChapId
+              ? supabase.from('users').select('*').eq('chapter_id', meetingChapId)
+              : Promise.resolve({ data: null }),
+            meetingChapId && selectedMeeting.adminId
+              ? supabase.from('users').select('*').eq('id', selectedMeeting.adminId).maybeSingle()
+              : Promise.resolve({ data: null }),
+            supabase.from('guest_invitations').select('*').eq('meeting_id', selectedMeeting.id)
+          ]);
+
+          if (isCancelled) return;
+
           if (meetingChapId) {
-            const { data: cUsers } = await supabase
-              .from('users')
-              .select('*')
-              .eq('chapter_id', meetingChapId);
-
-            let fetchedList: any[] = cUsers ? [...cUsers] : [];
-
-            // Ensure meeting's chapter admin is included if not already in fetchedList
-            if (selectedMeeting.adminId) {
-              const { data: adminUser } = await supabase
-                .from('users')
-                .select('*')
-                .eq('id', selectedMeeting.adminId)
-                .maybeSingle();
-              if (adminUser && !fetchedList.some((u: any) => (u.id || u.uid) === (adminUser.id || adminUser.uid))) {
-                fetchedList.push(adminUser);
-              }
+            let fetchedList: any[] = cUsersRes?.data ? [...cUsersRes.data] : [];
+            const adminUser = adminUserRes?.data;
+            if (adminUser && !fetchedList.some((u: any) => (u.id || u.uid) === (adminUser.id || adminUser.uid))) {
+              fetchedList.push(adminUser);
             }
 
             let chapterMembersList: UserProfile[] = [];
@@ -859,18 +913,6 @@ export function Meetings() {
             } else {
               chapterMembersList = allUsers.filter(u => u.role !== 'MASTER_ADMIN' && u.chapter_id === meetingChapId);
             }
-
-            // Sort members so Chapter Admin is listed at the top, followed by Executive Committee and Members
-            const getPositionRank = (u: any) => {
-              const role = String(u.role || '').toUpperCase();
-              const pos = String(u.position || u.chapter_position || '').toLowerCase();
-              if (role === 'CHAPTER_ADMIN' || pos === 'chapter_admin' || pos === 'chapter admin') return 1;
-              if (pos === 'president') return 2;
-              if (pos.includes('vice')) return 3;
-              if (pos === 'secretary') return 4;
-              if (pos === 'treasurer') return 5;
-              return 6;
-            };
 
             chapterMembersList.sort((a, b) => {
               const rankA = getPositionRank(a);
@@ -904,12 +946,7 @@ export function Meetings() {
             setModalChapterMembers([]);
           }
 
-          // 2. Fetch guests for this meeting
-          const { data: guests } = await supabase
-            .from('guest_invitations')
-            .select('*')
-            .eq('meeting_id', selectedMeeting.id);
-            
+          const guests = guestsRes?.data;
           if (guests) {
             setMeetingGuests(guests);
             const gCount = selectedMeeting.guestCount !== undefined 
@@ -923,25 +960,30 @@ export function Meetings() {
               setTempGuestCount(prev => (prev !== '' ? prev : guests.length));
             }
             
-            // Extract unique inviter IDs
             const inviterIds = [...new Set(guests.map(g => g.invited_by).filter(Boolean))];
-            
             if (inviterIds.length > 0) {
-              const { data: users } = await supabase
-                .from('users')
-                .select('*')
-                .in('uid', inviterIds);
-                
-              if (users) {
-                const invitersMap = users.reduce((acc, user) => {
-                  acc[user.uid] = user;
-                  return acc;
-                }, {} as Record<string, any>);
-                setGuestInviters(invitersMap);
+              const resolvedFromCache: Record<string, any> = {};
+              const missingIds: string[] = [];
+              inviterIds.forEach((id: string) => {
+                if (usersMap[id]) resolvedFromCache[id] = usersMap[id];
+                else missingIds.push(id);
+              });
+              if (missingIds.length > 0) {
+                const { data: users } = await supabase
+                  .from('users')
+                  .select('*')
+                  .in('uid', missingIds);
+                if (!isCancelled && users) {
+                  users.forEach((user: any) => {
+                    resolvedFromCache[user.uid || user.id] = user;
+                  });
+                }
+              }
+              if (!isCancelled) {
+                setGuestInviters(resolvedFromCache);
               }
             }
             
-            // Initialize tempGuestAttendance
             const initialGuestAttendance: Record<string, string> = {};
             guests.forEach(g => {
               const raw = String(g.status || g.attendance_status || '').trim();
@@ -962,13 +1004,18 @@ export function Meetings() {
       };
       
       fetchModalData();
+      return () => {
+        isCancelled = true;
+      };
     }
-  }, [isUpdateModalOpen, selectedMeeting]);
+  }, [isUpdateModalOpen, selectedMeeting?.id]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 10000); // 10s intervals for fast real-time client updates
+      if (!isAnyModalOpenRef.current) {
+        setCurrentTime(new Date());
+      }
+    }, 30000); // 30s intervals; skip ticks while modals are open to keep clicks/typing responsive
     return () => clearInterval(timer);
   }, []);
 
@@ -1157,7 +1204,7 @@ export function Meetings() {
     };
 
     loadAndSyncSetup();
-  }, [isMasterAdmin, selectedAdminId, isChapterAdmin, profile]);
+  }, [isMasterAdmin, selectedAdminId, isChapterAdmin, profile?.uid, profile?.chapter_id]);
 
   useEffect(() => {
     if (isScheduleModalOpen) {
@@ -1261,10 +1308,16 @@ export function Meetings() {
       unsubscribe();
       clearTimeout(timeoutId);
     };
-  }, [profile, selectedAdminId, isMasterAdmin]);
+  }, [profile?.uid, profile?.chapter_id, (profile as any)?.chapterId, selectedAdminId, isMasterAdmin]);
 
   useEffect(() => {
-    // Fetch members for attendance/details
+    if (selectedMeeting?.id) {
+      setNotes(selectedMeeting.notes || '');
+    }
+  }, [selectedMeeting?.id, selectedMeeting?.notes]);
+
+  useEffect(() => {
+    // Fetch members for attendance/details once per user/chapter context
     const fetchMembers = async () => {
       try {
         const { data: usersData } = await supabase.from('users').select('*');
@@ -1288,11 +1341,7 @@ export function Meetings() {
     };
 
     fetchMembers();
-
-    if (selectedMeeting?.id) {
-      setNotes(selectedMeeting.notes || '');
-    }
-  }, [selectedMeeting?.id, isMasterAdmin, isChapterAdmin, profile?.uid, selectedAdminId, profile?.chapter_id]);
+  }, [isMasterAdmin, isChapterAdmin, profile?.uid, selectedAdminId, profile?.chapter_id]);
 
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault();

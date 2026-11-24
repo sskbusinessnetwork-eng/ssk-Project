@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
 import { ContactPickerButton } from '../components/PhoneInputWithPicker';
@@ -380,7 +380,13 @@ export function Connections() {
           })
           .filter(m => m.role !== 'MASTER_ADMIN');
         
-        // Fetch Admin Names for All Members
+        // Resolve Admin Names in O(1) from already-fetched usersData (fallback single batch query only if missing)
+        const usersById = new Map<string, any>();
+        (usersData || []).forEach((u: any) => {
+          if (u?.id) usersById.set(String(u.id), u);
+          if (u?.uid && u.uid !== u.id) usersById.set(String(u.uid), u);
+        });
+
         const adminIds = Array.from(new Set(
           allActiveUsers
             .map(m => m.chapter_id || m.adminId)
@@ -389,12 +395,24 @@ export function Connections() {
 
         if (adminIds.length > 0) {
           const adminData: Record<string, string> = {};
-          await Promise.all(adminIds.map(async (id) => {
-            const adminDoc = await databaseService.get<UserProfile>('users', id);
-            if (adminDoc) {
-              adminData[id] = adminDoc.name || adminDoc.displayName || 'Unknown Admin';
+          const missingAdminIds: string[] = [];
+          adminIds.forEach((id) => {
+            const found = usersById.get(String(id));
+            if (found) {
+              adminData[id] = found.name || found.displayName || 'Unknown Admin';
+            } else {
+              missingAdminIds.push(id);
             }
-          }));
+          });
+          if (missingAdminIds.length > 0) {
+            const { data: extraAdmins } = await supabase
+              .from('users')
+              .select('id, name')
+              .in('id', missingAdminIds);
+            (extraAdmins || []).forEach((u: any) => {
+              if (u?.id) adminData[u.id] = u.name || 'Unknown Admin';
+            });
+          }
           setAdminNames(adminData);
         }
         
@@ -409,23 +427,29 @@ export function Connections() {
 
     fetchData();
 
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchData();
+      }, 250);
+    };
+
     // Listen for manual re-fetch events
-    const handleRefresh = () => fetchData();
-    window.addEventListener('dashboard-refresh', handleRefresh);
+    window.addEventListener('dashboard-refresh', scheduleRefresh);
 
     // Subscribe to realtime updates on Supabase 'users' table
     const channel = supabase
       .channel('public:users:directory')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
-        fetchData();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, scheduleRefresh)
       .subscribe();
 
     return () => {
-      window.removeEventListener('dashboard-refresh', handleRefresh);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener('dashboard-refresh', scheduleRefresh);
       supabase.removeChannel(channel);
     };
-  }, [profile]);
+  }, [profile?.uid, profile?.id, profile?.role, profile?.chapter_id, (profile as any)?.chapterId]);
 
   useEffect(() => {
     if (profile?.role === 'MASTER_ADMIN' && chaptersList.length > 0 && !masterSelectedChapterId) {
@@ -433,86 +457,106 @@ export function Connections() {
     }
   }, [profile, chaptersList, masterSelectedChapterId]);
 
-  const filteredMembers = members.filter(member => {
-    // 1. Tab Filtering
-    if (activeTab === 'chapter') {
-      if (profile?.role === 'MASTER_ADMIN') {
-        const selectedChap = (masterSelectedChapterId || '').trim().toLowerCase();
-        if (selectedChap) {
-          const memId = (member.chapter_id || '').trim().toLowerCase();
-          const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
-          if (memId !== selectedChap && memName !== selectedChap) return false;
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  const filteredMembers = useMemo(() => {
+    const term = deferredSearchTerm.toLowerCase().trim();
+    const stateFilterLower = selectedState.toLowerCase();
+    const cityFilterLower = selectedCity.toLowerCase();
+    const areaFilterLower = selectedArea.toLowerCase();
+
+    return members.filter(member => {
+      // 1. Tab Filtering
+      if (activeTab === 'chapter') {
+        if (profile?.role === 'MASTER_ADMIN') {
+          const selectedChap = (masterSelectedChapterId || '').trim().toLowerCase();
+          if (selectedChap) {
+            const memId = (member.chapter_id || '').trim().toLowerCase();
+            const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
+            if (memId !== selectedChap && memName !== selectedChap) return false;
+          }
+        } else {
+          if (!isSameChapter(member, currentUserChapterId, currentUserChapterName, currentUserChapter, profile)) {
+            return false;
+          }
         }
-      } else {
-        if (!isSameChapter(member, currentUserChapterId, currentUserChapterName, currentUserChapter, profile)) {
+      }
+
+      // 2. Search filtering (covers Name, Category, Business Name, Phone Number, Position, Chapter Name)
+      if (term) {
+        const { label: posLabel } = getPositionTitleAndStyle(member);
+        const displayPos = posLabel.toLowerCase();
+        const chName = (member.chapterName || member.chapter_name || (member as any).chapter || '').toLowerCase();
+        
+        const nameMatch = (member.name || '').toLowerCase().includes(term);
+        const categoryMatch = (member.category || '').toLowerCase().includes(term);
+        const businessMatch = (member.businessName || '').toLowerCase().includes(term);
+        const phoneMatch = (member.phone || '').includes(term) || (member.whatsappNumber || '').includes(term);
+        const positionMatch = displayPos.includes(term);
+        const chapterMatch = chName.includes(term);
+        
+        if (!(nameMatch || categoryMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
           return false;
         }
       }
-    }
 
-    // 2. Search filtering (covers Name, Category, Business Name, Phone Number, Position, Chapter Name)
-    const term = searchTerm.toLowerCase().trim();
-    if (term) {
-      const { label: posLabel } = getPositionTitleAndStyle(member);
-      const displayPos = posLabel.toLowerCase();
-      const chName = (member.chapterName || member.chapter_name || (member as any).chapter || '').toLowerCase();
+      // 3. Optional Filters
+      if (selectedCategory && member.category !== selectedCategory) return false;
       
-      const nameMatch = (member.name || '').toLowerCase().includes(term);
-      const categoryMatch = (member.category || '').toLowerCase().includes(term);
-      const businessMatch = (member.businessName || '').toLowerCase().includes(term);
-      const phoneMatch = (member.phone || '').includes(term) || (member.whatsappNumber || '').includes(term);
-      const positionMatch = displayPos.includes(term);
-      const chapterMatch = chName.includes(term);
+      if (selectedChapterIdFilter) {
+        const filterVal = selectedChapterIdFilter.trim().toLowerCase();
+        const memId = (member.chapter_id || '').trim().toLowerCase();
+        const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
+        if (memId !== filterVal && memName !== filterVal) return false;
+      }
       
-      if (!(nameMatch || categoryMatch || businessMatch || phoneMatch || positionMatch || chapterMatch)) {
-        return false;
+      if (selectedPositionFilter) {
+        const role = (member.role || 'MEMBER').toUpperCase();
+        const pos = (member.position || '').toLowerCase();
+        if (selectedPositionFilter === 'chapter_admin') {
+          if (role !== 'CHAPTER_ADMIN' && pos !== 'chapter_admin') return false;
+        } else if (selectedPositionFilter === 'president') {
+          if (role !== 'PRESIDENT' && pos !== 'president') return false;
+        } else if (selectedPositionFilter === 'vice_president') {
+          if (role !== 'VICE_PRESIDENT' && pos !== 'vice_president') return false;
+        } else if (selectedPositionFilter === 'treasurer') {
+          if (role !== 'TREASURER' && pos !== 'treasurer') return false;
+        } else if (selectedPositionFilter === 'member') {
+          if (role !== 'MEMBER' && pos !== 'member') return false;
+        }
       }
-    }
 
-    // 3. Optional Filters
-    // Business Category Filter
-    if (selectedCategory && member.category !== selectedCategory) return false;
-    
-    // Chapter Filter
-    if (selectedChapterIdFilter) {
-      const filterVal = selectedChapterIdFilter.trim().toLowerCase();
-      const memId = (member.chapter_id || '').trim().toLowerCase();
-      const memName = (member.chapterName || member.chapter_name || (member as any).chapter || '').trim().toLowerCase();
-      if (memId !== filterVal && memName !== filterVal) return false;
-    }
-    
-    // Position Filter
-    if (selectedPositionFilter) {
-      const role = (member.role || 'MEMBER').toUpperCase();
-      const pos = (member.position || '').toLowerCase();
-      if (selectedPositionFilter === 'chapter_admin') {
-        if (role !== 'CHAPTER_ADMIN' && pos !== 'chapter_admin') return false;
-      } else if (selectedPositionFilter === 'president') {
-        if (role !== 'PRESIDENT' && pos !== 'president') return false;
-      } else if (selectedPositionFilter === 'vice_president') {
-        if (role !== 'VICE_PRESIDENT' && pos !== 'vice_president') return false;
-      } else if (selectedPositionFilter === 'treasurer') {
-        if (role !== 'TREASURER' && pos !== 'treasurer') return false;
-      } else if (selectedPositionFilter === 'member') {
-        if (role !== 'MEMBER' && pos !== 'member') return false;
-      }
-    }
+      // Location Filters
+      if (selectedState && !member.state?.toLowerCase().includes(stateFilterLower)) return false;
+      if (selectedCity && !member.city?.toLowerCase().includes(cityFilterLower)) return false;
+      if (selectedArea && !member.area?.toLowerCase().includes(areaFilterLower)) return false;
 
-    // Location Filters
-    if (selectedState && !member.state?.toLowerCase().includes(selectedState.toLowerCase())) return false;
-    if (selectedCity && !member.city?.toLowerCase().includes(selectedCity.toLowerCase())) return false;
-    if (selectedArea && !member.area?.toLowerCase().includes(selectedArea.toLowerCase())) return false;
-
-    return true;
-  });
+      return true;
+    });
+  }, [
+    members,
+    activeTab,
+    profile,
+    masterSelectedChapterId,
+    currentUserChapterId,
+    currentUserChapterName,
+    currentUserChapter,
+    deferredSearchTerm,
+    selectedCategory,
+    selectedChapterIdFilter,
+    selectedPositionFilter,
+    selectedState,
+    selectedCity,
+    selectedArea
+  ]);
 
   // Get unique values for filters
-  const uniqueStates = Array.from(new Set(members.map(m => m.state).filter(Boolean)));
-  const uniqueCities = Array.from(new Set(members.map(m => m.city).filter(Boolean)));
-  const uniqueAreas = Array.from(new Set(members.map(m => m.area).filter(Boolean)));
+  const uniqueStates = useMemo(() => Array.from(new Set(members.map(m => m.state).filter(Boolean))), [members]);
+  const uniqueCities = useMemo(() => Array.from(new Set(members.map(m => m.city).filter(Boolean))), [members]);
+  const uniqueAreas = useMemo(() => Array.from(new Set(members.map(m => m.area).filter(Boolean))), [members]);
 
   // Calculate total counts
-  const totalChapterCount = members.filter(m => {
+  const totalChapterCount = useMemo(() => members.filter(m => {
     if (profile?.role === 'MASTER_ADMIN') {
       const selectedChap = (masterSelectedChapterId || '').trim().toLowerCase();
       if (!selectedChap) return true;
@@ -522,7 +566,7 @@ export function Connections() {
     } else {
       return isSameChapter(m, currentUserChapterId, currentUserChapterName, currentUserChapter, profile);
     }
-  }).length;
+  }).length, [members, profile, masterSelectedChapterId, currentUserChapterId, currentUserChapterName, currentUserChapter]);
 
   // Log details if no chapter members are found
   useEffect(() => {

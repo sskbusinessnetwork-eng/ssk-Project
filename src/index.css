@@ -692,5 +692,27 @@ body.theme-day,
   background-color: #F8FAFC !important;
 }
 
-
-
+.custom-thin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.custom-thin-scrollbar:hover::-webkit-scrollbar {
+  opacity: 1;
+}
+.custom-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 10px;
+}
+.custom-thin-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #4B5563;
+}
+.theme-day .custom-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+.theme-day .custom-thin-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+}

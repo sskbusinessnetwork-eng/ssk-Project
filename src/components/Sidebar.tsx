@@ -1,18 +1,15 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, Award, UserPlus, LogOut, CreditCard,
   X, Layers, ChevronLeft, ChevronRight, Activity, FileText,
   MessageSquare, Settings, Crown, Tags, BarChart3, Wallet
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil, isChapterLeaderRole } from '../utils/authUtils';
-import { databaseService } from '../services/databaseService';
-import { where } from '../lib/database';
 import { BrandLogo } from './BrandLogo';
 import { isLightColor } from '../utils/contrastUtils';
 
@@ -24,12 +21,11 @@ interface SidebarProps {
   backgroundColor?: string;
 }
 
-export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgroundColor }: SidebarProps) {
+export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgroundColor }: SidebarProps) {
   const { profile, logout } = useAuth();
   const { theme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const [, setUnreadCount] = useState(0);
 
   const sidebarRef = useRef<HTMLElement>(null);
   const [computedIsLight, setComputedIsLight] = useState<boolean>(() => {
@@ -42,65 +38,17 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
     }
   });
 
-  // Dynamic contrast evaluation based on current theme, custom color, or computed DOM style
+  // Dynamic contrast evaluation based on current theme or custom color
   useEffect(() => {
-    const evaluateContrast = () => {
-      if (backgroundColor) {
-        setComputedIsLight(isLightColor(backgroundColor));
-        return;
-      }
+    const nextIsLight = backgroundColor
+      ? isLightColor(backgroundColor)
+      : (theme === 'day' || document.documentElement.classList.contains('theme-day'));
 
-      if (theme === 'day' || document.documentElement.classList.contains('theme-day')) {
-        setComputedIsLight(true);
-        return;
-      }
-
-      if (sidebarRef.current) {
-        const computedBg = window.getComputedStyle(sidebarRef.current).backgroundColor;
-        if (computedBg && computedBg !== 'transparent' && computedBg !== 'rgba(0, 0, 0, 0)') {
-          setComputedIsLight(isLightColor(computedBg));
-          return;
-        }
-      }
-
-      setComputedIsLight(false);
-    };
-
-    evaluateContrast();
-
-    // Observe class or attribute changes on html/body (for instant theme switches)
-    const observer = new MutationObserver(() => {
-      evaluateContrast();
-    });
-
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] });
-
-    window.addEventListener('resize', evaluateContrast);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', evaluateContrast);
-    };
+    setComputedIsLight(prev => (prev === nextIsLight ? prev : nextIsLight));
   }, [theme, backgroundColor]);
 
   // Combined flag: light mode active if computed, theme, or prop indicates a light/white background
   const isLight = computedIsLight || theme === 'day' || (backgroundColor ? isLightColor(backgroundColor) : false);
-
-  useEffect(() => {
-    if (!profile?.uid) return;
-    const unsubscribe = databaseService.subscribe(
-      'notifications',
-      [
-        where('userId', '==', profile.uid),
-        where('read', '==', false)
-      ],
-      (notifications) => {
-        setUnreadCount(notifications.length);
-      }
-    );
-    return () => unsubscribe();
-  }, [profile?.uid]);
 
   const handleLogout = async () => {
     try {
@@ -200,18 +148,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
           <X size={18} />
         </button>
 
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="flex items-center gap-2 overflow-hidden"
-        >
+        <div className="flex items-center gap-2 overflow-hidden">
           {!isCollapsed ? (
             <BrandLogo size="sm" showText={true} lightText={!isLight} />
           ) : (
             <BrandLogo size="sm" showText={false} />
           )}
-        </motion.div>
+        </div>
 
         {/* Desktop Collapse/Expand Toggle Button */}
         {onToggleCollapse && (
@@ -293,28 +236,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
       </div>
 
       {/* Navigation (Scrollable Only) */}
-      <style>
-        {`
-          .custom-thin-scrollbar::-webkit-scrollbar {
-            width: 4px;
-            opacity: 0;
-            transition: opacity 0.3s;
-          }
-          .custom-thin-scrollbar:hover::-webkit-scrollbar {
-            opacity: 1;
-          }
-          .custom-thin-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          .custom-thin-scrollbar::-webkit-scrollbar-thumb {
-            background: ${isLight ? '#CBD5E1' : '#374151'};
-            border-radius: 10px;
-          }
-          .custom-thin-scrollbar:hover::-webkit-scrollbar-thumb {
-            background: ${isLight ? '#94A3B8' : '#4B5563'};
-          }
-        `}
-      </style>
       <div className="flex-1 overflow-y-auto custom-thin-scrollbar py-3 px-3 flex flex-col gap-[6px]">
         {visibleMenuItems.map((item) => {
           const homePaths = ['/analytics', '/dashboard', '/admin/analytics', '/admin/home', '/chapter-admin/home', '/member/home'];
@@ -340,8 +261,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
                 )}
               >
                 {isActive && (
-                  <motion.div 
-                    layoutId="activeNavIndicator" 
+                  <div 
                     className={cn(
                       "absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full",
                       isLight 
@@ -351,11 +271,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
                   />
                 )}
                 
-                <motion.div
-                  whileHover={{ scale: 1.12, rotate: 4 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 12 }}
-                  className="relative z-10 shrink-0"
-                >
+                <div className="relative z-10 shrink-0 transition-transform duration-150 group-hover:scale-110 group-hover:rotate-3">
                   <item.icon 
                     size={20} 
                     strokeWidth={isActive ? 2.5 : 2} 
@@ -370,7 +286,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
                           : "text-[#9CA3AF] group-hover:text-white"
                     )} 
                   />
-                </motion.div>
+                </div>
                 
                 <span className={cn(
                   "text-[14px] whitespace-nowrap flex-1 relative z-10 tracking-tight",
@@ -382,16 +298,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
                 </span>
 
                 {item.badge && (
-                  <motion.span 
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  <span 
                     className={cn(
                       "text-white text-[10px] font-extrabold w-[18px] h-[18px] flex items-center justify-center rounded-full relative z-10 shadow-sm",
                       isLight ? "bg-[#DC2626]" : "bg-[#E53935] shadow-[0_0_8px_rgba(229,57,53,0.5)]"
                     )}
                   >
                     {item.badge}
-                  </motion.span>
+                  </span>
                 )}
               </Link>
 
@@ -513,4 +427,4 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse, backgr
       </div>
     </aside>
   );
-}
+});

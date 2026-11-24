@@ -23,13 +23,27 @@ interface NotificationPopoverProps {
   isOpen: boolean;
   onClose: () => void;
   anchorRef?: React.RefObject<HTMLElement | null>;
+  notifications?: Notification[];
+  loading?: boolean;
+  onNotificationsChange?: React.Dispatch<React.SetStateAction<Notification[]>>;
 }
 
-export function NotificationPopover({ isOpen, onClose, anchorRef }: NotificationPopoverProps) {
+export function NotificationPopover({
+  isOpen,
+  onClose,
+  anchorRef,
+  notifications: propNotifications,
+  loading: propLoading,
+  onNotificationsChange
+}: NotificationPopoverProps) {
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const hasExternalState = propNotifications !== undefined && onNotificationsChange !== undefined;
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([]);
+  const [localLoading, setLocalLoading] = useState(true);
+  const notifications = hasExternalState ? propNotifications : localNotifications;
+  const loading = propLoading !== undefined ? propLoading : (hasExternalState ? false : localLoading);
+  const setNotifications = hasExternalState ? onNotificationsChange! : setLocalNotifications;
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'UNREAD'>('ALL');
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -53,17 +67,16 @@ export function NotificationPopover({ isOpen, onClose, anchorRef }: Notification
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
+    let nextStyles: React.CSSProperties;
     if (bellEl) {
       const rect = bellEl.getBoundingClientRect();
       const top = Math.round(rect.bottom + 8);
-      // Safe max-height to ensure it never overflows bottom edge
       const maxHeight = Math.min(540, Math.max(260, vh - top - 16));
 
       if (vw < 480) {
-        // Mobile layout: fitted within screen boundaries with 12px margin on left and right
         const width = Math.min(420, vw - 24);
         const left = Math.max(12, Math.floor((vw - width) / 2));
-        setPanelStyles({
+        nextStyles = {
           position: 'fixed',
           top: `${top}px`,
           left: `${left}px`,
@@ -71,19 +84,15 @@ export function NotificationPopover({ isOpen, onClose, anchorRef }: Notification
           width: `${width}px`,
           maxHeight: `${maxHeight}px`,
           zIndex: 50,
-        });
+        };
       } else {
-        // Tablet & Desktop layout: anchored beneath bell icon, shifted left if needed
         const width = Math.min(400, vw - 24);
-        // Distance from right edge of viewport to right edge of bell icon
         let right = Math.max(12, Math.round(vw - rect.right - 4));
-        
-        // Ensure left edge does not exceed viewport left boundary (keep at least 12px from left)
         if (vw - right - width < 12) {
           right = Math.max(12, vw - width - 12);
         }
 
-        setPanelStyles({
+        nextStyles = {
           position: 'fixed',
           top: `${top}px`,
           right: `${right}px`,
@@ -91,60 +100,78 @@ export function NotificationPopover({ isOpen, onClose, anchorRef }: Notification
           width: `${width}px`,
           maxHeight: `${maxHeight}px`,
           zIndex: 50,
-        });
+        };
       }
     } else {
-      // Fallback if bell element is not yet rendered
-      setPanelStyles({
+      nextStyles = {
         position: 'fixed',
         top: '64px',
         right: '16px',
         width: 'min(400px, calc(100vw - 24px))',
         maxHeight: '70vh',
         zIndex: 50,
-      });
+      };
     }
+
+    setPanelStyles((prev) => {
+      if (
+        prev.top === nextStyles.top &&
+        prev.left === nextStyles.left &&
+        prev.right === nextStyles.right &&
+        prev.width === nextStyles.width &&
+        prev.maxHeight === nextStyles.maxHeight
+      ) {
+        return prev;
+      }
+      return nextStyles;
+    });
   }, [isOpen, anchorRef]);
 
-  // Update positioning when opened, resized, scrolled, or orientation changes
+  // Update positioning when opened, resized, scrolled, or orientation changes (rAF throttled)
   useEffect(() => {
     if (!isOpen) return;
 
     recalculatePosition();
 
+    let rafId: number | null = null;
     const handleResizeOrScroll = () => {
-      recalculatePosition();
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        recalculatePosition();
+      });
     };
 
-    window.addEventListener('resize', handleResizeOrScroll);
-    window.addEventListener('scroll', handleResizeOrScroll, true);
+    window.addEventListener('resize', handleResizeOrScroll, { passive: true });
+    window.addEventListener('scroll', handleResizeOrScroll, { capture: true, passive: true });
     window.addEventListener('orientationchange', handleResizeOrScroll);
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResizeOrScroll);
       window.removeEventListener('scroll', handleResizeOrScroll, true);
       window.removeEventListener('orientationchange', handleResizeOrScroll);
     };
   }, [isOpen, recalculatePosition]);
 
-  // 2. Subscribe to real-time notifications
+  // 2. Subscribe to real-time notifications only when not managed by parent Layout
   useEffect(() => {
-    if (!userId) return;
+    if (hasExternalState || !userId) return;
 
-    setLoading(true);
+    setLocalLoading(true);
     const unsubscribe = notificationService.subscribeUserNotifications(
       userId,
       (newNotif) => {
-        setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+        setLocalNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
       },
       (list) => {
-        setNotifications(list);
-        setLoading(false);
+        setLocalNotifications(list);
+        setLocalLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, hasExternalState]);
 
   // 3. Click outside and Escape key handler
   useEffect(() => {
@@ -310,7 +337,7 @@ export function NotificationPopover({ isOpen, onClose, anchorRef }: Notification
           exit={{ opacity: 0, y: -6, scale: 0.98 }}
           transition={{ duration: 0.16, ease: 'easeOut' }}
           style={panelStyles}
-          className="bg-[#111827] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col backdrop-blur-2xl"
+          className="bg-[#111827] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col"
           role="dialog"
           aria-label="Notifications Panel"
         >
