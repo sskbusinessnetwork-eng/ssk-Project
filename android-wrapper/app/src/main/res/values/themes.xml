@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SSKBusinessNetwork" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/ssk_primary</item>
+        <item name="android:windowBackground">@color/ssk_background_dark</item>
+        <item name="android:statusBarColor">@color/ssk_background_dark</item>
+        <item name="android:navigationBarColor">@color/ssk_background_dark</item>
+    </style>
+
+    <style name="Theme.SSKBusinessNetwork.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ssk_background_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.SSKBusinessNetwork</item>
+    </style>
+</resources>
