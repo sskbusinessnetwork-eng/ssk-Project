@@ -3,6 +3,7 @@ import type { UserRole, Notification } from '../types';
 import { where, doc, updateDoc, deleteDoc, db } from '../lib/database';
 import { supabase } from '../lib/supabaseClient';
 import { parseDateToYYYYMMDD } from '../utils/memberStatus';
+import { SSK_OFFICIAL_LOGO } from '../constants/brand';
 
 export type NotificationType = 
   | 'REFERRAL' 
@@ -138,8 +139,8 @@ export const notificationService = {
         navigator.serviceWorker.ready.then(reg => {
           reg.showNotification(title, {
             body,
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
+            icon: SSK_OFFICIAL_LOGO,
+            badge: SSK_OFFICIAL_LOGO,
             data: { url: link },
             tag: 'ssk-push-' + Date.now()
           });
@@ -147,7 +148,7 @@ export const notificationService = {
       } else {
         const notif = new Notification(title, {
           body,
-          icon: '/favicon.ico',
+          icon: SSK_OFFICIAL_LOGO,
           data: { url: link }
         });
         notif.onclick = () => {

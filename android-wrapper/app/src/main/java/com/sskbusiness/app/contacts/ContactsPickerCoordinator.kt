@@ -41,7 +41,8 @@ object ContactPayloadBuilder {
 class ContactsPickerCoordinator(
     private val activity: ComponentActivity,
     private val webView: WebView,
-    private val allowedHosts: Set<String>
+    private val allowedHosts: Set<String>,
+    private val onPickerFlowStarted: (() -> Unit)? = null
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newSingleThreadExecutor()
@@ -94,6 +95,7 @@ class ContactsPickerCoordinator(
 
         if (isPickerActive) return
         isPickerActive = true
+        onPickerFlowStarted?.invoke()
 
         val hasContactsPermission = ContextCompat.checkSelfPermission(
             activity,
@@ -109,6 +111,7 @@ class ContactsPickerCoordinator(
 
     private fun launchSystemPicker(mode: PickMode) {
         activePickMode = mode
+        onPickerFlowStarted?.invoke()
         val intent = when (mode) {
             PickMode.FULL_CONTACT ->
                 Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
@@ -253,6 +256,8 @@ class ContactsPickerCoordinator(
             null
         )
     }
+
+    fun isPickerInFlight(): Boolean = isPickerActive
 
     fun shutdown() {
         ioExecutor.shutdownNow()

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
@@ -105,8 +106,68 @@ async function startServer() {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  const ANDROID_APK_URL =
+    "https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/android-apk%205./app-debug.apk";
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/api/download-android-app", async (req, res) => {
+    const controller = new AbortController();
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        controller.abort();
+      }
+    });
+
+    try {
+      const upstream = await fetch(ANDROID_APK_URL, {
+        method: req.method === "HEAD" ? "HEAD" : "GET",
+        signal: controller.signal,
+      });
+
+      if (!upstream.ok) {
+        return res.status(upstream.status || 502).json({
+          error: "Unable to fetch Android application package.",
+        });
+      }
+
+      res.setHeader("Content-Type", "application/vnd.android.package-archive");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="SSK-Business-Network.apk"; filename*=UTF-8\'\'SSK-Business-Network.apk'
+      );
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Cache-Control", "public, max-age=300");
+
+      const contentLength = upstream.headers.get("content-length");
+      if (contentLength) {
+        res.setHeader("Content-Length", contentLength);
+      }
+
+      if (req.method === "HEAD" || !upstream.body) {
+        return res.end();
+      }
+
+      const nodeStream = Readable.fromWeb(upstream.body as any);
+      nodeStream.on("error", (streamErr) => {
+        console.error("Android APK stream error:", streamErr);
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else if (!res.writableEnded) {
+          res.end();
+        }
+      });
+
+      nodeStream.pipe(res);
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      console.error("Android APK download proxy error:", err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: "Failed to download Android application package." });
+      }
+    }
   });
 
   app.get("/api/vapidPublicKey", (req, res) => {

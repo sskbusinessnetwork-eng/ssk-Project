@@ -6,7 +6,7 @@ import {
   ArrowRight, Users, ShieldCheck, TrendingUp, Target, Globe, CheckCircle2, 
   Handshake, Hammer, Clock, Sprout, HardHat, Palette, Headset, Telescope, 
   Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Map, Calendar, X,
-  AlertCircle, CalendarX, Loader2
+  AlertCircle, CalendarX, Loader2, Download
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -437,7 +437,7 @@ export function LandingPage() {
             <p className="text-[16px] sm:text-[18px] md:text-[20px] lg:text-[22px] font-black text-white mb-8 md:mb-12 tracking-tight">
               By the <span className="text-[#EF4444]">SSK People</span>. For the <span className="text-[#EF4444]">SSK People</span>.
             </p>
-            <div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4">
               <motion.button
                 whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(249, 115, 22, 0.6)" }}
                 whileTap={{ scale: 0.95 }}
@@ -446,6 +446,27 @@ export function LandingPage() {
               >
                 Join a Chapter Meeting
               </motion.button>
+
+              <a
+                href="/api/download-android-app"
+                download="SSK-Business-Network.apk"
+                aria-label="Download Android App"
+                className="group inline-flex items-center justify-center gap-2.5 min-h-[44px] px-6 sm:px-7 md:px-8 py-3 sm:py-4 md:py-5 rounded-full bg-gradient-to-r from-[#162B52] via-[#1C3666] to-[#132548] hover:from-[#1D396D] hover:via-[#22427A] hover:to-[#18305C] text-white border border-white/25 hover:border-[#F97316]/75 shadow-[0_8px_24px_rgba(0,0,0,0.3)] hover:shadow-[0_10px_28px_rgba(249,115,22,0.22)] font-extrabold tracking-[1px] sm:tracking-[1.5px] text-[12px] md:text-[13px] whitespace-nowrap shrink-0 w-full sm:w-auto transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F97316]"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                  className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-[#3DDC84] shrink-0 transition-transform duration-200 group-hover:scale-110"
+                >
+                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993 0 .5511-.4483.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396" />
+                </svg>
+                <span>Download Android App</span>
+                <Download
+                  aria-hidden="true"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FB923C] shrink-0 transition-transform duration-200 group-hover:translate-y-0.5"
+                />
+              </a>
             </div>
           </div>
         </div>

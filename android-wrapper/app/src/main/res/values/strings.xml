@@ -7,4 +7,5 @@
     <string name="contacts_permission_rationale">Allow Contacts permission to pick a contact with all saved phone numbers, or continue with single-number selection.</string>
     <string name="no_contact_app_found">No Contacts application was found on this device.</string>
     <string name="press_back_again_to_exit">Press back again to exit SSK Business Network</string>
+    <string name="offline_refresh_unavailable">No internet connection. Showing last loaded content.</string>
 </resources>
