@@ -649,44 +649,24 @@ export async function resolveContactSelection(options?: {
     }
   }
 
-  // Priority 2: Browser Contact Picker API (Android Chrome/Edge, etc.)
+  // Priority 2: Browser Contact Picker API (Android Chrome/Edge/Samsung Internet on top-level HTTPS)
   if (!runtime.hasWebContactPicker) {
     return {
       status: 'unavailable',
-      reason: runtime.isInIframe ? 'iframe_blocked' : 'unsupported',
+      reason: 'unsupported',
       runtime
     };
   }
 
   try {
-    let desiredProps: string[] = ['name', 'tel'];
-    if (typeof nav.contacts.getProperties === 'function') {
-      try {
-        const supportedProps: string[] = await nav.contacts.getProperties();
-        if (Array.isArray(supportedProps)) {
-          if (!supportedProps.includes('tel')) {
-            return {
-              status: 'unavailable',
-              reason: 'unsupported',
-              errorName: 'TelUnsupported',
-              runtime
-            };
-          }
-          desiredProps = supportedProps.includes('name') ? ['name', 'tel'] : ['tel'];
-        }
-      } catch {
-        // Ignore getProperties() failure on partial implementations and proceed with ['name', 'tel']
-      }
-    }
-
+    // Call select() immediately with zero prior awaits to preserve transient user activation
     let contacts: any[] | null = null;
     try {
-      contacts = await nav.contacts.select(desiredProps, { multiple: false });
+      contacts = await nav.contacts.select(['name', 'tel'], { multiple: false });
     } catch (propErr: any) {
       const errName = String(propErr?.name || '');
       const canRetryTelOnly =
-        desiredProps.includes('name') &&
-        (errName === 'TypeError' || errName === 'NotSupportedError' || errName === 'InvalidAccessError');
+        errName === 'TypeError' || errName === 'NotSupportedError' || errName === 'InvalidAccessError';
 
       if (canRetryTelOnly) {
         contacts = await nav.contacts.select(['tel'], { multiple: false });

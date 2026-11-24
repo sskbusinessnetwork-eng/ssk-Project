@@ -100,11 +100,11 @@ interface ContactPickerFallbackModalProps {
   onPick: (contact: PickedContact) => void;
 }
 
-function getNoticeMessage(reason: ModalNoticeReason, isInIframe: boolean): string {
+function getNoticeMessage(reason: ModalNoticeReason): string {
   if (reason === 'multiple_numbers') {
     return 'This contact has multiple phone numbers. Tap the number you want to use below, or import/pick another contact.';
   }
-  if (reason === 'iframe_blocked' || isInIframe) {
+  if (reason === 'iframe_blocked') {
     return 'Direct phonebook popup is blocked inside this embedded browser view. Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.';
   }
   if (reason === 'permission_denied') {
@@ -131,14 +131,6 @@ function ContactPickerFallbackModal({
   const [showManualPaste, setShowManualPaste] = useState(false);
   const vcardInputRef = useRef<HTMLInputElement>(null);
   const hasPickedRef = useRef(false);
-
-  const isInIframe = useMemo(() => {
-    try {
-      return window.self !== window.top;
-    } catch {
-      return true;
-    }
-  }, []);
 
   const commitPickAndClose = (contact: PickedContact) => {
     if (hasPickedRef.current) return;
@@ -356,7 +348,7 @@ function ContactPickerFallbackModal({
           {/* Context Notice */}
           <div className="p-3 rounded-xl bg-[#151C2E] border border-white/10 flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed">
             <AlertCircle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-            <span>{getNoticeMessage(reason, isInIframe)}</span>
+            <span>{getNoticeMessage(reason)}</span>
           </div>
 
           {/* Quick Actions: Import vCard (.vcf) & Paste Clipboard */}

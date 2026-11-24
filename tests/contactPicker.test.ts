@@ -35,15 +35,16 @@ function createTopWindow(extra: Record<string, any> = {}) {
   return win;
 }
 
-// 1. Contact picker supported (Web Contact Picker API + country codes + formatting cleanup)
-test('1. Web Contact Picker API supported: selects contact, preserves country codes, cleans formatting', async () => {
+// 1. Contact picker supported (Web Contact Picker API + synchronous user activation + country codes)
+test('1. Web Contact Picker API supported: invokes select() synchronously on click, preserves country codes, cleans formatting', async () => {
   const win = createTopWindow();
+  let selectCalledSynchronously = false;
   const nav = {
     userAgent:
       'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
     contacts: {
-      getProperties: async () => ['name', 'tel', 'email'],
       select: async (props: string[]) => {
+        selectCalledSynchronously = true;
         assert.deepEqual(props, ['name', 'tel']);
         return [
           {
@@ -55,7 +56,10 @@ test('1. Web Contact Picker API supported: selects contact, preserves country co
     }
   };
 
-  const result = await resolveContactSelection({ env: { windowObj: win, navigatorObj: nav } });
+  const pendingPromise = resolveContactSelection({ env: { windowObj: win, navigatorObj: nav } });
+  assert.equal(selectCalledSynchronously, true, 'select() must execute synchronously to preserve user gesture activation');
+
+  const result = await pendingPromise;
   assert.equal(result.status, 'selected');
   if (result.status === 'selected') {
     assert.equal(result.source, 'web');
@@ -90,9 +94,9 @@ test('1b. Web Contact Picker API retries with ["tel"] when partial Chromium/OEM 
   }
 });
 
-// 2. Contact picker unsupported (iOS Safari, Desktop Firefox/Chrome, Android WebView without bridge)
+// 2. Contact picker unsupported (iOS Safari, Desktop Firefox/Chrome, Android WebView without bridge, even inside iframe)
 test('2. Contact picker unsupported: triggers unsupported fallback cleanly on iOS Safari / desktop / bare WebView', async () => {
-  const iosWin = createTopWindow();
+  const iosWin = createTopWindow({ top: { differentFrame: true } });
   const iosNav = {
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'
   };
