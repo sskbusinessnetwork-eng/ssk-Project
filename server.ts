@@ -114,36 +114,53 @@ async function startServer() {
   });
 
   app.get("/api/download-android-app", async (req, res) => {
+    if (process.env.VERCEL) {
+      return res.redirect(302, ANDROID_APK_URL);
+    }
+
     const controller = new AbortController();
-    req.on("close", () => {
-      if (!res.writableEnded) {
+    res.on("close", () => {
+      if (!res.writableFinished) {
         controller.abort();
       }
     });
 
     try {
+      const upstreamHeaders: Record<string, string> = {};
+      if (typeof req.headers.range === "string" && req.headers.range.trim()) {
+        upstreamHeaders["Range"] = req.headers.range;
+      }
+
       const upstream = await fetch(ANDROID_APK_URL, {
         method: req.method === "HEAD" ? "HEAD" : "GET",
+        headers: upstreamHeaders,
         signal: controller.signal,
       });
 
-      if (!upstream.ok) {
+      if (!upstream.ok && upstream.status !== 206) {
         return res.status(upstream.status || 502).json({
           error: "Unable to fetch Android application package.",
         });
       }
 
+      res.status(upstream.status === 206 ? 206 : 200);
       res.setHeader("Content-Type", "application/vnd.android.package-archive");
       res.setHeader(
         "Content-Disposition",
         'attachment; filename="SSK-Business-Network.apk"; filename*=UTF-8\'\'SSK-Business-Network.apk'
       );
+      res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Cache-Control", "public, max-age=300");
 
       const contentLength = upstream.headers.get("content-length");
       if (contentLength) {
         res.setHeader("Content-Length", contentLength);
+      }
+
+      const contentRange = upstream.headers.get("content-range");
+      if (contentRange) {
+        res.setHeader("Content-Range", contentRange);
       }
 
       if (req.method === "HEAD" || !upstream.body) {

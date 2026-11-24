@@ -448,7 +448,7 @@ export function LandingPage() {
               </motion.button>
 
               <a
-                href="/api/download-android-app"
+                href="https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/android-apk%205./app-debug.apk"
                 download="SSK-Business-Network.apk"
                 aria-label="Download Android App"
                 className="group inline-flex items-center justify-center gap-2.5 min-h-[44px] px-6 sm:px-7 md:px-8 py-3 sm:py-4 md:py-5 rounded-full bg-gradient-to-r from-[#162B52] via-[#1C3666] to-[#132548] hover:from-[#1D396D] hover:via-[#22427A] hover:to-[#18305C] text-white border border-white/25 hover:border-[#F97316]/75 shadow-[0_8px_24px_rgba(0,0,0,0.3)] hover:shadow-[0_10px_28px_rgba(249,115,22,0.22)] font-extrabold tracking-[1px] sm:tracking-[1.5px] text-[12px] md:text-[13px] whitespace-nowrap shrink-0 w-full sm:w-auto transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F97316]"
