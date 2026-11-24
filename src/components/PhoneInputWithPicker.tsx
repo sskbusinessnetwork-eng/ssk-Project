@@ -14,182 +14,72 @@ import {
   Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { normalizePhoneDigits } from '../utils/phoneUtils';
+import { normalizePhoneDigits, normalizePickedPhoneNumber } from '../utils/phoneUtils';
 import { showInfo, showSuccess, showError } from '../services/toastService';
 import { supabase } from '../lib/supabaseClient';
 import { extractMemberExtraData } from './OfflineReferralMemberSelect';
 import { getCleanFullName } from '../utils/authUtils';
+import {
+  parseVCardContacts,
+  resolveContactSelection,
+  type PickedContact,
+  type ParsedVCardContact,
+  type ContactPickerUnavailableReason
+} from '../services/contactPickerService';
 
-export interface PickedContact {
-  phone: string;
-  name?: string;
-}
-
-interface ParsedVCardContact {
-  name: string;
-  phones: string[];
-}
-
-function decodeQuotedPrintable(input: string): string {
-  try {
-    const cleaned = input.replace(/=\r?\n/g, '');
-    const bytes: number[] = [];
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '=' && /^[0-9A-Fa-f]{2}$/.test(cleaned.slice(i + 1, i + 3))) {
-        bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16));
-        i += 2;
-      } else {
-        bytes.push(cleaned.charCodeAt(i));
-      }
-    }
-    return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
-  } catch {
-    return input;
-  }
-}
-
-export function parseVCardContacts(vcfText: string): ParsedVCardContact[] {
-  if (!vcfText || typeof vcfText !== 'string') return [];
-
-  // Unfold RFC 6350/2426 folded lines
-  const unfolded = vcfText
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\n[ \t]/g, '');
-
-  const blocks = unfolded.split(/BEGIN:VCARD/i).slice(1);
-  const results: ParsedVCardContact[] = [];
-
-  for (const block of blocks) {
-    const endIdx = block.search(/END:VCARD/i);
-    const body = endIdx >= 0 ? block.slice(0, endIdx) : block;
-    const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
-
-    let fullName = '';
-    let fallbackName = '';
-    const phoneSet = new Set<string>();
-
-    for (const line of lines) {
-      const colonIdx = line.indexOf(':');
-      if (colonIdx === -1) continue;
-
-      const left = line.slice(0, colonIdx).toUpperCase();
-      let right = line.slice(colonIdx + 1).trim();
-
-      if (left.includes('QUOTED-PRINTABLE')) {
-        right = decodeQuotedPrintable(right);
-      }
-
-      const propName = left.split(';')[0].replace(/^ITEM\d+\./, '');
-
-      if (propName === 'FN' && right) {
-        fullName = right.trim();
-      } else if (propName === 'N' && right && !fallbackName) {
-        const parts = right.split(';').map((p) => p.trim()).filter(Boolean);
-        if (parts.length > 0) {
-          fallbackName = parts.length >= 2 ? `${parts[1]} ${parts[0]}`.trim() : parts[0];
-        }
-      } else if (propName === 'TEL' && right) {
-        const cleanedUri = right.replace(/^tel:/i, '').trim();
-        const normalized = normalizePhoneDigits(cleanedUri);
-        const val = normalized || cleanedUri;
-        if (val && val.replace(/\D/g, '').length >= 7) {
-          phoneSet.add(val);
-        }
-      }
-    }
-
-    const phones = Array.from(phoneSet);
-    if (phones.length > 0) {
-      results.push({
-        name: (fullName || fallbackName || 'Contact').trim(),
-        phones
-      });
-    }
-  }
-
-  return results;
-}
-
-function extractRawPhone(rawTelItem: any): string {
-  if (!rawTelItem) return '';
-  if (typeof rawTelItem === 'string') return rawTelItem.trim();
-  if (typeof rawTelItem === 'object') {
-    return String(rawTelItem.value || rawTelItem.number || '').trim();
-  }
-  return String(rawTelItem).trim();
-}
+export type { PickedContact, ParsedVCardContact, ContactPickerUnavailableReason };
+export { parseVCardContacts };
 
 export async function pickPhoneFromContacts(
   onSelect: (phone: string) => void,
   onContactSelect?: (contact: PickedContact) => void,
-  onUnavailable?: (reason: 'unsupported' | 'blocked', errorName?: string) => void
+  onUnavailable?: (reason: ContactPickerUnavailableReason, errorName?: string) => void,
+  onMultipleNumbers?: (contact: ParsedVCardContact) => void
 ): Promise<boolean> {
-  const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
-  const isSupported = Boolean(nav && 'contacts' in nav && nav.contacts && typeof nav.contacts.select === 'function');
+  const result = await resolveContactSelection();
 
-  if (!isSupported) {
-    if (onUnavailable) {
-      onUnavailable('unsupported');
-    } else {
-      showInfo('Opening phonebook options...', { title: 'Contacts Picker' });
-    }
-    return false;
-  }
-
-  try {
-    let contacts: any[] | null = null;
-    try {
-      contacts = await nav.contacts.select(['name', 'tel'], { multiple: false });
-    } catch (propErr: any) {
-      if (propErr?.name === 'TypeError') {
-        contacts = await nav.contacts.select(['tel'], { multiple: false });
-      } else {
-        throw propErr;
-      }
-    }
-
-    if (contacts && contacts.length > 0) {
-      const contact = contacts[0];
-      const rawName = Array.isArray(contact?.name) && contact.name.length > 0
-        ? String(contact.name[0] || '').trim()
-        : undefined;
-
-      if (contact?.tel && contact.tel.length > 0) {
-        for (const item of contact.tel) {
-          const rawTel = extractRawPhone(item);
-          if (rawTel) {
-            const normalized = normalizePhoneDigits(rawTel) || rawTel;
-            onSelect(normalized);
-            if (onContactSelect) {
-              onContactSelect({ phone: normalized, name: rawName });
-            }
-            return true;
-          }
-        }
-      }
-
-      showInfo('Selected contact does not have a phone number saved.', {
-        title: 'No Phone Number'
-      });
-      return true;
+  if (result.status === 'selected') {
+    onSelect(result.contact.phone);
+    if (onContactSelect) {
+      onContactSelect(result.contact);
     }
     return true;
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      // User dismissed the native picker intentionally
-      return true;
-    }
-
-    if (onUnavailable) {
-      onUnavailable('blocked', err?.name);
-    } else {
-      showInfo('Unable to open device contacts directly in this view.', {
-        title: 'Contacts Unavailable'
-      });
-    }
-    return false;
   }
+
+  if (result.status === 'multiple_numbers') {
+    if (onMultipleNumbers) {
+      onMultipleNumbers({ name: result.name, phones: result.phones });
+    } else {
+      const firstPhone = result.phones[0];
+      onSelect(firstPhone);
+      if (onContactSelect) {
+        onContactSelect({ phone: firstPhone, name: result.name });
+      }
+    }
+    return true;
+  }
+
+  if (result.status === 'no_phone') {
+    showInfo('Selected contact does not have a valid phone number saved.', {
+      title: 'No Phone Number'
+    });
+    return true;
+  }
+
+  if (result.status === 'cancelled') {
+    return true;
+  }
+
+  if (onUnavailable) {
+    onUnavailable(result.reason, result.errorName);
+  } else {
+    const fallbackMessage =
+      result.reason === 'permission_denied'
+        ? 'Contacts permission was denied. Allow access or use .vcf / Paste Number.'
+        : 'Unable to open device contacts directly in this view.';
+    showInfo(fallbackMessage, { title: 'Contacts Unavailable' });
+  }
+  return false;
 }
 
 interface DirectoryContactItem {
@@ -200,16 +90,36 @@ interface DirectoryContactItem {
   chapterName: string;
 }
 
+type ModalNoticeReason = ContactPickerUnavailableReason | 'multiple_numbers';
+
 interface ContactPickerFallbackModalProps {
   isOpen: boolean;
-  reason: 'unsupported' | 'blocked';
+  reason: ModalNoticeReason;
+  initialMultipleContact?: ParsedVCardContact | null;
   onClose: () => void;
   onPick: (contact: PickedContact) => void;
+}
+
+function getNoticeMessage(reason: ModalNoticeReason, isInIframe: boolean): string {
+  if (reason === 'multiple_numbers') {
+    return 'This contact has multiple phone numbers. Tap the number you want to use below, or import/pick another contact.';
+  }
+  if (reason === 'iframe_blocked' || isInIframe) {
+    return 'Direct phonebook popup is blocked inside this embedded browser view. Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.';
+  }
+  if (reason === 'permission_denied') {
+    return 'Contacts permission was denied or restricted on this device. Allow contacts permission in browser/app settings, or import a contact card (.vcf), paste a number, or pick from the SSK Member Directory below.';
+  }
+  if (reason === 'blocked') {
+    return 'Direct phonebook popup is restricted by this browser or WebView on your device. Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.';
+  }
+  return 'Your browser or WebView does not support direct native phonebook popup (supported on Android Chrome/Edge or native app bridge). Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.';
 }
 
 function ContactPickerFallbackModal({
   isOpen,
   reason,
+  initialMultipleContact = null,
   onClose,
   onPick
 }: ContactPickerFallbackModalProps) {
@@ -220,6 +130,7 @@ function ContactPickerFallbackModal({
   const [manualPasteValue, setManualPasteValue] = useState('');
   const [showManualPaste, setShowManualPaste] = useState(false);
   const vcardInputRef = useRef<HTMLInputElement>(null);
+  const hasPickedRef = useRef(false);
 
   const isInIframe = useMemo(() => {
     try {
@@ -229,13 +140,28 @@ function ContactPickerFallbackModal({
     }
   }, []);
 
+  const commitPickAndClose = (contact: PickedContact) => {
+    if (hasPickedRef.current) return;
+    hasPickedRef.current = true;
+    onPick(contact);
+    onClose();
+  };
+
   useEffect(() => {
     if (!isOpen) {
+      hasPickedRef.current = false;
       setSearchQuery('');
       setVcardContacts([]);
       setManualPasteValue('');
       setShowManualPaste(false);
       return;
+    }
+
+    hasPickedRef.current = false;
+    if (initialMultipleContact && initialMultipleContact.phones.length > 0) {
+      setVcardContacts([initialMultipleContact]);
+    } else {
+      setVcardContacts([]);
     }
 
     let isMounted = true;
@@ -268,7 +194,7 @@ function ContactPickerFallbackModal({
             .map((u: any) => {
               const extra = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
               const rawPhone = String(u.phone || extra.phone || '').trim();
-              const normalizedPhone = normalizePhoneDigits(rawPhone) || rawPhone;
+              const normalizedPhone = normalizePickedPhoneNumber(rawPhone) || normalizePhoneDigits(rawPhone) || rawPhone;
               const chapId = String(u.chapter_id || extra.chapter_id || '').trim().toLowerCase();
               const chapName = (chapId && chapMap.get(chapId)) || u.chapter_name || extra.chapter_name || 'Chapter Member';
               const rawCatId = String(u.category_id || extra.category_id || '').trim().toLowerCase();
@@ -314,7 +240,7 @@ function ContactPickerFallbackModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen]);
+  }, [isOpen, initialMultipleContact]);
 
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
@@ -337,14 +263,13 @@ function ContactPickerFallbackModal({
       const text = await file.text();
       const parsed = parseVCardContacts(text);
       if (parsed.length === 0) {
-        showError('No phone numbers were found in that contact card (.vcf).');
+        showError('No valid phone numbers were found in that contact card (.vcf).');
         return;
       }
 
       if (parsed.length === 1 && parsed[0].phones.length === 1) {
-        onPick({ phone: parsed[0].phones[0], name: parsed[0].name });
         showSuccess(`Selected ${parsed[0].name}`);
-        onClose();
+        commitPickAndClose({ phone: parsed[0].phones[0], name: parsed[0].name });
         return;
       }
 
@@ -358,11 +283,10 @@ function ContactPickerFallbackModal({
     try {
       if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
         const text = await navigator.clipboard.readText();
-        const normalized = normalizePhoneDigits(text);
-        if (normalized && normalized.length >= 7) {
-          onPick({ phone: normalized });
+        const normalized = normalizePickedPhoneNumber(text);
+        if (normalized) {
           showSuccess('Phone number pasted from clipboard');
-          onClose();
+          commitPickAndClose({ phone: normalized });
           return;
         }
         if (text && text.trim()) {
@@ -378,14 +302,12 @@ function ContactPickerFallbackModal({
   };
 
   const handleApplyManualPaste = () => {
-    const normalized = normalizePhoneDigits(manualPasteValue);
-    const val = normalized || manualPasteValue.trim();
-    if (!val || val.replace(/\D/g, '').length < 7) {
+    const normalized = normalizePickedPhoneNumber(manualPasteValue);
+    if (!normalized) {
       showError('Please enter or paste a valid phone number.');
       return;
     }
-    onPick({ phone: val });
-    onClose();
+    commitPickAndClose({ phone: normalized });
   };
 
   if (!isOpen || typeof document === 'undefined') return null;
@@ -434,11 +356,7 @@ function ContactPickerFallbackModal({
           {/* Context Notice */}
           <div className="p-3 rounded-xl bg-[#151C2E] border border-white/10 flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed">
             <AlertCircle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-            <span>
-              {reason === 'blocked' || isInIframe
-                ? 'Direct phonebook popup is blocked inside this embedded browser view. Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.'
-                : 'Your browser does not support direct native phonebook popup (supported on Android Chrome/Edge). Import a contact card (.vcf), paste a copied number, or pick from the SSK Member Directory below.'}
-            </span>
+            <span>{getNoticeMessage(reason, isInIframe)}</span>
           </div>
 
           {/* Quick Actions: Import vCard (.vcf) & Paste Clipboard */}
@@ -446,7 +364,7 @@ function ContactPickerFallbackModal({
             <input
               ref={vcardInputRef}
               type="file"
-              accept=".vcf,text/vcard,text/x-vcard,text/directory"
+              accept=".vcf,text/vcard,text/x-vcard,text/x-vCard,text/directory,application/vcard"
               onChange={handleVCardFileChange}
               className="hidden"
             />
@@ -495,12 +413,14 @@ function ContactPickerFallbackModal({
             </div>
           )}
 
-          {/* Imported vCard Multiple Matches */}
+          {/* Selected Multi-Number Contact / Imported vCard Matches */}
           {vcardContacts.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                  Imported Contacts ({vcardContacts.length})
+                  {reason === 'multiple_numbers' && vcardContacts.length === 1
+                    ? 'Select Phone Number'
+                    : `Imported Contacts (${vcardContacts.length})`}
                 </p>
                 <button
                   type="button"
@@ -519,10 +439,7 @@ function ContactPickerFallbackModal({
                         <button
                           key={ph}
                           type="button"
-                          onClick={() => {
-                            onPick({ phone: ph, name: vc.name });
-                            onClose();
-                          }}
+                          onClick={() => commitPickAndClose({ phone: ph, name: vc.name })}
                           className="px-2.5 py-1 rounded-lg bg-primary/15 border border-primary/30 text-primary text-[11px] font-bold hover:bg-primary hover:text-white transition-all cursor-pointer flex items-center gap-1"
                         >
                           <Phone size={11} />
@@ -576,10 +493,7 @@ function ContactPickerFallbackModal({
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => {
-                      onPick({ phone: m.phone, name: m.name });
-                      onClose();
-                    }}
+                    onClick={() => commitPickAndClose({ phone: m.phone, name: m.name })}
                     className="w-full text-left p-2.5 rounded-xl bg-[#151C2E]/70 hover:bg-[#1A2236] border border-white/5 hover:border-primary/40 transition-all flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <div className="min-w-0 flex-1">
@@ -625,18 +539,38 @@ export function ContactPickerButton({
   disabled = false,
   className
 }: ContactPickerButtonProps) {
-  const [fallbackState, setFallbackState] = useState<{ open: boolean; reason: 'unsupported' | 'blocked' }>({
+  const [fallbackState, setFallbackState] = useState<{
+    open: boolean;
+    reason: ModalNoticeReason;
+    initialMultipleContact: ParsedVCardContact | null;
+  }>({
     open: false,
-    reason: 'unsupported'
+    reason: 'unsupported',
+    initialMultipleContact: null
   });
+  const isPickingRef = useRef(false);
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    if (disabled) return;
+    if (disabled || isPickingRef.current) return;
 
-    void pickPhoneFromContacts(onSelect, onContactSelect, (reason) => {
-      setFallbackState({ open: true, reason });
+    isPickingRef.current = true;
+    void pickPhoneFromContacts(
+      onSelect,
+      onContactSelect,
+      (reason) => {
+        setFallbackState({ open: true, reason, initialMultipleContact: null });
+      },
+      (multiContact) => {
+        setFallbackState({
+          open: true,
+          reason: 'multiple_numbers',
+          initialMultipleContact: multiContact
+        });
+      }
+    ).finally(() => {
+      isPickingRef.current = false;
     });
   };
 
@@ -659,7 +593,14 @@ export function ContactPickerButton({
       <ContactPickerFallbackModal
         isOpen={fallbackState.open}
         reason={fallbackState.reason}
-        onClose={() => setFallbackState((prev) => ({ ...prev, open: false }))}
+        initialMultipleContact={fallbackState.initialMultipleContact}
+        onClose={() =>
+          setFallbackState((prev) => ({
+            ...prev,
+            open: false,
+            initialMultipleContact: null
+          }))
+        }
         onPick={(contact) => {
           onSelect(contact.phone);
           if (onContactSelect) {
