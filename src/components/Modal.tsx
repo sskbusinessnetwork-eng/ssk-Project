@@ -10,7 +10,7 @@ interface ModalProps {
   maxWidth?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl" }: ModalProps) {
+export const Modal = React.memo(function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl" }: ModalProps) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -40,7 +40,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 sm:p-2 bg-muted hover:bg-border rounded-xl transition-all text-text-secondary hover:text-text-primary active:scale-90 cursor-pointer"
+                className="p-1.5 sm:p-2 bg-muted hover:bg-border rounded-xl transition-colors text-text-secondary hover:text-text-primary active:scale-90 cursor-pointer"
               >
                 <X size={18} className="sm:w-5 sm:h-5" />
               </button>
@@ -59,4 +59,4 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
       )}
     </AnimatePresence>
   );
-}
+});

@@ -581,35 +581,28 @@ export function Reports() {
   useEffect(() => {
     if (!profile) return;
 
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchReportData();
+      }, 250);
+    };
+
     const channel = supabase
       .channel('reports-live-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'one_to_one_meetings' }, () =>
-        fetchReportData()
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () =>
-        fetchReportData()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'referrals' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'thank_you_slips' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chapters' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'one_to_one_meetings' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, scheduleRefresh)
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [profile, fetchReportData]);

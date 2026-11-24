@@ -278,11 +278,7 @@ export function Referrals() {
         return;
       }
 
-      // STEP 1 - VERIFY DATABASE: Log every referral column
-      console.log(`[Referrals Table Verification] Total rows fetched: ${refRows.length}`);
-      refRows.forEach((r: any, idx: number) => {
-        console.log(`[Referral #${idx + 1}] ID: ${r.id} | sender_id: ${r.sender_id} | receiver_id: ${r.receiver_id} | chapter_id: ${r.chapter_id}`);
-      });
+      // Fetch users table for complete mapping
 
       // STEP 2 - VERIFY USERS TABLE: Fetch users table for complete mapping
       const { data: usersData, error: usersErr } = await supabase
@@ -314,19 +310,6 @@ export function Referrals() {
 
         const senderUser = r.sender || userMap.get(senderKey);
         const receiverUser = r.receiver || userMap.get(receiverKey);
-
-        // STEP 6 - DEBUG: Log lookup results clearly
-        if (!senderUser) {
-          console.error(`Referral sender_id: ${senderIdRaw} - Matching sender user: NOT FOUND`);
-        } else {
-          console.log(`Referral sender_id: ${senderIdRaw} - Sender:`, senderUser);
-        }
-
-        if (!receiverUser) {
-          console.error(`Referral receiver_id: ${receiverIdRaw} - Matching receiver user: NOT FOUND`);
-        } else {
-          console.log(`Referral receiver_id: ${receiverIdRaw} - Receiver:`, receiverUser);
-        }
 
         // Master Admin must never appear as a sender or receiver
         if (senderUser?.role === 'MASTER_ADMIN' || receiverUser?.role === 'MASTER_ADMIN') {

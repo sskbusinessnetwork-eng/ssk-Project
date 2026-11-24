@@ -191,7 +191,8 @@ const GrowthScoreGauge = React.memo(function GrowthScoreGauge({
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const ease = 1 - Math.pow(1 - progress, 3);
-      setScore(Math.floor(ease * end));
+      const nextVal = Math.floor(ease * end);
+      setScore(prev => (prev === nextVal ? prev : nextVal));
 
       if (progress < 1) {
         rafId = requestAnimationFrame(animate);
@@ -213,7 +214,7 @@ const GrowthScoreGauge = React.memo(function GrowthScoreGauge({
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-[-4px] rounded-full opacity-40 blur-[8px] border-2 border-dashed border-[#E53935]"
+        className="absolute inset-[-4px] rounded-full opacity-35 border-2 border-dashed border-[#E53935] will-change-transform transform-gpu"
       />
 
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 relative z-10">
@@ -244,7 +245,6 @@ const GrowthScoreGauge = React.memo(function GrowthScoreGauge({
           strokeDasharray="276"
           strokeDashoffset={276 - (276 * Math.min(100, Math.max(0, score))) / 100}
           strokeLinecap="round"
-          className="transition-all duration-300 drop-shadow-[0_0_8px_rgba(229,57,53,0.6)]"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center m-2.5 rounded-full bg-[#0B1220]/90 backdrop-blur-sm shadow-inner z-20">
@@ -572,32 +572,6 @@ export function Analytics() {
       });
       setChapterUsers(chapterMems);
     });
-
-    // For non-MASTER_ADMIN users, also fetch all users so cross-chapter names resolve accurately
-    if (profile.role !== 'MASTER_ADMIN') {
-      supabase.from('users').select('*').then(
-        ({ data: sbUsers }) => {
-          if (sbUsers && sbUsers.length > 0) {
-            setAllUsersList(prev => {
-              const map = new Map<string, any>();
-              (prev || []).forEach(u => {
-                const k = String(u.id || u.uid || '');
-                if (k) map.set(k.toLowerCase(), u);
-              });
-              sbUsers.forEach((u: any) => {
-                const k = String(u.id || u.uid || '');
-                if (k) {
-                  const existing = map.get(k.toLowerCase()) || {};
-                  map.set(k.toLowerCase(), { ...existing, ...u });
-                }
-              });
-              return Array.from(map.values());
-            });
-          }
-        },
-        (err) => console.warn("Dashboard load users notice:", err)
-      );
-    }
 
     // 2. Subscribe to thank you slips
     const unsubSlips = databaseService.subscribe<any>('thank_you_slips', [], (data) => {

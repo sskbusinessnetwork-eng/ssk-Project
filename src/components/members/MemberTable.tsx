@@ -1,33 +1,15 @@
 import { Avatar } from '../../components/Avatar';
-import React, { useState } from 'react';
-import { 
-  Phone, 
+import React, { memo, useCallback } from 'react';
+import {
+  Phone,
   PhoneCall,
-  Briefcase, 
-  Tags, 
-  UserCheck, 
-  UserMinus, 
-  CreditCard, 
-  Trash2,
-  Building2,
-  Edit2,
-  Shield,
-  AlertTriangle,
-  Bell,
-  Users,
-  Settings,
-  MapPin,
-  Calendar,
-  MoreVertical,
-  Eye,
-  Lock
+  Trash2
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { cn } from '../../lib/utils';
-import { differenceInDays, isValid } from 'date-fns';
-import { safeFormat as format } from '../../utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
 import { isMemberActive } from '../../utils/memberStatus';
+import { getDisplayPosition, getCleanFullName } from '../../utils/authUtils';
 
 interface MemberTableProps {
   currentUserId?: string;
@@ -44,12 +26,155 @@ interface MemberTableProps {
   onTransferMember: (member: UserProfile) => void;
 }
 
-import { getDisplayPosition, getCleanFullName } from '../../utils/authUtils';
+interface MemberCardProps {
+  member: UserProfile;
+  currentUserId?: string;
+  showActions: boolean;
+  onView: (uid: string) => void;
+  onEditMember: (member: UserProfile) => void;
+  onResetPassword: (member: UserProfile) => void;
+  onTransferMember: (member: UserProfile) => void;
+  onOpenSubModal: (member: UserProfile) => void;
+  onUpdateStatus: (uid: string, status: UserProfile['membershipStatus']) => void;
+  onDeleteMember: (member: UserProfile) => void;
+}
 
-export function MemberTable({
+const MemberCard = memo(function MemberCard({
+  member,
+  currentUserId,
+  showActions,
+  onView,
+  onEditMember,
+  onResetPassword,
+  onTransferMember,
+  onOpenSubModal,
+  onUpdateStatus,
+  onDeleteMember
+}: MemberCardProps) {
+  const rawPos = getDisplayPosition(member.position || (member as any).chapter_position, member.role);
+  const leadershipRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos)
+    ? rawPos.toUpperCase()
+    : 'MEMBER';
+  const cleanName = getCleanFullName(member.name || member.displayName);
+  const categoryLabel = member.category || (member as any).business_category || member.businessName || (member as any).business_name || 'Business Owner';
+  const chapterLabel = member.chapter_name || member.chapterName || (member as any).chapter || 'SSK Chapter';
+  const active = isMemberActive(member);
+
+  return (
+    <div className="bg-[#111827] p-4 rounded-xl border border-white/5 relative flex flex-col gap-2 shadow-sm hover:border-white/10 transition-colors">
+      <div className="flex items-start gap-3">
+        <Avatar src={member.photoURL} name={cleanName} size="w-12 h-12" className="rounded-full shrink-0" fallbackClassName="rounded-full text-sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <p className="font-bold text-white text-sm leading-tight truncate">{cleanName}</p>
+              <span className={cn(
+                "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0",
+                leadershipRole === 'PRESIDENT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                leadershipRole === 'VICE PRESIDENT' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                leadershipRole === 'TREASURER' ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
+                leadershipRole === 'CHAPTER ADMIN' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                "bg-white/5 text-neutral-300 border-white/10"
+              )}>
+                {leadershipRole}
+              </span>
+            </div>
+            <div className={cn(
+              "px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border shrink-0",
+              active ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
+            )}>
+              {active ? 'ACTIVE' : 'INACTIVE'}
+            </div>
+          </div>
+          <p className="text-xs text-primary font-semibold truncate mt-0.5 uppercase">
+            {categoryLabel} &bull; {chapterLabel}
+          </p>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-medium">
+              <Phone size={10} className="text-neutral-500" />
+              <span>{member.phone || 'No Phone'}</span>
+            </div>
+            {member.phone && (
+              <a
+                href={`tel:${member.phone}`}
+                onClick={(e) => e.stopPropagation()}
+                className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors"
+                title="Call Member"
+              >
+                <PhoneCall size={10} />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Action bar */}
+      {showActions && (
+        <div className="pt-3 mt-1 border-t border-white/5 flex flex-wrap items-center justify-end gap-2">
+          <button
+            onClick={() => onView(member.uid)}
+            className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-[#1C2538]"
+          >
+            View
+          </button>
+          {currentUserId === member.uid && (
+          <button
+            onClick={() => onEditMember(member)}
+            className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-[#1C2538]"
+          >
+            Edit
+          </button>
+          )}
+          <button
+            onClick={() => onResetPassword(member)}
+            className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-[#1C2538]"
+          >
+            Reset
+          </button>
+          <button
+            onClick={() => onTransferMember(member)}
+            className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-amber-500/20"
+          >
+            Transfer
+          </button>
+          <button
+            onClick={() => onOpenSubModal(member)}
+            className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-[#1C2538]"
+          >
+            Sub
+          </button>
+
+          {member.membershipStatus === 'ACTIVE' ? (
+            <button
+              onClick={() => onUpdateStatus(member.uid, 'SUSPENDED')}
+              className="px-2 py-1 bg-red-500/10 text-red-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-red-500/20"
+            >
+              Suspend
+            </button>
+          ) : (
+            <button
+              onClick={() => onUpdateStatus(member.uid, 'ACTIVE')}
+              className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors active:scale-95 hover:bg-emerald-500/20"
+            >
+              Activate
+            </button>
+          )}
+
+          <button
+            onClick={() => onDeleteMember(member)}
+            className="h-6 w-6 bg-red-500/10 text-red-400 rounded flex items-center justify-center transition-colors active:scale-95 hover:bg-red-500/20"
+          >
+            <Trash2 size={10} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const MemberTable = memo(function MemberTable({
   currentUserId,
   members,
-  adminMap,
   loading,
   isMasterAdmin,
   isChapterAdmin,
@@ -61,28 +186,10 @@ export function MemberTable({
   onTransferMember
 }: MemberTableProps) {
   const navigate = useNavigate();
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  const getPositionText = (member: UserProfile) => {
-    const position = member.position;
-    if (!position || position === 'member') return null;
-    return (
-      <span className="text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10">
-        {position.replace('_', ' ')}
-      </span>
-    );
-  };
-
-  const toggleActionsMenu = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setActiveMenuId(activeMenuId === id ? null : id);
-  };
-
-  React.useEffect(() => {
-    const handleOutsideClick = () => setActiveMenuId(null);
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
-  }, []);
+  const handleViewMember = useCallback((uid: string) => {
+    navigate(`/profile?id=${uid}`);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -98,125 +205,21 @@ export function MemberTable({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {members.length > 0 ? (
-        members.map((member) => {
-          const rawPos = getDisplayPosition(member.position || (member as any).chapter_position, member.role);
-          const leadershipRole = ['President', 'Vice President', 'Treasurer', 'Chapter Admin'].includes(rawPos)
-            ? rawPos.toUpperCase()
-            : 'MEMBER';
-          const cleanName = getCleanFullName(member.name || member.displayName);
-          const categoryLabel = member.category || (member as any).business_category || member.businessName || (member as any).business_name || 'Business Owner';
-          const chapterLabel = member.chapter_name || member.chapterName || (member as any).chapter || 'SSK Chapter';
-          return (
-            <div key={member.uid} className="bg-[#111827] p-4 rounded-xl border border-white/5 relative flex flex-col gap-2 shadow-sm hover:border-white/10 transition-colors">
-              <div className="flex items-start gap-3">
-                <Avatar src={member.photoURL} name={cleanName} size="w-12 h-12" className="rounded-full shrink-0" fallbackClassName="rounded-full text-sm" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                      <p className="font-bold text-white text-sm leading-tight truncate">{cleanName}</p>
-                      <span className={cn(
-                        "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0",
-                        leadershipRole === 'PRESIDENT' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                        leadershipRole === 'VICE PRESIDENT' ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                        leadershipRole === 'TREASURER' ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" :
-                        leadershipRole === 'CHAPTER ADMIN' ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                        "bg-white/5 text-neutral-300 border-white/10"
-                      )}>
-                        {leadershipRole}
-                      </span>
-                    </div>
-                    <div className={cn(
-                      "px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border shrink-0",
-                      isMemberActive(member) ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"
-                    )}>
-                      {isMemberActive(member) ? 'ACTIVE' : 'INACTIVE'}
-                    </div>
-                  </div>
-                  <p className="text-xs text-primary font-semibold truncate mt-0.5 uppercase">
-                    {categoryLabel} &bull; {chapterLabel}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-medium">
-                      <Phone size={10} className="text-neutral-500" />
-                      <span>{member.phone || 'No Phone'}</span>
-                    </div>
-                    {member.phone && (
-                      <a 
-                        href={`tel:${member.phone}`} 
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors"
-                        title="Call Member"
-                      >
-                        <PhoneCall size={10} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action bar */}
-              {showActions && (
-                <div className="pt-3 mt-1 border-t border-white/5 flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    onClick={() => navigate(`/profile?id=${member.uid}`)}
-                    className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
-                  >
-                    View
-                  </button>
-                  {currentUserId === member.uid && (
-                  <button
-                    onClick={() => onEditMember(member)}
-                    className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
-                  >
-                    Edit
-                  </button>
-                  )}
-                  <button
-                    onClick={() => onResetPassword(member)}
-                    className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    onClick={() => onTransferMember(member)}
-                    className="px-2 py-1 bg-amber-500/10 text-amber-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-amber-500/20"
-                  >
-                    Transfer
-                  </button>
-                  <button
-                    onClick={() => onOpenSubModal(member)}
-                    className="px-2 py-1 bg-[#151C2E] text-neutral-200 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-[#1C2538]"
-                  >
-                    Sub
-                  </button>
-                  
-                  {member.membershipStatus === 'ACTIVE' ? (
-                    <button
-                      onClick={() => onUpdateStatus(member.uid, 'SUSPENDED')}
-                      className="px-2 py-1 bg-red-500/10 text-red-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-red-500/20"
-                    >
-                      Suspend
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onUpdateStatus(member.uid, 'ACTIVE')}
-                      className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 hover:bg-emerald-500/20"
-                    >
-                      Activate
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={() => onDeleteMember(member)}
-                    className="h-6 w-6 bg-red-500/10 text-red-400 rounded flex items-center justify-center transition-all active:scale-95 hover:bg-red-500/20"
-                  >
-                    <Trash2 size={10} />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })
+        members.map((member) => (
+          <MemberCard
+            key={member.uid}
+            member={member}
+            currentUserId={currentUserId}
+            showActions={showActions}
+            onView={handleViewMember}
+            onEditMember={onEditMember}
+            onResetPassword={onResetPassword}
+            onTransferMember={onTransferMember}
+            onOpenSubModal={onOpenSubModal}
+            onUpdateStatus={onUpdateStatus}
+            onDeleteMember={onDeleteMember}
+          />
+        ))
       ) : (
         <div className="col-span-full bg-[#111827] p-8 rounded-xl border border-white/5 text-center">
           <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">No members found.</p>
@@ -224,4 +227,4 @@ export function MemberTable({
       )}
     </div>
   );
-}
+});

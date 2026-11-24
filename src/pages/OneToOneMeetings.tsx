@@ -1,6 +1,6 @@
 import { Avatar } from '../components/Avatar';
 import { supabase } from '../lib/supabaseClient';
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Plus, 
@@ -175,6 +175,7 @@ export function OneToOneMeetings() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [historyType, setHistoryType] = useState<'scheduled' | 'attended' | 'all'>('all');
@@ -551,15 +552,28 @@ export function OneToOneMeetings() {
     });
   }, [allUsersList, memberTab, currentUserChapterId, currentUserId, currentAuthId, profile]);
 
+  // O(1) user lookup map for meeting cards
+  const usersByIdMap = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const u of allUsersList) {
+      if (u.id) map.set(String(u.id), u);
+      if (u.uid) map.set(String(u.uid), u);
+    }
+    return map;
+  }, [allUsersList]);
+
   // Search Filtered Members (sorted alphabetically)
-  const filteredMembers = useMemo(() => {
-    const sorted = [...availableMembers].sort((a, b) =>
+  const sortedAvailableMembers = useMemo(() => {
+    return [...availableMembers].sort((a, b) =>
       getUserFullName(a).localeCompare(getUserFullName(b), undefined, { sensitivity: 'base' })
     );
-    if (!searchTerm.trim()) return sorted;
-    const q = searchTerm.toLowerCase().trim();
+  }, [availableMembers]);
 
-    return sorted.filter(m => {
+  const filteredMembers = useMemo(() => {
+    if (!deferredSearchTerm.trim()) return sortedAvailableMembers;
+    const q = deferredSearchTerm.toLowerCase().trim();
+
+    return sortedAvailableMembers.filter(m => {
       const fullName = (getUserFullName(m) || m.name || m.full_name || '').toLowerCase();
       const phone = (m.phone || m.contact_phone || m.whatsappNumber || m.mobile || '').toLowerCase();
       const chapterName = (chapterMap.get(String(m.chapter_id)) || chapterMap.get(String(m.chapter_id || '').toLowerCase()) || m.chapter_name || '').toLowerCase();
@@ -572,7 +586,7 @@ export function OneToOneMeetings() {
         cat.includes(q)
       );
     });
-  }, [availableMembers, searchTerm, chapterMap]);
+  }, [sortedAvailableMembers, deferredSearchTerm, chapterMap]);
 
   // Addresses for location selection
   const myAddress = useMemo(() => getUserFullAddress(currentUserRecord), [currentUserRecord]);
@@ -625,7 +639,9 @@ export function OneToOneMeetings() {
     });
     setLocationType('');
     setIsModalOpen(true);
-    refreshUsersAndChapters();
+    if (allUsersList.length === 0) {
+      refreshUsersAndChapters();
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1383,24 +1399,22 @@ export function OneToOneMeetings() {
           
           <div className="flex flex-col gap-3">
             {upcomingMeetings.length > 0 ? (
-              upcomingMeetings.map((meeting) => (
-                <MeetingCard 
-                  key={meeting.id} 
-                  meeting={meeting} 
-                  allUsersList={allUsersList}
-                  chapterMap={chapterMap}
-                  isCreator={
-                    (() => {
-                      const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
-                      const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
-                      const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
-                      return myIds.includes(senderId) || myIds.includes(receiverId);
-                    })()
-                  }
-                  isAdmin={isAdmin}
-                  onUpdate={() => handleOpenAttendanceModal(meeting)}
-                />
-              ))
+              upcomingMeetings.map((meeting) => {
+                const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
+                const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
+                const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
+                const isCreator = myIds.includes(senderId) || myIds.includes(receiverId);
+                return (
+                  <MeetingCard
+                    key={meeting.id}
+                    meeting={meeting}
+                    usersByIdMap={usersByIdMap}
+                    isCreator={isCreator}
+                    isAdmin={isAdmin}
+                    onUpdate={handleOpenAttendanceModal}
+                  />
+                );
+              })
             ) : (
               <div className="p-8 sm:p-12 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-dashed border-white/5">
                 <p className="text-neutral-400 font-medium italic text-[10px] sm:text-xs uppercase tracking-widest">No upcoming meetings scheduled.</p>
@@ -1461,24 +1475,22 @@ export function OneToOneMeetings() {
           
           <div className="flex flex-col gap-3">
             {pastMeetings.length > 0 ? (
-              pastMeetings.map((meeting) => (
-                <MeetingCard 
-                  key={meeting.id} 
-                  meeting={meeting} 
-                  allUsersList={allUsersList}
-                  chapterMap={chapterMap}
-                  isCreator={
-                    (() => {
-                      const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
-                      const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
-                      const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
-                      return myIds.includes(senderId) || myIds.includes(receiverId);
-                    })()
-                  }
-                  isAdmin={isAdmin}
-                  onUpdate={() => handleOpenAttendanceModal(meeting)}
-                />
-              ))
+              pastMeetings.map((meeting) => {
+                const senderId = String(meeting.sender_id || meeting.organizer_id || meeting.creatorId);
+                const receiverId = String(meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]));
+                const myIds = [String(profile?.id), String(profile?.uid), String(currentUserRecord?.id), String(currentUserRecord?.uid)];
+                const isCreator = myIds.includes(senderId) || myIds.includes(receiverId);
+                return (
+                  <MeetingCard
+                    key={meeting.id}
+                    meeting={meeting}
+                    usersByIdMap={usersByIdMap}
+                    isCreator={isCreator}
+                    isAdmin={isAdmin}
+                    onUpdate={handleOpenAttendanceModal}
+                  />
+                );
+              })
             ) : (
               <div className="py-20 text-center bg-[#111827] rounded-xl sm:rounded-[24px] border border-white/5 shadow-sm">
                 <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-500">
@@ -1534,9 +1546,9 @@ export function OneToOneMeetings() {
                   onClick={() => {
                     const nextOpen = !isDropdownOpen;
                     setIsDropdownOpen(nextOpen);
-                    if (nextOpen) refreshUsersAndChapters();
+                    if (nextOpen && allUsersList.length === 0) refreshUsersAndChapters();
                   }}
-                  className="w-full px-4 py-4 rounded-[16px] border border-white/5 bg-[#151C2E] cursor-pointer flex items-center justify-between group hover:border-primary/50 transition-all"
+                  className="w-full px-4 py-4 rounded-[16px] border border-white/5 bg-[#151C2E] cursor-pointer flex items-center justify-between group hover:border-primary/50 transition-colors"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
                     <Users size={18} className="text-neutral-400 group-hover:text-primary transition-colors shrink-0" />
@@ -2189,11 +2201,10 @@ export function OneToOneMeetings() {
 
 interface MeetingCardProps {
   meeting: OneToOneMeeting;
-  allUsersList: any[];
-  chapterMap: Map<string, string>;
+  usersByIdMap: Map<string, any>;
   isCreator: boolean;
   isAdmin?: boolean;
-  onUpdate?: () => void;
+  onUpdate?: (meeting: OneToOneMeeting) => void;
 }
 
 function isMeetingOverdue(meeting: OneToOneMeeting): boolean {
@@ -2226,12 +2237,12 @@ function isMeetingOverdue(meeting: OneToOneMeeting): boolean {
   return false;
 }
 
-const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapterMap, isCreator, isAdmin, onUpdate }) => {
+const MeetingCard = memo<MeetingCardProps>(function MeetingCard({ meeting, usersByIdMap, isCreator, isAdmin, onUpdate }) {
   const senderId = meeting.sender_id || meeting.organizer_id || meeting.creatorId;
   const receiverId = meeting.receiver_id || meeting.member_id || (meeting.participantIds && meeting.participantIds[0]);
 
-  const sender = allUsersList.find(u => String(u.id) === String(senderId) || String(u.uid) === String(senderId));
-  const receiver = allUsersList.find(u => String(u.id) === String(receiverId) || String(u.uid) === String(receiverId));
+  const sender = senderId ? usersByIdMap.get(String(senderId)) : undefined;
+  const receiver = receiverId ? usersByIdMap.get(String(receiverId)) : undefined;
 
   const senderName = getUserFullName(sender) || 'Sender';
   const receiverName = getUserFullName(receiver) || 'Receiver';
@@ -2253,9 +2264,9 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
 
   return (
     <div
-      onClick={onUpdate}
+      onClick={() => onUpdate?.(meeting)}
       className={cn(
-        "bg-[#111827] px-4 py-3 sm:px-5 sm:py-3.5 rounded-[12px] border transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
+        "bg-[#111827] px-4 py-3 sm:px-5 sm:py-3.5 rounded-[12px] border transition-colors duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#151C2E] group shadow-sm",
         isOverdue && !isCompleted && !isCancelled ? "border-amber-500/30 bg-amber-500/5" : "border-white/5"
       )}
     >
@@ -2290,7 +2301,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
         <div className="flex items-center gap-2">
           {!isCompleted && !isCancelled && (
             <button 
-              onClick={(e) => { e.stopPropagation(); onUpdate?.(); }}
+              onClick={(e) => { e.stopPropagation(); onUpdate?.(meeting); }}
               className="text-[10px] sm:text-xs font-bold text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors border border-white/10"
             >
               UPDATE MEETING
@@ -2303,4 +2314,4 @@ const MeetingCard: React.FC<MeetingCardProps> = ({ meeting, allUsersList, chapte
       </div>
     </div>
   );
-};
+});

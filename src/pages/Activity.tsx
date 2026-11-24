@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -100,8 +100,79 @@ export interface UnifiedActivityItem {
   contactName?: string;
   contactPhone?: string;
   referralId?: string;
+  formattedDate?: string;
   rawData: any;
 }
+
+const ActivityRow = memo(function ActivityRow({
+  item,
+  onSelect
+}: {
+  item: UnifiedActivityItem;
+  onSelect: (item: UnifiedActivityItem) => void;
+}) {
+  return (
+    <div
+      onClick={() => onSelect(item)}
+      className="flex items-center justify-between py-3.5 px-4 cursor-pointer transition-colors hover:bg-white/[0.03] active:scale-[0.995] group"
+    >
+      {/* Left Side: Type-Specific Line Icon */}
+      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+        <div className="w-11 h-11 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0 group-hover:border-[#E53935]/30 transition-colors">
+          {item.type === 'referral' ? (
+            <ReferralNotepadIcon className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
+          ) : item.type === 'testimonial' ? (
+            <Star className="w-6 h-6 text-amber-400 group-hover:text-amber-300 transition-colors" />
+          ) : (
+            <Handshake className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
+          )}
+        </div>
+
+        {/* Middle Content: Date on top, Member name, category, amount, or testimonial content below */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="text-[12px] font-medium text-neutral-400 leading-tight">
+              {item.formattedDate || item.date}
+            </span>
+            {item.type === 'testimonial' && item.activityLabel && (
+              <span className={cn(
+                "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border",
+                item.activityLabel === 'Testimonial Sent'
+                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                  : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+              )}>
+                {item.activityLabel}
+              </span>
+            )}
+          </div>
+          <div className="text-[14px] font-bold text-[#E53935] truncate leading-tight flex items-center gap-1.5">
+            <span className="truncate">{item.personName}</span>
+            {item.amount !== undefined && item.amount > 0 && (
+              <span className="font-extrabold text-[#E53935] shrink-0">
+                - ₹{item.amount.toLocaleString('en-IN')}
+              </span>
+            )}
+          </div>
+          {item.personCategory && (
+            <div className="text-[11px] font-semibold text-neutral-400 truncate mt-0.5">
+              {item.personCategory}
+            </div>
+          )}
+          {item.type === 'testimonial' && item.testimonialContent && (
+            <p className="text-[12px] text-neutral-300 mt-1 line-clamp-2 leading-relaxed break-words">
+              {item.testimonialContent}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Right Side: Chevron to indicate opening */}
+      <div className="pl-3 shrink-0">
+        <ChevronRight size={18} className="text-[#E53935]/70 group-hover:text-[#E53935] group-hover:translate-x-0.5 transition-transform" />
+      </div>
+    </div>
+  );
+});
 
 export function Activity() {
   const navigate = useNavigate();
@@ -391,18 +462,26 @@ export function Activity() {
     return defaultName || 'Member';
   }, [usersMap]);
 
+  // Pre-cache parsed user categories once per usersMap update
+  const userCategoryMap = useMemo(() => {
+    const cache: Record<string, string> = {};
+    for (const [uid, u] of Object.entries(usersMap)) {
+      const extra = extractMemberExtraData((u as any).profile_photo || (u as any).photo_url || (u as any).photoURL || '');
+      cache[uid] = resolveMemberCategory(u, extra);
+    }
+    return cache;
+  }, [usersMap]);
+
   // Helper: Resolve Member Category
   const getMemberCategory = useCallback((userId: string, fallbackCategory?: string) => {
-    if (userId && usersMap[userId]) {
-      const u: any = usersMap[userId];
-      const extra = extractMemberExtraData(u.profile_photo || u.photo_url || u.photoURL || '');
-      const cat = resolveMemberCategory(u, extra);
+    if (userId && userCategoryMap[userId]) {
+      const cat = userCategoryMap[userId];
       if (cat && cat !== 'Business Owner') return cat;
       if (fallbackCategory) return fallbackCategory;
       return cat;
     }
     return fallbackCategory || 'Business Owner';
-  }, [usersMap]);
+  }, [userCategoryMap]);
 
   // Helper: Resolve Specific Leadership Role (only Chapter Admin, President, Vice President, Treasurer)
   const getMemberSpecificRole = useCallback((userId: string, fallbackRole?: string) => {
@@ -445,6 +524,7 @@ export function Activity() {
         id: `ref-${ref.id}`,
         type: 'referral',
         date: ref.createdAt,
+        formattedDate: formatActivityDate(ref.createdAt),
         rawDate: new Date(ref.createdAt),
         fromUserId: ref.fromUserId,
         toUserId: ref.toUserId,
@@ -473,6 +553,7 @@ export function Activity() {
         id: `slip-${slip.id}`,
         type: 'thank_you_slip',
         date: slip.createdAt,
+        formattedDate: formatActivityDate(slip.createdAt),
         rawDate: new Date(slip.createdAt),
         fromUserId: slip.fromUserId,
         toUserId: slip.toUserId,
@@ -494,6 +575,7 @@ export function Activity() {
       const receiverName = getMemberName(t.toUserId, t.receiverName);
       const isSender = String(t.fromUserId) === currentUserId;
       const isReceiver = String(t.toUserId) === currentUserId;
+      const formattedTestimonialDate = formatActivityDate(t.createdAt);
 
       if (isSender) {
         items.push({
@@ -501,6 +583,7 @@ export function Activity() {
           type: 'testimonial',
           activityLabel: 'Testimonial Sent',
           date: t.createdAt,
+          formattedDate: formattedTestimonialDate,
           rawDate: new Date(t.createdAt),
           fromUserId: t.fromUserId,
           toUserId: t.toUserId,
@@ -521,6 +604,7 @@ export function Activity() {
           type: 'testimonial',
           activityLabel: 'Testimonial Received',
           date: t.createdAt,
+          formattedDate: formattedTestimonialDate,
           rawDate: new Date(t.createdAt),
           fromUserId: t.fromUserId,
           toUserId: t.toUserId,
@@ -541,6 +625,7 @@ export function Activity() {
           type: 'testimonial',
           activityLabel: 'Testimonial Sent',
           date: t.createdAt,
+          formattedDate: formattedTestimonialDate,
           rawDate: new Date(t.createdAt),
           fromUserId: t.fromUserId,
           toUserId: t.toUserId,
@@ -636,7 +721,7 @@ export function Activity() {
   }, [filteredActivities]);
 
   // Handle Item Click -> Open Respective Details Modal
-  const handleItemClick = (item: UnifiedActivityItem) => {
+  const handleItemClick = useCallback((item: UnifiedActivityItem) => {
     if (item.type === 'referral') {
       setSelectedReferralForDetails(item.rawData as Referral);
       setStatusVal(item.rawData.status || 'New');
@@ -645,7 +730,7 @@ export function Activity() {
     } else {
       setSelectedSlipForDetails(item.rawData as ThankYouSlip);
     }
-  };
+  }, []);
 
   // Update Referral Status handler
   const handleUpdateReferralStatus = async () => {
@@ -860,68 +945,11 @@ export function Activity() {
             </div>
           ) : (
             filteredActivities.map((item) => (
-              <motion.div
+              <ActivityRow
                 key={item.id}
-                whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.03)" }}
-                whileTap={{ scale: 0.995 }}
-                onClick={() => handleItemClick(item)}
-                className="flex items-center justify-between py-3.5 px-4 cursor-pointer transition-colors group"
-              >
-                {/* Left Side: Type-Specific Line Icon */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <div className="w-11 h-11 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0 group-hover:border-[#E53935]/30 transition-colors">
-                    {item.type === 'referral' ? (
-                      <ReferralNotepadIcon className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
-                    ) : item.type === 'testimonial' ? (
-                      <Star className="w-6 h-6 text-amber-400 group-hover:text-amber-300 transition-colors" />
-                    ) : (
-                      <Handshake className="w-6 h-6 text-neutral-400 group-hover:text-[#E53935] transition-colors" />
-                    )}
-                  </div>
-
-                  {/* Middle Content: Date on top, Member name, category, amount, or testimonial content below */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-[12px] font-medium text-neutral-400 leading-tight">
-                        {formatActivityDate(item.date)}
-                      </span>
-                      {item.type === 'testimonial' && item.activityLabel && (
-                        <span className={cn(
-                          "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border",
-                          item.activityLabel === 'Testimonial Sent'
-                            ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                            : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        )}>
-                          {item.activityLabel}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[14px] font-bold text-[#E53935] truncate leading-tight flex items-center gap-1.5">
-                      <span className="truncate">{item.personName}</span>
-                      {item.amount !== undefined && item.amount > 0 && (
-                        <span className="font-extrabold text-[#E53935] shrink-0">
-                          - ₹{item.amount.toLocaleString('en-IN')}
-                        </span>
-                      )}
-                    </div>
-                    {item.personCategory && (
-                      <div className="text-[11px] font-semibold text-neutral-400 truncate mt-0.5">
-                        {item.personCategory}
-                      </div>
-                    )}
-                    {item.type === 'testimonial' && item.testimonialContent && (
-                      <p className="text-[12px] text-neutral-300 mt-1 line-clamp-2 leading-relaxed break-words">
-                        {item.testimonialContent}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Side: Chevron to indicate opening */}
-                <div className="pl-3 shrink-0">
-                  <ChevronRight size={18} className="text-[#E53935]/70 group-hover:text-[#E53935] group-hover:translate-x-0.5 transition-all" />
-                </div>
-              </motion.div>
+                item={item}
+                onSelect={handleItemClick}
+              />
             ))
           )}
         </div>

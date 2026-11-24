@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Calendar, Award, UserPlus, LogOut, CreditCard,
@@ -87,15 +87,17 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
   const isChapterAdmin = isChapterLeaderRole(profile) || userRole === 'CHAPTER_ADMIN';
   const canAccessSettings = isMasterAdmin;
 
-  const visibleMenuItems = menuItems.filter(item => {
-    if (isMasterAdmin) {
-      return item.roles.includes('MASTER_ADMIN');
-    }
-    if (isChapterAdmin) {
-      return item.roles.includes('CHAPTER_ADMIN') || item.roles.includes('MEMBER');
-    }
-    return item.roles.includes('MEMBER') && item.label !== 'Settings';
-  });
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter(item => {
+      if (isMasterAdmin) {
+        return item.roles.includes('MASTER_ADMIN');
+      }
+      if (isChapterAdmin) {
+        return item.roles.includes('CHAPTER_ADMIN') || item.roles.includes('MEMBER');
+      }
+      return item.roles.includes('MEMBER') && item.label !== 'Settings';
+    });
+  }, [isMasterAdmin, isChapterAdmin, profile?.role, profile?.position]);
 
   const userRoleDisplay = 
     profile?.role === 'MASTER_ADMIN' ? 'Master Admin' :
@@ -111,7 +113,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
       ref={sidebarRef}
       style={backgroundColor ? { backgroundColor } : undefined}
       className={cn(
-        "sidebar-container h-[100vh] h-[100dvh] max-h-[100dvh] flex flex-col fixed left-0 top-0 transition-all duration-300 ease-in-out",
+        "sidebar-container h-[100vh] h-[100dvh] max-h-[100dvh] flex flex-col fixed left-0 top-0 transition-[width,transform] duration-300 ease-in-out",
         isLight 
           ? "bg-white border-r border-slate-200/90 shadow-sm" 
           : "bg-[#11131A] border-r border-[#1F2937]",
@@ -164,7 +166,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "hidden lg:flex items-center justify-center p-1.5 rounded-lg transition-all cursor-pointer shrink-0 shadow-sm",
+              "hidden lg:flex items-center justify-center p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 shadow-sm",
               isLight 
                 ? "bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200" 
                 : "bg-[#1F2937]/80 hover:bg-[#1F2937] text-[#9CA3AF] hover:text-white border border-white/10"
@@ -249,7 +251,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
                 onClick={() => onClose?.()}
                 data-active={isActive ? "true" : undefined}
                 className={cn(
-                  "sidebar-nav-item flex items-center gap-3 px-3 h-[46px] rounded-[14px] transition-all duration-300 relative overflow-hidden group",
+                  "sidebar-nav-item flex items-center gap-3 px-3 h-[46px] rounded-[14px] transition-colors duration-200 relative overflow-hidden group",
                   isCollapsed && "justify-center px-0",
                   isActive 
                     ? isLight
@@ -346,7 +348,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
               onClick={() => onClose?.()}
               data-active={location.pathname === '/settings' ? "true" : undefined}
               className={cn(
-                "sidebar-nav-item flex items-center gap-3 px-3 h-[42px] rounded-[14px] transition-all touch-manipulation group",
+                "sidebar-nav-item flex items-center gap-3 px-3 h-[42px] rounded-[14px] transition-colors touch-manipulation group",
                 isCollapsed && "justify-center px-0",
                 location.pathname === '/settings'
                   ? isLight
@@ -393,7 +395,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
               handleLogout();
             }} 
             className={cn(
-              "flex items-center gap-3 px-3 h-[44px] w-full rounded-[14px] transition-all text-left cursor-pointer shrink-0 touch-manipulation z-30 group",
+              "flex items-center gap-3 px-3 h-[44px] w-full rounded-[14px] transition-colors text-left cursor-pointer shrink-0 touch-manipulation z-30 group",
               isCollapsed && "justify-center px-0",
               isLight
                 ? "text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 font-semibold"

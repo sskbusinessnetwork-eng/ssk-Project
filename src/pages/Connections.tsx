@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue, useCallback, memo } from 'react';
 import { motion } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
 import { ContactPickerButton } from '../components/PhoneInputWithPicker';
@@ -33,6 +33,60 @@ import { databaseService } from '../services/databaseService';
 import { Modal } from '../components/Modal';
 import { Avatar } from '../components/Avatar';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+
+const ConnectionMemberRow = memo(function ConnectionMemberRow({
+  member,
+  chapterName,
+  positionLabel,
+  positionClasses,
+  onSelect
+}: {
+  member: UserProfile;
+  chapterName: string;
+  positionLabel: string;
+  positionClasses: string;
+  onSelect: (uid: string) => void;
+}) {
+  return (
+    <div
+      onClick={() => onSelect(member.uid)}
+      className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-colors duration-200 cursor-pointer group"
+    >
+      <Avatar
+        src={member.photoURL}
+        name={member.name}
+        size="w-12 h-12 text-base"
+        className="border border-white/10 shadow-inner shrink-0"
+      />
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
+            {getCleanFullName(member.name)}
+          </h3>
+          {positionLabel && (
+            <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border shrink-0", positionClasses)}>
+              {positionLabel}
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs sm:text-[13px] font-semibold text-primary truncate uppercase">
+          {(member.category || member.businessName || 'Business Owner')} &bull; {chapterName}
+        </p>
+
+        {member.businessName && member.category && member.businessName !== member.category && (
+          <p className="text-[12px] font-medium text-neutral-500 truncate">
+            {member.businessName}
+          </p>
+        )}
+      </div>
+      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
+        <ChevronRight size={18} className="text-neutral-500 group-hover:text-primary transition-colors" />
+      </div>
+    </div>
+  );
+});
 
 export function Connections() {
   const { profile } = useAuth();
@@ -586,24 +640,29 @@ export function Connections() {
 
   const totalGlobalCount = members.length;
 
-  // Sorting
-  const getSortWeight = (member: UserProfile) => {
-    const role = (member.role || 'MEMBER').toUpperCase();
-    if (role === 'CHAPTER_ADMIN') return 1;
-    if (role === 'PRESIDENT') return 2;
-    if (role === 'VICE_PRESIDENT') return 3;
-    if (role === 'TREASURER') return 4;
-    return 5;
-  };
+  const sortedMembers = useMemo(() => {
+    const getSortWeight = (member: UserProfile) => {
+      const role = (member.role || 'MEMBER').toUpperCase();
+      if (role === 'CHAPTER_ADMIN') return 1;
+      if (role === 'PRESIDENT') return 2;
+      if (role === 'VICE_PRESIDENT') return 3;
+      if (role === 'TREASURER') return 4;
+      return 5;
+    };
 
-  const sortedMembers = [...filteredMembers].sort((a, b) => {
-    if (activeTab === 'chapter') {
-      const wA = getSortWeight(a);
-      const wB = getSortWeight(b);
-      if (wA !== wB) return wA - wB;
-    }
-    return (a.name || '').localeCompare(b.name || '');
-  });
+    return [...filteredMembers].sort((a, b) => {
+      if (activeTab === 'chapter') {
+        const wA = getSortWeight(a);
+        const wB = getSortWeight(b);
+        if (wA !== wB) return wA - wB;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [filteredMembers, activeTab]);
+
+  const handleSelectMemberProfile = useCallback((uid: string) => {
+    navigate(`/profile?id=${uid}`);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -858,45 +917,20 @@ export function Connections() {
       <div className="bg-[#161B22] rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-white/10 overflow-hidden">
         {sortedMembers.length > 0 ? (
           <div className="divide-y divide-white/5">
-            {sortedMembers.map((member, i) => (
-              <motion.div
-                key={member.uid}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => navigate(`/profile?id=${member.uid}`)}
-                className="p-5 flex items-center gap-4 hover:bg-[#1F2937] transition-all duration-300 cursor-pointer group"
-              >
-                <Avatar 
-                  src={member.photoURL} 
-                  name={member.name} 
-                  size="w-12 h-12 text-base" 
-                  className="border border-white/10 shadow-inner shrink-0" 
+            {sortedMembers.map((member) => {
+              const { label, classes } = getPositionTitleAndStyle(member);
+              const chName = member.chapterName || chapterNames[member.chapter_id || ''] || 'SSK Chapter';
+              return (
+                <ConnectionMemberRow
+                  key={member.uid}
+                  member={member}
+                  chapterName={chName}
+                  positionLabel={label}
+                  positionClasses={classes}
+                  onSelect={handleSelectMemberProfile}
                 />
-                
-                <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-[16px] sm:text-[18px] font-bold text-white truncate max-w-[150px] sm:max-w-none group-hover:text-primary transition-colors">
-                      {getCleanFullName(member.name)}
-                    </h3>
-                    {getPositionBadge(member)}
-                  </div>
-                  
-                  <p className="text-xs sm:text-[13px] font-semibold text-primary truncate uppercase">
-                    {(member.category || member.businessName || 'Business Owner')} &bull; {(member.chapterName || chapterNames[member.chapter_id || ''] || 'SSK Chapter')}
-                  </p>
-
-                  {member.businessName && member.category && member.businessName !== member.category && (
-                    <p className="text-[12px] font-medium text-neutral-500 truncate">
-                      {member.businessName}
-                    </p>
-                  )}
-                </div>
-                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors shrink-0">
-                  <ChevronRight size={18} className="text-neutral-500 group-hover:text-primary transition-colors" />
-                </div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-16 flex flex-col items-center justify-center text-center">

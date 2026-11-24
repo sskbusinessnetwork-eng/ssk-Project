@@ -126,6 +126,7 @@ export function TopPerformingMembersSection() {
         }
         .animate-marquee-rtl {
           animation: marqueeRtl 38s linear infinite;
+          will-change: transform;
         }
       `}</style>
     </section>
@@ -135,7 +136,7 @@ export function TopPerformingMembersSection() {
 const TopMemberCard: React.FC<{
   member: TopMemberPublicItem;
   getInitials: (name: string) => string;
-}> = ({
+}> = React.memo(({
   member,
   getInitials,
 }) => {
@@ -175,7 +176,7 @@ const TopMemberCard: React.FC<{
 
   return (
     <div
-      className={`shrink-0 w-64 sm:w-72 p-5 sm:p-6 rounded-2xl md:rounded-3xl border ${rankContainerStyle} relative flex flex-col items-center text-center transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl group overflow-hidden cursor-default`}
+      className={`shrink-0 w-64 sm:w-72 p-5 sm:p-6 rounded-2xl md:rounded-3xl border ${rankContainerStyle} relative flex flex-col items-center text-center transition-transform duration-300 hover:-translate-y-1.5 hover:shadow-2xl group overflow-hidden cursor-default`}
     >
       <div className={`absolute inset-0 bg-gradient-to-b ${glowStyle || 'from-white/5'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
 
@@ -233,4 +234,4 @@ const TopMemberCard: React.FC<{
       </div>
     </div>
   );
-}
+});

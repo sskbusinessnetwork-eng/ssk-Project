@@ -283,9 +283,12 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
     }
   };
   
-  const displayTasks = (todayTasks || []).filter((t: any) => !t.isHidden);
-  const completedCount = displayTasks.filter(t => t.isDone).length;
-  const progressPercent = displayTasks.length > 0 ? Math.round((completedCount / displayTasks.length) * 100) : 0;
+  const { displayTasks, completedCount, progressPercent } = React.useMemo(() => {
+    const filtered = (todayTasks || []).filter((t: any) => !t.isHidden);
+    const doneCount = filtered.filter(t => t.isDone).length;
+    const pct = filtered.length > 0 ? Math.round((doneCount / filtered.length) * 100) : 0;
+    return { displayTasks: filtered, completedCount: doneCount, progressPercent: pct };
+  }, [todayTasks]);
 
   const isChapterLeader = profile?.role === 'CHAPTER_ADMIN' || ['president', 'vice_president', 'treasurer', 'chapter_admin'].includes(profile?.position?.toLowerCase() || '');
 
@@ -445,15 +448,11 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
             </div>
           ) : (
             <>
-            {(showAllTasks ? displayTasks : displayTasks.slice(0, 6)).map((task: any, index: number) => (
-              <motion.div 
+            {(showAllTasks ? displayTasks : displayTasks.slice(0, 6)).map((task: any) => (
+              <div 
                 key={task.key} 
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05, duration: 0.5, ease: "easeOut" }}
-                whileHover={{ y: -2, backgroundColor: "rgba(23, 32, 51, 0.85)", borderColor: "rgba(220, 20, 60, 0.2)", boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
                 className={cn(
-                  "px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-all duration-300 group w-full min-h-[84px] cursor-pointer border",
+                  "px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-colors duration-200 group w-full min-h-[84px] cursor-pointer border hover:-translate-y-0.5",
                   theme === 'day' 
                     ? "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm"
                     : "bg-[#0B1220]/60 border-white/5 hover:bg-[#172033] hover:border-red-500/20 shadow-md"
@@ -463,7 +462,7 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
                 {/* Left Column: Title only */}
                 <div className="flex flex-col flex-1 min-w-0 pr-2">
                     <h4 className={cn(
-                      "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-all duration-300 line-clamp-2 break-words flex items-center gap-1.5 flex-wrap",
+                      "text-[12px] sm:text-[14px] font-bold tracking-tight leading-snug transition-colors duration-200 line-clamp-2 break-words flex items-center gap-1.5 flex-wrap",
                       task.isDone ? "text-gray-500 line-through opacity-70" : theme === 'day' ? "text-gray-900" : "text-white"
                     )}>
                       {task.label}
@@ -474,23 +473,19 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
                 </div>
 
                 {/* Right Column: CTA Button */}
-                <motion.div
-                  whileHover={{ y: -2, scale: 1.02 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="shrink-0 w-[95px] sm:w-[105px]"
-                >
+                <div className="shrink-0 w-[95px] sm:w-[105px]">
                   <button 
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleTaskClick(task);
                     }}
-                    className="h-9 sm:h-10 w-full flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-all duration-250 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] border border-transparent shrink-0 cursor-pointer"
+                    className="h-9 sm:h-10 w-full flex items-center justify-center text-center bg-[#DC143C] hover:bg-[#B22222] text-white font-semibold text-[11px] sm:text-[13px] tracking-wider uppercase rounded-[12px] transition-colors duration-200 shadow-[0_8px_24px_rgba(220,20,60,0.35)] hover:shadow-[0_12px_30px_rgba(220,20,60,0.5)] active:scale-95 border border-transparent shrink-0 cursor-pointer"
                   >
                     {task.linkText}
                   </button>
-                </motion.div>
-              </motion.div>
+                </div>
+              </div>
             ))}
             {displayTasks.length > 6 && (
                <button onClick={() => setShowAllTasks(!showAllTasks)} className="w-full mt-2 py-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-bold text-xs uppercase tracking-wider border border-purple-500/20 transition-colors">
@@ -603,13 +598,9 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
               }
 
               return (
-                <motion.div 
+                <div 
                   key={act.id || idx} 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.08, duration: 0.4 }}
-                  whileHover={{ scale: 1.01, backgroundColor: "rgba(23, 32, 51, 0.8)", borderColor: "rgba(255,255,255,0.12)" }}
-                  className="flex flex-col justify-between gap-3 relative z-10 bg-[#0B1220]/40 border border-white/5 p-4 rounded-[18px] min-h-[120px] hover:bg-[#172033] transition-all cursor-pointer"
+                  className="flex flex-col justify-between gap-3 relative z-10 bg-[#0B1220]/40 border border-white/5 p-4 rounded-[18px] min-h-[120px] hover:bg-[#172033] hover:border-white/10 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className={cn(
@@ -626,7 +617,7 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
                     <h4 className="text-[12px] font-bold text-white truncate leading-tight" title={displayTitle}>{displayTitle}</h4>
                     <p className="text-[11px] text-[#9CA3AF] font-medium mt-1 leading-snug line-clamp-2" title={displayDesc}>{displayDesc}</p>
                   </div>
-                </motion.div>
+                </div>
               );
             })
           ) : (

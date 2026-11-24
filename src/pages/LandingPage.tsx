@@ -347,7 +347,7 @@ export function LandingPage() {
   if (user && profile) return <Navigate to={getDashboardPath(profile.role, profile.position)} replace />;
 
   return (
-    <div className="min-h-screen bg-white text-[#0F2040] overflow-x-hidden font-sans selection:bg-[#F97316] selection:text-[#0F2040]">
+    <div className="min-h-screen bg-white text-[#0F2040] overflow-x-clip font-sans selection:bg-[#F97316] selection:text-[#0F2040]">
       {/* Accessible Skip Link */}
       <a 
         href="#main-content" 
@@ -357,9 +357,9 @@ export function LandingPage() {
       </a>
       
       {/* Fixed Header Wrapper */}
-      <div className="fixed top-0 left-0 right-0 z-50">
+      <div className="fixed top-0 left-0 right-0 z-50 transform-gpu">
         {/* Navbar */}
-        <nav aria-label="Main Navigation" className={`px-4 sm:px-6 py-3 sm:py-4 transition-all duration-500 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-b border-white/10' : 'bg-transparent'}`}>
+        <nav aria-label="Main Navigation" className={`px-4 sm:px-6 py-3 sm:py-4 transition-colors duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-b border-white/10' : 'bg-transparent'}`}>
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <Link to="/">
@@ -375,7 +375,7 @@ export function LandingPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={scrollToForm} 
-                className="px-3.5 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 bg-[#C2410C] text-white text-[10px] sm:text-xs md:text-sm font-extrabold uppercase tracking-[1.5px] sm:tracking-[3px] rounded-full hover:bg-[#9A3412] transition-all shadow-[0_0_20px_rgba(194,65,12,0.3)] whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                className="px-3.5 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-2.5 bg-[#C2410C] text-white text-[10px] sm:text-xs md:text-sm font-extrabold uppercase tracking-[1.5px] sm:tracking-[3px] rounded-full hover:bg-[#9A3412] transition-colors shadow-[0_0_20px_rgba(194,65,12,0.3)] whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                 aria-label="Join Meeting"
               >
                 Join Meeting
@@ -387,7 +387,7 @@ export function LandingPage() {
 
       {/* Hero Section */}
       <header className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0F2040]">
-        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute -inset-x-0 -top-[20%] h-[140%] z-0">
+        <motion.div style={{ y: heroY, opacity: heroOpacity }} className="absolute -inset-x-0 -top-[20%] h-[140%] z-0 will-change-transform transform-gpu">
           <img 
             src="/images/hero-bg.webp" 
             srcSet="/images/hero-bg-sm.webp 640w, /images/hero-bg.webp 1280w"
@@ -442,7 +442,7 @@ export function LandingPage() {
                 whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(249, 115, 22, 0.6)" }}
                 whileTap={{ scale: 0.95 }}
                 onClick={scrollToForm}
-                className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] transition-all shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#F97316]/20 w-full sm:w-auto"
+                className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#F97316]/20 w-full sm:w-auto"
               >
                 Join a Chapter Meeting
               </motion.button>
@@ -897,7 +897,6 @@ export function LandingPage() {
 
       {/* Call To Action */}
       <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-gradient-to-br from-[#0F2040] to-[#1a365d] text-center text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
         <div className="max-w-5xl mx-auto relative z-10">
           <motion.h2 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[10px] sm:text-[11px] md:text-[12px] font-extrabold text-[#F97316] uppercase tracking-[2px] md:tracking-[3px] mb-4 md:mb-6">Call To Action</motion.h2>
           <motion.h3 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[22px] sm:text-[26px] md:text-[32px] font-black mb-4 md:mb-6 leading-tight">Take the First Step Towards Collective Growth.</motion.h3>

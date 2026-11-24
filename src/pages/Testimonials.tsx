@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../hooks/useAuth';
 import { databaseService } from '../services/databaseService';
@@ -34,6 +34,7 @@ export function Testimonials() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'received' | 'sent' | 'give' | 'chapter' | 'all'>('received');
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   
   // Testimonial modal states
   const [showMemberSelectModal, setShowMemberSelectModal] = useState(false);
@@ -41,6 +42,7 @@ export function Testimonials() {
   const [selectedReferral, setSelectedReferral] = useState<any | null>(null);
   const [showWriteModal, setShowWriteModal] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const deferredMemberSearchQuery = useDeferredValue(memberSearchQuery);
   
   const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -217,16 +219,18 @@ export function Testimonials() {
     }
   };
 
-  const handleOpenGiveTestimonial = (member?: UserProfile) => {
+  const handleOpenGiveTestimonial = useCallback((member?: UserProfile) => {
     if (member) {
       setSelectedReceiver(member);
       setShowWriteModal(true);
       setShowMemberSelectModal(false);
     } else {
       setShowMemberSelectModal(true);
-      loadUsersAndChapters();
+      if (Object.keys(users).length === 0) {
+        loadUsersAndChapters();
+      }
     }
-  };
+  }, [users, loadUsersAndChapters]);
 
   const receivedTestimonials = useMemo(() => {
     return testimonials.filter(t => {
@@ -256,8 +260,8 @@ export function Testimonials() {
     }
 
     // Search filter
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.toLowerCase().trim();
       filtered = filtered.filter(t => {
         const receiver = users[t.receiverMemberId]?.name?.toLowerCase() || '';
         const author = users[t.authorMemberId]?.name?.toLowerCase() || '';
@@ -268,8 +272,26 @@ export function Testimonials() {
       });
     }
 
-    return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [testimonials, activeTab, searchQuery, currentUserId, isMasterAdmin, userChapterId, users, chaptersMap]);
+    return [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [testimonials, receivedTestimonials, sentTestimonials, activeTab, deferredSearchQuery, isMasterAdmin, users, chaptersMap]);
+
+  const { thisMonthCount, avgRating } = useMemo(() => {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    let monthCount = 0;
+    let ratingSum = 0;
+    for (const t of testimonials) {
+      const d = new Date(t.createdAt);
+      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+        monthCount++;
+      }
+      ratingSum += Number(t.rating) || 5;
+    }
+    return {
+      thisMonthCount: monthCount,
+      avgRating: testimonials.length > 0 ? (ratingSum / testimonials.length).toFixed(1) : '0.0'
+    };
+  }, [testimonials]);
 
   // Active members list for selection
   const selectableMembers = useMemo(() => {
@@ -280,9 +302,9 @@ export function Testimonials() {
       })
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
 
-    if (!memberSearchQuery.trim()) return list;
+    if (!deferredMemberSearchQuery.trim()) return list;
 
-    const q = memberSearchQuery.toLowerCase().trim();
+    const q = deferredMemberSearchQuery.toLowerCase().trim();
     return list.filter((u: UserProfile) => {
       const name = u.name?.toLowerCase() || '';
       const business = u.businessName?.toLowerCase() || '';
@@ -290,7 +312,7 @@ export function Testimonials() {
       const chapter = (u.chapterName || chaptersMap[u.chapter_id || '']?.chapter_name || '').toLowerCase();
       return name.includes(q) || business.includes(q) || category.includes(q) || chapter.includes(q);
     });
-  }, [users, currentUserId, memberSearchQuery, chaptersMap]);
+  }, [users, currentUserId, deferredMemberSearchQuery, chaptersMap]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -326,13 +348,13 @@ export function Testimonials() {
           <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5">
             <div className="text-[#9CA3AF] text-[10px] font-bold uppercase tracking-wider">This Month</div>
             <div className="text-2xl font-black text-[#10B981]">
-              {testimonials.filter(t => new Date(t.createdAt).getMonth() === new Date().getMonth()).length}
+              {thisMonthCount}
             </div>
           </div>
           <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5">
             <div className="text-[#9CA3AF] text-[10px] font-bold uppercase tracking-wider">Avg Rating</div>
             <div className="text-2xl font-black text-[#F59E0B]">
-              {testimonials.length > 0 ? (testimonials.reduce((acc, t) => acc + (Number(t.rating) || 5), 0) / testimonials.length).toFixed(1) : '0.0'}
+              {avgRating}
             </div>
           </div>
           <div className="bg-[#111827] p-4 rounded-[20px] border border-white/5">
@@ -465,15 +487,13 @@ export function Testimonials() {
               const canDelete = isMasterAdmin || isChapterAdmin || t.authorMemberId === currentUserId;
 
               return (
-                <motion.div
+                <div
                   key={t.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
                   onClick={() => {
                     setSelectedTestimonial(t);
                     setShowDetailModal(true);
                   }}
-                  className="bg-[#111827] rounded-xl p-3 border border-white/5 flex flex-col gap-2 relative group hover:border-white/10 transition-all shadow-md cursor-pointer"
+                  className="bg-[#111827] rounded-xl p-3 border border-white/5 flex flex-col gap-2 relative group hover:border-white/10 transition-colors shadow-md cursor-pointer"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
@@ -508,7 +528,7 @@ export function Testimonials() {
                   <p className="text-[#9CA3AF] text-xs italic truncate">
                     "{t.testimonial}"
                   </p>
-                </motion.div>
+                </div>
               );
             })
           )}

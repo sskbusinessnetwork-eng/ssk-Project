@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { CategorySelect } from '../components/CategorySelect';
@@ -73,6 +73,7 @@ export function Members() {
   const [memberInvites, setMemberInvites] = useState<GuestInvitation[]>([]);
   const [allAdmins, setAllAdmins] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [loading, setLoading] = useState(true);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -737,37 +738,56 @@ export function Members() {
     }
   };
 
-  const filteredMembers = members.filter(m => {
-    // Hide self from the list
-    if (m.uid === profile?.uid) return false;
-
-    // Filter out deleted members
-    if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
-
-    // Show ONLY users with role 'MEMBER'
-    if (m.role !== 'MEMBER' && m.role !== 'CHAPTER_ADMIN') return false;
-
-    // Chapter Admin & Chapter Leaders can ONLY see members in their chapter
+  const filteredMembers = useMemo(() => {
+    const q = deferredSearchTerm.toLowerCase();
+    const stateFilter = filters.state.toLowerCase();
+    const cityFilter = filters.city.toLowerCase();
+    const areaFilter = filters.area.toLowerCase();
     const isUserChapterAdmin = isChapterLeaderRole(profile);
-    if (isUserChapterAdmin) {
-      const myChapId = String(profile?.chapter_id || '').trim();
-      const memId = String(m.chapter_id || (m as any).chapterId || '').trim();
-      if (!myChapId || !memId || memId !== myChapId) return false;
-    }
+    const myChapId = String(profile?.chapter_id || '').trim();
 
-    const matchesSearch = 
-      (m.name || m.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.category?.toLowerCase().includes(searchTerm.toLowerCase());
+    return members.filter(m => {
+      // Hide self from the list
+      if (m.uid === profile?.uid) return false;
 
-    const matchesChapter = !filters.chapter_id || String(m.chapter_id || (m as any).chapterId || '').trim() === filters.chapter_id;
-    const matchesCategory = !filters.category || m.category === filters.category;
-    const matchesState = !filters.state || m.state?.toLowerCase().includes(filters.state.toLowerCase());
-    const matchesCity = !filters.city || m.city?.toLowerCase().includes(filters.city.toLowerCase());
-    const matchesArea = !filters.area || m.area?.toLowerCase().includes(filters.area.toLowerCase());
+      // Filter out deleted members
+      if (m.deleted === true || m.deleted === 'true' || m.status === 'DELETED' || m.membershipStatus === 'DELETED') return false;
 
-    return matchesSearch && matchesChapter && matchesCategory && matchesState && matchesCity && matchesArea;
-  });
+      // Show ONLY users with role 'MEMBER'
+      if (m.role !== 'MEMBER' && m.role !== 'CHAPTER_ADMIN') return false;
+
+      // Chapter Admin & Chapter Leaders can ONLY see members in their chapter
+      if (isUserChapterAdmin) {
+        const memId = String(m.chapter_id || (m as any).chapterId || '').trim();
+        if (!myChapId || !memId || memId !== myChapId) return false;
+      }
+
+      const matchesSearch = !q ||
+        (m.name || m.displayName || '').toLowerCase().includes(q) ||
+        m.businessName?.toLowerCase().includes(q) ||
+        m.category?.toLowerCase().includes(q);
+
+      const matchesChapter = !filters.chapter_id || String(m.chapter_id || (m as any).chapterId || '').trim() === filters.chapter_id;
+      const matchesCategory = !filters.category || m.category === filters.category;
+      const matchesState = !stateFilter || m.state?.toLowerCase().includes(stateFilter);
+      const matchesCity = !cityFilter || m.city?.toLowerCase().includes(cityFilter);
+      const matchesArea = !areaFilter || m.area?.toLowerCase().includes(areaFilter);
+
+      return matchesSearch && matchesChapter && matchesCategory && matchesState && matchesCity && matchesArea;
+    });
+  }, [members, profile, deferredSearchTerm, filters]);
+
+  const adminMap = useMemo(() => {
+    return allAdmins.reduce((acc, user) => {
+      acc[user.uid] = user.name || user.displayName || 'Unknown Admin';
+      return acc;
+    }, {} as Record<string, string>);
+  }, [allAdmins]);
+
+  const handleOpenTransferModal = useCallback((member: UserProfile) => {
+    setTransferMember(member);
+    setIsTransferModalOpen(true);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -925,10 +945,7 @@ export function Members() {
 
             <MemberTable currentUserId={profile?.uid}
               members={filteredMembers}
-              adminMap={allAdmins.reduce((acc, user) => {
-                acc[user.uid] = user.name || user.displayName || 'Unknown Admin';
-                return acc;
-              }, {} as Record<string, string>)}
+              adminMap={adminMap}
               loading={loading}
               isMasterAdmin={isMasterAdmin}
               isChapterAdmin={isChapterAdmin}
@@ -937,10 +954,7 @@ export function Members() {
               onEditMember={openEditModal}
               onDeleteMember={setDeleteConfirmMember}
               onResetPassword={setResetPasswordMember}
-              onTransferMember={(member) => {
-                setTransferMember(member);
-                setIsTransferModalOpen(true);
-              }}
+              onTransferMember={handleOpenTransferModal}
             />
           </>
         ) : activeTab === 'invites' ? (

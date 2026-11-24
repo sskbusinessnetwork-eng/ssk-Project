@@ -41,7 +41,7 @@ interface MasterAdminCompanionViewProps {
   tasks?: any[];
 }
 
-export function MasterAdminCompanionView({
+export const MasterAdminCompanionView = React.memo(function MasterAdminCompanionView({
   profile,
   networkHealthScore,
   membersAnalysed,
@@ -540,4 +540,4 @@ export function MasterAdminCompanionView({
 
     </div>
   );
-}
+});

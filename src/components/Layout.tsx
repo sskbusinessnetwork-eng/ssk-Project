@@ -86,23 +86,36 @@ export function Layout() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isMobileSidebarOpen, isBottomSheetOpen, isNotificationOpen]);
 
+  const handleCloseMobileSidebar = useCallback(() => setIsMobileSidebarOpen(false), []);
+  const handleToggleMobileSidebar = useCallback(() => setIsMobileSidebarOpen(prev => !prev), []);
+  const handleCloseNotification = useCallback(() => setIsNotificationOpen(false), []);
+  const handleToggleNotification = useCallback(() => setIsNotificationOpen(prev => !prev), []);
+
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
+    let lastOverflow = '';
+    const applyOverflow = (next: string) => {
+      if (lastOverflow !== next) {
+        document.body.style.overflow = next;
+        lastOverflow = next;
+      }
+    };
+
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        document.body.style.overflow = '';
+        applyOverflow('');
       } else if (isMobileSidebarOpen) {
-        document.body.style.overflow = 'hidden';
+        applyOverflow('hidden');
       }
     };
 
     if (isMobileSidebarOpen && window.innerWidth < 1024) {
-      document.body.style.overflow = 'hidden';
+      applyOverflow('hidden');
     } else {
-      document.body.style.overflow = '';
+      applyOverflow('');
     }
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', handleResize, { passive: true });
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('resize', handleResize);
@@ -141,30 +154,30 @@ export function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#05070E] flex flex-col md:flex-row overflow-hidden text-white font-sans">
+    <div className="min-h-screen bg-[#05070E] flex flex-col md:flex-row overflow-x-clip text-white font-sans">
       
       {/* Sidebar - Handles Desktop and Tablet Overlay */}
       <Sidebar 
         isOpen={isMobileSidebarOpen} 
-        onClose={() => setIsMobileSidebarOpen(false)} 
+        onClose={handleCloseMobileSidebar} 
         isCollapsed={isDesktopCollapsed}
         onToggleCollapse={toggleDesktopCollapsed}
       />
       
       {/* Main Content Area */}
       <main className={cn(
-        "flex-1 min-h-screen relative overflow-y-auto custom-scrollbar z-10 transition-[margin] duration-200",
+        "flex-1 min-h-screen relative z-10 transition-[margin] duration-200",
         "pb-[110px] lg:pb-0", // padding for floating mobile bottom nav
         isDesktopCollapsed ? "lg:ml-[78px]" : "lg:ml-[280px]"
       )}>
         
         {/* Top Header */}
-        <header className="bg-[#05070E]/90 backdrop-blur-md sticky top-0 z-40 px-3 sm:px-5 lg:px-8 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5">
+        <header className="bg-[#05070E]/90 backdrop-blur-md transform-gpu sticky top-0 z-40 px-3 sm:px-5 lg:px-8 flex items-center justify-between h-[60px] sm:h-[64px] lg:h-[80px] border-b border-white/5">
           
           <div className="flex items-center gap-3 sm:gap-5 lg:gap-6 min-w-0 flex-1">
             <button 
-              onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-              className="lg:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-all text-white shrink-0 z-[10000] relative"
+              onClick={handleToggleMobileSidebar}
+              className="lg:hidden p-2 hover:bg-white/10 active:scale-95 rounded-xl transition-colors text-white shrink-0 z-[10000] relative"
               aria-label={isMobileSidebarOpen ? "Close menu" : "Open menu"}
             >
               {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
@@ -206,13 +219,13 @@ export function Layout() {
                 id="notification-bell-btn"
                 ref={bellButtonRef}
                 type="button"
-                onClick={() => setIsNotificationOpen(prev => !prev)}
+                onClick={handleToggleNotification}
                 className="relative group shrink-0 outline-none focus:outline-none cursor-pointer"
                 aria-label={isNotificationOpen ? "Close notifications" : "Open notifications"}
                 aria-expanded={isNotificationOpen}
               >
                 <div className={cn(
-                  "p-1.5 sm:p-2.5 transition-all rounded-full border flex items-center justify-center",
+                  "p-1.5 sm:p-2.5 transition-colors rounded-full border flex items-center justify-center",
                   isNotificationOpen
                     ? "bg-primary/20 text-white border-primary/40 shadow-sm"
                     : "text-[#9CA3AF] group-hover:text-white bg-[#111827] border-white/5 group-hover:border-white/10"
@@ -228,7 +241,7 @@ export function Layout() {
 
               <NotificationPopover 
                 isOpen={isNotificationOpen} 
-                onClose={() => setIsNotificationOpen(false)} 
+                onClose={handleCloseNotification} 
                 anchorRef={bellButtonRef}
                 notifications={notifications}
                 loading={notificationsLoading}
@@ -275,7 +288,7 @@ export function Layout() {
       </main>
 
       {/* Mobile Bottom Navigation Menu */}
-      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-[74px] rounded-[20px] bg-[#111827]/95 backdrop-blur-md border border-white/5 px-2 flex items-center justify-around z-40 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+      <nav className="md:hidden fixed bottom-4 left-4 right-4 h-[74px] rounded-[20px] bg-[#111827]/95 backdrop-blur-md transform-gpu border border-white/5 px-2 flex items-center justify-around z-40 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
         {mobileNavItems.map((item, idx) => {
           const isActive = item.path ? location.pathname === item.path : false;
           const isSelected = item.isAction ? isBottomSheetOpen : isActive;
@@ -285,17 +298,17 @@ export function Layout() {
               onClick={item.action}
               className="outline-none focus:outline-none"
             >
-              <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] transition-all group">
+              <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] group">
                 <item.icon 
                   size={20} 
                   className={cn(
-                    "transition-all duration-300 mb-1 relative z-10",
+                    "transition-colors duration-200 mb-1 relative z-10",
                     isSelected ? "text-[#E53935] drop-shadow-[0_0_8px_rgba(229,57,53,0.8)]" : "text-[#9CA3AF]"
                   )}
                   strokeWidth={isSelected ? 2.5 : 2}
                 />
                 <span className={cn(
-                  "text-[11px] font-bold transition-all duration-300 relative z-10",
+                  "text-[11px] font-bold transition-colors duration-200 relative z-10",
                   isSelected ? "text-[#E53935]" : "text-[#9CA3AF]"
                 )}>
                   {item.label}
@@ -311,17 +324,17 @@ export function Layout() {
               to={item.path as string}
               className="outline-none focus:outline-none"
             >
-              <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] transition-all group">
+              <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] group">
                 <item.icon 
                   size={20} 
                   className={cn(
-                    "transition-all duration-300 mb-1 relative z-10",
+                    "transition-colors duration-200 mb-1 relative z-10",
                     isActive ? "text-[#E53935] drop-shadow-[0_0_8px_rgba(229,57,53,0.8)]" : "text-[#6B7280]"
                   )}
                   strokeWidth={isActive ? 2.5 : 2}
                 />
                 <span className={cn(
-                  "text-[11px] font-bold transition-all duration-300 relative z-10",
+                  "text-[11px] font-bold transition-colors duration-200 relative z-10",
                   isActive ? "text-[#E53935]" : "text-[#6B7280]"
                 )}>
                   {item.label}

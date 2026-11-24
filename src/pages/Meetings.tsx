@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -99,6 +99,130 @@ export function getAttendanceDisplay(status?: string) {
   }
   return { label: status, color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium' };
 }
+
+const getAttendanceStatusColor = (status: string) => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'present') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+  if (s === 'absent') return 'text-red-400 bg-red-500/10 border-red-500/20';
+  if (s === 'substitute') return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+  if (s === 'medical') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+  if (s === 'late') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
+  if (s === 'pending' || !s) return 'text-amber-400 bg-amber-500/10 border-amber-500/20 font-bold';
+  return 'text-neutral-400 bg-[#151C2E] border-white/10';
+};
+
+interface ModalMemberAttendanceRowProps {
+  mId: string;
+  memberName: string;
+  roleLabel: string;
+  availableBalance: number;
+  existingDebitAmount: number;
+  attendanceVal: string;
+  memberPayOption: string;
+  configuredMeetingAmt: number;
+  onAttendanceChange: (mId: string, newStatus: string) => void;
+  onPaymentChange: (mId: string, option: string, availableBalance: number, existingDebitAmount: number) => void;
+}
+
+const ModalMemberAttendanceRow = React.memo(function ModalMemberAttendanceRow({
+  mId,
+  memberName,
+  roleLabel,
+  availableBalance,
+  existingDebitAmount,
+  attendanceVal,
+  memberPayOption,
+  configuredMeetingAmt,
+  onAttendanceChange,
+  onPaymentChange,
+}: ModalMemberAttendanceRowProps) {
+  const isAttended = attendanceVal === 'Present' || attendanceVal === 'Substitute' || attendanceVal === 'Late';
+  const effectiveWalletAvailable = availableBalance + existingDebitAmount;
+  const isWalletInsufficient =
+    isAttended &&
+    memberPayOption === 'Wallet' &&
+    configuredMeetingAmt > 0 &&
+    effectiveWalletAvailable < configuredMeetingAmt;
+
+  return (
+    <div className="flex flex-col p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
+              {memberName}
+            </h4>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400">
+              <Wallet size={10} />
+              ₹{availableBalance.toLocaleString('en-IN')}
+            </span>
+          </div>
+          {roleLabel && (
+            <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
+              {roleLabel}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+          <select
+            value={attendanceVal || 'Pending'}
+            onChange={(e) => onAttendanceChange(mId, e.target.value)}
+            className={cn(
+              "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
+              getAttendanceStatusColor(attendanceVal)
+            )}
+          >
+            <option value="Pending" className="bg-[#111827] text-amber-400 font-bold">Pending</option>
+            <option value="Present" className="bg-[#111827] text-emerald-400 font-bold">Present</option>
+            <option value="Absent" className="bg-[#111827] text-red-400 font-bold">Absent</option>
+            <option value="Substitute" className="bg-[#111827] text-blue-400 font-bold">Substitute</option>
+            <option value="Medical" className="bg-[#111827] text-purple-400 font-bold">Medical</option>
+            <option value="Late" className="bg-[#111827] text-purple-400 font-bold">Late</option>
+          </select>
+
+          {isAttended && (
+            <>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-neutral-300 shrink-0">
+                <span className="text-[10px] uppercase font-bold text-neutral-400">Amount:</span>
+                <span className="text-white font-extrabold">₹{configuredMeetingAmt}</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Payment:</span>
+                <select
+                  value={memberPayOption}
+                  onChange={(e) => onPaymentChange(mId, e.target.value, availableBalance, existingDebitAmount)}
+                  className={cn(
+                    "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
+                    memberPayOption === 'Not Paid' || memberPayOption === ''
+                      ? "bg-red-500/10 text-red-400 border-red-500/30"
+                      : isWalletInsufficient
+                        ? "bg-red-500/10 text-red-400 border-red-500/40 ring-1 ring-red-500/40"
+                        : memberPayOption === 'Wallet'
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                  )}
+                >
+                  <option value="" className="bg-[#111827] text-neutral-400">Select Payment *</option>
+                  <option value="Not Paid" className="bg-[#111827] text-white">Not Paid</option>
+                  <option value="Paid UPI" className="bg-[#111827] text-white">Paid UPI</option>
+                  <option value="Paid Cash" className="bg-[#111827] text-white">Paid Cash</option>
+                  <option value="Wallet" className="bg-[#111827] text-white">Wallet (₹{availableBalance})</option>
+                </select>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {isWalletInsufficient && (
+        <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>Insufficient wallet balance. Available balance: ₹{availableBalance}. Please choose UPI or Cash.</span>
+        </div>
+      )}
+    </div>
+  );
+});
 
 function calculateOccurrences(
   frequency: 'Weekly' | 'Monthly',
@@ -2398,6 +2522,206 @@ export function Meetings() {
   
   const totalUpcomingPages = Math.ceil(upcomingTableMeetings.length / upcomingPerPage);
 
+  const configuredModalMeetingAmt = useMemo(() => {
+    if (tempMeetingAmount !== '' && tempMeetingAmount !== undefined) {
+      return Number(tempMeetingAmount) || 0;
+    }
+    return Number(
+      selectedMeeting?.meetingAmount ??
+      (selectedMeeting as any)?.meeting_amount ??
+      (selectedMeeting?.memberNotes as any)?.__meetingAmount ??
+      0
+    ) || 0;
+  }, [tempMeetingAmount, selectedMeeting]);
+
+  const preparedModalMembers = useMemo(() => {
+    if (!isUpdateModalOpen && !selectedMeeting) return [];
+    const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
+    const getPositionRank = (u: any) => {
+      const label = getMemberPositionLabel(u);
+      if (label === 'CHAPTER ADMIN') return 1;
+      if (label === 'PRESIDENT') return 2;
+      if (label === 'VICE PRESIDENT') return 3;
+      if (label === 'TREASURER') return 4;
+      return 5;
+    };
+    const baseMembers = modalChapterMembers.length > 0
+      ? modalChapterMembers
+      : members.filter(m => {
+          if (m.role === 'MASTER_ADMIN') return false;
+          return Boolean(m.chapter_id && meetingChapId && String(m.chapter_id).trim() === String(meetingChapId).trim());
+        });
+
+    const sorted = [...baseMembers].sort((a, b) => {
+      const rankA = getPositionRank(a);
+      const rankB = getPositionRank(b);
+      if (rankA !== rankB) return rankA - rankB;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    return sorted.map((member) => {
+      const mId = String(member.id || member.uid || '');
+      const roleLabel = getMemberPositionLabel(member);
+      const walletSummary = walletService.getMemberWalletSummary(member);
+      const existingMeetingDebit = selectedMeeting?.id
+        ? walletSummary.transactions.find(
+            tx => tx.type === 'DEBIT' && String(tx.meetingId || '') === String(selectedMeeting.id) && !tx.isReversed
+          )
+        : undefined;
+      return {
+        mId,
+        memberName: member.name || member.displayName || 'Unknown Member',
+        roleLabel,
+        availableBalance: walletSummary.availableBalance,
+        existingDebitAmount: existingMeetingDebit ? Number(existingMeetingDebit.amount) || 0 : 0,
+      };
+    });
+  }, [isUpdateModalOpen, selectedMeeting, modalChapterMembers, members, usersMap, chaptersMap, profile?.chapter_id]);
+
+  const modalPaymentSummary = useMemo(() => {
+    const rawNotes: any = selectedMeeting?.memberNotes || (selectedMeeting as any)?.member_notes || {};
+    const savedMeetingAmt =
+      selectedMeeting?.meetingAmount ??
+      (selectedMeeting as any)?.meeting_amount ??
+      rawNotes.__meetingAmount ??
+      rawNotes.__meeting_amount ??
+      rawNotes._MeetingAmount ??
+      0;
+    const configuredAmt =
+      tempMeetingAmount !== '' && tempMeetingAmount !== undefined
+        ? Number(tempMeetingAmount) || 0
+        : Number(savedMeetingAmt) || 0;
+
+    let totalUpiPayment = 0;
+    let totalCashPayment = 0;
+    let totalWalletPayment = 0;
+
+    const guestIds = new Set<string>((meetingGuests || []).map(g => String(g.id)));
+    const allMemberIds = new Set<string>();
+    modalChapterMembers.forEach(m => {
+      const id = m.id || m.uid;
+      if (id) allMemberIds.add(String(id));
+    });
+    Object.keys(tempAttendance || {}).forEach(k => {
+      if (!k.startsWith('_')) allMemberIds.add(String(k));
+    });
+    Object.keys(tempPaymentOptions || {}).forEach(k => {
+      if (!k.startsWith('_')) allMemberIds.add(String(k));
+    });
+
+    const seenLower = new Set<string>();
+    allMemberIds.forEach(mId => {
+      if (guestIds.has(mId)) return;
+      const lowerId = mId.toLowerCase();
+      if (seenLower.has(lowerId)) return;
+      seenLower.add(lowerId);
+
+      const att = String(tempAttendance[mId] ?? tempAttendance[lowerId] ?? '').toUpperCase();
+      const isAttended = ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(att);
+      const payOpt = String(tempPaymentOptions[mId] ?? tempPaymentOptions[lowerId] ?? '').trim();
+
+      if (isAttended && (payOpt.startsWith('Paid') || payOpt === 'Wallet')) {
+        const rawMemberAmt = Number(tempAmount[mId] ?? tempAmount[lowerId] ?? 0) || 0;
+        const memberAmt =
+          tempMeetingAmount !== '' && tempMeetingAmount !== undefined
+            ? Number(tempMeetingAmount) || 0
+            : rawMemberAmt > 0
+              ? rawMemberAmt
+              : configuredAmt;
+
+        if (payOpt === 'Paid UPI') {
+          totalUpiPayment += memberAmt;
+        } else if (payOpt === 'Paid Cash') {
+          totalCashPayment += memberAmt;
+        } else if (payOpt === 'Wallet') {
+          totalWalletPayment += memberAmt;
+        }
+      }
+    });
+
+    (meetingGuests || []).forEach(guest => {
+      const gId = String(guest.id);
+      const gAtt = String(tempGuestAttendance[gId] || '').toUpperCase();
+      if (gAtt === 'PRESENT' || gAtt === 'SUBSTITUTE') {
+        const gAmt = Number(tempAmount[gId]) || 0;
+        if (gAmt > 0) {
+          const gOpt = String(tempPaymentOptions[gId] || '').toUpperCase();
+          if (gOpt.includes('UPI')) {
+            totalUpiPayment += gAmt;
+          } else if (gOpt.includes('WALLET')) {
+            totalWalletPayment += gAmt;
+          } else {
+            totalCashPayment += gAmt;
+          }
+        }
+      }
+    });
+
+    const presentMembersCount = Object.values(tempAttendance || {}).filter(s => ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(String(s).toUpperCase())).length;
+    const presentGuestsCount = Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length;
+
+    return {
+      totalUpiPayment,
+      totalCashPayment,
+      totalWalletPayment,
+      totalCollected: totalUpiPayment + totalCashPayment + totalWalletPayment,
+      presentMembersCount,
+      presentGuestsCount,
+    };
+  }, [selectedMeeting, tempMeetingAmount, meetingGuests, modalChapterMembers, tempAttendance, tempPaymentOptions, tempAmount, tempGuestAttendance]);
+
+  const handleModalMemberAttendanceChange = useCallback((mId: string, newStatus: string) => {
+    setTempAttendance(prev => ({ ...prev, [mId]: newStatus as any }));
+    if (newStatus === 'Present' || newStatus === 'Substitute' || newStatus === 'Late') {
+      setTempPaymentOptions(prevOpts => {
+        const opt = prevOpts[mId] || '';
+        if (opt && (opt.startsWith('Paid') || opt === 'Wallet')) {
+          setTempAmount(prev => ({ ...prev, [mId]: configuredModalMeetingAmt }));
+        } else {
+          setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+        }
+        return prevOpts;
+      });
+    } else {
+      setTempPaymentOptions(prev => ({ ...prev, [mId]: '' }));
+      setTempAmount(prev => {
+        if (!(mId in prev)) return prev;
+        const next = { ...prev };
+        delete next[mId];
+        return next;
+      });
+    }
+  }, [configuredModalMeetingAmt]);
+
+  const handleModalMemberPaymentChange = useCallback((
+    mId: string,
+    option: string,
+    availableBalance: number,
+    existingDebitAmount: number
+  ) => {
+    setTempPaymentOptions(prev => ({ ...prev, [mId]: option }));
+    if (option === 'Paid UPI' || option === 'Paid Cash' || option === 'Wallet') {
+      setTempAmount(prev => ({
+        ...prev,
+        [mId]: configuredModalMeetingAmt > 0 ? configuredModalMeetingAmt : (Number(prev[mId]) || 0)
+      }));
+    } else {
+      setTempAmount(prev => ({ ...prev, [mId]: 0 }));
+    }
+    if (option === 'Wallet') {
+      const effectiveWalletAvailable = availableBalance + existingDebitAmount;
+      if (configuredModalMeetingAmt > 0 && effectiveWalletAvailable < configuredModalMeetingAmt) {
+        const insufficientMsg = `Insufficient wallet balance. Available balance: ₹${availableBalance}.`;
+        setError(insufficientMsg);
+        showError(insufficientMsg);
+      } else {
+        setError(null);
+      }
+    } else {
+      setError(null);
+    }
+  }, [configuredModalMeetingAmt]);
+
   const getSavedMeetingPaymentTotals = (meeting: Meeting | null | undefined) => {
     if (!meeting) return { totalUpi: 0, totalCash: 0, totalWallet: 0, totalCollected: 0 };
     const rawNotes: any = meeting.memberNotes || (meeting as any).member_notes || {};
@@ -3040,13 +3364,10 @@ export function Meetings() {
                 const mStatus = getMeetingStatus(meeting);
 
                 return (
-                  <motion.div
+                  <div
                     key={meeting.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
                     onClick={() => handleOpenAttendanceReport(meeting)}
-                    className="group bg-[#111827] border border-white/5 hover:border-white/10 rounded-xl sm:rounded-[18px] p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="group bg-[#111827] border border-white/5 hover:border-white/10 rounded-xl sm:rounded-[18px] p-4 sm:p-5 shadow-sm hover:shadow-xl transition-colors duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
                     <div className="flex flex-col gap-2 sm:gap-3 flex-1 min-w-0">
                       {/* Top: Status & Title */}
@@ -3135,7 +3456,7 @@ export function Meetings() {
                               e.stopPropagation();
                               handleOpenUpdateMeetingModal(meeting);
                             }}
-                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
+                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-colors"
                           >
                             Update
                           </button>
@@ -3146,7 +3467,7 @@ export function Meetings() {
                               setSelectedMeeting(meeting);
                               setIsCancelConfirmOpen(true);
                             }}
-                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all"
+                            className="flex-1 sm:flex-none text-center px-4 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-colors"
                           >
                             Cancel
                           </button>
@@ -3157,7 +3478,7 @@ export function Meetings() {
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
@@ -3499,187 +3820,28 @@ export function Meetings() {
               <h3 className="text-sm font-bold text-white">Members</h3>
             </div>
             <div className="flex flex-col divide-y divide-white/5">
-                  {(() => {
-                    const meetingChapId = selectedMeeting?.chapter_id || (selectedMeeting?.adminId ? usersMap[selectedMeeting.adminId]?.chapter_id : null) || profile?.chapter_id;
-                    const getPositionRank = (u: any) => {
-                      const label = getMemberPositionLabel(u);
-                      if (label === 'CHAPTER ADMIN') return 1;
-                      if (label === 'PRESIDENT') return 2;
-                      if (label === 'VICE PRESIDENT') return 3;
-                      if (label === 'TREASURER') return 4;
-                      return 5;
-                    };
-                    const meetingMembers = (modalChapterMembers.length > 0 ? modalChapterMembers : members.filter(m => {
-                      if (m.role === 'MASTER_ADMIN') return false;
-                      return Boolean(m.chapter_id && meetingChapId && String(m.chapter_id).trim() === String(meetingChapId).trim());
-                    })).sort((a, b) => {
-                      const rankA = getPositionRank(a);
-                      const rankB = getPositionRank(b);
-                      if (rankA !== rankB) return rankA - rankB;
-                      return (a.name || '').localeCompare(b.name || '');
-                    });
-
-                    if (meetingMembers.length === 0) {
-                      return (
-                        <div className="py-6 text-center text-xs text-neutral-400 font-medium">
-                          No members found for this chapter.
-                        </div>
-                      );
-                    }
-
-                    const configuredMeetingAmt = tempMeetingAmount !== '' && tempMeetingAmount !== undefined 
-                      ? Number(tempMeetingAmount) 
-                      : (selectedMeeting?.meetingAmount ?? (selectedMeeting as any)?.meeting_amount ?? (selectedMeeting?.memberNotes as any)?.__meetingAmount ?? 0);
-
-                    return meetingMembers.map((member) => {
-                      const mId = member.id || member.uid;
-                      const attendanceVal = tempAttendance[mId] || '';
-                      const isAttended = attendanceVal === 'Present' || attendanceVal === 'Substitute' || attendanceVal === 'Late';
-                      const memberPayOption = tempPaymentOptions[mId] || '';
-                      
-                      const getStatusColor = (status: string) => {
-                        const s = String(status || '').toLowerCase();
-                        if (s === 'present') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                        if (s === 'absent') return 'text-red-400 bg-red-500/10 border-red-500/20';
-                        if (s === 'substitute') return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                        if (s === 'medical') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-                        if (s === 'late') return 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-                        if (s === 'pending' || !s) return 'text-amber-400 bg-amber-500/10 border-amber-500/20 font-bold';
-                        return 'text-neutral-400 bg-[#151C2E] border-white/10';
-                      };
-                      
-                      const roleLabel = getMemberPositionLabel(member);
-                      const walletSummary = walletService.getMemberWalletSummary(member);
-                      const existingMeetingDebit = selectedMeeting?.id
-                        ? walletSummary.transactions.find(
-                            tx => tx.type === 'DEBIT' && String(tx.meetingId || '') === String(selectedMeeting.id) && !tx.isReversed
-                          )
-                        : undefined;
-                      const effectiveWalletAvailable = walletSummary.availableBalance + (existingMeetingDebit ? Number(existingMeetingDebit.amount) || 0 : 0);
-                      const isWalletInsufficient =
-                        isAttended &&
-                        memberPayOption === 'Wallet' &&
-                        configuredMeetingAmt > 0 &&
-                        effectiveWalletAvailable < configuredMeetingAmt;
-                      
-                      return (
-                        <div key={mId} className="flex flex-col p-4 sm:p-5 gap-3 hover:bg-[#151C2E] transition-colors group">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="text-[13px] sm:text-sm font-bold text-white truncate group-hover:text-primary transition-colors">
-                                  {member.name || member.displayName || 'Unknown Member'}
-                                </h4>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400">
-                                  <Wallet size={10} />
-                                  ₹{walletSummary.availableBalance.toLocaleString('en-IN')}
-                                </span>
-                              </div>
-                              {roleLabel && (
-                                <p className="text-[10px] sm:text-[11px] text-neutral-400 font-semibold mt-0.5 truncate uppercase tracking-wider">
-                                  {roleLabel}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-3 w-full sm:w-auto">
-                              <select
-                                value={attendanceVal || 'Pending'}
-                                onChange={(e) => {
-                                  const newStatus = e.target.value as any;
-                                  setTempAttendance(prev => ({ ...prev, [mId]: newStatus }));
-                                  if (newStatus === 'Present' || newStatus === 'Substitute' || newStatus === 'Late') {
-                                    const opt = tempPaymentOptions[mId] || '';
-                                    if (opt && (opt.startsWith('Paid') || opt === 'Wallet')) {
-                                      setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt }));
-                                    } else {
-                                      setTempAmount(prev => ({ ...prev, [mId]: 0 }));
-                                    }
-                                  } else {
-                                    setTempPaymentOptions(prev => ({ ...prev, [mId]: '' }));
-                                    setTempAmount(prev => {
-                                      const next = { ...prev };
-                                      delete next[mId];
-                                      return next;
-                                    });
-                                  }
-                                }}
-                                className={cn(
-                                  "flex-1 sm:flex-none px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none appearance-none cursor-pointer text-center",
-                                  getStatusColor(attendanceVal)
-                                )}
-                              >
-                                <option value="Pending" className="bg-[#111827] text-amber-400 font-bold">Pending</option>
-                                <option value="Present" className="bg-[#111827] text-emerald-400 font-bold">Present</option>
-                                <option value="Absent" className="bg-[#111827] text-red-400 font-bold">Absent</option>
-                                <option value="Substitute" className="bg-[#111827] text-blue-400 font-bold">Substitute</option>
-                                <option value="Medical" className="bg-[#111827] text-purple-400 font-bold">Medical</option>
-                                <option value="Late" className="bg-[#111827] text-purple-400 font-bold">Late</option>
-                              </select>
-                              
-                              {isAttended && (
-                                <>
-                                  <div className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 bg-black/20 border border-white/5 rounded-lg text-[11px] sm:text-xs font-bold text-neutral-300 shrink-0">
-                                    <span className="text-[10px] uppercase font-bold text-neutral-400">Amount:</span>
-                                    <span className="text-white font-extrabold">₹{configuredMeetingAmt}</span>
-                                  </div>
-
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="text-[10px] uppercase font-bold text-neutral-400 hidden sm:inline">Payment:</span>
-                                    <select
-                                      value={memberPayOption}
-                                      onChange={(e) => {
-                                        const option = e.target.value;
-                                        setTempPaymentOptions(prev => ({ ...prev, [mId]: option }));
-                                        if (option === 'Paid UPI' || option === 'Paid Cash' || option === 'Wallet') {
-                                            setTempAmount(prev => ({ ...prev, [mId]: configuredMeetingAmt > 0 ? configuredMeetingAmt : (Number(prev[mId]) || 0) }));
-                                        } else {
-                                            setTempAmount(prev => ({ ...prev, [mId]: 0 }));
-                                        }
-                                        if (option === 'Wallet') {
-                                          if (configuredMeetingAmt > 0 && effectiveWalletAvailable < configuredMeetingAmt) {
-                                            const insufficientMsg = `Insufficient wallet balance. Available balance: ₹${walletSummary.availableBalance}.`;
-                                            setError(insufficientMsg);
-                                            showError(insufficientMsg);
-                                          } else {
-                                            setError(null);
-                                          }
-                                        } else {
-                                          setError(null);
-                                        }
-                                      }}
-                                      className={cn(
-                                        "px-2.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg border outline-none cursor-pointer transition-colors",
-                                        memberPayOption === 'Not Paid' || memberPayOption === ''
-                                          ? "bg-red-500/10 text-red-400 border-red-500/30"
-                                          : isWalletInsufficient
-                                            ? "bg-red-500/10 text-red-400 border-red-500/40 ring-1 ring-red-500/40"
-                                            : memberPayOption === 'Wallet'
-                                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                              : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                                      )}
-                                    >
-                                      <option value="" className="bg-[#111827] text-neutral-400">Select Payment *</option>
-                                      <option value="Not Paid" className="bg-[#111827] text-white">Not Paid</option>
-                                      <option value="Paid UPI" className="bg-[#111827] text-white">Paid UPI</option>
-                                      <option value="Paid Cash" className="bg-[#111827] text-white">Paid Cash</option>
-                                      <option value="Wallet" className="bg-[#111827] text-white">Wallet (₹{walletSummary.availableBalance})</option>
-                                    </select>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {isWalletInsufficient && (
-                            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold flex items-center gap-2">
-                              <AlertCircle size={14} className="shrink-0" />
-                              <span>Insufficient wallet balance. Available balance: ₹{walletSummary.availableBalance}. Please choose UPI or Cash.</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
+              {preparedModalMembers.length === 0 ? (
+                <div className="py-6 text-center text-xs text-neutral-400 font-medium">
+                  No members found for this chapter.
                 </div>
+              ) : (
+                preparedModalMembers.map((row) => (
+                  <ModalMemberAttendanceRow
+                    key={row.mId}
+                    mId={row.mId}
+                    memberName={row.memberName}
+                    roleLabel={row.roleLabel}
+                    availableBalance={row.availableBalance}
+                    existingDebitAmount={row.existingDebitAmount}
+                    attendanceVal={tempAttendance[row.mId] || ''}
+                    memberPayOption={tempPaymentOptions[row.mId] || ''}
+                    configuredMeetingAmt={configuredModalMeetingAmt}
+                    onAttendanceChange={handleModalMemberAttendanceChange}
+                    onPaymentChange={handleModalMemberPaymentChange}
+                  />
+                ))
+              )}
+            </div>
           </div>
           
           {/* Guests Section */}
@@ -3745,116 +3907,32 @@ export function Meetings() {
             )}
           </div>
 
-          {(() => {
-            const rawNotes: any = selectedMeeting?.memberNotes || (selectedMeeting as any)?.member_notes || {};
-            const savedMeetingAmt =
-              selectedMeeting?.meetingAmount ??
-              (selectedMeeting as any)?.meeting_amount ??
-              rawNotes.__meetingAmount ??
-              rawNotes.__meeting_amount ??
-              rawNotes._MeetingAmount ??
-              0;
-            const configuredAmt =
-              tempMeetingAmount !== '' && tempMeetingAmount !== undefined
-                ? Number(tempMeetingAmount) || 0
-                : Number(savedMeetingAmt) || 0;
-
-            let totalUpiPayment = 0;
-            let totalCashPayment = 0;
-            let totalWalletPayment = 0;
-
-            const guestIds = new Set<string>((meetingGuests || []).map(g => String(g.id)));
-            const allMemberIds = new Set<string>();
-            modalChapterMembers.forEach(m => {
-              const id = m.id || m.uid;
-              if (id) allMemberIds.add(String(id));
-            });
-            Object.keys(tempAttendance || {}).forEach(k => {
-              if (!k.startsWith('_')) allMemberIds.add(String(k));
-            });
-            Object.keys(tempPaymentOptions || {}).forEach(k => {
-              if (!k.startsWith('_')) allMemberIds.add(String(k));
-            });
-
-            const seenLower = new Set<string>();
-            allMemberIds.forEach(mId => {
-              if (guestIds.has(mId)) return;
-              const lowerId = mId.toLowerCase();
-              if (seenLower.has(lowerId)) return;
-              seenLower.add(lowerId);
-
-              const att = String(tempAttendance[mId] ?? tempAttendance[lowerId] ?? '').toUpperCase();
-              const isAttended = ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(att);
-              const payOpt = String(tempPaymentOptions[mId] ?? tempPaymentOptions[lowerId] ?? '').trim();
-
-              if (isAttended && (payOpt.startsWith('Paid') || payOpt === 'Wallet')) {
-                const rawMemberAmt = Number(tempAmount[mId] ?? tempAmount[lowerId] ?? 0) || 0;
-                const memberAmt =
-                  tempMeetingAmount !== '' && tempMeetingAmount !== undefined
-                    ? Number(tempMeetingAmount) || 0
-                    : rawMemberAmt > 0
-                      ? rawMemberAmt
-                      : configuredAmt;
-
-                if (payOpt === 'Paid UPI') {
-                  totalUpiPayment += memberAmt;
-                } else if (payOpt === 'Paid Cash') {
-                  totalCashPayment += memberAmt;
-                } else if (payOpt === 'Wallet') {
-                  totalWalletPayment += memberAmt;
-                }
-              }
-            });
-
-            (meetingGuests || []).forEach(guest => {
-              const gId = String(guest.id);
-              const gAtt = String(tempGuestAttendance[gId] || '').toUpperCase();
-              if (gAtt === 'PRESENT' || gAtt === 'SUBSTITUTE') {
-                const gAmt = Number(tempAmount[gId]) || 0;
-                if (gAmt > 0) {
-                  const gOpt = String(tempPaymentOptions[gId] || '').toUpperCase();
-                  if (gOpt.includes('UPI')) {
-                    totalUpiPayment += gAmt;
-                  } else if (gOpt.includes('WALLET')) {
-                    totalWalletPayment += gAmt;
-                  } else {
-                    totalCashPayment += gAmt;
-                  }
-                }
-              }
-            });
-
-            const totalCollected = totalUpiPayment + totalCashPayment + totalWalletPayment;
-
-            return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
-                  <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
-                    {Object.values(tempAttendance || {}).filter(s => ['PRESENT', 'YES', 'SUBSTITUTE', 'LATE'].includes(String(s).toUpperCase())).length}
-                    {Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length > 0 && (
-                      <span className="text-xs text-emerald-400/70 font-medium mb-1">
-                        (+{Object.values(tempGuestAttendance || {}).filter(s => String(s).toUpperCase() === 'PRESENT').length} Guests)
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
-                  <p className="text-xl font-bold text-white">
-                    ₹{totalCollected.toLocaleString()}
-                  </p>
-                  <div className="flex flex-wrap items-center justify-end gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-wider">
-                    <span className="text-blue-400">UPI: ₹{totalUpiPayment.toLocaleString()}</span>
-                    <span className="text-neutral-600">+</span>
-                    <span className="text-amber-400">Cash: ₹{totalCashPayment.toLocaleString()}</span>
-                    <span className="text-neutral-600">+</span>
-                    <span className="text-emerald-400">Wallet: ₹{totalWalletPayment.toLocaleString()}</span>
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 bg-emerald-500/10 rounded-[16px] border border-emerald-500/20">
+              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Total Present</p>
+              <p className="text-xl font-bold text-emerald-400 flex items-end gap-2">
+                {modalPaymentSummary.presentMembersCount}
+                {modalPaymentSummary.presentGuestsCount > 0 && (
+                  <span className="text-xs text-emerald-400/70 font-medium mb-1">
+                    (+{modalPaymentSummary.presentGuestsCount} Guests)
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="p-4 bg-[#151C2E] rounded-[16px] border border-white/5 text-right">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Total Collected</p>
+              <p className="text-xl font-bold text-white">
+                ₹{modalPaymentSummary.totalCollected.toLocaleString()}
+              </p>
+              <div className="flex flex-wrap items-center justify-end gap-2 mt-1.5 text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-blue-400">UPI: ₹{modalPaymentSummary.totalUpiPayment.toLocaleString()}</span>
+                <span className="text-neutral-600">+</span>
+                <span className="text-amber-400">Cash: ₹{modalPaymentSummary.totalCashPayment.toLocaleString()}</span>
+                <span className="text-neutral-600">+</span>
+                <span className="text-emerald-400">Wallet: ₹{modalPaymentSummary.totalWalletPayment.toLocaleString()}</span>
               </div>
-            );
-          })()}
+            </div>
+          </div>
           <div className="flex flex-wrap sm:flex-nowrap gap-3">
             {selectedMeeting && !isMeetingDone(selectedMeeting) && (
               <button
