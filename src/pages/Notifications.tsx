@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Notification } from '../types';
-import { notificationService, TaskChecklistItem } from '../services/notificationService';
+import { notificationService, TaskChecklistItem, PushSubscriptionState } from '../services/notificationService';
 import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
@@ -39,6 +39,9 @@ export function Notifications() {
   const [permissionState, setPermissionState] = useState<NotificationPermission>(
     notificationService.getPermissionState()
   );
+  const [pushState, setPushState] = useState<PushSubscriptionState | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
   const navigate = useNavigate();
   const markingIdsRef = useRef<Set<string>>(new Set());
   const deletingIdsRef = useRef<Set<string>>(new Set());
@@ -53,8 +56,13 @@ export function Notifications() {
 
     setLoading(true);
 
-    // Initial automated check for reminders
-    notificationService.runAutomatedReminders(profile);
+    // Load push subscription state for this device
+    notificationService.getPushSubscriptionState(userId)
+      .then((state) => {
+        setPushState(state);
+        setPermissionState(state.permission);
+      })
+      .catch(() => {});
 
     // Load task checklist
     notificationService.getTodayTaskChecklist(userId, profile)
@@ -77,11 +85,45 @@ export function Notifications() {
     return () => unsubscribe();
   }, [userId, profile]);
 
-  // Request Notification Permission
+  // Request Notification Permission & subscribe current device
   const handleEnableNotifications = async () => {
-    if (!userId) return;
-    const res = await notificationService.requestPermission(userId);
-    setPermissionState(res);
+    if (!userId || pushBusy) return;
+    setPushBusy(true);
+    setPushFeedback(null);
+    try {
+      const res = await notificationService.requestPermission(userId);
+      setPermissionState(res);
+      if (res === 'granted') {
+        const subState = await notificationService.subscribeCurrentDevice(userId);
+        setPushState(subState);
+        setPushFeedback('Device push notifications enabled for 8 AM, 1 PM, 6 PM & 9 PM IST alerts.');
+      } else if (res === 'denied') {
+        const latest = await notificationService.getPushSubscriptionState(userId);
+        setPushState(latest);
+        setPushFeedback('Notifications are blocked in your browser settings.');
+      }
+    } catch (err: any) {
+      setPushFeedback(err?.message || 'Unable to enable push notifications on this device.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  // Disable push alerts on current device
+  const handleDisableNotifications = async () => {
+    if (!userId || pushBusy) return;
+    setPushBusy(true);
+    setPushFeedback(null);
+    try {
+      await notificationService.unsubscribeDevice(userId);
+      const latest = await notificationService.getPushSubscriptionState(userId);
+      setPushState(latest);
+      setPushFeedback('Push alerts disabled on this device.');
+    } catch {
+      setPushFeedback('Could not disable push alerts on this device.');
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   // Mark single as read (optimistic + duplicate guard)
@@ -208,6 +250,66 @@ export function Notifications() {
               Clear
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Native Device Push Alerts Card */}
+      <div className="bg-[#111827] rounded-[20px] p-4 sm:p-5 border border-white/5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={cn(
+            "w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0",
+            pushState?.subscribed ? "bg-emerald-500/10 text-emerald-400" :
+            permissionState === 'denied' ? "bg-amber-500/10 text-amber-400" :
+            "bg-primary/10 text-primary"
+          )}>
+            {pushState?.subscribed ? <Bell size={18} /> : permissionState === 'denied' ? <BellOff size={18} /> : <Bell size={18} />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xs sm:text-sm font-bold text-white">Device Push Reminders (IST)</h2>
+              {pushState?.subscribed && (
+                <span className="text-[10px] font-extrabold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Active{pushState.deviceCount > 1 ? ` · ${pushState.deviceCount} devices` : ''}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+              {pushState?.needsIOSHomeScreen
+                ? 'On iPhone/iPad, tap Share → Add to Home Screen, then open the installed app to enable background notifications.'
+                : permissionState === 'denied'
+                  ? 'Notifications are blocked in your browser settings. Allow notifications for this site in browser permissions to receive alerts.'
+                  : pushState?.supported === false
+                    ? 'This browser does not support background Web Push notifications.'
+                    : pushState?.subscribed
+                      ? `Subscribed on ${pushState.deviceLabel} for automated 8:00 AM, 1:00 PM, 6:00 PM & 9:00 PM IST task reminders.`
+                      : 'Receive daily greeting & pending task reminders in your device notification bar at 8 AM, 1 PM, 6 PM & 9 PM IST — even when closed.'}
+            </p>
+            {pushFeedback && (
+              <p className="text-[11px] text-primary font-semibold mt-1">{pushFeedback}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          {pushState?.subscribed ? (
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={handleDisableNotifications}
+              className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-red-500/15 text-neutral-300 hover:text-red-400 border border-white/10 text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              {pushBusy ? 'Updating...' : 'Disable'}
+            </button>
+          ) : pushState?.supported !== false && !pushState?.needsIOSHomeScreen && permissionState !== 'denied' ? (
+            <button
+              type="button"
+              disabled={pushBusy}
+              onClick={handleEnableNotifications}
+              className="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-bold uppercase tracking-wider shadow-md shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              {pushBusy ? 'Enabling...' : 'Enable Alerts'}
+            </button>
+          ) : null}
         </div>
       </div>
 

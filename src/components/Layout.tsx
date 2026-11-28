@@ -73,8 +73,31 @@ export function Layout() {
       }
     );
 
-    return () => unsubscribe();
-  }, [profile?.uid, profile?.id]);
+    // Silently register/sync Web Push subscription for already-granted devices
+    void notificationService.syncExistingPushSubscription(userId);
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'SSK_NOTIFICATION_CLICK' && typeof data.url === 'string') {
+        preloadRouteByPath(data.url);
+        navigate(data.url);
+      } else if (data.type === 'SSK_PUSH_SUBSCRIPTION_ROTATED' && data.subscription) {
+        void notificationService.saveSubscriptionToBackend(userId, data.subscription);
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    return () => {
+      unsubscribe();
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [profile?.uid, profile?.id, navigate]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

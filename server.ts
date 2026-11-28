@@ -7,15 +7,24 @@ import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import webpush from "web-push";
+import {
+  upsertDeviceSubscription,
+  deactivateDeviceSubscription,
+  getUserDeviceSubscriptions,
+  sendPushToUserDevices,
+  runScheduledNotificationDispatch,
+} from "./server/scheduledNotifications";
 
 dotenv.config({ quiet: true });
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BC1b0zclASiN3KGw7H_kGEFcutEzj6IHL-26UPDEyuWrOAtS4vDvyzd1FXAktO7hISEV3EIFf9RP7u6U0L8NnbU";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "na13C1Sh44faY5Ogv-zXGwWN6yof1gnuWFPjt_tBOxw";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:sskbusinessnetwork@gmail.com";
+const CRON_SECRET = process.env.CRON_SECRET || "";
 
 try {
   webpush.setVapidDetails(
-    'mailto:sskbusinessnetwork@gmail.com',
+    VAPID_SUBJECT,
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY
   );
@@ -188,74 +197,161 @@ async function startServer() {
   });
 
   app.get("/api/vapidPublicKey", (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
-  app.post("/api/subscribe", async (req, res) => {
+  const handlePushSubscribe = async (req: express.Request, res: express.Response) => {
     try {
-      const { subscription, uid } = req.body;
-      if (!subscription || !uid) {
+      const { subscription, uid, userId, deviceLabel, platform, userAgent } = req.body || {};
+      const resolvedUid = String(uid || userId || "").trim();
+      if (!subscription || !resolvedUid) {
         return res.status(400).json({ error: "Missing subscription or uid" });
       }
-      
-      const { data: user } = await supabase.from('users').select('profile_photo').eq('id', uid).single();
-      let photo = user?.profile_photo || '';
-      let extraData: any = {};
-      if (photo.includes('|||')) {
-        const parts = photo.split('|||');
-        photo = parts[0];
-        try {
-          extraData = JSON.parse(parts[1] || '{}');
-        } catch(e) {}
-      }
-      extraData.push_token = subscription;
-      
-      const newPhoto = `${photo}|||${JSON.stringify(extraData)}`;
 
-      const { error } = await supabase
-        .from("users")
-        .update({ profile_photo: newPhoto })
-        .eq("id", uid);
-        
-      if (error) {
-        console.warn("Failed to store push_token:", error);
+      const token = req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7).trim()
+        : "";
+      if (token) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          if (user && user.id !== resolvedUid) {
+            return res.status(403).json({ error: "Authenticated user mismatch" });
+          }
+        } catch {}
       }
-      
-      res.status(201).json({ success: true });
+
+      const result = await upsertDeviceSubscription(adminSupabase, {
+        userId: resolvedUid,
+        subscription,
+        deviceLabel: deviceLabel || "Web Browser",
+        platform: platform || "web",
+        userAgent: userAgent || String(req.headers["user-agent"] || ""),
+      });
+
+      return res.status(201).json(result);
     } catch (e: any) {
+      const msg = e?.message || "Failed to store push subscription";
+      const status =
+        msg.includes("Invalid push subscription") || msg.includes("Missing user")
+          ? 400
+          : msg.includes("not found")
+            ? 404
+            : 500;
       console.error("Subscribe error:", e);
-      res.status(500).json({ error: e.message });
+      return res.status(status).json({ error: msg });
+    }
+  };
+
+  app.post("/api/subscribe", handlePushSubscribe);
+  app.post("/api/push/subscribe", handlePushSubscribe);
+
+  app.post("/api/push/unsubscribe", async (req, res) => {
+    try {
+      const { uid, userId, endpoint } = req.body || {};
+      const resolvedUid = String(uid || userId || "").trim();
+      if (!resolvedUid) {
+        return res.status(400).json({ error: "Missing uid" });
+      }
+
+      const result = await deactivateDeviceSubscription(adminSupabase, {
+        userId: resolvedUid,
+        endpoint: endpoint || null,
+      });
+
+      return res.json(result);
+    } catch (e: any) {
+      console.error("Unsubscribe error:", e);
+      return res.status(500).json({ error: e?.message || "Failed to unsubscribe device" });
+    }
+  });
+
+  app.get("/api/push/status", async (req, res) => {
+    try {
+      const resolvedUid = String(req.query.uid || req.query.userId || "").trim();
+      const endpoint = req.query.endpoint ? String(req.query.endpoint).trim() : null;
+      if (!resolvedUid) {
+        return res.status(400).json({ error: "Missing uid" });
+      }
+
+      const devices = await getUserDeviceSubscriptions(adminSupabase, resolvedUid);
+      const currentDeviceActive = endpoint
+        ? devices.some((d) => d.endpoint === endpoint)
+        : devices.length > 0;
+
+      return res.json({
+        subscribed: currentDeviceActive,
+        deviceCount: devices.length,
+        devices: devices.map((d) => ({
+          endpoint: d.endpoint,
+          deviceLabel: d.deviceLabel,
+          platform: d.platform,
+          lastSeenAt: d.lastSeenAt,
+          lastSentAt: d.lastSentAt,
+        })),
+      });
+    } catch (e: any) {
+      console.error("Push status error:", e);
+      return res.status(500).json({ error: e?.message || "Failed to load push status" });
     }
   });
 
   app.post("/api/notify", async (req, res) => {
     try {
-      const { uid, payload } = req.body;
+      const { uid, payload } = req.body || {};
       if (!uid || !payload) return res.status(400).json({ error: "Missing uid or payload" });
 
-      const { data } = await supabase.from("users").select("profile_photo").eq("id", uid).single();
-      let photo = data?.profile_photo || '';
-      let extraData: any = {};
-      if (photo.includes('|||')) {
-        const parts = photo.split('|||');
-        try {
-          extraData = JSON.parse(parts[1] || '{}');
-        } catch(e) {}
+      const summary = await sendPushToUserDevices(adminSupabase, webpush, String(uid), payload);
+      if (summary.devicesTargeted === 0) {
+        return res.status(404).json({ error: "No active push devices found" });
       }
 
-      if (!extraData.push_token) {
-        return res.status(404).json({ error: "No push token found" });
-      }
-
-      const sub = extraData.push_token;
-
-      await webpush.sendNotification(sub, JSON.stringify(payload));
-      res.json({ success: true });
+      return res.json({
+        success: summary.devicesSucceeded > 0,
+        ...summary,
+      });
     } catch (e: any) {
       console.error("Notify error:", e);
-      res.status(500).json({ error: e.message });
+      return res.status(500).json({ error: e?.message || "Failed to deliver notification" });
     }
   });
+
+  const handleScheduledCron = async (req: express.Request, res: express.Response) => {
+    try {
+      const authHeader = req.headers.authorization || "";
+      const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      const headerSecret = String(req.headers["x-cron-secret"] || "").trim();
+      const serviceRoleEnv = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+      const isProduction = process.env.NODE_ENV === "production";
+      const hasSecretConfig = Boolean(CRON_SECRET || serviceRoleEnv);
+      const secretMatches =
+        (Boolean(CRON_SECRET) && (bearer === CRON_SECRET || headerSecret === CRON_SECRET)) ||
+        (Boolean(serviceRoleEnv) && bearer === serviceRoleEnv);
+
+      if ((hasSecretConfig && !secretMatches) || (isProduction && !hasSecretConfig)) {
+        return res.status(401).json({ error: "Unauthorized scheduled notification trigger" });
+      }
+
+      const slotParam = (req.body?.slot || req.query.slot || null) as string | null;
+      const dryRun = Boolean(req.body?.dryRun || req.query.dryRun === "true");
+      const targetUserId = (req.body?.userId || req.query.userId || undefined) as string | undefined;
+
+      const summary = await runScheduledNotificationDispatch(adminSupabase, webpush, {
+        slot: slotParam,
+        dryRun,
+        targetUserId,
+      });
+
+      return res.json(summary);
+    } catch (e: any) {
+      console.error("Scheduled notifications dispatch error:", e);
+      return res.status(500).json({ error: e?.message || "Scheduled notification dispatch failed" });
+    }
+  };
+
+  app.get("/api/cron/scheduled-notifications", handleScheduledCron);
+  app.post("/api/cron/scheduled-notifications", handleScheduledCron);
 
   // Create User endpoint
   app.post("/api/admin/create-user", async (req, res) => {

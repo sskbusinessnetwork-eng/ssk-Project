@@ -4,6 +4,7 @@ import { UserProfile } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { ensureUserChapterId } from '../utils/authUtils';
 import { withTimeout } from '../utils/directoryCache';
+import { notificationService } from '../services/notificationService';
 
 export const auth = {}; // dummy
 export const db = {}; // dummy
@@ -88,6 +89,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
+    const activeUid = user?.uid || user?.id || profile?.uid || profile?.id;
+    if (activeUid) {
+      try {
+        await withTimeout(notificationService.unsubscribeOnLogout(String(activeUid)), 2_500, 'Push logout cleanup');
+      } catch {}
+    }
     try { await supabase.auth.signOut(); } catch(e) {}
     setUser(null);
     setProfile(null);
@@ -98,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .replace(/^ +/, "")
         .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
-  }, []);
+  }, [user?.uid, user?.id, profile?.uid, profile?.id]);
 
   const refreshProfile = useCallback(async () => {
     const savedUser = localStorage.getItem('user');

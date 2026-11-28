@@ -63,6 +63,36 @@ export function NotificationPopover({
   });
 
   const userId = profile?.uid || profile?.id || '';
+  const [pushPerm, setPushPerm] = useState<NotificationPermission>(() => notificationService.getPermissionState());
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !userId) return;
+    let active = true;
+    notificationService.getPushSubscriptionState(userId).then((st) => {
+      if (!active) return;
+      setPushPerm(st.permission);
+      setPushSubscribed(st.subscribed);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [isOpen, userId]);
+
+  const handleQuickEnablePush = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!userId || pushEnabling) return;
+    setPushEnabling(true);
+    try {
+      const res = await notificationService.requestPermission(userId);
+      setPushPerm(res);
+      if (res === 'granted') {
+        const st = await notificationService.subscribeCurrentDevice(userId);
+        setPushSubscribed(st.subscribed);
+      }
+    } finally {
+      setPushEnabling(false);
+    }
+  };
 
   // 1. Dynamic positioning calculation relative to bell button
   const recalculatePosition = useCallback(() => {
@@ -547,6 +577,40 @@ export function NotificationPopover({
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Footer: Quick Push Opt-In & Notification Settings Link */}
+          <div className="px-3.5 py-2.5 border-t border-white/5 bg-[#0F1523]/90 flex items-center justify-between gap-2 shrink-0">
+            {pushSubscribed ? (
+              <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Device push alerts active (IST)
+              </span>
+            ) : pushPerm === 'denied' ? (
+              <span className="text-[11px] font-medium text-amber-400">
+                Push blocked in browser settings
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={pushEnabling}
+                onClick={handleQuickEnablePush}
+                className="text-[11px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
+              >
+                {pushEnabling ? 'Enabling device alerts...' : 'Enable native device push alerts'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                preloadRouteByPath('/notifications');
+                onClose();
+                navigate('/notifications');
+              }}
+              className="text-[11px] font-semibold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+            >
+              Manage
+            </button>
           </div>
         </motion.div>
       )}

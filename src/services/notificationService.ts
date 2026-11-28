@@ -52,9 +52,28 @@ function getSubscriptionDates(user: any): { startDate: Date | null; endDate: Dat
   return { startDate: startParsed.date, endDate: endParsed.date, endDateStr: endParsed.ymd };
 }
 
+export interface PushCapability {
+  supported: boolean;
+  isIOS: boolean;
+  isStandalone: boolean;
+  needsIOSHomeScreen: boolean;
+  permission: NotificationPermission;
+}
+
+export interface PushSubscriptionState {
+  supported: boolean;
+  permission: NotificationPermission;
+  subscribed: boolean;
+  deviceCount: number;
+  deviceLabel: string;
+  needsIOSHomeScreen: boolean;
+}
+
+const PUSH_OPT_OUT_PREFIX = 'ssk_push_opted_out_';
+
 export const notificationService = {
   // ==========================================================
-  // PUSH NOTIFICATION PERMISSION & BROWSER NATIVE PUSH
+  // PUSH NOTIFICATION PERMISSION & MULTI-DEVICE NATIVE PUSH
   // ==========================================================
 
   // Helper for web-push base64 encoding
@@ -73,67 +92,370 @@ export const notificationService = {
     return outputArray;
   },
 
+  detectDeviceInfo(): { deviceLabel: string; platform: string } {
+    if (typeof navigator === 'undefined') {
+      return { deviceLabel: 'Web Browser', platform: 'web' };
+    }
+
+    const ua = navigator.userAgent || '';
+    const isIPadOS = /Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1;
+    let os = 'Desktop';
+    let platform = 'desktop';
+
+    if (/Android/i.test(ua)) {
+      os = 'Android';
+      platform = 'android';
+    } else if (/iPhone/i.test(ua)) {
+      os = 'iPhone';
+      platform = 'ios';
+    } else if (/iPad/i.test(ua) || isIPadOS) {
+      os = 'iPad';
+      platform = 'ios';
+    } else if (/Mac OS X|Macintosh/i.test(ua)) {
+      os = 'Mac';
+      platform = 'macos';
+    } else if (/Windows/i.test(ua)) {
+      os = 'Windows';
+      platform = 'windows';
+    } else if (/Linux/i.test(ua)) {
+      os = 'Linux';
+      platform = 'linux';
+    }
+
+    let browser = 'Browser';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/SamsungBrowser/i.test(ua)) browser = 'Samsung Internet';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+    else if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) browser = 'Chrome';
+    else if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) browser = 'Safari';
+
+    const isStandalone =
+      (typeof window !== 'undefined' &&
+        window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+      Boolean((navigator as any).standalone);
+
+    return {
+      deviceLabel: `${os} ${browser}${isStandalone ? ' (App)' : ''}`,
+      platform,
+    };
+  },
+
+  getPushCapability(): PushCapability {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return {
+        supported: false,
+        isIOS: false,
+        isStandalone: false,
+        needsIOSHomeScreen: false,
+        permission: 'denied',
+      };
+    }
+
+    const ua = navigator.userAgent || '';
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(ua) ||
+      (/Macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1);
+    const isStandalone =
+      Boolean(window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+      Boolean((navigator as any).standalone);
+
+    const hasNotification = 'Notification' in window;
+    const hasSW = 'serviceWorker' in navigator;
+    const hasPush = 'PushManager' in window;
+
+    return {
+      supported: hasNotification && hasSW && hasPush,
+      isIOS,
+      isStandalone,
+      needsIOSHomeScreen: isIOS && !isStandalone,
+      permission: hasNotification ? Notification.permission : 'denied',
+    };
+  },
+
+  async saveSubscriptionToBackend(userId: string, subscription: PushSubscription | PushSubscriptionJSON) {
+    if (!userId || !subscription) return null;
+    const { deviceLabel, platform } = this.detectDeviceInfo();
+    const subJson =
+      typeof (subscription as PushSubscription).toJSON === 'function'
+        ? (subscription as PushSubscription).toJSON()
+        : subscription;
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+    } catch {}
+
+    const res = await fetchWithTimeout('/api/push/subscribe', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        subscription: subJson,
+        uid: userId,
+        deviceLabel,
+        platform,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      }),
+    }, 6_000);
+
+    if (!res.ok) {
+      throw new Error(`Push subscribe HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
+  async subscribeCurrentDevice(userId: string): Promise<PushSubscriptionState> {
+    const cap = this.getPushCapability();
+    const { deviceLabel } = this.detectDeviceInfo();
+
+    if (!cap.supported || cap.permission !== 'granted' || !userId) {
+      return {
+        supported: cap.supported,
+        permission: cap.permission,
+        subscribed: false,
+        deviceCount: 0,
+        deviceLabel,
+        needsIOSHomeScreen: cap.needsIOSHomeScreen,
+      };
+    }
+
+    const reg = await this.registerServiceWorker();
+    if (!reg) {
+      return {
+        supported: false,
+        permission: cap.permission,
+        subscribed: false,
+        deviceCount: 0,
+        deviceLabel,
+        needsIOSHomeScreen: cap.needsIOSHomeScreen,
+      };
+    }
+
+    const readyReg = await navigator.serviceWorker.ready;
+    let subscription = await readyReg.pushManager.getSubscription();
+
+    if (!subscription) {
+      const keyRes = await fetchWithTimeout('/api/vapidPublicKey', {}, 6_000);
+      if (!keyRes.ok) {
+        throw new Error('Unable to load push notification key');
+      }
+      const { publicKey } = await keyRes.json();
+      const applicationServerKey = this.urlBase64ToUint8Array(publicKey);
+      subscription = await readyReg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+    }
+
+    const saved = await this.saveSubscriptionToBackend(userId, subscription);
+    try {
+      localStorage.removeItem(`${PUSH_OPT_OUT_PREFIX}${userId}`);
+    } catch {}
+
+    return {
+      supported: true,
+      permission: Notification.permission,
+      subscribed: true,
+      deviceCount: Number(saved?.deviceCount || 1),
+      deviceLabel,
+      needsIOSHomeScreen: cap.needsIOSHomeScreen,
+    };
+  },
+
   async requestPermission(userId?: string): Promise<NotificationPermission> {
+    const cap = this.getPushCapability();
     if (!('Notification' in window)) {
-      console.warn("Browser does not support notifications.");
+      console.warn('Browser does not support notifications.');
+      return 'denied';
+    }
+
+    // Respect prior denial cleanly — never spam denied users
+    if (Notification.permission === 'denied') {
       return 'denied';
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        const reg = await this.registerServiceWorker();
-        if (reg && userId) {
-          // Subscribe to web-push
-          try {
-            const keyRes = await fetchWithTimeout('/api/vapidPublicKey', {}, 6_000);
-            if (keyRes.ok) {
-              const { publicKey } = await keyRes.json();
-              const applicationServerKey = this.urlBase64ToUint8Array(publicKey);
-              const subscription = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey
-              });
-              
-              await fetchWithTimeout('/api/subscribe', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ subscription, uid: userId })
-              }, 6_000);
-              console.log("Push subscription saved successfully");
-            }
-          } catch(e) {
-            console.warn("Push subscription failed", e);
-          }
+      const permission =
+        Notification.permission === 'granted'
+          ? 'granted'
+          : await Notification.requestPermission();
+
+      if (permission === 'granted' && userId && cap.supported) {
+        try {
+          await this.subscribeCurrentDevice(userId);
+        } catch (e) {
+          console.warn('Push subscription failed:', e);
         }
       }
       return permission;
     } catch (error) {
-      console.error("Error requesting notification permission:", error);
-      return 'denied';
+      console.error('Error requesting notification permission:', error);
+      return Notification.permission || 'denied';
     }
   },
 
+  async syncExistingPushSubscription(userId?: string): Promise<void> {
+    if (!userId) return;
+    const cap = this.getPushCapability();
+    if (!cap.supported || cap.permission !== 'granted') return;
+
+    try {
+      if (localStorage.getItem(`${PUSH_OPT_OUT_PREFIX}${userId}`) === 'true') {
+        return;
+      }
+      await this.subscribeCurrentDevice(userId);
+    } catch (e) {
+      console.warn('Silent push subscription sync notice:', e);
+    }
+  },
+
+  async getPushSubscriptionState(userId?: string): Promise<PushSubscriptionState> {
+    const cap = this.getPushCapability();
+    const { deviceLabel } = this.detectDeviceInfo();
+
+    if (!cap.supported || !userId) {
+      return {
+        supported: cap.supported,
+        permission: cap.permission,
+        subscribed: false,
+        deviceCount: 0,
+        deviceLabel,
+        needsIOSHomeScreen: cap.needsIOSHomeScreen,
+      };
+    }
+
+    let endpoint = '';
+    try {
+      const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+      const existingSub = reg ? await reg.pushManager.getSubscription() : null;
+      endpoint = existingSub?.endpoint || '';
+    } catch {}
+
+    let isOptedOut = false;
+    try {
+      isOptedOut = localStorage.getItem(`${PUSH_OPT_OUT_PREFIX}${userId}`) === 'true';
+    } catch {}
+
+    if (cap.permission !== 'granted' || isOptedOut) {
+      return {
+        supported: true,
+        permission: cap.permission,
+        subscribed: false,
+        deviceCount: 0,
+        deviceLabel,
+        needsIOSHomeScreen: cap.needsIOSHomeScreen,
+      };
+    }
+
+    try {
+      const params = new URLSearchParams({ uid: userId });
+      if (endpoint) params.set('endpoint', endpoint);
+      const statusRes = await fetchWithTimeout(`/api/push/status?${params.toString()}`, {}, 5_000);
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        return {
+          supported: true,
+          permission: cap.permission,
+          subscribed: Boolean(endpoint && statusData.subscribed),
+          deviceCount: Number(statusData.deviceCount || 0),
+          deviceLabel,
+          needsIOSHomeScreen: cap.needsIOSHomeScreen,
+        };
+      }
+    } catch {}
+
+    return {
+      supported: true,
+      permission: cap.permission,
+      subscribed: Boolean(endpoint),
+      deviceCount: endpoint ? 1 : 0,
+      deviceLabel,
+      needsIOSHomeScreen: cap.needsIOSHomeScreen,
+    };
+  },
+
+  async unsubscribeDevice(userId: string): Promise<{ remainingDevices: number }> {
+    if (!userId) return { remainingDevices: 0 };
+
+    try {
+      localStorage.setItem(`${PUSH_OPT_OUT_PREFIX}${userId}`, 'true');
+    } catch {}
+
+    let endpoint: string | null = null;
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        if (sub) {
+          endpoint = sub.endpoint;
+          await sub.unsubscribe();
+        }
+      } catch {}
+    }
+
+    try {
+      const res = await fetchWithTimeout('/api/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: userId, endpoint }),
+      }, 5_000);
+      if (res.ok) {
+        const data = await res.json();
+        return { remainingDevices: Number(data.remainingDevices || 0) };
+      }
+    } catch {}
+
+    return { remainingDevices: 0 };
+  },
+
+  async unsubscribeOnLogout(userId?: string): Promise<void> {
+    if (!userId) return;
+    let endpoint: string | null = null;
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        if (sub) {
+          endpoint = sub.endpoint;
+          await sub.unsubscribe();
+        }
+      } catch {}
+    }
+
+    if (!endpoint) return;
+
+    try {
+      await fetchWithTimeout('/api/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: userId, endpoint }),
+      }, 3_000);
+    } catch {}
+  },
+
   getPermissionState(): NotificationPermission {
-    if (!('Notification' in window)) return 'denied';
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'denied';
     return Notification.permission;
   },
 
   async registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       try {
-        const reg = await navigator.serviceWorker.register('/sw.js');
-        console.log("Service Worker registered:", reg.scope);
+        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         return reg;
       } catch (e) {
-        console.warn("Service Worker registration notice:", e);
+        console.warn('Service Worker registration notice:', e);
       }
     }
     return null;
   },
 
   showSystemNotification(title: string, body: string, link: string = '/notifications') {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
 
     try {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -158,7 +480,7 @@ export const notificationService = {
         };
       }
     } catch (err) {
-      console.warn("System notification display error:", err);
+      console.warn('System notification display error:', err);
     }
   },
 
