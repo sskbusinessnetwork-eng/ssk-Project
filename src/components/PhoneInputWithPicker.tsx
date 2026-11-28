@@ -1,19 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   BookUser,
-  Search,
   X,
-  Upload,
-  ClipboardPaste,
   Phone,
   AlertCircle,
-  Check,
   RefreshCw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { normalizePickedPhoneNumber } from '../utils/phoneUtils';
-import { showInfo, showSuccess, showError } from '../services/toastService';
+import { showInfo } from '../services/toastService';
 import {
   parseVCardContacts,
   resolveContactSelection,
@@ -75,9 +70,9 @@ export async function pickPhoneFromContacts(
   } else {
     const fallbackMessage =
       result.reason === 'permission_denied'
-        ? 'Contacts permission was denied. Allow access or import a .vcf contact card.'
-        : 'Unable to open device contacts directly in this view.';
-    showInfo(fallbackMessage, { title: 'Contacts Unavailable' });
+        ? 'Contacts permission was denied. Allow contacts access in your browser or app settings and try again, or enter the number manually.'
+        : 'Direct device contact selection is not supported in this browser. Please enter the phone number manually.';
+    showInfo(fallbackMessage, { title: 'Device Contacts Unavailable' });
   }
   return false;
 }
@@ -99,21 +94,24 @@ function getNoticeMessage(reason: ModalNoticeReason, runtime?: ContactPickerRunt
     return 'This device contact has multiple phone numbers. Tap the number you want to fill into the field.';
   }
   if (reason === 'iframe_blocked') {
-    return 'Direct device contacts popup is blocked inside an embedded view. Open the site directly in your mobile browser, or import a contact card (.vcf) or paste a number from your device contacts below.';
+    return 'Direct access to device contacts is blocked inside an embedded view. Open this website directly in your mobile browser (such as Chrome, Edge, or Samsung Internet on Android) to select a contact, or enter the phone number directly in the field.';
   }
   if (reason === 'permission_denied') {
-    return 'Contacts permission was denied or restricted on this device. Allow contacts access in your browser or app settings and tap Try Again, or import a contact card (.vcf) or paste a number below.';
+    return 'Contacts permission was denied or restricted on this device. Allow contacts access in your browser or app settings and tap Try Again, or enter the phone number directly in the field.';
   }
   if (reason === 'blocked') {
-    return 'Your browser blocked opening the device contacts picker. Allow access and tap Try Again, or import a contact card (.vcf) or paste a number below.';
+    return 'Your browser blocked opening the device contacts picker. Allow access and tap Try Again, or enter the phone number directly in the field.';
+  }
+  if (runtime && !runtime.isSecureContext) {
+    return 'Direct device contact access requires a secure HTTPS connection. Open this site over HTTPS on a supported mobile browser, or enter the phone number directly in the field.';
   }
   if (runtime?.isIOS) {
-    return 'Your iOS browser does not allow direct system contacts popup by default. Tap Import Contact (.vcf) to pick a contact card from Files (Contacts → Share Contact → Save to Files), or paste a copied number below.';
+    return 'This iOS browser does not allow direct access to device contacts by default. In Safari on iOS, you can enable "Contact Picker API" under Settings → Safari → Advanced → Feature Flags (or Experimental Features). Otherwise, please enter the phone number directly in the field.';
   }
   if (runtime?.isAndroid) {
-    return 'Direct contacts popup is not supported in this Android browser or WebView. Choose a contact card (.vcf) exported from your Contacts app, or paste a copied number below.';
+    return 'Direct device contact selection is not supported in this Android browser or WebView. Open this website in Google Chrome, Microsoft Edge, Samsung Internet, or the SSK Android app to pick from your device contacts, or enter the phone number directly in the field.';
   }
-  return 'This desktop browser does not support direct system contacts popups. Drag & drop or import a contact card (.vcf) from your device contacts (e.g. Apple/Google Contacts), or paste a copied number below.';
+  return 'Direct device contact selection is not supported by this browser. Native contact picking is available on supported mobile browsers (such as Chrome, Edge, or Samsung Internet on Android) or the SSK mobile app. Please enter the phone number directly in the field.';
 }
 
 function ContactPickerFallbackModal({
@@ -125,43 +123,12 @@ function ContactPickerFallbackModal({
   onPick,
   onRetryNative
 }: ContactPickerFallbackModalProps) {
-  const [vcardContacts, setVcardContacts] = useState<ParsedVCardContact[]>([]);
-  const [vcardSearch, setVcardSearch] = useState('');
-  const [manualPasteValue, setManualPasteValue] = useState('');
-  const [showManualPaste, setShowManualPaste] = useState(false);
-  const [isDraggingVcf, setIsDraggingVcf] = useState(false);
-  const vcardInputRef = useRef<HTMLInputElement>(null);
   const hasPickedRef = useRef(false);
-
-  const commitPickAndClose = (contact: PickedContact) => {
-    if (hasPickedRef.current) return;
-    hasPickedRef.current = true;
-    onPick(contact);
-    onClose();
-  };
-
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!isOpen) {
-      hasPickedRef.current = false;
-      setVcardSearch('');
-      setVcardContacts([]);
-      setManualPasteValue('');
-      setShowManualPaste(false);
-      setIsDraggingVcf(false);
-      return;
-    }
-
     hasPickedRef.current = false;
-    setVcardSearch('');
-    setIsDraggingVcf(false);
-    if (initialMultipleContact && initialMultipleContact.phones.length > 0) {
-      setVcardContacts([initialMultipleContact]);
-    } else {
-      setVcardContacts([]);
-    }
   }, [isOpen, initialMultipleContact]);
 
   useEffect(() => {
@@ -175,115 +142,18 @@ function ContactPickerFallbackModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  const filteredVcardContacts = useMemo(() => {
-    if (!vcardSearch.trim()) return vcardContacts;
-    const q = vcardSearch.toLowerCase().trim();
-    return vcardContacts.filter(
-      (vc) =>
-        vc.name.toLowerCase().includes(q) ||
-        vc.phones.some((ph) => ph.toLowerCase().includes(q))
-    );
-  }, [vcardContacts, vcardSearch]);
-
-  const processVCardText = (text: string) => {
-    const parsed = parseVCardContacts(text);
-    if (parsed.length === 0) {
-      showError('No valid phone numbers were found in that contact card (.vcf).');
-      return;
-    }
-
-    if (parsed.length === 1 && parsed[0].phones.length === 1) {
-      showSuccess(`Selected ${parsed[0].name}`);
-      commitPickAndClose({ phone: parsed[0].phones[0], name: parsed[0].name });
-      return;
-    }
-
-    setVcardSearch('');
-    setVcardContacts(parsed);
-  };
-
-  const handleVCardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      processVCardText(text);
-    } catch {
-      showError('Could not read the selected contact file.');
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingVcf(false);
-
-    const file = e.dataTransfer?.files?.[0];
-    if (file) {
-      try {
-        const text = await file.text();
-        processVCardText(text);
-        return;
-      } catch {
-        showError('Could not read the dropped contact file.');
-        return;
-      }
-    }
-
-    const vcardText =
-      e.dataTransfer?.getData('text/vcard') ||
-      e.dataTransfer?.getData('text/x-vcard') ||
-      e.dataTransfer?.getData('text/plain');
-    if (vcardText && /BEGIN:VCARD/i.test(vcardText)) {
-      processVCardText(vcardText);
-    } else if (vcardText) {
-      const normalized = normalizePickedPhoneNumber(vcardText);
-      if (normalized) {
-        commitPickAndClose({ phone: normalized });
-      }
-    }
-  };
-
-  const handleClipboardPaste = async () => {
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        const text = await navigator.clipboard.readText();
-        if (text && /BEGIN:VCARD/i.test(text)) {
-          processVCardText(text);
-          return;
-        }
-        const normalized = normalizePickedPhoneNumber(text);
-        if (normalized) {
-          showSuccess('Phone number pasted from clipboard');
-          commitPickAndClose({ phone: normalized });
-          return;
-        }
-        if (text && text.trim()) {
-          showInfo('Clipboard text did not contain a valid phone number. Paste it manually below.');
-        } else {
-          showInfo('Clipboard is empty. Copy a number from your device contacts first.');
-        }
-      }
-      setShowManualPaste(true);
-    } catch {
-      setShowManualPaste(true);
-    }
-  };
-
-  const handleApplyManualPaste = () => {
-    const normalized = normalizePickedPhoneNumber(manualPasteValue);
-    if (!normalized) {
-      showError('Please enter or paste a valid phone number.');
-      return;
-    }
-    commitPickAndClose({ phone: normalized });
+  const commitPickAndClose = (contact: PickedContact) => {
+    if (hasPickedRef.current) return;
+    hasPickedRef.current = true;
+    onPick(contact);
+    onClose();
   };
 
   if (!isOpen || typeof document === 'undefined') return null;
 
-  const isMultiNumberPrompt = reason === 'multiple_numbers' && vcardContacts.length > 0;
+  const isMultiNumberPrompt =
+    reason === 'multiple_numbers' &&
+    Boolean(initialMultipleContact && initialMultipleContact.phones.length > 0);
   const canRetryNativePicker =
     Boolean(onRetryNative) &&
     (reason === 'permission_denied' || reason === 'blocked') &&
@@ -298,22 +168,8 @@ function ContactPickerFallbackModal({
       }}
     >
       <div
-        className={cn(
-          'w-full max-w-md bg-[#111827] border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-white transition-colors',
-          isDraggingVcf ? 'border-primary ring-2 ring-primary/40' : 'border-white/10'
-        )}
+        className="w-full max-w-md bg-[#111827] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-white transition-colors"
         onClick={(e) => e.stopPropagation()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isDraggingVcf) setIsDraggingVcf(true);
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsDraggingVcf(false);
-        }}
-        onDrop={handleDrop}
       >
         <div className="h-1 w-full bg-primary shrink-0" />
 
@@ -325,12 +181,12 @@ function ContactPickerFallbackModal({
             </div>
             <div className="min-w-0">
               <h3 className="text-sm font-bold uppercase tracking-wider text-white truncate">
-                {isMultiNumberPrompt ? 'Select Phone Number' : 'Device Contacts'}
+                {isMultiNumberPrompt ? 'Select Phone Number' : 'Device Contacts Unavailable'}
               </h3>
               <p className="text-[11px] text-neutral-400 truncate">
                 {isMultiNumberPrompt
                   ? 'Choose which number from this contact to use'
-                  : 'Select a contact from your device'}
+                  : 'Native contact picker limitation'}
               </p>
             </div>
           </div>
@@ -346,167 +202,63 @@ function ContactPickerFallbackModal({
 
         {/* Body */}
         <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar flex-1">
-          {/* Context Notice (shown when native picker could not open directly) */}
           {!isMultiNumberPrompt && (
-            <div className="p-3 rounded-xl bg-[#151C2E] border border-white/10 flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed">
-              <AlertCircle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-              <div className="space-y-2 flex-1">
+            <div className="p-3.5 rounded-xl bg-[#151C2E] border border-white/10 flex items-start gap-2.5 text-xs text-neutral-200 leading-relaxed">
+              <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-3 flex-1">
                 <p>{getNoticeMessage(reason, runtime)}</p>
-                {canRetryNativePicker && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onRetryNative?.();
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/15 border border-primary/30 text-primary text-[11px] font-bold hover:bg-primary hover:text-white transition-colors cursor-pointer"
-                  >
-                    <RefreshCw size={12} />
-                    Try Device Contacts Again
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Device Contact Card (.vcf) & Paste Clipboard Actions */}
-          {!isMultiNumberPrompt && (
-            <div className="grid grid-cols-2 gap-2.5">
-              <input
-                ref={vcardInputRef}
-                type="file"
-                accept=".vcf,text/vcard,text/x-vcard,text/x-vCard,text/directory,application/vcard"
-                onChange={handleVCardFileChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => vcardInputRef.current?.click()}
-                className="py-2.5 px-3 rounded-xl bg-primary text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all cursor-pointer shadow-md shadow-primary/20"
-              >
-                <Upload size={14} className="shrink-0" />
-                <span>Import Contact (.vcf)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleClipboardPaste}
-                className="py-2.5 px-3 rounded-xl bg-[#151C2E] border border-white/10 text-white text-xs font-bold flex items-center justify-center gap-2 hover:border-primary/50 hover:bg-[#1A2236] transition-all cursor-pointer"
-              >
-                <ClipboardPaste size={14} className="shrink-0 text-primary" />
-                <span>Paste Number</span>
-              </button>
-            </div>
-          )}
-
-          {showManualPaste && !isMultiNumberPrompt && (
-            <div className="p-3 rounded-xl bg-[#151C2E] border border-primary/30 space-y-2">
-              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-                Paste Copied Phone Number
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  autoFocus
-                  value={manualPasteValue}
-                  onChange={(e) => setManualPasteValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleApplyManualPaste();
-                    }
-                  }}
-                  placeholder="Long-press / Ctrl+V to paste..."
-                  className="flex-1 px-3 py-2 rounded-lg bg-[#111827] border border-white/10 text-white text-xs outline-none focus:border-primary"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyManualPaste}
-                  className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90 cursor-pointer flex items-center gap-1"
-                >
-                  <Check size={13} />
-                  Use
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Selected Multi-Number Contact / Imported Device vCard Contacts */}
-          {vcardContacts.length > 0 && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                  {isMultiNumberPrompt
-                    ? 'Device Contact Numbers'
-                    : `Device Contacts (${filteredVcardContacts.length})`}
-                </p>
-                {!isMultiNumberPrompt && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVcardContacts([]);
-                      setVcardSearch('');
-                    }}
-                    className="text-[10px] text-neutral-400 hover:text-white cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {!isMultiNumberPrompt && vcardContacts.length > 5 && (
-                <div className="relative flex items-center">
-                  <Search size={14} className="absolute left-3 text-neutral-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={vcardSearch}
-                    onChange={(e) => setVcardSearch(e.target.value)}
-                    placeholder="Search imported device contacts..."
-                    className="w-full h-9 pl-8 pr-8 rounded-xl bg-[#151C2E] border border-white/10 text-xs text-white placeholder-neutral-400 outline-none focus:border-primary"
-                  />
-                  {vcardSearch && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {canRetryNativePicker && (
                     <button
                       type="button"
-                      onClick={() => setVcardSearch('')}
-                      className="absolute right-2.5 p-0.5 rounded-full text-neutral-400 hover:text-white cursor-pointer"
+                      onClick={() => {
+                        onClose();
+                        onRetryNative?.();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors cursor-pointer"
                     >
-                      <X size={13} />
+                      <RefreshCw size={12} />
+                      Try Again
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-neutral-200 text-xs font-semibold hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
                 </div>
-              )}
+              </div>
+            </div>
+          )}
 
-              <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
-                {filteredVcardContacts.length > 0 ? (
-                  filteredVcardContacts.map((vc, idx) => (
-                    <div
-                      key={`${vc.name}-${idx}`}
-                      className="p-2.5 rounded-xl bg-[#151C2E] border border-white/10 space-y-1.5"
+          {isMultiNumberPrompt && initialMultipleContact && (
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                Device Contact Numbers
+              </p>
+
+              <div className="p-2.5 rounded-xl bg-[#151C2E] border border-white/10 space-y-1.5">
+                <p className="text-xs font-bold text-white">{initialMultipleContact.name}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {initialMultipleContact.phones.map((ph) => (
+                    <button
+                      key={ph}
+                      type="button"
+                      onClick={() =>
+                        commitPickAndClose({ phone: ph, name: initialMultipleContact.name })
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-primary/15 border border-primary/30 text-primary text-[11px] font-bold hover:bg-primary hover:text-white transition-all cursor-pointer flex items-center gap-1"
                     >
-                      <p className="text-xs font-bold text-white">{vc.name}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {vc.phones.map((ph) => (
-                          <button
-                            key={ph}
-                            type="button"
-                            onClick={() => commitPickAndClose({ phone: ph, name: vc.name })}
-                            className="px-2.5 py-1 rounded-lg bg-primary/15 border border-primary/30 text-primary text-[11px] font-bold hover:bg-primary hover:text-white transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            <Phone size={11} />
-                            {ph}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="py-4 text-center text-xs text-neutral-400">
-                    No contacts matching "{vcardSearch}"
-                  </div>
-                )}
+                      <Phone size={11} />
+                      {ph}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {isMultiNumberPrompt && onRetryNative && (
+              {onRetryNative && (
                 <div className="pt-1 flex justify-end">
                   <button
                     type="button"
@@ -555,6 +307,12 @@ export function ContactPickerButton({
     initialMultipleContact: null
   });
   const isPickingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isPickingRef.current = false;
+    };
+  }, []);
 
   const startContactSelection = () => {
     if (disabled || isPickingRef.current) return;

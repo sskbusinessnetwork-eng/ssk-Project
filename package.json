@@ -5,7 +5,7 @@
   "type": "module",
   "main": "server.ts",
   "engines": {
-    "node": ">=20.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx server.ts",
@@ -54,7 +54,19 @@
     "lighthouse": "^13.5.0",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.8.2"
-  }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "ignoredBuiltDependencies": [
+      "core-js",
+      "protobufjs"
+    ]
+  },
+  "trustedDependencies": [
+    "esbuild"
+  ]
 }

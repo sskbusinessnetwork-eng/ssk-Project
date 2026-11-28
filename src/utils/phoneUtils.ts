@@ -42,7 +42,9 @@ export function isSamePhoneNumber(phone1?: string | number | null, phone2?: stri
  */
 export function normalizePickedPhoneNumber(raw?: string | number | null): string {
   if (raw === null || raw === undefined) return "";
-  let str = String(raw).trim();
+  let str = String(raw)
+    .replace(/[\u00A0\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, " ")
+    .trim();
   if (!str) return "";
 
   // Strip tel: URI prefix and RFC 3966 parameters (;ext=..., ;isub=..., etc.)
@@ -51,12 +53,12 @@ export function normalizePickedPhoneNumber(raw?: string | number | null): string
 
   // Reject strings that look like arbitrary text mixed with letters
   // (after removing known scheme/formatting characters)
-  const withoutAllowedPunctuation = str.replace(/[\s\-().+\u00A0\u200B-\u200D\uFEFF]/g, "");
+  const withoutAllowedPunctuation = str.replace(/[\s\-().+]/g, "");
   if (!withoutAllowedPunctuation || /[^\d]/.test(withoutAllowedPunctuation)) {
     return "";
   }
 
-  const hasLeadingPlus = str.replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g, "").startsWith("+");
+  const hasLeadingPlus = str.replace(/\s/g, "").startsWith("+");
   const digits = str.replace(/\D/g, "");
 
   if (digits.length < 7 || digits.length > 15) {

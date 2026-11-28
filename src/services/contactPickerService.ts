@@ -669,7 +669,15 @@ export async function resolveContactSelection(options?: {
         errName === 'TypeError' || errName === 'NotSupportedError' || errName === 'InvalidAccessError';
 
       if (canRetryTelOnly) {
-        contacts = await nav.contacts.select(['tel'], { multiple: false });
+        try {
+          contacts = await nav.contacts.select(['tel'], { multiple: false });
+        } catch (telErr: any) {
+          if (String(telErr?.name || '') === 'TypeError') {
+            contacts = await nav.contacts.select(['tel']);
+          } else {
+            throw telErr;
+          }
+        }
       } else {
         throw propErr;
       }

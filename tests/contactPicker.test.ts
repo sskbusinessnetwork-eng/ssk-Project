@@ -460,15 +460,15 @@ test('10. Runtime detection accurately classifies Android Chrome, OEM WebViews, 
   }
 });
 
-// 11. Single-object Web Contact Picker response & no cloud/app phonebook in PhoneInputWithPicker
-test('11. Single-object Web Contact Picker response handled and PhoneInputWithPicker uses device-only fallback', async () => {
+// 11. Single-object Web Contact Picker response, BiDi-wrapped numbers, & clean limitation fallback in PhoneInputWithPicker
+test('11. Single-object Web Contact Picker response handled and PhoneInputWithPicker uses clean device-only fallback', async () => {
   const win = createTopWindow();
   const singleObjNav = {
     userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/126.0 Mobile Safari/537.36',
     contacts: {
       select: async () => ({
         name: ['Single Obj Contact'],
-        tel: ['+91 98450 11223']
+        tel: ['\u202A+91 98450 11223\u202C']
       })
     }
   };
@@ -481,6 +481,28 @@ test('11. Single-object Web Contact Picker response handled and PhoneInputWithPi
     assert.equal(res.contact.name, 'Single Obj Contact');
   }
 
+  // Fallback without options object if browser throws TypeError on options argument
+  const noOptionsCalls: Array<{ props: string[]; hasOptions: boolean }> = [];
+  const noOptionsNav = {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+    contacts: {
+      select: async (props: string[], opts?: any) => {
+        noOptionsCalls.push({ props, hasOptions: opts !== undefined });
+        if (opts !== undefined) {
+          throw Object.assign(new TypeError('Options not supported'), { name: 'TypeError' });
+        }
+        return [{ tel: ['\u200E+1 415 555 0101'] }];
+      }
+    }
+  };
+  const noOptionsRes = await resolveContactSelection({ env: { windowObj: win, navigatorObj: noOptionsNav } });
+  assert.equal(noOptionsRes.status, 'selected');
+  if (noOptionsRes.status === 'selected') {
+    assert.equal(noOptionsRes.contact.phone, '+14155550101');
+  }
+  assert.equal(noOptionsCalls.length, 3);
+  assert.equal(noOptionsCalls[2].hasOptions, false);
+
   const pickerSource = fs.readFileSync(
     path.resolve(process.cwd(), 'src/components/PhoneInputWithPicker.tsx'),
     'utf8'
@@ -488,4 +510,7 @@ test('11. Single-object Web Contact Picker response handled and PhoneInputWithPi
   assert.equal(/supabase/i.test(pickerSource), false, 'PhoneInputWithPicker must not query Supabase cloud directory');
   assert.equal(/Member Phonebook/i.test(pickerSource), false, 'PhoneInputWithPicker must not render Member Phonebook');
   assert.equal(/Member Directory/i.test(pickerSource), false, 'PhoneInputWithPicker must not reference Member Directory');
+  assert.equal(/Drag & drop or import a contact card/i.test(pickerSource), false, 'PhoneInputWithPicker must not display VCF drag-and-drop message');
+  assert.equal(/Import Contact \(\.vcf\)/i.test(pickerSource), false, 'PhoneInputWithPicker must not render VCF import screen');
+  assert.equal(/Paste Copied Phone Number/i.test(pickerSource), false, 'PhoneInputWithPicker must not render manual paste interface');
 });
