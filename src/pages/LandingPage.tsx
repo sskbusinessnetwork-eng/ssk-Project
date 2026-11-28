@@ -1,26 +1,22 @@
-import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
 import { CategorySelect } from '../components/CategorySelect';
 import { 
-  ArrowRight, Users, ShieldCheck, TrendingUp, Target, Globe, CheckCircle2, 
+  ArrowRight, Users, ShieldCheck, Globe, CheckCircle2, 
   Handshake, Hammer, Clock, Sprout, HardHat, Palette, Headset, Telescope, 
-  Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Map, Calendar, X,
-  AlertCircle, CalendarX, Loader2, Download
+  Coins, Settings, Briefcase, GraduationCap, Scale, Shield, Calendar, X,
+  AlertCircle, CalendarX, Loader2
 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { getDashboardPath } from '../utils/authUtils';
-import { databaseService } from '../services/databaseService';
 import { supabase } from '../lib/supabaseClient';
-import { UserProfile, Category } from '../types';
+import { Category } from '../types';
 import { BrandLogo } from '../components/BrandLogo';
 import { PhoneInputWithPicker } from '../components/PhoneInputWithPicker';
 import { TopPerformingMembersSection } from '../components/TopPerformingMembersSection';
-import {  where, orderBy, limit  } from '../lib/database';
-import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
-import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
+import { normalizePhoneDigits, isSamePhoneNumber } from '../utils/phoneUtils';
 
 // Reusable animation variants
 const fadeUp = {
@@ -36,53 +32,43 @@ const staggerContainer = {
   }
 };
 
+type ChapterOption = {
+  chapterId: string;
+  chapterName: string;
+  adminId: string;
+  adminName: string;
+};
+
 export function LandingPage() {
   const { user, profile, loading } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formSuccess, setFormSuccess] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 1000], [0, 250]);
   const heroOpacity = useTransform(scrollY, [0, 500], [1, 0]);
 
-  const [formData, setFormData] = useState({
-    fullName: '',
-    phone: '',
-    businessName: '',
-    businessCategory: '',
-    city: '',
-    adminId: '',
-    meetingDate: '',
-    meetingTime: '',
-    meetingVenue: ''
-  });
-  const [chaptersList, setChaptersList] = useState<{ chapterId: string; chapterName: string; adminId: string; adminName: string }[]>([]);
-  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
-  const [isFetchingMeeting, setIsFetchingMeeting] = useState(false);
+  const [chaptersList, setChaptersList] = useState<ChapterOption[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    let isMounted = true;
+
+    const fetchInitialData = async () => {
       try {
-        const { data, error } = await supabase.from('categories').select('id, name').order('name');
-        if (data && !error) {
-          setCategories(data as Category[]);
+        const [categoriesRes, chaptersRes, adminsRes] = await Promise.all([
+          supabase.from('categories').select('id, name').order('name'),
+          supabase.from('chapters').select('*'),
+          supabase.from('users').select('*').or('role.eq.CHAPTER_ADMIN,position.eq.chapter_admin'),
+        ]);
+
+        if (!isMounted) return;
+
+        if (categoriesRes.data && !categoriesRes.error) {
+          setCategories(categoriesRes.data as Category[]);
         }
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-      }
-    };
-    fetchCategories();
-  }, []);
 
-  useEffect(() => {
-    const fetchChaptersAndAdmins = async () => {
-      try {
-        const { data: chaptersData } = await supabase.from('chapters').select('*');
-        const { data: adminUsers } = await supabase.from('users').select('*').or('role.eq.CHAPTER_ADMIN,position.eq.chapter_admin');
-
-        const list: { chapterId: string; chapterName: string; adminId: string; adminName: string }[] = [];
+        const chaptersData = chaptersRes.data;
+        const adminUsers = adminsRes.data;
+        const list: ChapterOption[] = [];
         const addedChapterIds = new Set<string>();
 
         if (chaptersData) {
@@ -125,76 +111,15 @@ export function LandingPage() {
 
         setChaptersList(list);
       } catch (err) {
-        console.error('Error fetching chapters:', err);
+        console.error('Error fetching landing page data:', err);
       }
     };
 
-    fetchChaptersAndAdmins();
+    fetchInitialData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  useEffect(() => {
-    if (!formData.adminId) {
-      setSelectedMeeting(null);
-      setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
-      setIsFetchingMeeting(false);
-      return;
-    }
-
-    const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
-    if (!selectedChapter) {
-      setSelectedMeeting(null);
-      setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
-      setIsFetchingMeeting(false);
-      return;
-    }
-
-    const fetchMeeting = async () => {
-      setIsFetchingMeeting(true);
-      try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: meetingsData } = await supabase
-          .from('meetings')
-          .select('*')
-          .or(`chapter_id.eq.${selectedChapter.chapterId},admin_id.eq.${selectedChapter.adminId}`)
-          .gte('date', todayStr)
-          .neq('status', 'Completed')
-          .neq('status', 'COMPLETED')
-          .neq('status', 'Completed ')
-          .neq('status', 'Cancelled')
-          .neq('status', 'CANCELLED')
-          .order('date', { ascending: true });
-
-        const upcoming = meetingsData?.find(m => {
-          const s = String(m.status || '').trim().toUpperCase();
-          if (s === 'COMPLETED' || s === 'CANCELLED') return false;
-          if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
-          if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
-          return true;
-        });
-
-        if (upcoming) {
-          setSelectedMeeting(upcoming);
-          setFormData(prev => ({
-            ...prev,
-            meetingDate: upcoming.date,
-            meetingTime: upcoming.time || '',
-            meetingVenue: upcoming.venue || upcoming.location || ''
-          }));
-        } else {
-          setSelectedMeeting(null);
-          setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
-        }
-      } catch (error) {
-        console.error('Error fetching meeting:', error);
-        setSelectedMeeting(null);
-        setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
-      } finally {
-        setIsFetchingMeeting(false);
-      }
-    };
-
-    fetchMeeting();
-  }, [formData.adminId, chaptersList]);
 
   useEffect(() => {
     let ticking = false;
@@ -212,132 +137,9 @@ export function LandingPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleGuestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setFormError(null);
-    try {
-      if (!formData.adminId) {
-        throw new Error('Please select a Chapter.');
-      }
-
-      const rawPhone = formData.phone.trim();
-      const phoneDigits = normalizePhoneDigits(rawPhone);
-      if (phoneDigits.length < 10) {
-        throw new Error('Please enter a valid 10-digit phone number.');
-      }
-
-      // Check if phone belongs to an existing member / position holder
-      const { data: existingUsers } = await supabase.from('users').select('*');
-      if (existingUsers && existingUsers.length > 0) {
-        for (const u of existingUsers) {
-          const userPhones = [
-            u.phone,
-            u.mobile,
-            u.phoneNumber,
-            u.phone_number,
-            u.whatsapp,
-            u.whatsapp_number,
-            u.contactPhone
-          ];
-          if (u.profile_photo && typeof u.profile_photo === 'string' && u.profile_photo.includes('|||')) {
-            try {
-              const extra = JSON.parse(u.profile_photo.split('|||')[1] || '{}');
-              if (extra.phone) userPhones.push(extra.phone);
-              if (extra.mobile) userPhones.push(extra.mobile);
-              if (extra.whatsapp) userPhones.push(extra.whatsapp);
-            } catch (e) {}
-          }
-          if (userPhones.some(p => isSamePhoneNumber(p, rawPhone))) {
-            const memberName = u.name || u.full_name || 'Member';
-            const memberPos = u.position || u.chapter_position || u.role || 'Member';
-            throw new Error(`${memberName} is already a member (${memberPos}) and cannot be registered as a guest.`);
-          }
-        }
-      }
-
-      const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
-      const chapterId = selectedChapter?.chapterId || formData.adminId;
-      const chapterAdminId = selectedChapter?.adminId || formData.adminId;
-      const chapterName = selectedChapter?.chapterName || 'Chapter';
-
-      // Check duplicate guest for meeting if meeting selected
-      if (selectedMeeting?.id) {
-        const { data: dupInv } = await supabase
-          .from('guest_invitations')
-          .select('guest_phone, guest_whatsapp')
-          .eq('meeting_id', selectedMeeting.id);
-        if (dupInv && dupInv.some((g: any) => isSamePhoneNumber(g.guest_phone, rawPhone) || isSamePhoneNumber(g.guest_whatsapp, rawPhone))) {
-          throw new Error('This guest has already been registered for this meeting.');
-        }
-      }
-
-      const guestPayload = {
-        guest_name: formData.fullName.trim(),
-        guest_phone: formData.phone.trim(),
-        guest_whatsapp: formData.phone.trim(),
-        guest_business: formData.businessName.trim(),
-        business_category: formData.businessCategory,
-        invited_by: chapterAdminId,
-        invited_by_chapter: chapterId,
-        chapter_id: chapterId,
-        created_by: chapterAdminId || null,
-        status: 'Pending',
-        meeting_id: selectedMeeting?.id || null,
-        meeting_title: selectedMeeting?.title || `${chapterName} Meeting`,
-        meeting_date: selectedMeeting?.date || formData.meetingDate || null,
-        meeting_time: selectedMeeting?.time || formData.meetingTime || null,
-        meeting_venue: selectedMeeting?.venue || selectedMeeting?.location || formData.meetingVenue || null,
-        created_at: new Date().toISOString()
-      };
-
-      const { data: invResult, error: invError } = await supabase
-        .from('guest_invitations')
-        .insert([guestPayload])
-        .select();
-
-      if (invError) {
-        console.error('Error saving guest invitation:', invError);
-        throw new Error(invError.message || 'Failed to submit guest registration.');
-      }
-
-      // Send notification to the selected Chapter Admin
-      if (chapterAdminId) {
-        try {
-          await supabase.from('notifications').insert([{
-            user_id: chapterAdminId,
-            message: `New Guest Registration received for ${chapterName}. Guest: ${formData.fullName.trim()}, Contact: ${formData.phone.trim()}|||{"role":"CHAPTER_ADMIN","type":"GUEST_REGISTRATION"}`,
-            type: 'GUEST_REGISTRATION',
-            created_at: new Date().toISOString()
-          }]);
-        } catch (e) {
-          console.warn('Could not insert notification:', e);
-        }
-      }
-
-      setFormSuccess(true);
-      setFormData({
-        fullName: '',
-        phone: '',
-        businessName: '',
-        businessCategory: '',
-        city: '',
-        adminId: '',
-        meetingDate: '',
-        meetingTime: '',
-        meetingVenue: ''
-      });
-    } catch (error: any) {
-      console.error('Error submitting guest registration:', error);
-      setFormError(error.message || 'Failed to submit registration. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const scrollToForm = () => {
+  const scrollToForm = useCallback(() => {
     document.getElementById('guest-form')?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   if (loading || (user && !profile)) return (
     <div className="min-h-screen bg-[#0F2040] flex items-center justify-center">
@@ -423,7 +225,7 @@ export function LandingPage() {
           ))}
         </div>
 
-        <div className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-20 md:mt-24">
+        <div className="relative z-10 text-center px-4 sm:px-6 max-w-5xl mx-auto pt-24 pb-20 sm:pt-28 sm:pb-24">
           <div className="space-y-2">
             <h1 className="text-[24px] sm:text-[32px] md:text-[40px] lg:text-[48px] font-black tracking-tight text-white mb-6 leading-[1.2] px-2">
               We Built Our Community with Values.<br />
@@ -437,37 +239,14 @@ export function LandingPage() {
             <p className="text-[16px] sm:text-[18px] md:text-[20px] lg:text-[22px] font-black text-white mb-8 md:mb-12 tracking-tight">
               By the <span className="text-[#EF4444]">SSK People</span>. For the <span className="text-[#EF4444]">SSK People</span>.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4">
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(249, 115, 22, 0.6)" }}
-                whileTap={{ scale: 0.95 }}
-                onClick={scrollToForm}
-                className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#F97316]/20 w-full sm:w-auto"
-              >
-                Join a Chapter Meeting
-              </motion.button>
-
-              <a
-                href="https://wfbkgfotpzscjyaanzpx.supabase.co/storage/v1/object/public/android-apk%205./app-debug.apk"
-                download="SSK-Business-Network.apk"
-                aria-label="Download Android App"
-                className="group inline-flex items-center justify-center gap-2.5 min-h-[44px] px-6 sm:px-7 md:px-8 py-3 sm:py-4 md:py-5 rounded-full bg-gradient-to-r from-[#162B52] via-[#1C3666] to-[#132548] hover:from-[#1D396D] hover:via-[#22427A] hover:to-[#18305C] text-white border border-white/25 hover:border-[#F97316]/75 shadow-[0_8px_24px_rgba(0,0,0,0.3)] hover:shadow-[0_10px_28px_rgba(249,115,22,0.22)] font-extrabold tracking-[1px] sm:tracking-[1.5px] text-[12px] md:text-[13px] whitespace-nowrap shrink-0 w-full sm:w-auto transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F97316]"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                  className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-[#3DDC84] shrink-0 transition-transform duration-200 group-hover:scale-110"
-                >
-                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4483.9993.9993 0 .5511-.4483.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396" />
-                </svg>
-                <span>Download Android App</span>
-                <Download
-                  aria-hidden="true"
-                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FB923C] shrink-0 transition-transform duration-200 group-hover:translate-y-0.5"
-                />
-              </a>
-            </div>
+            <motion.button
+              whileHover={{ scale: 1.05, boxShadow: "0px 0px 30px rgba(249, 115, 22, 0.6)" }}
+              whileTap={{ scale: 0.95 }}
+              onClick={scrollToForm}
+              className="px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-gradient-to-r from-[#F97316] to-[#FB923C] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] transition-colors shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#F97316]/20"
+            >
+              Join a Chapter Meeting
+            </motion.button>
           </div>
         </div>
         
@@ -475,7 +254,7 @@ export function LandingPage() {
         <motion.div 
           animate={{ y: [0, 10, 0] }} 
           transition={{ repeat: Infinity, duration: 2 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/50"
+          className="hidden sm:block absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 text-white/50"
         >
           <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center p-1">
             <div className="w-1.5 h-3 bg-[#F97316] rounded-full" />
@@ -490,7 +269,7 @@ export function LandingPage() {
       <TopPerformingMembersSection />
 
       {/* The Story Begins */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] text-center relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] text-center relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_700px]">
         <div className="max-w-6xl mx-auto">
           <motion.h2 
             initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={fadeUp}
@@ -537,7 +316,7 @@ export function LandingPage() {
       </section>
 
       {/* The Reality */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_750px]">
         {/* Background decorative elements */}
         <div className="absolute top-0 right-0 w-1/2 h-full bg-[#F9FAFB]/50 -skew-x-12 translate-x-32 hidden md:block" />
         
@@ -616,7 +395,7 @@ export function LandingPage() {
       </section>
 
       {/* A Simple Thought */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] text-center relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] text-center relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_650px]">
         <div className="max-w-6xl mx-auto relative z-10">
           <motion.h2 
             initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={fadeUp}
@@ -657,14 +436,14 @@ export function LandingPage() {
       </section>
 
       {/* Introducing SSK Business Network */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#0F2040] text-center relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#0F2040] text-center relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_650px]">
         {/* Animated Network Background */}
         <div className="absolute inset-0 opacity-30">
           <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 2 }} x1="20%" y1="20%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
-            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 2, delay: 0.2 }} x1="80%" y1="30%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
-            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 2, delay: 0.4 }} x1="30%" y1="80%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
-            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} transition={{ duration: 2, delay: 0.6 }} x1="70%" y1="70%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
+            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2 }} x1="20%" y1="20%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
+            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2, delay: 0.2 }} x1="80%" y1="30%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
+            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2, delay: 0.4 }} x1="30%" y1="80%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
+            <motion.line initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2, delay: 0.6 }} x1="70%" y1="70%" x2="50%" y2="50%" stroke="#F97316" strokeWidth="1" strokeDasharray="5,5" />
           </svg>
           {[
             { top: '20%', left: '20%' }, { top: '30%', right: '20%' }, 
@@ -720,7 +499,7 @@ export function LandingPage() {
       </section>
 
       {/* How This Movement Works & Power of One Category */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_750px]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16 md:mb-24">
             <motion.h2 
@@ -731,7 +510,7 @@ export function LandingPage() {
             </motion.h2>
             <motion.p 
               initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
-              className="text-[14px] sm:text-[16px] md:text-[20px] lg:text-[24px] font-extrabold text-[#F97316] bg-white inline-block px-4 sm:px-6 py-2 sm:py-3 rounded-full shadow-sm border border-[#F3F4F6] uppercase tracking-[2px] md:tracking-[3px] text-center"
+              className="text-[14px] sm:text-[16px] md:text-[20px] lg:text-[24px] font-extrabold text-[#F97316] bg-white inline-block max-w-full px-4 sm:px-6 py-2 sm:py-3 rounded-2xl sm:rounded-full shadow-sm border border-[#F3F4F6] uppercase tracking-[2px] md:tracking-[3px] text-center"
             >
               👉 Only ONE person per category.
             </motion.p>
@@ -745,10 +524,10 @@ export function LandingPage() {
                   <p className="font-extrabold text-[#0F2040] text-[12px] sm:text-[14px] md:text-[16px] lg:text-[18px] uppercase tracking-[2px] md:tracking-[3px] text-center">Show up consistently</p>
                 </motion.div>
                 <motion.div variants={fadeUp} className="flex flex-col items-center gap-4 group">
-                  <div className="w-20 h-20 md:w-24 md:h-24 bg-white rounded-[1.5rem] md:rounded-[2rem] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center text-[#0F2040] group-hover:scale-110 group-hover:bg-[#0F2040] group-hover:text-white transition-all duration-500">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-white rounded-[1.25rem] sm:rounded-[1.5rem] md:rounded-[2rem] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center text-[#0F2040] group-hover:scale-110 group-hover:bg-[#0F2040] group-hover:text-white transition-all duration-500">
                     <ArrowRight className="w-8 h-8 md:w-10 md:h-10" />
                   </div>
-                  <p className="font-extrabold text-[#0F2040] text-lg md:text-xl uppercase tracking-[3px]">Pass genuine referrals</p>
+                  <p className="font-extrabold text-[#0F2040] text-[12px] sm:text-[14px] md:text-[16px] lg:text-[18px] uppercase tracking-[2px] md:tracking-[3px] text-center">Pass genuine referrals</p>
                 </motion.div>
               </motion.div>
               
@@ -795,7 +574,7 @@ export function LandingPage() {
       </section>
 
       {/* More Than Networking */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white text-center relative">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white text-center relative [content-visibility:auto] [contain-intrinsic-size:auto_700px]">
         <div className="max-w-6xl mx-auto">
           <motion.h2 
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
@@ -839,7 +618,7 @@ export function LandingPage() {
       </section>
 
       {/* A Vision For The Future */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#0F2040] text-center relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#0F2040] text-center relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_600px]">
         <div className="absolute inset-0 z-0 opacity-40">
           <img 
             src="/images/vision-bg.webp" 
@@ -880,7 +659,7 @@ export function LandingPage() {
       </section>
 
       {/* This Is Your Invitation */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white text-center">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-white text-center [content-visibility:auto] [contain-intrinsic-size:auto_600px]">
         <div className="max-w-6xl mx-auto">
           <motion.h2 
             initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
@@ -917,7 +696,7 @@ export function LandingPage() {
       </section>
 
       {/* Call To Action */}
-      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-gradient-to-br from-[#0F2040] to-[#1a365d] text-center text-white relative overflow-hidden">
+      <section className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-gradient-to-br from-[#0F2040] to-[#1a365d] text-center text-white relative overflow-hidden [content-visibility:auto] [contain-intrinsic-size:auto_480px]">
         <div className="max-w-5xl mx-auto relative z-10">
           <motion.h2 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[10px] sm:text-[11px] md:text-[12px] font-extrabold text-[#F97316] uppercase tracking-[2px] md:tracking-[3px] mb-4 md:mb-6">Call To Action</motion.h2>
           <motion.h3 initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="text-[22px] sm:text-[26px] md:text-[32px] font-black mb-4 md:mb-6 leading-tight">Take the First Step Towards Collective Growth.</motion.h3>
@@ -947,197 +726,7 @@ export function LandingPage() {
       </section>
 
       {/* Sign-Up Section */}
-      <section id="guest-form" className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] relative">
-        <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#0F2040] to-transparent opacity-5" />
-        <div className="max-w-4xl mx-auto relative z-10">
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="bg-white p-6 sm:p-10 md:p-16 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-[#F3F4F6] relative overflow-hidden mx-2 sm:mx-0"
-          >
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#F97316] to-[#FB923C]" />
-            <h3 className="text-[20px] sm:text-[24px] md:text-[28px] lg:text-[32px] font-black text-[#0F2040] mb-6 md:mb-10 text-center tracking-tight">Register as a Guest for a Chapter Meeting</h3>
-            
-            {formSuccess ? (
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#FDF8F0] p-6 md:p-12 rounded-[16px] md:rounded-[24px] text-center space-y-6 border border-[#F97316]/20">
-                <div className="w-16 h-16 md:w-24 md:h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 shadow-inner">
-                  <CheckCircle2 className="w-8 h-8 md:w-12 md:h-12" />
-                </div>
-                <h4 className="text-2xl md:text-3xl font-medium text-[14px] text-[#0F2040]">Registration Successful!</h4>
-                <p className="text-[14px] md:text-[16px] lg:text-[18px] text-[#4B5563] font-medium leading-relaxed">We have received your details and will contact you shortly.</p>
-                <button 
-                  onClick={() => setFormSuccess(false)}
-                  className="mt-6 md:mt-8 px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-[#0F2040] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] hover:bg-[#0F2040]/90 transition-all"
-                >
-                  Register Another Guest
-                </button>
-              </motion.div>
-            ) : (
-              <form onSubmit={handleGuestSubmit} className="space-y-6 md:space-y-8">
-                {formError && (
-                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
-                    <AlertCircle size={18} />
-                    {formError}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-6">
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-full-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Full Name</label>
-                    <input 
-                      id="guest-full-name"
-                      name="fullName"
-                      required 
-                      type="text" 
-                      placeholder="e.g. John D." 
-                      value={formData.fullName} 
-                      onChange={e => setFormData({...formData, fullName: e.target.value})} 
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
-                    />
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-phone-number" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Phone Number</label>
-                    <PhoneInputWithPicker 
-                      id="guest-phone-number"
-                      name="phone"
-                      required 
-                      value={formData.phone} 
-                      onChange={(value) => setFormData({...formData, phone: value})} 
-                      placeholder="e.g. +91 9..." 
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
-                    />
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-business-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Name</label>
-                    <input 
-                      id="guest-business-name"
-                      name="businessName"
-                      required 
-                      type="text" 
-                      placeholder="e.g. SSK Creations" 
-                      value={formData.businessName} 
-                      onChange={e => setFormData({...formData, businessName: e.target.value})} 
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
-                    />
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-business-category" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Category</label>
-                    <CategorySelect
-                      id="guest-business-category"
-                      value={formData.businessCategory}
-                      onChange={(val) => setFormData({ ...formData, businessCategory: val })}
-                      categories={categories}
-                      placeholder="Select Category"
-                      lightTheme
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] flex items-center justify-between cursor-pointer"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-city" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">City</label>
-                    <input 
-                      id="guest-city"
-                      name="city"
-                      required 
-                      type="text" 
-                      placeholder="e.g. Bangalore" 
-                      value={formData.city} 
-                      onChange={e => setFormData({...formData, city: e.target.value})} 
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
-                    />
-                  </div>
-                  <div className="space-y-2 md:space-y-3">
-                    <label htmlFor="guest-preferred-chapter" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Preferred Chapter Name</label>
-                    <select 
-                      id="guest-preferred-chapter"
-                      name="chapter"
-                      required 
-                      value={formData.adminId} 
-                      onChange={e => setFormData({...formData, adminId: e.target.value})} 
-                      className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[14px] text-[#0F2040]"
-                    >
-                      <option value="">Select Chapter</option>
-                      {chaptersList.map(chap => (
-                        <option key={chap.chapterId} value={chap.chapterId}>{chap.chapterName}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    {formData.adminId && isFetchingMeeting && (
-                      <motion.div
-                        key="loading-meeting"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="col-span-1 md:col-span-2 p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center gap-3 text-[#6B7280] text-xs md:text-sm font-medium"
-                      >
-                        <Loader2 size={18} className="animate-spin text-[#F97316]" />
-                        <span>Fetching upcoming meeting details...</span>
-                      </motion.div>
-                    )}
-
-                    {formData.adminId && !isFetchingMeeting && selectedMeeting && (
-                      <motion.div
-                        key="meeting-fields"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.3 }}
-                        className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"
-                      >
-                        <div className="space-y-2 md:space-y-3">
-                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Date</label>
-                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                            {formData.meetingDate ? format(new Date(formData.meetingDate), 'dd MMM yyyy') : 'Nil'}
-                          </div>
-                        </div>
-                        <div className="space-y-2 md:space-y-3">
-                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Time</label>
-                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                            {formData.meetingTime || 'Nil'}
-                          </div>
-                        </div>
-                        <div className="space-y-2 md:space-y-3 md:col-span-2">
-                          <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Venue</label>
-                          <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
-                            {formData.meetingVenue || 'Nil'}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {formData.adminId && !isFetchingMeeting && !selectedMeeting && (
-                      <motion.div
-                        key="no-meeting-alert"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.3 }}
-                        className="col-span-1 md:col-span-2 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 rounded-[12px] md:rounded-[16px] text-xs md:text-sm font-semibold flex items-center gap-2.5"
-                      >
-                        <CalendarX size={20} className="shrink-0 text-amber-600" />
-                        <span>No upcoming meeting is scheduled for this chapter.</span>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="w-full h-12 sm:h-14 md:h-16 mt-6 md:mt-8 bg-[#0F2040] text-white rounded-[12px] md:rounded-[16px] font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] hover:bg-[#1a365d] transition-all shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#0F2040]/20 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Reserving...' : 'Reserve My Seat'}
-                </motion.button>
-              </form>
-            )}
-          </motion.div>
-        </div>
-      </section>
+      <GuestRegistrationSection chaptersList={chaptersList} categories={categories} />
       </main>
 
       {/* Final Message & Footer */}
@@ -1163,7 +752,7 @@ export function LandingPage() {
                 <a href="mailto:sskbusinessnetwork@gmail.com" className="hover:text-[#0F2040] transition-colors">sskbusinessnetwork@gmail.com</a>
                 <a href="tel:+918884449689" className="hover:text-[#0F2040] transition-colors">+91 88844 49689</a>
               </div>
-              <a href="#join-section" className="hover:text-[#0F2040] transition-colors">Contact</a>
+              <a href="#guest-form" className="hover:text-[#0F2040] transition-colors">Contact</a>
             </div>
           </div>
         </div>
@@ -1171,3 +760,427 @@ export function LandingPage() {
     </div>
   );
 }
+
+const GuestRegistrationSection = React.memo(function GuestRegistrationSection({
+  chaptersList,
+  categories,
+}: {
+  chaptersList: ChapterOption[];
+  categories: Category[];
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formSuccess, setFormSuccess] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [isFetchingMeeting, setIsFetchingMeeting] = useState(false);
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phone: '',
+    businessName: '',
+    businessCategory: '',
+    city: '',
+    adminId: '',
+    meetingDate: '',
+    meetingTime: '',
+    meetingVenue: ''
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!formData.adminId) {
+      setSelectedMeeting(null);
+      setFormData(prev =>
+        prev.meetingDate || prev.meetingTime || prev.meetingVenue
+          ? { ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }
+          : prev
+      );
+      setIsFetchingMeeting(false);
+      return;
+    }
+
+    const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
+    if (!selectedChapter) {
+      setSelectedMeeting(null);
+      setFormData(prev =>
+        prev.meetingDate || prev.meetingTime || prev.meetingVenue
+          ? { ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }
+          : prev
+      );
+      setIsFetchingMeeting(false);
+      return;
+    }
+
+    const fetchMeeting = async () => {
+      setIsFetchingMeeting(true);
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: meetingsData } = await supabase
+          .from('meetings')
+          .select('*')
+          .or(`chapter_id.eq.${selectedChapter.chapterId},admin_id.eq.${selectedChapter.adminId}`)
+          .gte('date', todayStr)
+          .neq('status', 'Completed')
+          .neq('status', 'COMPLETED')
+          .neq('status', 'Completed ')
+          .neq('status', 'Cancelled')
+          .neq('status', 'CANCELLED')
+          .order('date', { ascending: true });
+
+        if (cancelled) return;
+
+        const upcoming = meetingsData?.find(m => {
+          const s = String(m.status || '').trim().toUpperCase();
+          if (s === 'COMPLETED' || s === 'CANCELLED') return false;
+          if (m.isCompleted === true || m.isCompleted === 'true' || m.is_completed === true || m.is_completed === 'true') return false;
+          if (m.isCancelled === true || m.isCancelled === 'true' || m.is_cancelled === true || m.is_cancelled === 'true') return false;
+          return true;
+        });
+
+        if (upcoming) {
+          setSelectedMeeting(upcoming);
+          setFormData(prev => ({
+            ...prev,
+            meetingDate: upcoming.date,
+            meetingTime: upcoming.time || '',
+            meetingVenue: upcoming.venue || upcoming.location || ''
+          }));
+        } else {
+          setSelectedMeeting(null);
+          setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Error fetching meeting:', error);
+        setSelectedMeeting(null);
+        setFormData(prev => ({ ...prev, meetingDate: '', meetingTime: '', meetingVenue: '' }));
+      } finally {
+        if (!cancelled) {
+          setIsFetchingMeeting(false);
+        }
+      }
+    };
+
+    fetchMeeting();
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.adminId, chaptersList]);
+
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setFormError(null);
+    try {
+      if (!formData.adminId) {
+        throw new Error('Please select a Chapter.');
+      }
+
+      const rawPhone = formData.phone.trim();
+      const phoneDigits = normalizePhoneDigits(rawPhone);
+      if (phoneDigits.length < 10) {
+        throw new Error('Please enter a valid 10-digit phone number.');
+      }
+
+      // Check if phone belongs to an existing member / position holder
+      const { data: existingUsers } = await supabase.from('users').select('*');
+      if (existingUsers && existingUsers.length > 0) {
+        for (const u of existingUsers) {
+          const userPhones = [
+            u.phone,
+            u.mobile,
+            u.phoneNumber,
+            u.phone_number,
+            u.whatsapp,
+            u.whatsapp_number,
+            u.contactPhone
+          ];
+          if (u.profile_photo && typeof u.profile_photo === 'string' && u.profile_photo.includes('|||')) {
+            try {
+              const extra = JSON.parse(u.profile_photo.split('|||')[1] || '{}');
+              if (extra.phone) userPhones.push(extra.phone);
+              if (extra.mobile) userPhones.push(extra.mobile);
+              if (extra.whatsapp) userPhones.push(extra.whatsapp);
+            } catch (err) {}
+          }
+          if (userPhones.some(p => isSamePhoneNumber(p, rawPhone))) {
+            const memberName = u.name || u.full_name || 'Member';
+            const memberPos = u.position || u.chapter_position || u.role || 'Member';
+            throw new Error(`${memberName} is already a member (${memberPos}) and cannot be registered as a guest.`);
+          }
+        }
+      }
+
+      const selectedChapter = chaptersList.find(c => c.chapterId === formData.adminId || c.adminId === formData.adminId);
+      const chapterId = selectedChapter?.chapterId || formData.adminId;
+      const chapterAdminId = selectedChapter?.adminId || formData.adminId;
+      const chapterName = selectedChapter?.chapterName || 'Chapter';
+
+      // Check duplicate guest for meeting if meeting selected
+      if (selectedMeeting?.id) {
+        const { data: dupInv } = await supabase
+          .from('guest_invitations')
+          .select('guest_phone, guest_whatsapp')
+          .eq('meeting_id', selectedMeeting.id);
+        if (dupInv && dupInv.some((g: any) => isSamePhoneNumber(g.guest_phone, rawPhone) || isSamePhoneNumber(g.guest_whatsapp, rawPhone))) {
+          throw new Error('This guest has already been registered for this meeting.');
+        }
+      }
+
+      const guestPayload = {
+        guest_name: formData.fullName.trim(),
+        guest_phone: formData.phone.trim(),
+        guest_whatsapp: formData.phone.trim(),
+        guest_business: formData.businessName.trim(),
+        business_category: formData.businessCategory,
+        invited_by: chapterAdminId,
+        invited_by_chapter: chapterId,
+        chapter_id: chapterId,
+        created_by: chapterAdminId || null,
+        status: 'Pending',
+        meeting_id: selectedMeeting?.id || null,
+        meeting_title: selectedMeeting?.title || `${chapterName} Meeting`,
+        meeting_date: selectedMeeting?.date || formData.meetingDate || null,
+        meeting_time: selectedMeeting?.time || formData.meetingTime || null,
+        meeting_venue: selectedMeeting?.venue || selectedMeeting?.location || formData.meetingVenue || null,
+        created_at: new Date().toISOString()
+      };
+
+      const { error: invError } = await supabase
+        .from('guest_invitations')
+        .insert([guestPayload])
+        .select();
+
+      if (invError) {
+        console.error('Error saving guest invitation:', invError);
+        throw new Error(invError.message || 'Failed to submit guest registration.');
+      }
+
+      // Send notification to the selected Chapter Admin
+      if (chapterAdminId) {
+        try {
+          await supabase.from('notifications').insert([{
+            user_id: chapterAdminId,
+            message: `New Guest Registration received for ${chapterName}. Guest: ${formData.fullName.trim()}, Contact: ${formData.phone.trim()}|||{"role":"CHAPTER_ADMIN","type":"GUEST_REGISTRATION"}`,
+            type: 'GUEST_REGISTRATION',
+            created_at: new Date().toISOString()
+          }]);
+        } catch (err) {
+          console.warn('Could not insert notification:', err);
+        }
+      }
+
+      setFormSuccess(true);
+      setFormData({
+        fullName: '',
+        phone: '',
+        businessName: '',
+        businessCategory: '',
+        city: '',
+        adminId: '',
+        meetingDate: '',
+        meetingTime: '',
+        meetingVenue: ''
+      });
+    } catch (error: any) {
+      console.error('Error submitting guest registration:', error);
+      setFormError(error.message || 'Failed to submit registration. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <section id="guest-form" className="py-16 md:py-24 lg:py-32 px-4 sm:px-6 bg-[#FDF8F0] relative">
+      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#0F2040] to-transparent opacity-5" />
+      <div className="max-w-4xl mx-auto relative z-10">
+        <motion.div 
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          viewport={{ once: true }}
+          className="bg-white p-6 sm:p-10 md:p-16 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-[#F3F4F6] relative overflow-hidden mx-0 sm:mx-0"
+        >
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#F97316] to-[#FB923C]" />
+          <h3 className="text-[20px] sm:text-[24px] md:text-[28px] lg:text-[32px] font-black text-[#0F2040] mb-6 md:mb-10 text-center tracking-tight">Register as a Guest for a Chapter Meeting</h3>
+          
+          {formSuccess ? (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#FDF8F0] p-6 md:p-12 rounded-[16px] md:rounded-[24px] text-center space-y-6 border border-[#F97316]/20">
+              <div className="w-16 h-16 md:w-24 md:h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 shadow-inner">
+                <CheckCircle2 className="w-8 h-8 md:w-12 md:h-12" />
+              </div>
+              <h4 className="text-2xl md:text-3xl font-medium text-[#0F2040]">Registration Successful!</h4>
+              <p className="text-[14px] md:text-[16px] lg:text-[18px] text-[#4B5563] font-medium leading-relaxed">We have received your details and will contact you shortly.</p>
+              <button 
+                onClick={() => setFormSuccess(false)}
+                className="mt-6 md:mt-8 px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-[#0F2040] text-white rounded-full font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] hover:bg-[#0F2040]/90 transition-all"
+              >
+                Register Another Guest
+              </button>
+            </motion.div>
+          ) : (
+            <form onSubmit={handleGuestSubmit} className="space-y-6 md:space-y-8">
+              {formError && (
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-[12px] text-sm font-bold flex items-center gap-2">
+                  <AlertCircle size={18} />
+                  {formError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-6">
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-full-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Full Name</label>
+                  <input 
+                    id="guest-full-name"
+                    name="fullName"
+                    required 
+                    type="text" 
+                    placeholder="e.g. John D." 
+                    value={formData.fullName} 
+                    onChange={e => setFormData(prev => ({ ...prev, fullName: e.target.value }))} 
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                  />
+                </div>
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-phone-number" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Phone Number</label>
+                  <PhoneInputWithPicker 
+                    id="guest-phone-number"
+                    name="phone"
+                    required 
+                    value={formData.phone} 
+                    onChange={(value) => setFormData(prev => ({ ...prev, phone: value }))} 
+                    placeholder="e.g. +91 9..." 
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                  />
+                </div>
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-business-name" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Name</label>
+                  <input 
+                    id="guest-business-name"
+                    name="businessName"
+                    required 
+                    type="text" 
+                    placeholder="e.g. SSK Creations" 
+                    value={formData.businessName} 
+                    onChange={e => setFormData(prev => ({ ...prev, businessName: e.target.value }))} 
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                  />
+                </div>
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-business-category" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Business Category</label>
+                  <CategorySelect
+                    id="guest-business-category"
+                    value={formData.businessCategory}
+                    onChange={(val) => setFormData(prev => ({ ...prev, businessCategory: val }))}
+                    categories={categories}
+                    placeholder="Select Category"
+                    lightTheme
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040] flex items-center justify-between cursor-pointer"
+                    required
+                  />
+                </div>
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-city" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">City</label>
+                  <input 
+                    id="guest-city"
+                    name="city"
+                    required 
+                    type="text" 
+                    placeholder="e.g. Bangalore" 
+                    value={formData.city} 
+                    onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))} 
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040] placeholder:text-[#6B7280]" 
+                  />
+                </div>
+                <div className="space-y-2 md:space-y-3">
+                  <label htmlFor="guest-preferred-chapter" className="block text-[10px] md:text-[12px] font-extrabold text-[#374151] uppercase tracking-[3px] ml-2">Preferred Chapter Name</label>
+                  <select 
+                    id="guest-preferred-chapter"
+                    name="chapter"
+                    required 
+                    value={formData.adminId} 
+                    onChange={e => setFormData(prev => ({ ...prev, adminId: e.target.value }))} 
+                    className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] focus:bg-white focus:border-[#F97316] focus:ring-4 focus:ring-[#F97316]/10 outline-none transition-all font-medium text-[16px] sm:text-[14px] text-[#0F2040]"
+                  >
+                    <option value="">Select Chapter</option>
+                    {chaptersList.map(chap => (
+                      <option key={chap.chapterId} value={chap.chapterId}>{chap.chapterName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  {formData.adminId && isFetchingMeeting && (
+                    <motion.div
+                      key="loading-meeting"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="col-span-1 md:col-span-2 p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center gap-3 text-[#6B7280] text-xs md:text-sm font-medium"
+                    >
+                      <Loader2 size={18} className="animate-spin text-[#F97316]" />
+                      <span>Fetching upcoming meeting details...</span>
+                    </motion.div>
+                  )}
+
+                  {formData.adminId && !isFetchingMeeting && selectedMeeting && (
+                    <motion.div
+                      key="meeting-fields"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6"
+                    >
+                      <div className="space-y-2 md:space-y-3">
+                        <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Date</label>
+                        <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                          {formData.meetingDate ? format(new Date(formData.meetingDate), 'dd MMM yyyy') : 'Nil'}
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:space-y-3">
+                        <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Time</label>
+                        <div className="w-full h-12 md:h-14 px-5 md:px-6 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                          {formData.meetingTime || 'Nil'}
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:space-y-3 md:col-span-2">
+                        <label className="block text-[10px] md:text-[12px] font-extrabold text-[#6B7280] uppercase tracking-[3px] ml-2">Meeting Venue</label>
+                        <div className="w-full min-h-12 md:min-h-14 px-5 md:px-6 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-[12px] md:rounded-[16px] flex items-center font-medium text-[14px] text-[#0F2040]">
+                          {formData.meetingVenue || 'Nil'}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {formData.adminId && !isFetchingMeeting && !selectedMeeting && (
+                    <motion.div
+                      key="no-meeting-alert"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className="col-span-1 md:col-span-2 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-800 rounded-[12px] md:rounded-[16px] text-xs md:text-sm font-semibold flex items-center gap-2.5"
+                    >
+                      <CalendarX size={20} className="shrink-0 text-amber-600" />
+                      <span>No upcoming meeting is scheduled for this chapter.</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit" 
+                disabled={isSubmitting}
+                className="w-full h-12 sm:h-14 md:h-16 mt-6 md:mt-8 bg-[#0F2040] text-white rounded-[12px] md:rounded-[16px] font-extrabold uppercase tracking-[2px] md:tracking-[3px] text-[11px] sm:text-[12px] md:text-[13px] hover:bg-[#1a365d] transition-all shadow-[0_4px_20px_rgba(0,0,0,0.03)] shadow-[#0F2040]/20 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Reserving...' : 'Reserve My Seat'}
+              </motion.button>
+            </form>
+          )}
+        </motion.div>
+      </div>
+    </section>
+  );
+});

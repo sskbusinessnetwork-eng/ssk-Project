@@ -8,7 +8,7 @@ import {
   TopMemberPublicItem 
 } from '../utils/topPerformance';
 
-export function TopPerformingMembersSection() {
+export const TopPerformingMembersSection = React.memo(function TopPerformingMembersSection() {
   const [settings, setSettings] = useState<TopPerformanceSettings | null>(null);
   const [members, setMembers] = useState<TopMemberPublicItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -131,7 +131,7 @@ export function TopPerformingMembersSection() {
       `}</style>
     </section>
   );
-}
+});
 
 const TopMemberCard: React.FC<{
   member: TopMemberPublicItem;

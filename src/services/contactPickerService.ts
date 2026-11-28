@@ -506,7 +506,7 @@ async function waitForNativeAsyncCallback(
 async function tryNativeAndroidBridge(
   runtime: ContactPickerRuntimeInfo,
   env?: ContactPickerEnvironment,
-  nativeTimeoutMs = 60000
+  nativeTimeoutMs = 120000
 ): Promise<ContactResolutionResult | null> {
   const win = env?.windowObj ?? (typeof window !== 'undefined' ? (window as any) : undefined);
   const nav = env?.navigatorObj ?? (typeof navigator !== 'undefined' ? (navigator as any) : undefined);
@@ -675,11 +675,12 @@ export async function resolveContactSelection(options?: {
       }
     }
 
-    if (!contacts || contacts.length === 0) {
+    const contactList = Array.isArray(contacts) ? contacts : contacts ? [contacts] : [];
+    if (contactList.length === 0) {
       return { status: 'cancelled', source: 'web' };
     }
 
-    const contact = contacts[0];
+    const contact = contactList[0];
     const rawName =
       Array.isArray(contact?.name) && contact.name.length > 0
         ? String(contact.name[0] || '').trim()

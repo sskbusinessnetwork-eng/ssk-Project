@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   normalizePickedPhoneNumber,
   dedupePhoneNumbers,
@@ -456,4 +458,34 @@ test('10. Runtime detection accurately classifies Android Chrome, OEM WebViews, 
     assert.equal(flutterRes.source, 'native');
     assert.equal(flutterRes.contact.phone, '+919123456789');
   }
+});
+
+// 11. Single-object Web Contact Picker response & no cloud/app phonebook in PhoneInputWithPicker
+test('11. Single-object Web Contact Picker response handled and PhoneInputWithPicker uses device-only fallback', async () => {
+  const win = createTopWindow();
+  const singleObjNav = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/126.0 Mobile Safari/537.36',
+    contacts: {
+      select: async () => ({
+        name: ['Single Obj Contact'],
+        tel: ['+91 98450 11223']
+      })
+    }
+  };
+
+  const res = await resolveContactSelection({ env: { windowObj: win, navigatorObj: singleObjNav } });
+  assert.equal(res.status, 'selected');
+  if (res.status === 'selected') {
+    assert.equal(res.source, 'web');
+    assert.equal(res.contact.phone, '+919845011223');
+    assert.equal(res.contact.name, 'Single Obj Contact');
+  }
+
+  const pickerSource = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/PhoneInputWithPicker.tsx'),
+    'utf8'
+  );
+  assert.equal(/supabase/i.test(pickerSource), false, 'PhoneInputWithPicker must not query Supabase cloud directory');
+  assert.equal(/Member Phonebook/i.test(pickerSource), false, 'PhoneInputWithPicker must not render Member Phonebook');
+  assert.equal(/Member Directory/i.test(pickerSource), false, 'PhoneInputWithPicker must not reference Member Directory');
 });
