@@ -42,6 +42,7 @@ export function PassReferralModal({
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [memberSearchTerm, setMemberSearchTerm] = useState('');
@@ -49,6 +50,7 @@ export function PassReferralModal({
   const memberSearchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!isMemberDropdownOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
         setIsMemberDropdownOpen(false);
@@ -65,7 +67,7 @@ export function PassReferralModal({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [isMemberDropdownOpen]);
 
   useEffect(() => {
     if (isMemberDropdownOpen) {
@@ -199,7 +201,7 @@ export function PassReferralModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmittingRef.current) return;
 
     if (!formData.toUserId) {
       const msg = 'Please select a recipient member.';
@@ -230,6 +232,7 @@ export function PassReferralModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -340,6 +343,7 @@ export function PassReferralModal({
       showError(errMsg);
       scrollToError();
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

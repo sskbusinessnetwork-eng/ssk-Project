@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { 
@@ -83,6 +83,7 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
   const { theme } = useTheme();
   const { refreshProfile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [showAllTasks, setShowAllTasks] = useState(false);
 
@@ -237,7 +238,8 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
   const lowLabel = maxRevenue > 0 ? formatRevenueLabel(maxRevenue * 1 / 3) : '0';
 
   const handleRequestRenewal = async () => {
-    if (!profile) return;
+    if (!profile || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
 
     setIsSubmitting(true);
     setSuccessMsg('');
@@ -279,6 +281,7 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
     } catch (err: any) {
       console.error('Error submitting renewal request:', err);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -452,7 +455,7 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
               <div 
                 key={task.key} 
                 className={cn(
-                  "px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-colors duration-200 group w-full min-h-[84px] cursor-pointer border hover:-translate-y-0.5",
+                  "px-4 sm:px-5 py-3.5 rounded-[20px] flex items-center justify-between gap-4 transition-colors duration-200 group w-full min-h-[84px] cursor-pointer border",
                   theme === 'day' 
                     ? "bg-white border-gray-100 hover:bg-gray-50 hover:border-gray-200 shadow-sm"
                     : "bg-[#0B1220]/60 border-white/5 hover:bg-[#172033] hover:border-red-500/20 shadow-md"
@@ -883,9 +886,10 @@ export const MemberCompanionView = React.memo(function MemberCompanionView({
               ) : (
                 <div className="flex flex-col items-center md:items-end gap-1.5 w-full">
                   <motion.button 
+                    type="button"
                     onClick={isEligibleForRenewal ? handleRequestRenewal : undefined}
                     disabled={!isEligibleForRenewal || isSubmitting}
-                    whileHover={isEligibleForRenewal ? { scale: 1.03, y: -2, boxShadow: "0 0 15px rgba(229,57,53,0.3)" } : {}}
+                    whileHover={isEligibleForRenewal ? { scale: 1.03, boxShadow: "0 0 15px rgba(229,57,53,0.3)" } : {}}
                     whileTap={isEligibleForRenewal ? { scale: 0.97 } : {}}
                     className={cn(
                       "w-full md:w-auto text-white px-5 py-2.5 rounded-[16px] font-bold text-[12px] flex items-center justify-center gap-1.5 shadow-lg transition-all",

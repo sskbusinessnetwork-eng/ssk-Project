@@ -12,6 +12,7 @@ import { cn } from '../lib/utils';
 import { getDashboardPath as getDashboardPathUtil, isChapterLeaderRole } from '../utils/authUtils';
 import { BrandLogo } from './BrandLogo';
 import { isLightColor } from '../utils/contrastUtils';
+import { preloadRouteByPath } from '../routes/routeLoaders';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -28,6 +29,7 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
   const navigate = useNavigate();
 
   const sidebarRef = useRef<HTMLElement>(null);
+  const isLoggingOutRef = useRef(false);
   const [computedIsLight, setComputedIsLight] = useState<boolean>(() => {
     try {
       return localStorage.getItem('ssk_app_theme') === 'day' || 
@@ -51,12 +53,16 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
   const isLight = computedIsLight || theme === 'day' || (backgroundColor ? isLightColor(backgroundColor) : false);
 
   const handleLogout = async () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
     try {
       await logout();
       navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
     } catch (error) {
       console.error('Logout failed:', error);
       navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
+    } finally {
+      isLoggingOutRef.current = false;
     }
   };
 
@@ -249,9 +255,13 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
               <Link
                 to={item.path}
                 onClick={() => onClose?.()}
+                onPointerDown={() => preloadRouteByPath(item.path)}
+                onTouchStart={() => preloadRouteByPath(item.path)}
+                onMouseEnter={() => preloadRouteByPath(item.path)}
+                onFocus={() => preloadRouteByPath(item.path)}
                 data-active={isActive ? "true" : undefined}
                 className={cn(
-                  "sidebar-nav-item flex items-center gap-3 px-3 h-[46px] rounded-[14px] transition-colors duration-200 relative overflow-hidden group",
+                  "sidebar-nav-item flex items-center gap-3 px-3 h-[46px] rounded-[14px] transition-colors duration-200 relative overflow-hidden group touch-manipulation",
                   isCollapsed && "justify-center px-0",
                   isActive 
                     ? isLight
@@ -346,6 +356,10 @@ export const Sidebar = memo(function Sidebar({ isOpen, onClose, isCollapsed, onT
             <Link 
               to="/settings" 
               onClick={() => onClose?.()}
+              onPointerDown={() => preloadRouteByPath('/settings')}
+              onTouchStart={() => preloadRouteByPath('/settings')}
+              onMouseEnter={() => preloadRouteByPath('/settings')}
+              onFocus={() => preloadRouteByPath('/settings')}
               data-active={location.pathname === '/settings' ? "true" : undefined}
               className={cn(
                 "sidebar-nav-item flex items-center gap-3 px-3 h-[42px] rounded-[14px] transition-colors touch-manipulation group",

@@ -221,6 +221,7 @@ export function OfflineReferralMemberSelect({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -237,7 +238,7 @@ export function OfflineReferralMemberSelect({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {

@@ -44,6 +44,7 @@ export function GiveTestimonialModal({
   const [title, setTitle] = useState('');
   const [testimonial, setTestimonial] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
@@ -160,7 +161,7 @@ export function GiveTestimonialModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmittingRef.current) return;
 
     if (!selectedReceiverId || !selectedReceiver) {
       const msg = 'Please select a member to receive your testimonial.';
@@ -178,6 +179,7 @@ export function GiveTestimonialModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -250,6 +252,7 @@ export function GiveTestimonialModal({
       showError(errMsg);
       scrollToError();
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

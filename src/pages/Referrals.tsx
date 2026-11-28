@@ -113,6 +113,7 @@ export function Referrals() {
   const memberSearchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!isMemberDropdownOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target as Node)) {
         setIsMemberDropdownOpen(false);
@@ -129,7 +130,7 @@ export function Referrals() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [isMemberDropdownOpen]);
 
   useEffect(() => {
     if (isMemberDropdownOpen) {

@@ -292,7 +292,6 @@ const StatGrid = React.memo(function StatGrid({
                 show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
               }}
               whileHover={isClickable ? { 
-                 y: -3, 
                  scale: 1.015, 
                  boxShadow: "0 12px 24px rgba(0,0,0,0.5), 0 0 15px rgba(255,255,255,0.05)",
                  borderColor: "rgba(255, 255, 255, 0.25)"
@@ -376,7 +375,6 @@ const StatGrid = React.memo(function StatGrid({
               show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } }
             }}
             whileHover={isClickable ? { 
-               y: -4, 
                scale: 1.02, 
                boxShadow: "0 12px 28px rgba(0,0,0,0.6)",
                borderColor: "rgba(255, 255, 255, 0.25)"

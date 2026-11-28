@@ -48,6 +48,7 @@ export function ScheduleOneToOneModal({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
@@ -176,7 +177,7 @@ export function ScheduleOneToOneModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmittingRef.current) return;
 
     if (!formData.participantId) {
       const msg = 'Please select a member for the One-to-One meeting.';
@@ -207,6 +208,7 @@ export function ScheduleOneToOneModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -333,6 +335,7 @@ export function ScheduleOneToOneModal({
       showError(userMessage);
       scrollToError();
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

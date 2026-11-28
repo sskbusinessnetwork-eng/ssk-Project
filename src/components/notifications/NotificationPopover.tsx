@@ -18,6 +18,7 @@ import { notificationService } from '../../services/notificationService';
 import { safeFormat } from '../../utils/dateUtils';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
+import { preloadRouteByPath } from '../../routes/routeLoaders';
 
 interface NotificationPopoverProps {
   isOpen: boolean;
@@ -46,6 +47,10 @@ export function NotificationPopover({
   const setNotifications = hasExternalState ? onNotificationsChange! : setLocalNotifications;
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'UNREAD'>('ALL');
   const panelRef = useRef<HTMLDivElement>(null);
+  const markingIdsRef = useRef<Set<string>>(new Set());
+  const deletingIdsRef = useRef<Set<string>>(new Set());
+  const isMarkingAllRef = useRef(false);
+  const isClearingAllRef = useRef(false);
 
   // Position state calculated dynamically relative to the bell icon and viewport
   const [panelStyles, setPanelStyles] = useState<React.CSSProperties>({
@@ -207,47 +212,72 @@ export function NotificationPopover({
     };
   }, [isOpen, onClose, anchorRef]);
 
-  // Action: Mark single as read
+  // Action: Mark single as read (optimistic + duplicate guard)
   const handleMarkAsRead = async (id: string) => {
-    await notificationService.markAsRead(id);
+    if (!id || markingIdsRef.current.has(id)) return;
+    markingIdsRef.current.add(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true, is_read: true } : n))
     );
+    try {
+      await notificationService.markAsRead(id);
+    } catch (err) {
+      console.warn('Mark notification as read failed:', err);
+    } finally {
+      markingIdsRef.current.delete(id);
+    }
   };
 
   // Action: Mark all as read
   const handleMarkAllAsRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!userId) return;
-    await notificationService.markAllAsRead(userId);
+    if (!userId || isMarkingAllRef.current) return;
+    isMarkingAllRef.current = true;
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, read: true, is_read: true }))
     );
+    try {
+      await notificationService.markAllAsRead(userId);
+    } finally {
+      isMarkingAllRef.current = false;
+    }
   };
 
   // Action: Delete notification
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await notificationService.deleteNotification(id);
+    if (!id || deletingIdsRef.current.has(id)) return;
+    deletingIdsRef.current.add(id);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await notificationService.deleteNotification(id);
+    } finally {
+      deletingIdsRef.current.delete(id);
+    }
   };
 
   // Action: Clear all
   const handleClearAll = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!userId) return;
-    await notificationService.clearAll(userId);
+    if (!userId || isClearingAllRef.current) return;
+    isClearingAllRef.current = true;
     setNotifications([]);
+    try {
+      await notificationService.clearAll(userId);
+    } finally {
+      isClearingAllRef.current = false;
+    }
   };
 
-  // Action: Notification Click -> Marks read & Navigates to the relevant feature screen
-  const handleNotificationClick = async (notif: Notification) => {
+  // Action: Notification Click -> Optimistically marks read & immediately navigates on first click
+  const handleNotificationClick = (notif: Notification) => {
     const isUnread = !notif.read && !notif.is_read;
     if (isUnread) {
-      await handleMarkAsRead(notif.id);
+      void handleMarkAsRead(notif.id);
     }
 
     const targetUrl = notificationService.resolveLink(notif, profile?.role);
+    preloadRouteByPath(targetUrl);
     onClose();
     navigate(targetUrl);
   };
@@ -334,8 +364,8 @@ export function NotificationPopover({
           ref={panelRef}
           initial={{ opacity: 0, y: -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -6, scale: 0.98 }}
-          transition={{ duration: 0.16, ease: 'easeOut' }}
+          exit={{ opacity: 0, y: -6, scale: 0.98, pointerEvents: 'none' }}
+          transition={{ duration: 0.12, ease: 'easeOut' }}
           style={panelStyles}
           className="bg-[#111827] border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col"
           role="dialog"

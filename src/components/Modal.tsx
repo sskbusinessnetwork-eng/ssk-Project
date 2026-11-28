@@ -18,16 +18,16 @@ export const Modal = React.memo(function Modal({ isOpen, onClose, title, childre
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            exit={{ opacity: 0, pointerEvents: 'none' }}
+            transition={{ duration: 0.12 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/80"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.97, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 10 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
+            exit={{ opacity: 0, scale: 0.97, y: 10, pointerEvents: 'none' }}
+            transition={{ duration: 0.14, ease: 'easeOut' }}
             className={`relative w-full ${maxWidth} bg-card rounded-2xl sm:rounded-[24px] shadow-2xl overflow-hidden border border-white/5 flex flex-col max-h-[calc(100dvh-120px)] sm:max-h-[85vh] my-auto`}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-primary shrink-0" />

@@ -181,6 +181,7 @@ export function Wallet() {
 
   // Close member dropdown when clicking outside
   useEffect(() => {
+    if (!isDropdownOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsDropdownOpen(false);
@@ -188,7 +189,7 @@ export function Wallet() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isDropdownOpen]);
 
   const effectiveTargetMemberId = isAuthorizedManager
     ? selectedMemberId || currentUserId

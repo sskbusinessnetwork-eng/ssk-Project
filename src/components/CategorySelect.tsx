@@ -37,6 +37,7 @@ export function CategorySelect({
 
   // Close dropdown on click outside
   useEffect(() => {
+    if (!isOpen) return;
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -44,7 +45,7 @@ export function CategorySelect({
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {

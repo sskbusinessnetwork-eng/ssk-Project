@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Bell, 
@@ -26,6 +26,7 @@ import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { preloadRouteByPath } from '../routes/routeLoaders';
 
 type FilterCategory = 'ALL' | 'UNREAD' | 'MEETINGS' | 'REFERRALS' | 'GUESTS' | 'SUBSCRIPTION' | 'SYSTEM';
 
@@ -39,6 +40,10 @@ export function Notifications() {
     notificationService.getPermissionState()
   );
   const navigate = useNavigate();
+  const markingIdsRef = useRef<Set<string>>(new Set());
+  const deletingIdsRef = useRef<Set<string>>(new Set());
+  const isMarkingAllRef = useRef(false);
+  const isClearingAllRef = useRef(false);
 
   const userId = profile?.uid || profile?.id || '';
 
@@ -79,36 +84,69 @@ export function Notifications() {
     setPermissionState(res);
   };
 
-  // Mark single as read
+  // Mark single as read (optimistic + duplicate guard)
   const handleMarkAsRead = async (id: string) => {
-    await notificationService.markAsRead(id);
+    if (!id || markingIdsRef.current.has(id)) return;
+    markingIdsRef.current.add(id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true, is_read: true } : n))
+    );
+    try {
+      await notificationService.markAsRead(id);
+    } catch (err) {
+      console.warn('Mark notification as read failed:', err);
+    } finally {
+      markingIdsRef.current.delete(id);
+    }
   };
 
   // Mark all as read
   const handleMarkAllAsRead = async () => {
-    if (!userId) return;
-    await notificationService.markAllAsRead(userId);
+    if (!userId || isMarkingAllRef.current) return;
+    isMarkingAllRef.current = true;
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read: true, is_read: true }))
+    );
+    try {
+      await notificationService.markAllAsRead(userId);
+    } finally {
+      isMarkingAllRef.current = false;
+    }
   };
 
   // Delete notification
   const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    await notificationService.deleteNotification(id);
+    if (!id || deletingIdsRef.current.has(id)) return;
+    deletingIdsRef.current.add(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await notificationService.deleteNotification(id);
+    } finally {
+      deletingIdsRef.current.delete(id);
+    }
   };
 
   // Clear all notifications
   const handleClearAll = async () => {
-    if (!userId) return;
-    await notificationService.clearAll(userId);
+    if (!userId || isClearingAllRef.current) return;
+    isClearingAllRef.current = true;
+    setNotifications([]);
+    try {
+      await notificationService.clearAll(userId);
+    } finally {
+      isClearingAllRef.current = false;
+    }
   };
 
-  // Handle notification click
-  const handleNotificationClick = async (notif: Notification) => {
+  // Handle notification click -> immediately navigate without waiting for network call
+  const handleNotificationClick = (notif: Notification) => {
     if (!notif.read && !notif.is_read) {
-      await handleMarkAsRead(notif.id);
+      void handleMarkAsRead(notif.id);
     }
 
     const targetUrl = notificationService.resolveLink(notif, profile?.role);
+    preloadRouteByPath(targetUrl);
     navigate(targetUrl);
   };
 

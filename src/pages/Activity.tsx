@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef, memo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -205,6 +205,7 @@ export function Activity() {
 
   // Referral Status Updating within Details Modal
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const isUpdatingStatusRef = useRef(false);
   const [statusVal, setStatusVal] = useState('');
 
   // Filters
@@ -734,7 +735,8 @@ export function Activity() {
 
   // Update Referral Status handler
   const handleUpdateReferralStatus = async () => {
-    if (!selectedReferralForDetails || !statusVal) return;
+    if (!selectedReferralForDetails || !statusVal || isUpdatingStatusRef.current) return;
+    isUpdatingStatusRef.current = true;
     setIsUpdatingStatus(true);
     try {
       const { error } = await supabase
@@ -753,6 +755,7 @@ export function Activity() {
     } catch (err: any) {
       showError(err.message || 'Failed to update status');
     } finally {
+      isUpdatingStatusRef.current = false;
       setIsUpdatingStatus(false);
     }
   };
@@ -979,7 +982,8 @@ export function Activity() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
+              transition={{ duration: 0.12 }}
               onClick={() => setIsActionMenuOpen(false)}
               className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 cursor-pointer"
             />
@@ -987,7 +991,7 @@ export function Activity() {
             <motion.div
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95, pointerEvents: 'none' }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
               className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-[#111827] rounded-3xl p-4 border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 flex flex-col gap-2.5"
             >

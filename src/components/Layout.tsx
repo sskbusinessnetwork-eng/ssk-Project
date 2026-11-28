@@ -1,5 +1,5 @@
 import { Avatar } from '../components/Avatar';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sidebar } from './Sidebar';
@@ -15,6 +15,7 @@ import { notificationService } from '../services/notificationService';
 import { BrandLogo } from './BrandLogo';
 import { NotificationPopover } from './notifications/NotificationPopover';
 import { ThemeToggle } from './ThemeToggle';
+import { preloadRouteByPath, preloadAuthenticatedRoutes } from '../routes/routeLoaders';
 
 export function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -29,6 +30,7 @@ export function Layout() {
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
+  const isLoggingOutRef = useRef(false);
 
   const toggleDesktopCollapsed = useCallback(() => {
     setIsDesktopCollapsed((prev: boolean) => {
@@ -122,6 +124,29 @@ export function Layout() {
     };
   }, [isMobileSidebarOpen]);
 
+  // Preload authenticated route chunks on idle so sidebar/nav clicks respond immediately on first tap
+  useEffect(() => {
+    const userId = profile?.uid || profile?.id;
+    if (!userId) return;
+
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (typeof win.requestIdleCallback === 'function') {
+      const idleId = win.requestIdleCallback(() => {
+        preloadAuthenticatedRoutes(profile?.role);
+      }, { timeout: 1500 });
+      return () => win.cancelIdleCallback?.(idleId);
+    }
+
+    const timerId = window.setTimeout(() => {
+      preloadAuthenticatedRoutes(profile?.role);
+    }, 600);
+    return () => window.clearTimeout(timerId);
+  }, [profile?.uid, profile?.id, profile?.role]);
+
   // Close bottom sheet, notification dropdown, and mobile sidebar on route change
   useEffect(() => {
     setIsBottomSheetOpen(false);
@@ -130,12 +155,16 @@ export function Layout() {
   }, [location.pathname]);
 
   const handleLogout = async () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
     try {
       await logout();
       navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
     } catch (error) {
       console.error('Logout failed:', error);
       navigate('/login', { replace: true, state: { message: 'You have been logged out successfully.' } });
+    } finally {
+      isLoggingOutRef.current = false;
     }
   };
 
@@ -184,7 +213,13 @@ export function Layout() {
             </button>
             
             {/* Header Logo branding */}
-            <Link to="/dashboard" className="flex items-center min-w-0 shrink">
+            <Link
+              to="/dashboard"
+              onPointerDown={() => preloadRouteByPath('/dashboard')}
+              onMouseEnter={() => preloadRouteByPath('/dashboard')}
+              onFocus={() => preloadRouteByPath('/dashboard')}
+              className="flex items-center min-w-0 shrink touch-manipulation"
+            >
               <BrandLogo 
                 size="sm" 
                 showText={false} 
@@ -264,7 +299,13 @@ export function Layout() {
                 </div>
               </div>
             ) : (
-              <Link to="/profile" className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0">
+              <Link
+                to="/profile"
+                onPointerDown={() => preloadRouteByPath('/profile')}
+                onMouseEnter={() => preloadRouteByPath('/profile')}
+                onFocus={() => preloadRouteByPath('/profile')}
+                className="flex items-center gap-2 sm:gap-3 hover:opacity-95 transition-opacity pl-0 sm:pl-2 sm:border-l border-white/10 shrink-0 touch-manipulation"
+              >
                 <div className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] sm:text-sm shrink-0 border border-[#FFE4E6]/20 sm:border-2">
                   {profile?.name ? profile.name.substring(0, 2).toUpperCase() : 'SV'}
                 </div>
@@ -283,7 +324,15 @@ export function Layout() {
         </header>
 
         <div className="p-4 sm:p-6 md:p-8 lg:p-10 max-w-[1600px] mx-auto w-full space-y-8">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="min-h-[50vh] flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 
@@ -295,8 +344,9 @@ export function Layout() {
           return item.isAction ? (
             <button
               key={idx}
+              type="button"
               onClick={item.action}
-              className="outline-none focus:outline-none"
+              className="flex flex-1 h-full items-center justify-center touch-manipulation select-none outline-none focus:outline-none cursor-pointer"
             >
               <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] group">
                 <item.icon 
@@ -322,7 +372,11 @@ export function Layout() {
             <Link
               key={item.path}
               to={item.path as string}
-              className="outline-none focus:outline-none"
+              onPointerDown={() => preloadRouteByPath(item.path)}
+              onTouchStart={() => preloadRouteByPath(item.path)}
+              onMouseEnter={() => preloadRouteByPath(item.path)}
+              onFocus={() => preloadRouteByPath(item.path)}
+              className="flex flex-1 h-full items-center justify-center touch-manipulation select-none outline-none focus:outline-none"
             >
               <div className="relative flex flex-col items-center justify-center min-w-[60px] h-[54px] group">
                 <item.icon 
@@ -355,8 +409,8 @@ export function Layout() {
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
+              transition={{ duration: 0.12 }}
               className="fixed inset-0 bg-[#000000]/80 z-[50] md:hidden cursor-pointer"
               onClick={() => setIsBottomSheetOpen(false)}
             />
@@ -386,7 +440,13 @@ export function Layout() {
                     </div>
                   </div>
                 ) : (
-                  <Link to="/profile" className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5 hover:bg-[#374151] transition-colors active:bg-[#4B5563]">
+                  <Link
+                    to="/profile"
+                    onClick={() => setIsBottomSheetOpen(false)}
+                    onPointerDown={() => preloadRouteByPath('/profile')}
+                    onMouseEnter={() => preloadRouteByPath('/profile')}
+                    className="flex items-center justify-between p-4 mb-2 bg-[#1F2937] rounded-2xl border border-white/5 hover:bg-[#374151] transition-colors active:bg-[#4B5563] touch-manipulation"
+                  >
                     <div className="flex items-center gap-4">
                       <Avatar src={profile?.photoURL} name={profile?.name} size="w-12 h-12" className="border border-white/10 shadow-sm" fallbackClassName="text-lg" />
                       <div className="flex flex-col">
@@ -403,7 +463,13 @@ export function Layout() {
                 <div className="flex flex-col gap-1 mt-4">
                   <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider px-2 mb-1">Navigation</span>
                   
-                  <Link to="/directory" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
+                  <Link
+                    to="/directory"
+                    onClick={() => setIsBottomSheetOpen(false)}
+                    onPointerDown={() => preloadRouteByPath('/directory')}
+                    onMouseEnter={() => preloadRouteByPath('/directory')}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151] touch-manipulation"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
                         <FileText size={18} />
@@ -413,7 +479,13 @@ export function Layout() {
                     <ChevronRight size={18} className="text-[#6B7280]" />
                   </Link>
 
-                  <Link to="/reports" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
+                  <Link
+                    to="/reports"
+                    onClick={() => setIsBottomSheetOpen(false)}
+                    onPointerDown={() => preloadRouteByPath('/reports')}
+                    onMouseEnter={() => preloadRouteByPath('/reports')}
+                    className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151] touch-manipulation"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
                         <Activity size={18} />
@@ -432,7 +504,13 @@ export function Layout() {
                   <span className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider px-2 mb-1">Account</span>
                   
                   {canAccessSettings && (
-                    <Link to="/settings" className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151]">
+                    <Link
+                      to="/settings"
+                      onClick={() => setIsBottomSheetOpen(false)}
+                      onPointerDown={() => preloadRouteByPath('/settings')}
+                      onMouseEnter={() => preloadRouteByPath('/settings')}
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-[#1F2937] transition-colors active:bg-[#374151] touch-manipulation"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#1F2937] flex items-center justify-center text-[#9CA3AF]">
                           <Settings size={18} />
@@ -442,7 +520,7 @@ export function Layout() {
                       <ChevronRight size={18} className="text-[#6B7280]" />
                     </Link>
                   )}
-                  <button onClick={handleLogout} className="flex items-center justify-between p-3 rounded-xl hover:bg-red-500/10 transition-colors active:bg-red-500/20 w-full text-left mt-2 border border-red-500/20">
+                  <button onClick={handleLogout} className="flex items-center justify-between p-3 rounded-xl hover:bg-red-500/10 transition-colors active:bg-red-500/20 w-full text-left mt-2 border border-red-500/20 touch-manipulation cursor-pointer">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
                         <LogOut size={18} />
@@ -463,8 +541,8 @@ export function Layout() {
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
+            exit={{ opacity: 0, pointerEvents: 'none' }}
+            transition={{ duration: 0.12, ease: "easeInOut" }}
             className="fixed inset-0 bg-black/60 z-[9998] lg:hidden cursor-pointer animate-none"
             onClick={(e) => {
               e.preventDefault();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
 import { databaseService } from '../../services/databaseService';
@@ -41,6 +41,7 @@ export function InviteGuestModal({
   const [matchedMember, setMatchedMember] = useState<any | null>(null);
   const [duplicateMeetingError, setDuplicateMeetingError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -149,7 +150,7 @@ export function InviteGuestModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile) return;
+    if (!profile || isSubmittingRef.current) return;
 
     if (matchedMember) {
       const msg = `${matchedMember.name} is already a member and cannot be added as a guest.`;
@@ -198,6 +199,7 @@ export function InviteGuestModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -377,6 +379,7 @@ SSK Business Network`;
       showError(errMsg);
       scrollToError();
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

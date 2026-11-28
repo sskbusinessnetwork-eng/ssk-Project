@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
 import { databaseService } from '../../services/databaseService';
@@ -56,6 +56,7 @@ export function SubmitThankYouSlipModal({
   const [isOffline, setIsOffline] = useState(false);
   const [offlineMemberId, setOfflineMemberId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -226,7 +227,7 @@ export function SubmitThankYouSlipModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!effectiveSender || isSubmitting) return;
+    if (!effectiveSender || isSubmitting || isSubmittingRef.current) return;
 
     if (!isOffline && !formData.referralId) {
       const msg = 'Please select an eligible referral.';
@@ -252,6 +253,7 @@ export function SubmitThankYouSlipModal({
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -388,6 +390,7 @@ export function SubmitThankYouSlipModal({
       showError(errMsg);
       scrollToError();
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };

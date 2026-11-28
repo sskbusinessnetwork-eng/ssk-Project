@@ -262,6 +262,9 @@ export function Reports() {
   const [selectedTopPerformerId, setSelectedTopPerformerId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!meetingFilterOpen && !contributorsFilterOpen && !entireBizDropdownOpen && !weeklyChapterFilterOpen) {
+      return;
+    }
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       if (meetingFilterRef.current && !meetingFilterRef.current.contains(target)) {
@@ -279,7 +282,7 @@ export function Reports() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [meetingFilterOpen, contributorsFilterOpen, entireBizDropdownOpen, weeklyChapterFilterOpen]);
 
   // Initialize default custom date ranges based on IST
   useEffect(() => {

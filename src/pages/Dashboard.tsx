@@ -1,6 +1,6 @@
 import { addYears, isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Share2, Award, Calendar, UserPlus, ChevronRight, Users, Handshake, BookOpen, 
   Eye, Plus, Filter, TrendingUp, TrendingDown, CheckCircle2, Clock, Sparkles, Target, Compass, 
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { preloadRouteByPath } from '../routes/routeLoaders';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../contexts/ThemeContext';
 import { getCleanFullName, getDisplayPosition, isChapterLeaderRole } from '../utils/authUtils';
@@ -327,8 +328,12 @@ export function Analytics() {
   const [participatedOneToOnes, setParticipatedOneToOnes] = useState<any[]>([]);
   const [guestInvitations, setGuestInvitations] = useState<any[]>([]);
   const [isChecklistHighlighted, setIsChecklistHighlighted] = useState(false);
+  const processingRenewalIdsRef = useRef<Set<string>>(new Set());
+  const analyticsRequestSeqRef = useRef(0);
 
   const handleApproveRenewal = async (requestId: string, memberId: string) => {
+    if (!requestId || processingRenewalIdsRef.current.has(requestId)) return;
+    processingRenewalIdsRef.current.add(requestId);
     try {
       const newStart = new Date().toISOString();
       const newEnd = addYears(new Date(), 1).toISOString();
@@ -348,10 +353,14 @@ export function Analytics() {
       }).eq('id', requestId);
     } catch (e) {
       console.error('Error approving', e);
+    } finally {
+      processingRenewalIdsRef.current.delete(requestId);
     }
   };
 
   const handleRejectRenewal = async (requestId: string, memberId: string) => {
+    if (!requestId || processingRenewalIdsRef.current.has(requestId)) return;
+    processingRenewalIdsRef.current.add(requestId);
     try {
       await supabase.from('subscription_requests').update({
         status: 'REJECTED',
@@ -364,6 +373,8 @@ export function Analytics() {
       }).eq('id', memberId);
     } catch (e) {
       console.error('Error rejecting', e);
+    } finally {
+      processingRenewalIdsRef.current.delete(requestId);
     }
   };
 
@@ -2506,11 +2517,18 @@ export function Analytics() {
     return 'Member';
   };
 
-  const fetchAnalyticsDataForCategory = async (category: string, dateRangeOverride?: { start: Date; end: Date } | null) => {
+  const fetchAnalyticsDataForCategory = async (category: string, dateRangeOverride?: { start: Date; end: Date } | null, requestSeq?: number) => {
     if (!profile) return;
     const norm = category.toLowerCase().trim();
     const candidateIds = userCandidateIds;
     if (candidateIds.length === 0) return;
+
+    const seq = requestSeq ?? ++analyticsRequestSeqRef.current;
+    const commitRecords = (records: any[]) => {
+      if (analyticsRequestSeqRef.current === seq) {
+        setAnalyticsModalRecords(records);
+      }
+    };
 
     const effectiveDate = dateRangeOverride !== undefined ? dateRangeOverride : activeDateRange;
 
@@ -2590,7 +2608,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('business') || norm.includes('thank')) {
         let query = supabase.from('thank_you_slips').select('*');
         const isThank = norm.includes('thank');
@@ -2683,7 +2701,7 @@ export function Analytics() {
           }
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('one-to-one') || norm.includes('1-to-1') || norm.includes('1:1') || norm.includes('one to one')) {
         let query = supabase.from('one_to_one_meetings').select('*');
         const isScheduledOnly = norm.includes('scheduled');
@@ -2761,7 +2779,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('guest') || norm.includes('visitor') || norm.includes('invite')) {
         let query = supabase.from('guest_invitations').select('*');
         const isVisitorOnly = norm.includes('visitor') || norm.includes('attended');
@@ -2879,7 +2897,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('meeting')) {
         const isAttendedOnly = norm.includes('attended') || norm.includes('attendance');
         const isScheduledOnly = norm.includes('scheduled');
@@ -2980,7 +2998,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('testimonial')) {
         let query = supabase.from('testimonials').select('*');
         const isGivenOnly = norm.includes('given') || norm.includes('sent');
@@ -3046,7 +3064,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('member')) {
         let list = chapterUsers.filter(u => u.role !== 'MASTER_ADMIN');
         if (usePersonalStats) {
@@ -3078,7 +3096,7 @@ export function Analytics() {
           };
         });
 
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       } else if (norm.includes('chapter') && !norm.includes('meeting')) {
         const mapped = allChapters.map(c => ({
           id: String(c.id),
@@ -3091,7 +3109,7 @@ export function Analytics() {
           time: c.meetingTime || null,
           notes: `Meeting Day: ${c.meetingDay || '-'}`
         }));
-        setAnalyticsModalRecords(mapped);
+        commitRecords(mapped);
       }
     } catch (e) {
       console.warn("Error fetching analytics data for category from Supabase:", e);
@@ -3100,19 +3118,25 @@ export function Analytics() {
   };
 
   const handleStatCardClick = useCallback(async (label: string) => {
+    if (analyticsLoading && analyticsModalCategory === label) return;
+    const seq = ++analyticsRequestSeqRef.current;
     setAnalyticsModalCategory(label);
     setAnalyticsLoading(true);
     setAnalyticsError(false);
     setAnalyticsModalRecords([]);
     try {
-      await fetchAnalyticsDataForCategory(label, activeDateRange);
+      await fetchAnalyticsDataForCategory(label, activeDateRange, seq);
     } catch (e) {
       console.error("Error loading analytics records:", e);
-      setAnalyticsError(true);
+      if (analyticsRequestSeqRef.current === seq) {
+        setAnalyticsError(true);
+      }
     } finally {
-      setAnalyticsLoading(false);
+      if (analyticsRequestSeqRef.current === seq) {
+        setAnalyticsLoading(false);
+      }
     }
-  }, [activeDateRange, fetchAnalyticsDataForCategory]);
+  }, [activeDateRange, analyticsLoading, analyticsModalCategory, fetchAnalyticsDataForCategory]);
 
   const renderAnalyticsDetails = () => {
     if (!analyticsModalCategory) return null;
@@ -3318,12 +3342,13 @@ const getGreeting = () => {
             {profile?.role !== 'MASTER_ADMIN' && (
               <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full sm:w-auto">
                 <motion.button 
+                  type="button"
                   onClick={handleGrowScoreClick}
                   onMouseEnter={() => setIsRocketHovered(true)}
                   onMouseLeave={() => setIsRocketHovered(false)}
-                  whileHover={{ y: -4, scale: 1.03, boxShadow: "0 0 20px rgba(229,57,53,0.4)" }}
+                  whileHover={{ scale: 1.03, boxShadow: "0 0 20px rgba(229,57,53,0.4)" }}
                   whileTap={{ scale: 0.97 }}
-                  className="w-full sm:w-auto bg-[#E53935] hover:bg-[#D32F2F] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 transition-all duration-300"
+                  className="w-full sm:w-auto bg-[#E53935] hover:bg-[#D32F2F] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer touch-manipulation"
                 >
                   <motion.div
                     animate={isRocketHovered ? { y: -3, x: 3, scale: 1.1 } : { y: 0, x: 0, scale: 1 }}
@@ -3334,13 +3359,22 @@ const getGreeting = () => {
                   Grow Your Business
                 </motion.button>
                 
-                <Link to="/member/my-report" className="w-full sm:w-auto">
-                  <motion.button 
-                    onMouseEnter={() => setIsReportHovered(true)}
-                    onMouseLeave={() => setIsReportHovered(false)}
-                    whileHover={{ y: -4, scale: 1.03, bg: "rgba(31, 41, 55, 0.9)" }}
+                <Link
+                  to="/member/my-report"
+                  onPointerDown={() => preloadRouteByPath('/member/my-report')}
+                  onTouchStart={() => preloadRouteByPath('/member/my-report')}
+                  onMouseEnter={() => {
+                    setIsReportHovered(true);
+                    preloadRouteByPath('/member/my-report');
+                  }}
+                  onMouseLeave={() => setIsReportHovered(false)}
+                  onFocus={() => preloadRouteByPath('/member/my-report')}
+                  className="w-full sm:w-auto touch-manipulation"
+                >
+                  <motion.span 
+                    whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
-                    className="w-full bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300 w-full"
+                    className="w-full bg-[#1F2937]/80 hover:bg-[#1F2937] text-white px-5 lg:px-7 h-[46px] sm:h-[50px] rounded-[14px] font-bold text-[13px] flex items-center justify-center gap-2 border border-white/10 transition-all duration-300 cursor-pointer"
                   >
                     <motion.div
                       animate={isReportHovered ? { rotate: [0, 10, -10, 0], scale: 1.1 } : { rotate: 0, scale: 1 }}
@@ -3349,7 +3383,7 @@ const getGreeting = () => {
                       <Activity size={16} />
                     </motion.div>
                     My Chapter Report
-                  </motion.button>
+                  </motion.span>
                 </Link>
               </div>
             )}
@@ -3820,14 +3854,18 @@ const getGreeting = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setAnalyticsModalCategory(null)}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
+              transition={{ duration: 0.12 }}
+              onClick={() => {
+                analyticsRequestSeqRef.current += 1;
+                setAnalyticsModalCategory(null);
+              }}
               className="absolute inset-0 bg-black/75 transition-opacity duration-150"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20, pointerEvents: 'none' }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="relative w-full max-w-6xl max-h-[90vh] flex flex-col bg-[#0B1220] rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden"
             >
@@ -3845,8 +3883,12 @@ const getGreeting = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => setAnalyticsModalCategory(null)}
-                    className="p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-[12px] border border-white/5 transition-all text-neutral-400 hover:text-white group shrink-0"
+                    type="button"
+                    onClick={() => {
+                      analyticsRequestSeqRef.current += 1;
+                      setAnalyticsModalCategory(null);
+                    }}
+                    className="p-2.5 sm:p-3 bg-white/5 hover:bg-white/10 rounded-[12px] border border-white/5 transition-all text-neutral-400 hover:text-white group shrink-0 cursor-pointer"
                   >
                     <X size={20} className="group-hover:scale-110 transition-transform" />
                   </button>

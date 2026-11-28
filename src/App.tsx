@@ -8,35 +8,37 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 
+import { routeLoaders } from './routes/routeLoaders';
+
 // Route-based code splitting for optimal bundle size and Lighthouse performance
-const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
-const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })));
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Analytics = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Analytics })));
-const MyReport = lazy(() => import('./pages/MyReport').then(m => ({ default: m.MyReport })));
-const Activity = lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
-const Testimonials = lazy(() => import('./pages/Testimonials').then(m => ({ default: m.Testimonials })));
-const TestimonialReports = lazy(() => import('./pages/TestimonialReports').then(m => ({ default: m.TestimonialReports })));
-const Positions = lazy(() => import('./pages/Positions').then(m => ({ default: m.Positions })));
-const ManageChapter = lazy(() => import('./pages/ManageChapter').then(m => ({ default: m.ManageChapter })));
-const OnboardMember = lazy(() => import('./pages/OnboardMember').then(m => ({ default: m.OnboardMember })));
-const SetPassword = lazy(() => import('./pages/SetPassword').then(m => ({ default: m.SetPassword })));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const Categories = lazy(() => import('./pages/Categories').then(m => ({ default: m.Categories })));
-const Admins = lazy(() => import('./pages/Admins').then(m => ({ default: m.Admins })));
-const Members = lazy(() => import('./pages/Members').then(m => ({ default: m.Members })));
-const Meetings = lazy(() => import('./pages/Meetings').then(m => ({ default: m.Meetings })));
-const Guests = lazy(() => import('./pages/Guests').then(m => ({ default: m.Guests })));
-const OneToOneMeetings = lazy(() => import('./pages/OneToOneMeetings').then(m => ({ default: m.OneToOneMeetings })));
-const Connections = lazy(() => import('./pages/Connections').then(m => ({ default: m.Connections })));
-const Notifications = lazy(() => import('./pages/Notifications').then(m => ({ default: m.Notifications })));
-const SubscriptionExpired = lazy(() => import('./pages/SubscriptionExpired').then(m => ({ default: m.SubscriptionExpired })));
-const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
-const ManageSubscriptions = lazy(() => import('./pages/ManageSubscriptions').then(m => ({ default: m.ManageSubscriptions })));
-const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
-const MemberTYS = lazy(() => import('./pages/MemberTYS').then(m => ({ default: m.MemberTYS })));
-const FuturePresentations = lazy(() => import('./pages/FuturePresentations').then(m => ({ default: m.FuturePresentations })));
-const Wallet = lazy(() => import('./pages/Wallet').then(m => ({ default: m.Wallet })));
+const LandingPage = lazy(routeLoaders.landing);
+const Register = lazy(routeLoaders.register);
+const Login = lazy(routeLoaders.login);
+const Analytics = lazy(routeLoaders.analytics);
+const MyReport = lazy(routeLoaders.myReport);
+const Activity = lazy(routeLoaders.activity);
+const Testimonials = lazy(routeLoaders.testimonials);
+const TestimonialReports = lazy(routeLoaders.testimonialReports);
+const Positions = lazy(routeLoaders.positions);
+const ManageChapter = lazy(routeLoaders.manageChapter);
+const OnboardMember = lazy(routeLoaders.onboardMember);
+const SetPassword = lazy(routeLoaders.setPassword);
+const Profile = lazy(routeLoaders.profile);
+const Categories = lazy(routeLoaders.categories);
+const Admins = lazy(routeLoaders.admins);
+const Members = lazy(routeLoaders.members);
+const Meetings = lazy(routeLoaders.meetings);
+const Guests = lazy(routeLoaders.guests);
+const OneToOneMeetings = lazy(routeLoaders.oneToOneMeetings);
+const Connections = lazy(routeLoaders.connections);
+const Notifications = lazy(routeLoaders.notifications);
+const SubscriptionExpired = lazy(routeLoaders.subscriptionExpired);
+const Reports = lazy(routeLoaders.reports);
+const ManageSubscriptions = lazy(routeLoaders.manageSubscriptions);
+const Settings = lazy(routeLoaders.settings);
+const MemberTYS = lazy(routeLoaders.memberTYS);
+const FuturePresentations = lazy(routeLoaders.futurePresentations);
+const Wallet = lazy(routeLoaders.wallet);
 
 function RouteFallback() {
   return (
