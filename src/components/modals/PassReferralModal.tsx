@@ -15,6 +15,7 @@ import {
   resolveMemberCategory
 } from '../OfflineReferralMemberSelect';
 import { getCleanFullName } from '../../utils/authUtils';
+import { getDirectorySnapshot, withTimeout } from '../../utils/directoryCache';
 
 interface PassReferralModalProps {
   isOpen: boolean;
@@ -96,25 +97,19 @@ export function PassReferralModal({
     let isMounted = true;
     const fetchMembers = async () => {
       try {
-        const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-          supabase.from('users').select('*').order('name', { ascending: true }),
-          supabase.from('chapters').select('id, chapter_name'),
-          supabase.from('categories').select('id, name')
-        ]);
-
-        if (usersRes.error) throw usersRes.error;
-        const usersData = usersRes.data;
+        const snapshot = await getDirectorySnapshot();
+        const usersData = snapshot.users;
 
         const chapterMap = new Map<string, string>();
-        if (chaptersRes.data) {
-          chaptersRes.data.forEach((c: any) => {
+        if (snapshot.chapters) {
+          snapshot.chapters.forEach((c: any) => {
             if (c.id) {
               chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
             }
           });
         }
 
-        const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+        const { categoryMap, validCategoryNames } = buildCategoryLookup(snapshot.categories);
 
         if (isMounted && usersData) {
           const mapped = usersData
@@ -299,9 +294,13 @@ export function PassReferralModal({
         updated_at: new Date().toISOString()
       };
 
-      const { error: insertError } = await supabase
-        .from('referrals')
-        .insert([newReferral]);
+      const { error: insertError } = await withTimeout<any>(
+        supabase
+          .from('referrals')
+          .insert([newReferral]),
+        12_000,
+        'Submitting referral'
+      );
 
       if (insertError) {
         throw insertError;

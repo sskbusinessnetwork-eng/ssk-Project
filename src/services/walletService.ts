@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { WalletPaymentType, WalletSummary, WalletTransaction, WalletTransactionType } from '../types';
 import { canManageWallet, getCleanFullName, getDisplayPosition } from '../utils/authUtils';
+import { fetchWithTimeout } from '../utils/directoryCache';
 
 function normalizeTransaction(raw: any, fallbackMemberId: string): WalletTransaction | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -246,7 +247,7 @@ export const walletService = {
 
     // 3. Also call backend /api/wallet/update if callerId is provided or if direct update had an error
     if (!persisted && callerId) {
-      const res = await fetch('/api/wallet/update', {
+      const res = await fetchWithTimeout('/api/wallet/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -255,7 +256,7 @@ export const walletService = {
           walletTransactions: summary.transactions,
           walletBalance: summary.availableBalance
         })
-      });
+      }, 8_000);
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || directUpdateErr?.message || 'Failed to save wallet update to Supabase.');

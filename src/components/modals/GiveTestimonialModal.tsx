@@ -16,6 +16,7 @@ import {
   resolveMemberCategory
 } from '../OfflineReferralMemberSelect';
 import { getCleanFullName, getDisplayPosition } from '../../utils/authUtils';
+import { getDirectorySnapshot, withTimeout } from '../../utils/directoryCache';
 
 interface GiveTestimonialModalProps {
   isOpen: boolean;
@@ -55,27 +56,21 @@ export function GiveTestimonialModal({
     }
   }, [initialReceiverId]);
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (forceRefresh = false) => {
     try {
-      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-        supabase.from('users').select('*').order('name', { ascending: true }),
-        supabase.from('chapters').select('id, chapter_name'),
-        supabase.from('categories').select('id, name')
-      ]);
-
-      if (usersRes.error) throw usersRes.error;
-      const usersData = usersRes.data;
+      const snapshot = await getDirectorySnapshot({ forceRefresh });
+      const usersData = snapshot.users;
 
       const chapterMap = new Map<string, string>();
-      if (chaptersRes.data) {
-        chaptersRes.data.forEach((c: any) => {
+      if (snapshot.chapters) {
+        snapshot.chapters.forEach((c: any) => {
           if (c.id) {
             chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
           }
         });
       }
 
-      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(snapshot.categories);
 
       if (isMountedRef.current && usersData) {
         const mapped = usersData
@@ -131,13 +126,17 @@ export function GiveTestimonialModal({
       return;
     }
 
-    fetchMembers();
-    window.addEventListener('profile-updated', fetchMembers);
-    window.addEventListener('members-refresh', fetchMembers);
+    const handleRefreshMembers = () => {
+      void fetchMembers(true);
+    };
+
+    void fetchMembers(false);
+    window.addEventListener('profile-updated', handleRefreshMembers);
+    window.addEventListener('members-refresh', handleRefreshMembers);
     return () => {
       isMountedRef.current = false;
-      window.removeEventListener('profile-updated', fetchMembers);
-      window.removeEventListener('members-refresh', fetchMembers);
+      window.removeEventListener('profile-updated', handleRefreshMembers);
+      window.removeEventListener('members-refresh', handleRefreshMembers);
     };
   }, [isOpen, fetchMembers]);
 
@@ -207,9 +206,13 @@ export function GiveTestimonialModal({
         updatedAt: new Date().toISOString()
       };
 
-      const { error: insertErr } = await supabase
-        .from('testimonials')
-        .insert([testimonialPayload]);
+      const { error: insertErr } = await withTimeout<any>(
+        supabase
+          .from('testimonials')
+          .insert([testimonialPayload]),
+        12_000,
+        'Submitting testimonial'
+      );
 
       if (insertErr) {
         try {
@@ -284,7 +287,7 @@ export function GiveTestimonialModal({
               onClick={() => {
                 const nextOpen = !isMemberDropdownOpen;
                 setIsMemberDropdownOpen(nextOpen);
-                if (nextOpen) fetchMembers();
+                if (nextOpen && allMembers.length === 0) void fetchMembers(false);
               }}
               className="w-full px-3.5 py-3 rounded-xl border border-white/10 bg-[#151C2E] cursor-pointer flex items-center justify-between text-left transition-all hover:border-primary/50"
             >

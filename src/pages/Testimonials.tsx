@@ -20,6 +20,7 @@ import {
   resolveMemberCategory
 } from '../components/OfflineReferralMemberSelect';
 import { getCleanFullName, getDisplayPosition as formatPosition, isChapterLeaderRole } from "../utils/authUtils";
+import { getDirectorySnapshot, withTimeout } from '../utils/directoryCache';
 
 export function Testimonials() {
   const { profile } = useAuth();
@@ -106,17 +107,13 @@ export function Testimonials() {
     return () => { isMounted = false; };
   }, [urlReferralId, urlRecipientId, users]);
 
-  const loadUsersAndChapters = useCallback(async () => {
+  const loadUsersAndChapters = useCallback(async (forceRefresh = false) => {
     try {
-      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-        supabase.from('users').select('*').order('name', { ascending: true }),
-        supabase.from('chapters').select('id, chapter_name'),
-        supabase.from('categories').select('id, name')
-      ]);
+      const snapshot = await getDirectorySnapshot({ forceRefresh, timeoutMs: 12_000 });
 
       const chapMap: Record<string, Chapter> = {};
       const chapNameLookup = new Map<string, string>();
-      (chaptersRes.data || []).forEach((c: any) => {
+      (snapshot.chapters || []).forEach((c: any) => {
         if (c.id) {
           chapMap[c.id] = c;
           chapNameLookup.set(String(c.id).trim().toLowerCase(), c.chapter_name || c.name || '');
@@ -124,10 +121,13 @@ export function Testimonials() {
       });
       setChaptersMap(chapMap);
 
-      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(snapshot.categories);
 
       const userMap: Record<string, UserProfile> = {};
-      (usersRes.data || []).forEach((u: any) => {
+      const sortedUsers = [...(snapshot.users || [])].sort((a: any, b: any) =>
+        String(a.name || '').localeCompare(String(b.name || ''))
+      );
+      sortedUsers.forEach((u: any) => {
         const uId = u.id || u.uid;
         if (!uId) return;
 
@@ -166,9 +166,12 @@ export function Testimonials() {
   }, []);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!currentUserId) {
+      setLoading(false);
+      return;
+    }
 
-    loadUsersAndChapters();
+    loadUsersAndChapters(false);
 
     // Subscribe to testimonials
     const unsubscribe = databaseService.subscribe(
@@ -180,31 +183,44 @@ export function Testimonials() {
       }
     );
 
-    const handleRefresh = async () => {
-      try {
-        const [freshData] = await Promise.all([
-          databaseService.list<Testimonial>('testimonials'),
-          loadUsersAndChapters()
-        ]);
-        setTestimonials(freshData);
-      } catch (e) {
-        console.warn("Refresh testimonials notice:", e);
-      }
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        try {
+          const [freshData] = await withTimeout(
+            Promise.all([
+              databaseService.list<Testimonial>('testimonials'),
+              loadUsersAndChapters(true)
+            ]),
+            12_000,
+            'Refreshing testimonials'
+          );
+          setTestimonials(freshData);
+        } catch (e) {
+          console.warn("Refresh testimonials notice:", e);
+        }
+      }, 200);
+    };
+
+    const handleDirectoryRefresh = () => {
+      void loadUsersAndChapters(true);
     };
 
     window.addEventListener('testimonials-updated', handleRefresh);
     window.addEventListener('dashboard-refresh', handleRefresh);
-    window.addEventListener('profile-updated', loadUsersAndChapters);
-    window.addEventListener('members-refresh', loadUsersAndChapters);
+    window.addEventListener('profile-updated', handleDirectoryRefresh);
+    window.addEventListener('members-refresh', handleDirectoryRefresh);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       unsubscribe();
       window.removeEventListener('testimonials-updated', handleRefresh);
       window.removeEventListener('dashboard-refresh', handleRefresh);
-      window.removeEventListener('profile-updated', loadUsersAndChapters);
-      window.removeEventListener('members-refresh', loadUsersAndChapters);
+      window.removeEventListener('profile-updated', handleDirectoryRefresh);
+      window.removeEventListener('members-refresh', handleDirectoryRefresh);
     };
-  }, [profile, loadUsersAndChapters]);
+  }, [currentUserId, loadUsersAndChapters]);
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this testimonial?')) {

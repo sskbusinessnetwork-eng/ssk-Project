@@ -15,6 +15,7 @@ import {
   NormalizedMemberOption,
   normalizeMemberOption,
 } from '../OfflineReferralMemberSelect';
+import { getDirectorySnapshot, withTimeout } from '../../utils/directoryCache';
 
 interface SubmitThankYouSlipModalProps {
   isOpen: boolean;
@@ -71,16 +72,24 @@ export function SubmitThankYouSlipModal({
         const uId = effectiveSenderId;
         if (!uId) return;
 
-        // Fetch users, chapters, and categories in parallel
-        const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-          supabase.from('users').select('*'),
-          supabase.from('chapters').select('id, chapter_name'),
-          supabase.from('categories').select('id, name')
-        ]);
+        // Fetch directory snapshot, existing slips, and received referrals in parallel
+        const [snapshot, slipsRes, refRes] = await withTimeout(
+          Promise.all([
+            getDirectorySnapshot(),
+            supabase.from('thank_you_slips').select('referral_id'),
+            supabase
+              .from('referrals')
+              .select('*')
+              .or(`receiver_id.eq.${uId},to_user_id.eq.${uId}`)
+              .order('created_at', { ascending: false })
+          ]),
+          12_000,
+          'Loading thank you slip data'
+        );
 
         const chapMap = new Map<string, string>();
-        if (chaptersRes.data) {
-          chaptersRes.data.forEach((c: any) => {
+        if (snapshot.chapters) {
+          snapshot.chapters.forEach((c: any) => {
             if (c.id) {
               chapMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
             }
@@ -89,8 +98,8 @@ export function SubmitThankYouSlipModal({
         if (isMounted) setChapterMap(chapMap);
 
         const catMap = new Map<string, string>();
-        if (categoriesRes.data) {
-          categoriesRes.data.forEach((cat: any) => {
+        if (snapshot.categories) {
+          snapshot.categories.forEach((cat: any) => {
             if (cat.id && cat.name) {
               catMap.set(String(cat.id).trim().toLowerCase(), String(cat.name));
             }
@@ -98,7 +107,7 @@ export function SubmitThankYouSlipModal({
         }
         if (isMounted) setCategoryMap(catMap);
 
-        const usersData = usersRes.data;
+        const usersData = snapshot.users;
         const uMap: Record<string, any> = {};
         if (usersData) {
           if (isMounted) setAllUsersList(usersData);
@@ -109,8 +118,7 @@ export function SubmitThankYouSlipModal({
         }
         if (isMounted) setUsersMap(uMap);
 
-        // Fetch existing slips to exclude already thanked referrals
-        const { data: slipsData } = await supabase.from('thank_you_slips').select('referral_id');
+        const slipsData = slipsRes.data;
         const thankedRefIds = new Set<string>();
         if (slipsData) {
           slipsData.forEach((s: any) => {
@@ -119,14 +127,7 @@ export function SubmitThankYouSlipModal({
           });
         }
 
-        // Fetch referrals received by this user
-        let query = supabase
-          .from('referrals')
-          .select('*')
-          .or(`receiver_id.eq.${uId},to_user_id.eq.${uId}`)
-          .order('created_at', { ascending: false });
-
-        const { data: refData, error: refErr } = await query;
+        const { data: refData, error: refErr } = refRes;
         if (refErr) throw refErr;
 
         if (isMounted && refData) {

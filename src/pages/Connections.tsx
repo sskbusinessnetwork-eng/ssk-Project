@@ -33,6 +33,7 @@ import { databaseService } from '../services/databaseService';
 import { Modal } from '../components/Modal';
 import { Avatar } from '../components/Avatar';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { getDirectorySnapshot, invalidateDirectoryCache, withTimeout } from '../utils/directoryCache';
 
 const ConnectionMemberRow = memo(function ConnectionMemberRow({
   member,
@@ -304,91 +305,74 @@ export function Connections() {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!profile) return;
-      
+    let isMounted = true;
+    const fetchData = async (silent = false, forceRefresh = false) => {
+      if (!profile) {
+        if (isMounted) setLoading(false);
+        return;
+      }
+
       try {
-        setLoading(true);
+        if (!silent && isMounted) {
+          setLoading(true);
+        }
         setErrorMessage(null);
-        
-        // Check if user is active - bypass check since "no need approval" is requested
-        const needsApproval = false;
-        if (needsApproval && profile.membershipStatus !== 'ACTIVE' && profile.role !== 'MASTER_ADMIN') {
-          setLoading(false);
-          return;
-        }
 
-        // Fetch Categories
-        const { data: cats } = await supabase.from('categories').select('id, name').order('name');
+        const [snapshot, chaps] = await withTimeout(
+          Promise.all([
+            getDirectorySnapshot({ forceRefresh, timeoutMs: 12_000 }),
+            databaseService.list<any>('chapters').catch(() => [])
+          ]),
+          12_000,
+          'Loading connections'
+        );
+
+        if (!isMounted) return;
+
+        // 1. Categories
+        const cats = [...(snapshot.categories || [])].sort((a: any, b: any) =>
+          String(a.name || '').localeCompare(String(b.name || ''))
+        );
         const catMap: Record<string, string> = {};
-        if (cats) {
-          setCategories(cats as unknown as Category[]);
-          cats.forEach((c: any) => {
-            if (c.id && c.name) {
-              catMap[String(c.id).trim().toLowerCase()] = c.name;
-            }
-          });
-        }
+        setCategories(cats as unknown as Category[]);
+        cats.forEach((c: any) => {
+          if (c.id && c.name) {
+            catMap[String(c.id).trim().toLowerCase()] = c.name;
+          }
+        });
 
-        // Fetch Chapters
+        // 2. Chapters (fallback to snapshot.chapters if list returned empty)
+        const effectiveChaps = (chaps && chaps.length > 0) ? chaps : (snapshot.chapters || []);
         const chapMap: Record<string, string> = {};
-        try {
-          const chaps = await databaseService.list<any>('chapters');
-          setChaptersList(chaps || []);
-          chaps.forEach(c => {
-            if (c.id && c.chapter_name) {
-              chapMap[c.id] = c.chapter_name;
-            }
-          });
-          setChapterNames(chapMap);
-        } catch (e) {
-          console.error("Error loading chapters:", e);
-        }
+        setChaptersList(effectiveChaps);
+        effectiveChaps.forEach((c: any) => {
+          const chapLabel = c.chapter_name || c.name;
+          if (c.id && chapLabel) {
+            chapMap[c.id] = chapLabel;
+          }
+        });
+        setChapterNames(chapMap);
 
-        // Fetch fresh logged-in user's details directly from Supabase 'users' table
+        const usersData = snapshot.users || [];
+
+        // 3. Resolve logged-in user's chapter info from already-loaded users snapshot
         const loggedInUserId = profile?.uid || profile?.id;
-        let fetchedChapterId: string | null = null;
-        let fetchedChapterName: string | null = null;
-        let fetchedChapter: string | null = null;
-
         if (loggedInUserId) {
-          const { data: dbUser, error: dbUserErr } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', loggedInUserId)
-            .maybeSingle();
-
-          if (!dbUserErr && dbUser) {
-            fetchedChapterId = dbUser.chapter_id || null;
-            fetchedChapterName = dbUser.chapter_name || null;
-            fetchedChapter = dbUser.chapter || null;
-            setCurrentUserChapterId(fetchedChapterId);
-            setCurrentUserChapterName(fetchedChapterName);
-            setCurrentUserChapter(fetchedChapter);
+          const dbUser = usersData.find(
+            (u: any) => String(u.id || u.uid) === String(loggedInUserId)
+          );
+          if (dbUser) {
+            setCurrentUserChapterId(dbUser.chapter_id || null);
+            setCurrentUserChapterName(dbUser.chapter_name || null);
+            setCurrentUserChapter(dbUser.chapter || null);
           } else {
-            fetchedChapterId = profile.chapter_id || (profile as any).chapterId || null;
-            fetchedChapterName = profile.chapterName || (profile as any).chapter_name || null;
-            fetchedChapter = (profile as any).chapter || null;
-            setCurrentUserChapterId(fetchedChapterId);
-            setCurrentUserChapterName(fetchedChapterName);
-            setCurrentUserChapter(fetchedChapter);
+            setCurrentUserChapterId(profile.chapter_id || (profile as any).chapterId || null);
+            setCurrentUserChapterName(profile.chapterName || (profile as any).chapter_name || null);
+            setCurrentUserChapter((profile as any).chapter || null);
           }
         }
 
-        // Fetch All Members from Supabase 'users' table without SQL chapter restrictions
-        const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('*');
-
-        if (usersError) {
-          console.error("Supabase load members error:", usersError);
-          setErrorMessage("Unable to load members. Please try again.");
-          setMembers([]);
-          setLoading(false);
-          return;
-        }
-
-        const allActiveUsers: UserProfile[] = (usersData || [])
+        const allActiveUsers: UserProfile[] = usersData
           .filter((row: any) => {
             const status = String(row.status || '').toUpperCase();
             if (status === 'INACTIVE') return false;
@@ -433,10 +417,10 @@ export function Connections() {
             };
           })
           .filter(m => m.role !== 'MASTER_ADMIN');
-        
-        // Resolve Admin Names in O(1) from already-fetched usersData (fallback single batch query only if missing)
+
+        // Resolve Admin Names in O(1) from already-fetched usersData
         const usersById = new Map<string, any>();
-        (usersData || []).forEach((u: any) => {
+        usersData.forEach((u: any) => {
           if (u?.id) usersById.set(String(u.id), u);
           if (u?.uid && u.uid !== u.id) usersById.set(String(u.uid), u);
         });
@@ -449,56 +433,45 @@ export function Connections() {
 
         if (adminIds.length > 0) {
           const adminData: Record<string, string> = {};
-          const missingAdminIds: string[] = [];
           adminIds.forEach((id) => {
             const found = usersById.get(String(id));
             if (found) {
               adminData[id] = found.name || found.displayName || 'Unknown Admin';
-            } else {
-              missingAdminIds.push(id);
             }
           });
-          if (missingAdminIds.length > 0) {
-            const { data: extraAdmins } = await supabase
-              .from('users')
-              .select('id, name')
-              .in('id', missingAdminIds);
-            (extraAdmins || []).forEach((u: any) => {
-              if (u?.id) adminData[u.id] = u.name || 'Unknown Admin';
-            });
-          }
           setAdminNames(adminData);
         }
-        
+
         setMembers(allActiveUsers);
       } catch (error) {
         console.error("Error fetching connections:", error);
-        setErrorMessage("Unable to load members. Please try again.");
+        if (isMounted) setErrorMessage("Unable to load members. Please try again.");
       } finally {
-        setLoading(false);
+        if (isMounted && !silent) setLoading(false);
       }
     };
 
-    fetchData();
+    fetchData(false, false);
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleRefresh = () => {
+      if (!isMounted) return;
+      invalidateDirectoryCache();
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        fetchData();
+        if (isMounted) fetchData(true, true);
       }, 250);
     };
 
-    // Listen for manual re-fetch events
     window.addEventListener('dashboard-refresh', scheduleRefresh);
 
-    // Subscribe to realtime updates on Supabase 'users' table
     const channel = supabase
       .channel('public:users:directory')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, scheduleRefresh)
       .subscribe();
 
     return () => {
+      isMounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('dashboard-refresh', scheduleRefresh);
       supabase.removeChannel(channel);

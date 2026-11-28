@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 import { safeFormat as format } from '../../utils/dateUtils';
 import { normalizePhoneNumber } from '../../utils/phoneUtils';
 import { ContactPickerButton } from '../PhoneInputWithPicker';
+import { getDirectorySnapshot, fetchWithTimeout, withTimeout } from '../../utils/directoryCache';
 
 interface InviteGuestModalProps {
   isOpen: boolean;
@@ -57,14 +58,6 @@ export function InviteGuestModal({
       try {
         const userChapId = profile?.chapter_id || (profile as any)?.chapterId || (profile as any)?.adminId;
 
-        // 1. Categories
-        const { data: catData } = await supabase
-          .from('categories')
-          .select('*')
-          .order('name', { ascending: true });
-        if (isMounted && catData) setCategories(catData);
-
-        // 2. Upcoming meetings
         let meetingQuery = supabase
           .from('meetings')
           .select('*')
@@ -74,8 +67,29 @@ export function InviteGuestModal({
           meetingQuery = meetingQuery.eq('chapter_id', userChapId);
         }
 
-        const { data: meetData } = await meetingQuery;
-        if (isMounted && meetData) {
+        const [snapshot, meetRes, guestsRes] = await withTimeout(
+          Promise.all([
+            getDirectorySnapshot(),
+            meetingQuery,
+            supabase
+              .from('guest_invitations')
+              .select('id, guest_phone, guest_whatsapp, meeting_id, guest_name')
+          ]),
+          12_000,
+          'Loading invite guest form'
+        );
+
+        if (!isMounted) return;
+
+        if (snapshot.categories) {
+          const sortedCats = [...snapshot.categories].sort((a: any, b: any) =>
+            String(a.name || '').localeCompare(String(b.name || ''))
+          );
+          setCategories(sortedCats);
+        }
+
+        const meetData = meetRes?.data;
+        if (meetData) {
           const valid = meetData.filter((m: any) => {
             const s = String(m.status || '').trim().toUpperCase();
             if (s === 'COMPLETED' || s === 'CANCELLED') return false;
@@ -87,18 +101,13 @@ export function InviteGuestModal({
           }
         }
 
-        // 3. Existing members for duplicate check
-        const { data: usersData } = await supabase
-          .from('users')
-          .select('id, name, phone, phoneNumber, position, role');
-        if (isMounted && usersData) setExistingMembers(usersData);
+        if (snapshot.users) {
+          setExistingMembers(snapshot.users);
+        }
 
-        // 4. Existing guests for duplicate meeting check
-        const { data: guestsData } = await supabase
-          .from('guest_invitations')
-          .select('id, guest_phone, guest_whatsapp, meeting_id, guest_name');
-        if (isMounted && guestsData) setExistingGuests(guestsData);
-
+        if (guestsRes?.data) {
+          setExistingGuests(guestsRes.data);
+        }
       } catch (err: any) {
         console.warn('Error loading invite guest data:', err);
       }
@@ -273,14 +282,14 @@ export function InviteGuestModal({
       // 1. Try authoritative API endpoint
       let apiSuccess = false;
       try {
-        const res = await fetch('/api/guests/invite', {
+        const res = await fetchWithTimeout('/api/guests/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             newInvitation,
             callerId: currentAuthId
           })
-        });
+        }, 8_000);
         const text = await res.text();
         let resData: any = null;
         try { resData = text ? JSON.parse(text) : null; } catch(e) {}
@@ -354,7 +363,13 @@ ${resolvedChapterName} Chapter
 SSK Business Network`;
           
           const waUrl = `https://wa.me/${normWhatsapp}?text=${encodeURIComponent(message)}`;
-          window.open(waUrl, '_blank');
+          const a = document.createElement('a');
+          a.href = waUrl;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         } catch (wErr) {}
       }
 

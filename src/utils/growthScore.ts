@@ -3,26 +3,51 @@ import { calculateProfileCompletion } from './profileUtils';
 import { parseSafeDate } from './dateUtils';
 import { isNormalReferral } from '../types';
 
+const IST_OFFSET_MS = 19_800_000; // Asia/Kolkata is fixed UTC+05:30 (no DST)
+
+const IST_PARTS_FORMATTER = (() => {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+  } catch {
+    return null;
+  }
+})();
+
+function formatISTFromDate(date: Date): { year: string; month: string; day: string } {
+  const ms = date.getTime();
+  if (!Number.isNaN(ms) && ms >= 0) {
+    const shifted = new Date(ms + IST_OFFSET_MS);
+    return {
+      year: String(shifted.getUTCFullYear()),
+      month: String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+      day: String(shifted.getUTCDate()).padStart(2, "0")
+    };
+  }
+  if (IST_PARTS_FORMATTER) {
+    try {
+      const parts = IST_PARTS_FORMATTER.formatToParts(date);
+      const year = parts.find(p => p.type === "year")?.value;
+      const month = parts.find(p => p.type === "month")?.value;
+      const day = parts.find(p => p.type === "day")?.value;
+      if (year && month && day) return { year, month, day };
+    } catch {}
+  }
+  return {
+    year: String(date.getFullYear()),
+    month: String(date.getMonth() + 1).padStart(2, "0"),
+    day: String(date.getDate()).padStart(2, "0")
+  };
+}
+
 export function getISTDayBounds(inputDate: Date | string | number = new Date()) {
   try {
-    let date = parseSafeDate(inputDate) || new Date();
-    let year, month, day;
-    try {
-      const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      });
-      const parts = formatter.formatToParts(date);
-      year = parts.find(p => p.type === "year")?.value;
-      month = parts.find(p => p.type === "month")?.value;
-      day = parts.find(p => p.type === "day")?.value;
-    } catch (e) {
-      year = date.getFullYear().toString();
-      month = (date.getMonth() + 1).toString().padStart(2, "0");
-      day = date.getDate().toString().padStart(2, "0");
-    }
+    const date = parseSafeDate(inputDate) || new Date();
+    const { year, month, day } = formatISTFromDate(date);
     const start = new Date(`${year}-${month}-${day}T00:00:00+05:30`);
     const end = new Date(`${year}-${month}-${day}T23:59:59.999+05:30`);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
@@ -44,25 +69,12 @@ export function getISTDayBounds(inputDate: Date | string | number = new Date()) 
 
 export function getISTDateString(inputDate: Date | string | number = new Date()) {
   try {
-    let date = parseSafeDate(inputDate) || new Date();
-    try {
-      const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      });
-      const parts = formatter.formatToParts(date);
-      const year = parts.find(p => p.type === "year")?.value;
-      const month = parts.find(p => p.type === "month")?.value;
-      const day = parts.find(p => p.type === "day")?.value;
-      return `${year}-${month}-${day}`;
-    } catch (e) {
-      const year = date.getFullYear().toString();
-      const month = (date.getMonth() + 1).toString().padStart(2, "0");
-      const day = date.getDate().toString().padStart(2, "0");
-      return `${year}-${month}-${day}`;
+    if (typeof inputDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(inputDate)) {
+      return inputDate;
     }
+    const date = parseSafeDate(inputDate) || new Date();
+    const { year, month, day } = formatISTFromDate(date);
+    return `${year}-${month}-${day}`;
   } catch (e) {
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`;
@@ -161,6 +173,8 @@ export function formatDateKey(dateInput: any): string {
   }
 }
 
+const lastSyncedScoreMap = new Map<string, { sig: string; timestamp: number }>();
+
 /**
  * Sync growth score and workspace checklist state directly to Supabase users table
  */
@@ -189,6 +203,15 @@ export async function syncGrowthScoreToDatabase(userId: string, scoreData: any, 
     if (checklistObj) {
       payload.workspace_checklist = checklistObj;
     }
+
+    const sig = JSON.stringify(payload);
+    const prev = lastSyncedScoreMap.get(userId);
+    const now = Date.now();
+    if (prev && prev.sig === sig && (now - prev.timestamp < 30_000)) {
+      return;
+    }
+    lastSyncedScoreMap.set(userId, { sig, timestamp: now });
+
     await supabase
       .from('users')
       .update(payload)
@@ -258,33 +281,223 @@ export function getWorkspaceChecklistTasks(
     startUTC = new Date(endUTC.getTime() - 365 * 24 * 60 * 60 * 1000);
   }
 
+  const userIdStr = String(userId || '').trim();
+  const toISTDayKey = (dateInput: any): string => {
+    if (!dateInput) return '';
+    if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      return dateInput;
+    }
+    const d = parseSafeDate(dateInput);
+    if (!d) return '';
+    return getISTDateString(d);
+  };
+
+  // Pre-index users, slips, and per-day activity sets once before the day loop (O(M) instead of O(365 * M))
+  const usersById = new Map<string, any>();
+  for (const u of allUsers) {
+    const idKey = String(u?.id || '').trim();
+    const uidKey = String(u?.uid || '').trim();
+    if (idKey && !usersById.has(idKey)) usersById.set(idKey, u);
+    if (uidKey && !usersById.has(uidKey)) usersById.set(uidKey, u);
+  }
+
+  const firstSlipByRefId = new Map<string, any>();
+  for (const s of allSlips) {
+    const refIdKey = String(s.referralId || s.referral_id || '').trim();
+    if (refIdKey && !firstSlipByRefId.has(refIdKey)) {
+      firstSlipByRefId.set(refIdKey, s);
+    }
+  }
+
+  const profileUpdatedDayKey = toISTDayKey(profile.updated_at || profile.created_at);
+  const isProfileCompleteAuto = calculateProfileCompletion(profile).isComplete;
+
+  const guestInviteDayKeys = new Set<string>();
+  for (const g of guestInvitations) {
+    const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.created_by || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
+    if (creator === userIdStr && g.status !== 'Cancelled' && g.status !== 'Invalid') {
+      const k1 = toISTDayKey(g.created_at || g.createdAt || g.date);
+      const k2 = toISTDayKey(g.meeting_date || g.meetingDate);
+      if (k1) guestInviteDayKeys.add(k1);
+      if (k2) guestInviteDayKeys.add(k2);
+    }
+  }
+
+  const passRefDayKeys = new Set<string>();
+  const userReceivedReferrals: any[] = [];
+  const userSentReferrals: any[] = [];
+  for (const r of allReferrals) {
+    const sender = String(r.fromUserId || r.from_user_id || r.sender_id || r.authorMemberId || r.submitted_by || '').trim();
+    const receiver = String(r.toUserId || r.receiver_id || r.to_user_id || r.receiverMemberId || '').trim();
+    const normal = isNormalReferral(r);
+
+    if (normal && sender === userIdStr) {
+      const k = toISTDayKey(r.created_at || r.createdAt || r.date);
+      if (k) passRefDayKeys.add(k);
+    }
+    if (normal && receiver === userIdStr) {
+      userReceivedReferrals.push(r);
+    }
+    if (sender === userIdStr) {
+      userSentReferrals.push(r);
+    }
+  }
+
+  const o2oDoneDayKeys = new Set<string>();
+  for (const m of oneToOnes) {
+    const isCreator = [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.created_by, m.createdBy]
+      .some(id => id && String(id).trim() === userIdStr);
+    if (isCreator) {
+      const k1 = toISTDayKey(m.created_at || m.createdAt || m.meeting_date || m.scheduled_date || m.date);
+      const k2 = toISTDayKey(m.scheduled_date || m.meeting_date || m.date);
+      if (k1) o2oDoneDayKeys.add(k1);
+      if (k2) o2oDoneDayKeys.add(k2);
+    }
+
+    const isParticipant = isCreator ||
+      [m.member_id, m.receiver_id].some(id => id && String(id).trim() === userIdStr) ||
+      (m.participantIds || []).some((id: any) => String(id).trim() === userIdStr);
+    if (isParticipant) {
+      const o2oUserAtt = (m.attendance || {})[userId];
+      const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
+      if (isCompleted) {
+        const k = toISTDayKey(m.completed_at || m.scheduled_date || m.meeting_date || m.date || m.created_at || m.createdAt);
+        if (k) o2oDoneDayKeys.add(k);
+      }
+    }
+  }
+
+  const userChapterId = String(profile.chapter_id || profile.chapterId || '').trim();
+  const chapterMeetingsByDay = new Map<string, any[]>();
+  for (const m of meetings) {
+    const mChap = String(m.chapter_id || m.chapterId || '').trim();
+    if (!userChapterId || !mChap || mChap === userChapterId) {
+      const dayKey = toISTDayKey(m.date || m.meeting_date || m.created_at || m.createdAt);
+      if (dayKey) {
+        const bucket = chapterMeetingsByDay.get(dayKey);
+        if (bucket) bucket.push(m);
+        else chapterMeetingsByDay.set(dayKey, [m]);
+      }
+    }
+  }
+
+  interface PreparedReceivedRef {
+    ref: any;
+    isConverted: boolean;
+    createdDayKey: string;
+    convertedDayKey: string;
+    senderName: string;
+    contactOrCustomerName: string;
+    slipForRef: any;
+    slipSentDayKey: string;
+  }
+  const receivedRefsByDay = new Map<string, PreparedReceivedRef[]>();
+  const addReceivedRefToDay = (dayKey: string, entry: PreparedReceivedRef) => {
+    if (!dayKey) return;
+    let bucket = receivedRefsByDay.get(dayKey);
+    if (!bucket) {
+      bucket = [];
+      receivedRefsByDay.set(dayKey, bucket);
+    }
+    if (!bucket.includes(entry)) bucket.push(entry);
+  };
+
+  for (const ref of userReceivedReferrals) {
+    const statusNorm = String(ref.status || '').toUpperCase();
+    const isConverted = statusNorm === 'CONVERTED' || statusNorm === 'COMPLETED';
+    const createdDayKey = toISTDayKey(ref.created_at || ref.createdAt || ref.date);
+    const convertedDayKey = isConverted ? toISTDayKey(ref.updated_at || ref.updatedAt || ref.created_at || ref.createdAt || ref.date) : '';
+    const senderId = String(ref.fromUserId || ref.sender_id || ref.from_user_id || ref.authorMemberId || ref.submitted_by || '').trim();
+    const referringMember = senderId ? usersById.get(senderId) : undefined;
+    const senderName = referringMember?.name || (referringMember as any)?.full_name || referringMember?.displayName || ref.fromUserName || ref.from_user_name || 'Unknown Member';
+    const contactOrCustomerName = ref.contactName || ref.contact_name || ref.customerName || ref.customer_name || 'Referral';
+    const slipForRef = firstSlipByRefId.get(String(ref.id || '').trim());
+    const slipSentDayKey = slipForRef ? toISTDayKey(slipForRef.created_at || slipForRef.createdAt || slipForRef.date) : '';
+
+    const entry: PreparedReceivedRef = {
+      ref,
+      isConverted,
+      createdDayKey,
+      convertedDayKey,
+      senderName,
+      contactOrCustomerName,
+      slipForRef,
+      slipSentDayKey
+    };
+    addReceivedRefToDay(createdDayKey, entry);
+    addReceivedRefToDay(convertedDayKey, entry);
+    addReceivedRefToDay(slipSentDayKey, entry);
+  }
+
+  // Pre-index testimonials authored by current user by refId or receiverId
+  const userAuthoredTestimonials: any[] = [];
+  for (const t of testimonials) {
+    const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId || t.from_user_id;
+    if (String(author || '').trim() === userIdStr) {
+      userAuthoredTestimonials.push(t);
+    }
+  }
+
+  interface PreparedSentRefTestimony {
+    ref: any;
+    receiverId: string;
+    receiverName: string;
+    slipReceivedDayKey: string;
+    testimonialForRef: any;
+    testimonialSentDayKey: string;
+  }
+  const sentRefTestimoniesByDay = new Map<string, PreparedSentRefTestimony[]>();
+  const addSentRefToDay = (dayKey: string, entry: PreparedSentRefTestimony) => {
+    if (!dayKey) return;
+    let bucket = sentRefTestimoniesByDay.get(dayKey);
+    if (!bucket) {
+      bucket = [];
+      sentRefTestimoniesByDay.set(dayKey, bucket);
+    }
+    if (!bucket.includes(entry)) bucket.push(entry);
+  };
+
+  for (const ref of userSentReferrals) {
+    const receiverId = String(ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId || '').trim();
+    const slipForRef = firstSlipByRefId.get(String(ref.id || '').trim());
+    if (!slipForRef || !receiverId) continue;
+
+    const slipReceivedDayKey = toISTDayKey(slipForRef.created_at || slipForRef.createdAt || slipForRef.date);
+    const receiverMember = usersById.get(receiverId);
+    const receiverName = receiverMember?.name || (receiverMember as any)?.full_name || receiverMember?.displayName || ref.toUserName || ref.to_user_name || 'the member you referred';
+    const refIdStr = String(ref.id || '').trim();
+
+    const testimonialForRef = userAuthoredTestimonials.find(t => {
+      const tRefId = t.referral_id || t.referralId;
+      const tReceiverId = t.receiverMemberId || t.receiver_id || t.toUserId || t.to_user_id;
+      const matchRef = tRefId && String(tRefId).trim() === refIdStr;
+      const matchReceiver = tReceiverId && String(tReceiverId).trim() === receiverId;
+      return Boolean(matchRef || (matchReceiver && (tRefId === refIdStr || !tRefId)));
+    });
+    const testimonialSentDayKey = testimonialForRef
+      ? toISTDayKey(testimonialForRef.created_at || testimonialForRef.createdAt || testimonialForRef.date)
+      : '';
+
+    const entry: PreparedSentRefTestimony = {
+      ref,
+      receiverId,
+      receiverName,
+      slipReceivedDayKey,
+      testimonialForRef,
+      testimonialSentDayKey
+    };
+    addSentRefToDay(slipReceivedDayKey, entry);
+    addSentRefToDay(testimonialSentDayKey, entry);
+  }
+
   const allTasks: WorkspaceTask[] = [];
 
   for (let currentUTC = new Date(startUTC); currentUTC <= endUTC; currentUTC.setUTCDate(currentUTC.getUTCDate() + 1)) {
     const currentIST = currentUTC.toISOString().split('T')[0];
-    
-    const isDateInRange = (dateInput: any) => {
-      if (!dateInput) return false;
-      try {
-        if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
-           return dateInput === currentIST;
-        }
-        const d = parseSafeDate(dateInput);
-        if (!d) return false;
-        return getISTDateString(d) === currentIST;
-      } catch {
-        return false;
-      }
-    };
-
+    const dateStr = currentIST;
     const rawTasks: any[] = [];
-    const dateStr = formatDateKey(currentIST);
 
-    const isProfileCompleteAuto = calculateProfileCompletion(profile).isComplete;
-    
-    // Only show profile task if it is incomplete OR it was updated during this specific day.
-    // If it's complete but updated earlier, it won't show.
-    if (!isProfileCompleteAuto || isDateInRange(profile.updated_at || profile.created_at)) {
+    if (!isProfileCompleteAuto || profileUpdatedDayKey === currentIST) {
       rawTasks.push({
         key: `task_complete_profile_${dateStr}`,
         label: 'Complete Your Profile',
@@ -298,14 +511,7 @@ export function getWorkspaceChecklistTasks(
       });
     }
 
-    const hasGuestAuto = guestInvitations.some(g => {
-      const creator = String(g.invited_by_user_id || g.invited_by || g.createdBy || g.created_by || g.member_id || g.user_id || g.inviterId || g.inviter_id || '').trim();
-      return creator === String(userId) && g.status !== 'Cancelled' && g.status !== 'Invalid' && (
-        isDateInRange(g.created_at || g.createdAt || g.date) ||
-        isDateInRange(g.meeting_date || g.meetingDate)
-      );
-    });
-
+    const hasGuestAuto = guestInviteDayKeys.has(currentIST);
     rawTasks.push({
       key: `task_invite_guest_${dateStr}`,
       label: 'Invite Guest',
@@ -317,12 +523,7 @@ export function getWorkspaceChecklistTasks(
       bgColor: 'bg-pink-500/10'
     });
 
-    const hasPassRefAuto = allReferrals.some(r => {
-      if (!isNormalReferral(r)) return false;
-      const sender = r.fromUserId || r.from_user_id || r.sender_id || r.authorMemberId;
-      return String(sender || '').trim() === String(userId) && isDateInRange(r.created_at || r.createdAt || r.date);
-    });
-
+    const hasPassRefAuto = passRefDayKeys.has(currentIST);
     rawTasks.push({
       key: `task_pass_referral_${dateStr}`,
       label: 'Pass Referral',
@@ -334,29 +535,7 @@ export function getWorkspaceChecklistTasks(
       bgColor: 'bg-emerald-500/10'
     });
 
-    const hasScheduleMeetingAuto = oneToOnes.some(m => {
-      const isCreator = [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.created_by, m.createdBy]
-        .some(id => id && String(id).trim() === String(userId));
-      return isCreator && (
-        isDateInRange(m.created_at || m.createdAt || m.meeting_date || m.scheduled_date || m.date) ||
-        isDateInRange(m.scheduled_date || m.meeting_date || m.date)
-      );
-    });
-
-    const has121Auto = oneToOnes.some(m => {
-      const isParticipant = (
-        [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.member_id, m.receiver_id]
-          .some(id => id && String(id).trim() === String(userId)) ||
-        (m.participantIds || []).some((id: any) => String(id).trim() === String(userId))
-      );
-      if (!isParticipant) return false;
-      const o2oUserAtt = (m.attendance || {})[userId];
-      const isCompleted = String(m.status || '').toUpperCase() === 'COMPLETED' || o2oUserAtt === 'PRESENT' || o2oUserAtt === 'Present' || Boolean(m.completed_at);
-      return isCompleted && isDateInRange(m.completed_at || m.scheduled_date || m.meeting_date || m.date || m.created_at || m.createdAt);
-    });
-
-    const isO2ODone = hasScheduleMeetingAuto || has121Auto;
-
+    const isO2ODone = o2oDoneDayKeys.has(currentIST);
     rawTasks.push({
       key: `task_schedule_meeting_${dateStr}`,
       label: 'Schedule 1-to-1 Meeting',
@@ -367,37 +546,9 @@ export function getWorkspaceChecklistTasks(
       iconColor: 'text-cyan-400',
       bgColor: 'bg-cyan-500/10'
     });
-    
+
     // 6. Attend Chapter Meeting
-    const userChapterId = String(profile.chapter_id || profile.chapterId || '').trim();
-
-    const getMeetingStartTimeMs = (m: any): number => {
-      const rawDate = m.date || m.meeting_date || m.created_at || m.createdAt;
-      if (!rawDate) return 0;
-      let d = new Date(rawDate);
-      if (isNaN(d.getTime())) return 0;
-      if (m.time && typeof m.time === 'string') {
-        const timeStr = m.time.trim();
-        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-        if (match) {
-          let hours = parseInt(match[1], 10);
-          const minutes = parseInt(match[2], 10);
-          const ampm = match[3];
-          if (ampm) {
-            if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
-            if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-          }
-          d.setHours(hours, minutes, 0, 0);
-        }
-      }
-      return d.getTime();
-    };
-
-    const userChapterMeetings = meetings.filter(m => {
-      const mChap = String(m.chapter_id || m.chapterId || '').trim();
-      return !userChapterId || !mChap || mChap === userChapterId;
-    });
-
+    const dayMeetings = chapterMeetingsByDay.get(currentIST) || [];
     let meetingTaskToRender: {
       meeting: any;
       taskIsVisible: boolean;
@@ -405,36 +556,27 @@ export function getWorkspaceChecklistTasks(
       isAbsent: boolean;
     } | null = null;
 
-    for (const m of userChapterMeetings) {
-      // Task belongs ONLY to the day the meeting actually occurred
-      const isMeetingOnThisDay = isDateInRange(m.date || m.meeting_date || m.created_at || m.createdAt);
-      if (!isMeetingOnThisDay) continue;
-
+    for (const m of dayMeetings) {
       const attMap = m.attendance || {};
       const userAtt = String(attMap[userId] || m.attendance_status || '').trim();
       const isPresent = ['Present', 'PRESENT', 'Yes', 'YES', 'Substitute', 'SUBSTITUTE'].includes(userAtt);
       const isAbsent = ['Absent', 'ABSENT', 'No', 'NO'].includes(userAtt);
-      const isMarked = isPresent || isAbsent;
+      const taskIsCompleted = isPresent || isAbsent;
 
-      const taskIsVisible = true;
-      const taskIsCompleted = isMarked;
-
-      if (taskIsVisible) {
-        if (!meetingTaskToRender || (!meetingTaskToRender.taskIsCompleted && taskIsCompleted)) {
-          meetingTaskToRender = {
-            meeting: m,
-            taskIsVisible,
-            taskIsCompleted,
-            isAbsent
-          };
-        } else if (!meetingTaskToRender.taskIsCompleted && !taskIsCompleted) {
-          meetingTaskToRender = {
-            meeting: m,
-            taskIsVisible,
-            taskIsCompleted,
-            isAbsent
-          };
-        }
+      if (!meetingTaskToRender || (!meetingTaskToRender.taskIsCompleted && taskIsCompleted)) {
+        meetingTaskToRender = {
+          meeting: m,
+          taskIsVisible: true,
+          taskIsCompleted,
+          isAbsent
+        };
+      } else if (!meetingTaskToRender.taskIsCompleted && !taskIsCompleted) {
+        meetingTaskToRender = {
+          meeting: m,
+          taskIsVisible: true,
+          taskIsCompleted,
+          isAbsent
+        };
       }
     }
 
@@ -456,161 +598,108 @@ export function getWorkspaceChecklistTasks(
     }
 
     // 7. Referral Conversion & Thank You Slip Workflow
-    const userReceivedReferrals = allReferrals.filter(r => {
-      if (!isNormalReferral(r)) return false;
-      const receiver = r.toUserId || r.receiver_id || r.to_user_id || r.receiverMemberId;
-      return String(receiver || '') === String(userId);
-    });
+    const dayReceivedRefs = receivedRefsByDay.get(currentIST);
+    if (dayReceivedRefs) {
+      for (const item of dayReceivedRefs) {
+        const refCreatedToday = item.createdDayKey === currentIST;
+        const refConvertedToday = item.isConverted && item.convertedDayKey === currentIST;
+        const slipSentToday = Boolean(item.slipForRef) && item.slipSentDayKey === currentIST;
 
-    userReceivedReferrals.forEach(ref => {
-      const statusNorm = String(ref.status || '').toUpperCase();
-      const isConverted = statusNorm === 'CONVERTED' || statusNorm === 'COMPLETED';
-      
-      const refCreatedToday = isDateInRange(ref.created_at || ref.createdAt || ref.date);
-      const refConvertedToday = isConverted && isDateInRange(ref.updated_at || ref.updatedAt || ref.created_at || ref.createdAt || ref.date);
+        if (refConvertedToday) {
+          rawTasks.push({
+            key: `task_update_referral_${item.ref.id}_${dateStr}`,
+            label: 'Update Referral',
+            desc: `Update referral status for ${item.contactOrCustomerName} received from ${item.senderName}.`,
+            autoDone: true,
+            link: '/referrals',
+            linkText: 'VIEW',
+            iconColor: 'text-amber-400',
+            bgColor: 'bg-amber-500/10'
+          });
+        } else if (refCreatedToday && !item.isConverted) {
+          rawTasks.push({
+            key: `task_update_referral_${item.ref.id}_${dateStr}`,
+            label: 'Update Referral',
+            desc: `Update referral status for ${item.contactOrCustomerName} received from ${item.senderName}.`,
+            autoDone: false,
+            link: '/referrals',
+            linkText: 'UPDATE',
+            iconColor: 'text-amber-400',
+            bgColor: 'bg-amber-500/10'
+          });
+        }
 
-      const senderId = ref.fromUserId || ref.sender_id || ref.from_user_id || ref.authorMemberId || ref.submitted_by;
-      const referringMember = (allUsers || []).find((u: any) =>
-        String(u.id || '').trim() === String(senderId || '').trim() ||
-        String(u.uid || '').trim() === String(senderId || '').trim()
-      );
-      const senderName = referringMember?.name || (referringMember as any)?.full_name || referringMember?.displayName || ref.fromUserName || ref.from_user_name || 'Unknown Member';
-      const contactOrCustomerName = ref.contactName || ref.contact_name || ref.customerName || ref.customer_name || 'Referral';
-
-      // Check if Thank You Slip exists
-      const slipForRef = allSlips.find(s => {
-        const refMatch = String(s.referralId || s.referral_id || '') === String(ref.id || '');
-        const userMatch = String(s.fromUserId || s.sender_id || s.submitted_by || s.from_user_id || '') === String(userId || '');
-        return refMatch || (userMatch && refMatch);
-      });
-      const slipSentToday = slipForRef && isDateInRange(slipForRef.created_at || slipForRef.createdAt || slipForRef.date);
-
-      // Task: Update Referral
-      if (refConvertedToday) {
-        rawTasks.push({
-          key: `task_update_referral_${ref.id}_${dateStr}`,
-          label: 'Update Referral',
-          desc: `Update referral status for ${contactOrCustomerName} received from ${senderName}.`,
-          autoDone: true,
-          link: '/referrals',
-          linkText: 'VIEW',
-          iconColor: 'text-amber-400',
-          bgColor: 'bg-amber-500/10'
-        });
-      } else if (refCreatedToday && !isConverted) {
-        rawTasks.push({
-          key: `task_update_referral_${ref.id}_${dateStr}`,
-          label: 'Update Referral',
-          desc: `Update referral status for ${contactOrCustomerName} received from ${senderName}.`,
-          autoDone: false,
-          link: '/referrals',
-          linkText: 'UPDATE',
-          iconColor: 'text-amber-400',
-          bgColor: 'bg-amber-500/10'
-        });
+        if (slipSentToday) {
+          rawTasks.push({
+            key: `task_thank_you_slip_${item.ref.id}_${dateStr}`,
+            label: `Send Thank You Slip to ${item.senderName}`,
+            desc: `Send a Thank You Slip to ${item.senderName} for converted referral (${item.contactOrCustomerName}).`,
+            autoDone: true,
+            link: '/thank-you-slips',
+            linkText: 'VIEW',
+            iconColor: 'text-teal-400',
+            bgColor: 'bg-teal-500/10'
+          });
+        } else if (refConvertedToday && !item.slipForRef) {
+          rawTasks.push({
+            key: `task_thank_you_slip_${item.ref.id}_${dateStr}`,
+            label: `Send Thank You Slip to ${item.senderName}`,
+            desc: `Send a Thank You Slip to ${item.senderName} for converted referral (${item.contactOrCustomerName}).`,
+            autoDone: false,
+            link: `/thank-you-slips?referralId=${item.ref.id}&action=new`,
+            linkText: 'SEND SLIP',
+            iconColor: 'text-teal-400',
+            bgColor: 'bg-teal-500/10'
+          });
+        }
       }
+    }
 
-      // Task: Send Thank You Slip
-      if (slipSentToday) {
-        rawTasks.push({
-          key: `task_thank_you_slip_${ref.id}_${dateStr}`,
-          label: `Send Thank You Slip to ${senderName}`,
-          desc: `Send a Thank You Slip to ${senderName} for converted referral (${contactOrCustomerName}).`,
-          autoDone: true,
-          link: '/thank-you-slips',
-          linkText: 'VIEW',
-          iconColor: 'text-teal-400',
-          bgColor: 'bg-teal-500/10'
-        });
-      } else if (refConvertedToday && !slipForRef) {
-        rawTasks.push({
-          key: `task_thank_you_slip_${ref.id}_${dateStr}`,
-          label: `Send Thank You Slip to ${senderName}`,
-          desc: `Send a Thank You Slip to ${senderName} for converted referral (${contactOrCustomerName}).`,
-          autoDone: false,
-          link: `/thank-you-slips?referralId=${ref.id}&action=new`,
-          linkText: 'SEND SLIP',
-          iconColor: 'text-teal-400',
-          bgColor: 'bg-teal-500/10'
-        });
-      }
-    });
-
-    // 8. Give Testimony Task (Assigned ONLY to the PERSON WHO SENT THE REFERRAL after receiver submits Thank You Slip)
-    const userSentReferrals = allReferrals.filter(r => {
-      const sender = r.fromUserId || r.sender_id || r.from_user_id || r.authorMemberId || r.submitted_by;
-      return String(sender || '').trim() === String(userId || '').trim();
-    });
-
-    userSentReferrals.forEach(ref => {
-      const receiverId = ref.toUserId || ref.receiver_id || ref.to_user_id || ref.receiverMemberId;
-      
-      const slipForRef = allSlips.find(s => {
-        const sRefId = s.referralId || s.referral_id;
-        return String(sRefId || '') === String(ref.id || '');
-      });
-
-      if (slipForRef && receiverId) {
-        const slipReceivedToday = isDateInRange(slipForRef.created_at || slipForRef.createdAt || slipForRef.date);
-
-        const receiverMember = (allUsers || []).find((u: any) =>
-          String(u.id || '').trim() === String(receiverId || '').trim() ||
-          String(u.uid || '').trim() === String(receiverId || '').trim()
-        );
-        const receiverName = receiverMember?.name || (receiverMember as any)?.full_name || receiverMember?.displayName || ref.toUserName || ref.to_user_name || 'the member you referred';
-
-        const testimonialForRef = testimonials.find(t => {
-          const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId || t.from_user_id;
-          if (String(author || '').trim() !== String(userId || '').trim()) return false;
-          const tRefId = t.referral_id || t.referralId;
-          const tReceiverId = t.receiverMemberId || t.receiver_id || t.toUserId || t.to_user_id;
-          const matchRef = tRefId && String(tRefId).trim() === String(ref.id).trim();
-          const matchReceiver = tReceiverId && String(tReceiverId).trim() === String(receiverId).trim();
-          return Boolean(matchRef || (matchReceiver && (tRefId === String(ref.id) || !tRefId)));
-        });
-
-        const testimonialSentToday = testimonialForRef && isDateInRange(testimonialForRef.created_at || testimonialForRef.createdAt || testimonialForRef.date);
+    // 8. Give Testimony Task
+    const daySentRefs = sentRefTestimoniesByDay.get(currentIST);
+    if (daySentRefs) {
+      for (const item of daySentRefs) {
+        const slipReceivedToday = item.slipReceivedDayKey === currentIST;
+        const testimonialSentToday = Boolean(item.testimonialForRef) && item.testimonialSentDayKey === currentIST;
 
         if (testimonialSentToday) {
           rawTasks.push({
-            key: `task_give_testimonial_ref_${ref.id}_${dateStr}`,
-            label: `Give Testimonial to ${receiverName}`,
-            desc: `Give a testimonial to ${receiverName}`,
+            key: `task_give_testimonial_ref_${item.ref.id}_${dateStr}`,
+            label: `Give Testimonial to ${item.receiverName}`,
+            desc: `Give a testimonial to ${item.receiverName}`,
             autoDone: true,
             link: '/testimonials',
             linkText: 'VIEW',
             iconColor: 'text-indigo-400',
             bgColor: 'bg-indigo-500/10'
           });
-        } else if (slipReceivedToday && !testimonialForRef) {
+        } else if (slipReceivedToday && !item.testimonialForRef) {
           rawTasks.push({
-            key: `task_give_testimonial_ref_${ref.id}_${dateStr}`,
-            label: `Give Testimonial to ${receiverName}`,
-            desc: `Give a testimonial to ${receiverName}`,
+            key: `task_give_testimonial_ref_${item.ref.id}_${dateStr}`,
+            label: `Give Testimonial to ${item.receiverName}`,
+            desc: `Give a testimonial to ${item.receiverName}`,
             autoDone: false,
-            link: `/testimonials?referralId=${ref.id}&recipientId=${receiverId}&action=new`,
+            link: `/testimonials?referralId=${item.ref.id}&recipientId=${item.receiverId}&action=new`,
             linkText: 'GIVE TESTIMONY',
             iconColor: 'text-indigo-400',
             bgColor: 'bg-indigo-500/10'
           });
         }
       }
-    });
+    }
 
-    // Deduplicate rawTasks by key and label
+    // Deduplicate rawTasks by key
     const deduplicatedRawTasks: typeof rawTasks = [];
-    const seenTaskKeys = new Set<string>();
+    const seenTaskByKey = new Map<string, any>();
 
     for (const task of rawTasks) {
-      if (!seenTaskKeys.has(task.key)) {
-        seenTaskKeys.add(task.key);
+      const existing = seenTaskByKey.get(task.key);
+      if (!existing) {
+        seenTaskByKey.set(task.key, task);
         deduplicatedRawTasks.push(task);
       } else if (task.autoDone) {
-        const existing = deduplicatedRawTasks.find(t => t.key === task.key);
-        if (existing) {
-          existing.autoDone = true;
-          existing.linkText = 'VIEW';
-        }
+        existing.autoDone = true;
+        existing.linkText = 'VIEW';
       }
     }
 
@@ -629,7 +718,7 @@ export function getWorkspaceChecklistTasks(
       linkText: Boolean(t.autoDone) ? 'VIEW' : t.linkText,
       iconColor: t.iconColor,
       bgColor: t.bgColor,
-      date: dateStr 
+      date: dateStr
     }));
 
     allTasks.push(...formattedTasks);
@@ -983,19 +1072,64 @@ export function calculateChapterGrowthScoreData(input: {
   
   const todayUTC = parseISTStrToUTC(todayStr);
 
+  // Pre-partition activity collections by member ID once so N members don't rescan all records
+  const refsByUser = new Map<string, any[]>();
+  const pushToUserBucket = (map: Map<string, any[]>, uid: any, item: any) => {
+    const key = String(uid || '').trim();
+    if (!key) return;
+    const arr = map.get(key);
+    if (arr) {
+      if (arr[arr.length - 1] !== item) arr.push(item);
+    } else {
+      map.set(key, [item]);
+    }
+  };
+
+  for (const r of allReferrals) {
+    const sender = r.fromUserId || r.from_user_id || r.sender_id || r.authorMemberId || r.submitted_by;
+    const receiver = r.toUserId || r.receiver_id || r.to_user_id || r.receiverMemberId;
+    pushToUserBucket(refsByUser, sender, r);
+    pushToUserBucket(refsByUser, receiver, r);
+  }
+
+  const o2oByUser = new Map<string, any[]>();
+  for (const m of oneToOnes) {
+    const ids = new Set<string>();
+    [m.organizer_id, m.creatorId, m.creator_id, m.sender_id, m.created_by, m.createdBy, m.member_id, m.receiver_id].forEach(id => {
+      if (id) ids.add(String(id).trim());
+    });
+    (m.participantIds || []).forEach((id: any) => {
+      if (id) ids.add(String(id).trim());
+    });
+    ids.forEach(uid => pushToUserBucket(o2oByUser, uid, m));
+  }
+
+  const guestsByUser = new Map<string, any[]>();
+  for (const g of guestInvitations) {
+    const creator = g.invited_by_user_id || g.invited_by || g.createdBy || g.created_by || g.member_id || g.user_id || g.inviterId || g.inviter_id;
+    pushToUserBucket(guestsByUser, creator, g);
+  }
+
+  const testimonialsByUser = new Map<string, any[]>();
+  for (const t of testimonials) {
+    const author = t.authorMemberId || t.author_id || t.fromUserId || t.authorId || t.from_user_id;
+    pushToUserBucket(testimonialsByUser, author, t);
+  }
+
   let totalCompletedTasks = 0;
   let totalTasksCount = 0;
 
   for (const m of applicableMembers) {
+    const mIdKey = String(m.uid || m.id || '').trim();
     // 2. Member subscription start
     let subStart = parseSafeDate(m.subscriptionStart || m.subscriptionStartDate || m.created_at || m.createdAt);
     if (!subStart) subStart = chapterCreatedAt;
 
     // MAX(chapter_created_at, subscription_start)
-    let startDate = new Date(Math.max(chapterCreatedAt.getTime(), subStart.getTime()));
+    const startDate = new Date(Math.max(chapterCreatedAt.getTime(), subStart.getTime()));
 
     // 3. Member subscription end
-    let subEnd = parseSafeDate(m.subscriptionEnd || m.subscriptionEndDate || m.current_subscription_end_date);
+    const subEnd = parseSafeDate(m.subscriptionEnd || m.subscriptionEndDate || m.current_subscription_end_date);
 
     // MIN(today, subscription_end)
     let endDate = todayUTC;
@@ -1007,19 +1141,21 @@ export function calculateChapterGrowthScoreData(input: {
       continue;
     }
 
-    // 4. Calculate tasks for this specific eligible period
+    // 4. Calculate tasks for this specific eligible period using pre-grouped member records
     const tasks = getWorkspaceChecklistTasks(m, {
-      allReferrals,
-      oneToOnes,
+      allReferrals: refsByUser.get(mIdKey) || [],
+      oneToOnes: o2oByUser.get(mIdKey) || [],
       meetings,
-      guestInvitations,
+      guestInvitations: guestsByUser.get(mIdKey) || [],
       allSlips,
-      testimonials,
+      testimonials: testimonialsByUser.get(mIdKey) || [],
       allUsers: chapterMembers
     }, { start: startDate, end: endDate });
 
     totalTasksCount += tasks.length;
-    totalCompletedTasks += tasks.filter(t => t.isDone).length;
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].isDone) totalCompletedTasks++;
+    }
   }
 
   let chapterScore = 0;

@@ -32,6 +32,7 @@ import { formatTime12h, parseTo12hParts, parseTimeTo24h } from '../utils/timeUti
 import { getCleanFullName, isChapterLeaderRole } from '../utils/authUtils';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { isMemberActive } from '../utils/memberStatus';
+import { getDirectorySnapshot, withTimeout, fetchWithTimeout } from '../utils/directoryCache';
 import {
   extractMemberExtraData,
   extractCleanPhotoUrl,
@@ -266,17 +267,13 @@ export function OneToOneMeetings() {
     []
   );
 
-  const refreshUsersAndChapters = useCallback(async () => {
+  const refreshUsersAndChapters = useCallback(async (forceRefresh = false) => {
     try {
-      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-        supabase.from('users').select('*').order('name', { ascending: true }),
-        supabase.from('chapters').select('id, chapter_name'),
-        supabase.from('categories').select('id, name')
-      ]);
+      const snapshot = await getDirectorySnapshot({ forceRefresh, timeoutMs: 12_000 });
 
       const cmap = new Map<string, string>();
-      if (chaptersRes.data) {
-        chaptersRes.data.forEach((c: any) => {
+      if (snapshot.chapters.length > 0) {
+        snapshot.chapters.forEach((c: any) => {
           const chapLabel = c.chapter_name || c.name || '';
           if (c.id && chapLabel) {
             cmap.set(String(c.id).trim().toLowerCase(), chapLabel);
@@ -287,11 +284,14 @@ export function OneToOneMeetings() {
         setChapterMap(cmap);
       }
 
-      const catLookup = buildCategoryLookup(categoriesRes.data);
+      const catLookup = buildCategoryLookup(snapshot.categories);
       categoryLookupRef.current = catLookup;
 
-      if (usersRes.data && !usersRes.error) {
-        const processedUsers = usersRes.data.map((doc: any) =>
+      if (snapshot.users.length > 0) {
+        const sortedUsers = [...snapshot.users].sort((a: any, b: any) =>
+          String(a.name || '').localeCompare(String(b.name || ''))
+        );
+        const processedUsers = sortedUsers.map((doc: any) =>
           normalizeFetchedUser(doc, catLookup.categoryMap, catLookup.validCategoryNames, cmap)
         );
 
@@ -356,16 +356,20 @@ export function OneToOneMeetings() {
   const fetchMeetingsAndUsers = useCallback(async () => {
     try {
       setLoading(true);
-      await refreshUsersAndChapters();
+      const [, meetingsRes] = await withTimeout(
+        Promise.all([
+          refreshUsersAndChapters(true),
+          supabase
+            .from('one_to_one_meetings')
+            .select('*')
+            .order('scheduled_date', { ascending: false })
+        ]),
+        12_000,
+        'Loading one-to-one meetings'
+      );
 
-      // Fetch Meetings directly from Supabase
-      const { data: meetingsData, error: mErr } = await supabase
-        .from('one_to_one_meetings')
-        .select('*')
-        .order('scheduled_date', { ascending: false });
-
-      if (meetingsData && !mErr) {
-        setMeetings(formatOneToOneMeetingsList(meetingsData));
+      if (meetingsRes?.data && !meetingsRes?.error) {
+        setMeetings(formatOneToOneMeetingsList(meetingsRes.data));
       }
     } catch (err) {
       console.error("Fetch meetings and users error:", err);
@@ -375,9 +379,12 @@ export function OneToOneMeetings() {
   }, [refreshUsersAndChapters, formatOneToOneMeetingsList]);
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile) {
+      setLoading(false);
+      return;
+    }
 
-    refreshUsersAndChapters();
+    refreshUsersAndChapters(false);
 
     // Fetch & subscribe to meetings (databaseService.subscribe handles initial load + realtime + dashboard-refresh)
     const meetingsConstraints = (isAdmin || isChapterAdmin)
@@ -410,7 +417,7 @@ export function OneToOneMeetings() {
     const handleRefresh = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        refreshUsersAndChapters();
+        refreshUsersAndChapters(true);
       }, 200);
     };
     window.addEventListener('profile-updated', handleRefresh);
@@ -831,11 +838,11 @@ export function OneToOneMeetings() {
 
       let createdSuccessfully = false;
       try {
-        const resp = await fetch('/api/one-to-one-meetings/create', {
+        const resp = await fetchWithTimeout('/api/one-to-one-meetings/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dbPayload)
-        });
+        }, 8_000);
         const resJson = await resp.json();
         if (resp.ok && resJson.success) {
           createdSuccessfully = true;

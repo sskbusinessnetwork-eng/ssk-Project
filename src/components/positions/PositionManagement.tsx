@@ -7,6 +7,7 @@ import { cn, getMemberPositionKey } from '../../lib/utils';
 import { Search, X, User } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { showError, showSuccess, scrollToError } from '../../services/toastService';
+import { fetchWithTimeout } from '../../utils/directoryCache';
 
 interface PositionManagementProps {
   chapterAdminId?: string;
@@ -125,7 +126,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const res = await fetch('/api/admin/update-position', {
+        const res = await fetchWithTimeout('/api/admin/update-position', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -137,7 +138,7 @@ export function PositionManagement({ chapterAdminId: propChapterAdminId, isMaste
             chapterId: effectiveAdminId,
             callerId: profile?.id || profile?.uid
           })
-        });
+        }, 8_000);
 
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {

@@ -31,6 +31,7 @@ import { normalizePhoneNumber, normalizePhoneDigits, isSamePhoneNumber } from '.
 import { cn } from '../lib/utils';
 import { ContactPickerButton } from '../components/PhoneInputWithPicker';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
+import { getDirectorySnapshot, withTimeout, fetchWithTimeout } from '../utils/directoryCache';
 
 export function Guests() {
   const { profile } = useAuth();
@@ -145,37 +146,49 @@ export function Guests() {
     return null;
   };
 
-  const fetchInitialData = useCallback(async (silent = false) => {
-    if (!profile) return;
+  const fetchInitialData = useCallback(async (silent = false, forceRefreshDirectory = false) => {
+    if (!profile) {
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     try {
-      // 1. Fetch Categories
-      const { data: cats } = await supabase.from('categories').select('id, name').order('name');
-      if (cats) {
-        setCategories(cats as unknown as Category[]);
-      }
-      
       const userId = profile.id || profile.uid;
       const userChapterId = profile.chapter_id || (profile as any).chapterId;
-
-      // 2. Fetch Directory of Users / Members for validation
-      try {
-        const { data: uData } = await supabase.from('users').select('*');
-        if (uData) {
-          setAllUsers(uData);
-        }
-      } catch (uErr) {
-        console.warn("User directory fetch notice:", uErr);
-      }
-
-      // 3. Fetch Meetings for status and date verification
       const todayYMD = getISTNow().dateString;
+
       let meetingsQuery = supabase.from('meetings').select('*').order('date', { ascending: true });
       if (userChapterId && profile.role !== 'MASTER_ADMIN') {
         meetingsQuery = meetingsQuery.eq('chapter_id', userChapterId);
       }
 
-      const { data: fetchedMeetings } = await meetingsQuery;
+      let invsQuery = supabase.from('guest_invitations').select('*');
+      if (profile.role !== 'MASTER_ADMIN') {
+        invsQuery = invsQuery.or(`invited_by.eq.${userId},invited_by_user_id.eq.${userId},created_by.eq.${userId}`);
+      }
+
+      const [snapshot, meetingsRes, invsRes] = await withTimeout(
+        Promise.all([
+          getDirectorySnapshot({ forceRefresh: forceRefreshDirectory, timeoutMs: 12_000 }),
+          meetingsQuery,
+          invsQuery.order('created_at', { ascending: false })
+        ]),
+        12_000,
+        'Loading guest invitations'
+      );
+
+      if (snapshot.categories) {
+        const sortedCats = [...snapshot.categories].sort((a: any, b: any) =>
+          String(a.name || '').localeCompare(String(b.name || ''))
+        );
+        setCategories(sortedCats as unknown as Category[]);
+      }
+
+      if (snapshot.users) {
+        setAllUsers(snapshot.users);
+      }
+
+      const fetchedMeetings = meetingsRes?.data;
       if (fetchedMeetings) {
         const normalizedMeetings = fetchedMeetings.map((m: any) => normalizeMeetingRecord({ ...m }));
         setAllMeetings(normalizedMeetings);
@@ -191,17 +204,8 @@ export function Guests() {
         });
         setUpcomingMeetings(activeUpcomingMeetings);
       }
-      
-      // 4. Fetch Guest Invitations
-      let invsQuery = supabase.from('guest_invitations').select('*');
-      if (profile.role === 'MASTER_ADMIN') {
-        // Master Admin sees all in system view
-      } else {
-        // Members, Chapter Admins, Position Holders only see their own invited guests on their personal page
-        invsQuery = invsQuery.or(`invited_by.eq.${userId},invited_by_user_id.eq.${userId},created_by.eq.${userId}`);
-      }
 
-      const { data: invs } = await invsQuery.order('created_at', { ascending: false });
+      const invs = invsRes?.data;
       let combinedInvs = invs ? [...invs] : [];
 
       // Check fallback invitations in user profile photo extra JSON
@@ -223,7 +227,6 @@ export function Guests() {
       }
 
       setInvitations(combinedInvs);
-      
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -232,30 +235,35 @@ export function Guests() {
   }, [profile]);
 
   useEffect(() => {
+    let isMounted = true;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     fetchInitialData(false);
 
-    const handleRefresh = () => {
-      fetchInitialData(true);
+    const scheduleSilentRefresh = () => {
+      if (!isMounted) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (isMounted) fetchInitialData(true);
+      }, 220);
     };
 
-    window.addEventListener('dashboard-refresh', handleRefresh);
-    window.addEventListener('meetings-updated', handleRefresh);
-    window.addEventListener('profile-updated', handleRefresh);
+    window.addEventListener('dashboard-refresh', scheduleSilentRefresh);
+    window.addEventListener('meetings-updated', scheduleSilentRefresh);
+    window.addEventListener('profile-updated', scheduleSilentRefresh);
 
     const channel = supabase
       .channel('guests-meetings-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, () => {
-        fetchInitialData(true);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, () => {
-        fetchInitialData(true);
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meetings' }, scheduleSilentRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'guest_invitations' }, scheduleSilentRefresh)
       .subscribe();
 
     return () => {
-      window.removeEventListener('dashboard-refresh', handleRefresh);
-      window.removeEventListener('meetings-updated', handleRefresh);
-      window.removeEventListener('profile-updated', handleRefresh);
+      isMounted = false;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      window.removeEventListener('dashboard-refresh', scheduleSilentRefresh);
+      window.removeEventListener('meetings-updated', scheduleSilentRefresh);
+      window.removeEventListener('profile-updated', scheduleSilentRefresh);
       supabase.removeChannel(channel);
     };
   }, [fetchInitialData]);
@@ -447,14 +455,14 @@ export function Guests() {
       let resData: any = null;
       let resStatus = 200;
       try {
-        const res = await fetch('/api/guests/invite', {
+        const res = await fetchWithTimeout('/api/guests/invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             newInvitation,
             callerId: userId
           })
-        });
+        }, 8_000);
         resStatus = res.status;
         const text = await res.text();
         try {
@@ -531,7 +539,11 @@ ${resolvedChapterName} Chapter
 SSK Business Network`;
       
       const waUrl = `https://wa.me/${normalizePhoneNumber(formData.guestWhatsapp)}?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
+      const waLink = document.createElement('a');
+      waLink.href = waUrl;
+      waLink.target = '_blank';
+      waLink.rel = 'noopener noreferrer';
+      waLink.click();
       
       setShowSuccess(true);
       setFormData({

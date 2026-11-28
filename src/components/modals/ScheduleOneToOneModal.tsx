@@ -15,6 +15,7 @@ import {
   resolveMemberCategory
 } from '../OfflineReferralMemberSelect';
 import { getCleanFullName, getDisplayPosition } from '../../utils/authUtils';
+import { getDirectorySnapshot, fetchWithTimeout, withTimeout } from '../../utils/directoryCache';
 
 interface ScheduleOneToOneModalProps {
   isOpen: boolean;
@@ -59,27 +60,21 @@ export function ScheduleOneToOneModal({
     }
   }, [initialParticipantId]);
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembers = useCallback(async (forceRefresh = false) => {
     try {
-      const [usersRes, chaptersRes, categoriesRes] = await Promise.all([
-        supabase.from('users').select('*').order('name', { ascending: true }),
-        supabase.from('chapters').select('id, chapter_name'),
-        supabase.from('categories').select('id, name')
-      ]);
-
-      if (usersRes.error) throw usersRes.error;
-      const usersData = usersRes.data;
+      const snapshot = await getDirectorySnapshot({ forceRefresh });
+      const usersData = snapshot.users;
 
       const chapterMap = new Map<string, string>();
-      if (chaptersRes.data) {
-        chaptersRes.data.forEach((c: any) => {
+      if (snapshot.chapters) {
+        snapshot.chapters.forEach((c: any) => {
           if (c.id) {
             chapterMap.set(String(c.id).trim().toLowerCase(), c.chapter_name || '');
           }
         });
       }
 
-      const { categoryMap, validCategoryNames } = buildCategoryLookup(categoriesRes.data);
+      const { categoryMap, validCategoryNames } = buildCategoryLookup(snapshot.categories);
 
       if (isMountedRef.current && usersData) {
         const mapped = usersData
@@ -130,13 +125,17 @@ export function ScheduleOneToOneModal({
       return;
     }
 
-    fetchMembers();
-    window.addEventListener('profile-updated', fetchMembers);
-    window.addEventListener('members-refresh', fetchMembers);
+    const handleRefreshMembers = () => {
+      void fetchMembers(true);
+    };
+
+    void fetchMembers(false);
+    window.addEventListener('profile-updated', handleRefreshMembers);
+    window.addEventListener('members-refresh', handleRefreshMembers);
     return () => {
       isMountedRef.current = false;
-      window.removeEventListener('profile-updated', fetchMembers);
-      window.removeEventListener('members-refresh', fetchMembers);
+      window.removeEventListener('profile-updated', handleRefreshMembers);
+      window.removeEventListener('members-refresh', handleRefreshMembers);
     };
   }, [isOpen, fetchMembers]);
 
@@ -221,6 +220,7 @@ export function ScheduleOneToOneModal({
         setError(msg);
         showError(msg);
         scrollToError();
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
         return;
       }
@@ -254,11 +254,11 @@ export function ScheduleOneToOneModal({
       // 1. Try server endpoint first for highest reliability and bypassing RLS / schema issues
       let createdSuccessfully = false;
       try {
-        const resp = await fetch('/api/one-to-one-meetings/create', {
+        const resp = await fetchWithTimeout('/api/one-to-one-meetings/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cleanDbPayload)
-        });
+        }, 6_000);
         const resJson = await resp.json();
         if (resp.ok && resJson.success) {
           createdSuccessfully = true;
@@ -271,9 +271,13 @@ export function ScheduleOneToOneModal({
 
       // 2. Direct Supabase insert fallback if backend endpoint wasn't reached
       if (!createdSuccessfully) {
-        const { error: insertErr } = await supabase
-          .from('one_to_one_meetings')
-          .insert([cleanDbPayload]);
+        const { error: insertErr } = await withTimeout<any>(
+          supabase
+            .from('one_to_one_meetings')
+            .insert([cleanDbPayload]),
+          10_000,
+          'Scheduling One-to-One meeting'
+        );
 
         if (insertErr) {
           console.error("Direct Supabase insert error details:", {
@@ -367,7 +371,7 @@ export function ScheduleOneToOneModal({
               onClick={() => {
                 const nextOpen = !isDropdownOpen;
                 setIsDropdownOpen(nextOpen);
-                if (nextOpen) fetchMembers();
+                if (nextOpen && allMembers.length === 0) void fetchMembers(false);
               }}
               className="w-full px-3.5 py-3 rounded-xl border border-white/10 bg-[#151C2E] cursor-pointer flex items-center justify-between text-left transition-all hover:border-primary/50"
             >

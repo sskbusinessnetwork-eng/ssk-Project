@@ -3,6 +3,7 @@ import { doc, getDoc, onSnapshot, query, collection, where, limit, getDocs, setD
 import { UserProfile } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { ensureUserChapterId } from '../utils/authUtils';
+import { withTimeout } from '../utils/directoryCache';
 
 export const auth = {}; // dummy
 export const db = {}; // dummy
@@ -55,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(user && profile));
   const [error, setError] = useState<string | null>(null);
 
   const login = useCallback(async (userProfile: UserProfile) => {
@@ -111,11 +112,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!uid) return;
 
       if (role === 'MASTER_ADMIN') {
-        const { data: maData } = await supabase
-          .from('master_admins')
-          .select('*')
-          .eq('id', uid)
-          .maybeSingle();
+        const { data: maData } = await withTimeout<any>(
+          supabase
+            .from('master_admins')
+            .select('*')
+            .eq('id', uid)
+            .maybeSingle(),
+          10_000,
+          'Profile refresh'
+        );
 
         if (maData) {
           const updatedProfile: UserProfile = {
@@ -141,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userDoc.exists()) {
         const userData = userDoc.data() as UserProfile;
         let updatedProfile = { id: uid, uid, ...userData };
-        updatedProfile = await ensureUserChapterId(updatedProfile);
+        updatedProfile = await withTimeout(ensureUserChapterId(updatedProfile), 8_000, 'Chapter check');
         setProfile(updatedProfile);
         localStorage.setItem('user', JSON.stringify({
           uid,
@@ -183,11 +188,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check master_admins table if role is MASTER_ADMIN
         if (role === 'MASTER_ADMIN') {
           try {
-            const { data: maData } = await supabase
-              .from('master_admins')
-              .select('*')
-              .eq('id', uid)
-              .maybeSingle();
+            const { data: maData } = await withTimeout<any>(
+              supabase
+                .from('master_admins')
+                .select('*')
+                .eq('id', uid)
+                .maybeSingle(),
+              10_000,
+              'Master admin sync'
+            );
 
             if (maData) {
               fetchedProfile = {
@@ -213,15 +222,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (userDoc.exists()) {
               const userData = userDoc.data() as UserProfile;
               let updated = { id: uid, uid, ...userData };
-              updated = await ensureUserChapterId(updated);
+              updated = await withTimeout(ensureUserChapterId(updated), 8_000, 'Chapter sync');
               fetchedProfile = updated;
             } else {
               // Fallback: check master_admins table if user was not found in users
-              const { data: maCheck } = await supabase
-                .from('master_admins')
-                .select('*')
-                .eq('id', uid)
-                .maybeSingle();
+              const { data: maCheck } = await withTimeout<any>(
+                supabase
+                  .from('master_admins')
+                  .select('*')
+                  .eq('id', uid)
+                  .maybeSingle(),
+                10_000,
+                'Master admin fallback sync'
+              );
 
               if (maCheck) {
                 fetchedProfile = {

@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabaseClient';
 import { calculateSubscriptionDetails } from '../utils/timeUtils';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { calculateProfileCompletion } from '../utils/profileUtils';
-import { calculateMemberGrowthScore, calculateGrowthScoreTrend, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
+import { calculateMemberGrowthScore, isDateInRange, calculateMemberGrowthScoreData, calculateChapterGrowthScoreData, getWorkspaceChecklistTasks, syncGrowthScoreToDatabase } from '../utils/growthScore';
 import { isMemberActive, getMemberInactiveReasons, getSubscriptionStatus } from '../utils/memberStatus';
 import { getMeetingExactDateTime } from './Meetings';
 import { isOfflineReferral, isNormalReferral } from '../types';
@@ -2216,7 +2216,7 @@ export function Analytics() {
            status: 'Pending'
          },
          customActions: [
-           { label: 'View Member', className: 'text-neutral-400 border-neutral-600 hover:bg-neutral-800', onClick: () => window.location.href='/subscriptions' },
+           { label: 'View Member', className: 'text-neutral-400 border-neutral-600 hover:bg-neutral-800', onClick: () => navigate('/subscriptions') },
            { label: 'Approve & Renew', className: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20', onClick: () => handleApproveRenewal(req.id, member.uid || member.id) },
            { label: 'Reject', className: 'text-red-400 border-red-500/30 bg-red-500/10 hover:bg-red-500/20', onClick: () => handleRejectRenewal(req.id, member.uid || member.id) }
          ]
@@ -2369,53 +2369,6 @@ export function Analytics() {
   const dynamicGrowthScore = Math.min(100, Math.max(0, Math.round(growthScoreData.score)));
   const growthStatus = growthScoreData.status;
   const growthStatusColor = growthScoreData.statusColor;
-
-  // Calculate Weekly and Monthly Growth Trends from live Supabase data
-  const { weeklyGrowth, monthlyGrowth } = useMemo(() => {
-    const now = new Date();
-    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const startOfPrevWeek = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const startOfMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const startOfPrevMonth = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-
-    const getScoreForRange = (start: Date, end: Date) => {
-      if (profile?.role === 'MASTER_ADMIN') {
-        const data = calculateChapterGrowthScoreData({
-          chapterMembers: chapterUsers,
-          allReferrals,
-          oneToOnes,
-          meetings,
-          guestInvitations,
-          allSlips,
-          testimonials: allTestimonials,
-          activeDateRange: { start, end },
-          currentProfile: profile
-        });
-        return data.score;
-      }
-      const data = calculateMemberGrowthScoreData({
-        profile,
-        allReferrals,
-        oneToOnes,
-        meetings,
-        guestInvitations,
-        allSlips,
-        testimonials: allTestimonials,
-        activeDateRange: { start, end }
-      });
-      return data.score;
-    };
-
-    const currentWeekAct = getScoreForRange(startOfWeek, now);
-    const prevWeekAct = getScoreForRange(startOfPrevWeek, new Date(startOfWeek.getTime() - 1));
-    const currentMonthAct = getScoreForRange(startOfMonth, now);
-    const prevMonthAct = getScoreForRange(startOfPrevMonth, new Date(startOfMonth.getTime() - 1));
-
-    return {
-      weeklyGrowth: calculateGrowthScoreTrend(currentWeekAct, prevWeekAct),
-      monthlyGrowth: calculateGrowthScoreTrend(currentMonthAct, prevMonthAct)
-    };
-  }, [allReferrals, allSlips, oneToOnes, guestInvitations, allTestimonials, profile]);
 
   const activeFocusTasks = useMemo(() => ({
     attendMeeting: hasAttendedMeeting,
@@ -3125,7 +3078,12 @@ export function Analytics() {
     setAnalyticsError(false);
     setAnalyticsModalRecords([]);
     try {
-      await fetchAnalyticsDataForCategory(label, activeDateRange, seq);
+      await Promise.race([
+        fetchAnalyticsDataForCategory(label, activeDateRange, seq),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Analytics request timed out.')), 12_000)
+        )
+      ]);
     } catch (e) {
       console.error("Error loading analytics records:", e);
       if (analyticsRequestSeqRef.current === seq) {
@@ -3173,9 +3131,9 @@ export function Analytics() {
           </p>
           <button 
             onClick={() => {
-              setAnalyticsLoading(true);
-              setAnalyticsError(false);
-              fetchAnalyticsDataForCategory(analyticsModalCategory, activeDateRange).finally(() => setAnalyticsLoading(false));
+              if (analyticsModalCategory) {
+                void handleStatCardClick(analyticsModalCategory);
+              }
             }}
             className="px-5 py-2.5 bg-[#1E293B] hover:bg-white/10 border border-white/5 text-white rounded-[10px] font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer"
           >

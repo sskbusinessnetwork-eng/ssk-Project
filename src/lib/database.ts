@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { getCleanFullName } from '../utils/authUtils';
+import { withTimeout, fetchWithTimeout, invalidateDirectoryCache } from '../utils/directoryCache';
 
 export interface QueryConstraint {
   type: string;
@@ -310,6 +311,24 @@ async function getCachedUserProfileForQuery() {
 }
 
 const inFlightGetDocs = new Map<string, Promise<any>>();
+const getDocsCache = new Map<string, { snap: any; timestamp: number; collectionPath: string }>();
+const GET_DOCS_CACHE_TTL_MS = 2500;
+
+export function invalidateDocsCache(collectionPath?: string) {
+  if (!collectionPath) {
+    getDocsCache.clear();
+    invalidateDirectoryCache();
+    return;
+  }
+  for (const [k, v] of getDocsCache.entries()) {
+    if (v.collectionPath === collectionPath) {
+      getDocsCache.delete(k);
+    }
+  }
+  if (collectionPath === 'users' || collectionPath === 'chapters' || collectionPath === 'categories') {
+    invalidateDirectoryCache();
+  }
+}
 
 function buildQueryDedupeKey(collectionPath: string, constraints: QueryConstraint[], userProfile: { role?: string; chapter_id?: string } | null): string {
   const roleKey = userProfile?.role || '';
@@ -326,6 +345,11 @@ export async function getDocs(queryRef: any) {
   const userProfile = await getCachedUserProfileForQuery();
 
   const dedupeKey = buildQueryDedupeKey(collectionPath, finalConstraints, userProfile);
+  const cachedEntry = getDocsCache.get(dedupeKey);
+  if (cachedEntry && (Date.now() - cachedEntry.timestamp < GET_DOCS_CACHE_TTL_MS)) {
+    return cachedEntry.snap;
+  }
+
   const existingInFlight = inFlightGetDocs.get(dedupeKey);
   if (existingInFlight) {
     return existingInFlight;
@@ -352,7 +376,7 @@ export async function getDocs(queryRef: any) {
     }
   }
 
-  const { data, error } = await builder;
+  const { data, error } = await withTimeout<any>(builder, 15_000, `Query ${collectionPath}`);
   if (error) {
     if (collectionPath === 'future_presentations') {
       try {
@@ -548,7 +572,13 @@ export async function getDocs(queryRef: any) {
       data: () => row,
       exists: () => true
     }));
-    return { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
+    const snap = { docs, empty: docs.length === 0, forEach: (cb: any) => docs.forEach(cb) };
+    if (getDocsCache.size > 60) {
+      const oldestKey = getDocsCache.keys().next().value;
+      if (oldestKey) getDocsCache.delete(oldestKey);
+    }
+    getDocsCache.set(dedupeKey, { snap, timestamp: Date.now(), collectionPath });
+    return snap;
   })();
 
   inFlightGetDocs.set(dedupeKey, execPromise);
@@ -668,7 +698,11 @@ function prepareUserPayload(partialData: any, existingPhoto: string = '') {
 
 export async function getDoc(docRef: any) {
   const { path, id } = docRef;
-  const { data, error } = await supabase.from(path).select('*').eq('id', id).maybeSingle();
+  const { data, error } = await withTimeout<any>(
+    supabase.from(path).select('*').eq('id', id).maybeSingle(),
+    12_000,
+    `Get ${path}`
+  );
   if (error || !data) return { exists: () => false, data: () => ({}), id };
   
   const camelData = keysToCamel(data);
@@ -814,6 +848,7 @@ export async function setDoc(docRef: any, data: any, options?: any) {
       console.error("setDoc error:", userError);
       throw new Error(userError.message || 'Database upsert failed');
     }
+    invalidateDocsCache('users');
     return;
   }
   
@@ -831,6 +866,7 @@ export async function setDoc(docRef: any, data: any, options?: any) {
       await supabase.from('meeting_participants').insert(inserts);
     }
   }
+  invalidateDocsCache(path);
 }
 
 export async function addDoc(collectionRef: any, data: any) {
@@ -889,18 +925,20 @@ export async function addDoc(collectionRef: any, data: any) {
           console.warn("Participant insert notice:", pErr);
         }
       }
+      invalidateDocsCache(collectionPath);
       return { id: newId };
     }
 
     console.warn("addDoc direct Supabase one_to_one_meetings insert warning, trying /api/one-to-one-meetings/create fallback:", meetingError);
     try {
-      const resp = await fetch('/api/one-to-one-meetings/create', {
+      const resp = await fetchWithTimeout('/api/one-to-one-meetings/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanOneToOnePayload)
-      });
+      }, 10_000);
       const json = await resp.json();
       if (json && json.data && json.data.id) {
+        invalidateDocsCache(collectionPath);
         return { id: json.data.id };
       }
     } catch (apiErr) {
@@ -911,21 +949,23 @@ export async function addDoc(collectionRef: any, data: any) {
       throw new Error(meetingError.message || 'Failed to schedule One-to-One Meeting.');
     }
 
+    invalidateDocsCache(collectionPath);
     return { id: Math.random().toString(36).substring(2, 15) };
   }
 
   if (collectionPath === 'users') {
     try {
-      const resp = await fetch('/api/members/create', {
+      const resp = await fetchWithTimeout('/api/members/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanData)
-      });
+      }, 12_000);
       const resJson = await resp.json();
       if (!resp.ok) {
         throw new Error(resJson.error || resJson.message || 'Failed to create member');
       }
       if (resJson.id || resJson.uid) {
+        invalidateDocsCache('users');
         return { id: resJson.id || resJson.uid };
       }
     } catch (apiErr: any) {
@@ -1034,18 +1074,20 @@ export async function addDoc(collectionRef: any, data: any) {
 
     console.warn("addDoc direct Supabase thank_you_slips insert warning, trying /api/thank-you-slips/create fallback:", slipError);
     try {
-      const resp = await fetch('/api/thank-you-slips/create', {
+      const resp = await fetchWithTimeout('/api/thank-you-slips/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanSlipPayload)
-      });
+      }, 10_000);
       const json = await resp.json();
       if (json && json.data && json.data.id) {
+        invalidateDocsCache(collectionPath);
         return { id: json.data.id };
       }
     } catch (apiErr) {
       console.warn("API fallback error for thank_you_slips:", apiErr);
     }
+    invalidateDocsCache(collectionPath);
     return { id: Math.random().toString(36).substring(2, 15) };
   }
 
@@ -1157,6 +1199,7 @@ export async function addDoc(collectionRef: any, data: any) {
     }
   }
   
+  invalidateDocsCache(collectionPath);
   return { id: newId || Math.random().toString(36).substring(2, 15) };
 }
 
@@ -1241,14 +1284,14 @@ export async function updateDoc(docRef: any, partialData: any) {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     if (token) {
-      const res = await fetch('/api/users/update', {
+      const res = await fetchWithTimeout('/api/users/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ uid: id, updates: preparedSnake })
-      });
+      }, 12_000);
       const data = await res.json();
       if (!res.ok) {
         console.error("updateDoc users error:", data.error);
@@ -1261,6 +1304,7 @@ export async function updateDoc(docRef: any, partialData: any) {
         throw new Error(userUpdateError.message || 'Database update failed');
       }
     }
+    invalidateDocsCache('users');
     return;
   }
 
@@ -1418,17 +1462,18 @@ export async function updateDoc(docRef: any, partialData: any) {
       await supabase.from('meeting_participants').insert(inserts);
     }
   }
+  invalidateDocsCache(path);
 }
 
 export async function deleteDoc(docRef: any) {
   const { path, id } = docRef;
   if (path === 'users') {
     try {
-      await fetch('/api/members/delete', {
+      await fetchWithTimeout('/api/members/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: id })
-      });
+      }, 10_000);
     } catch (e) {
       console.warn("API delete notice:", e);
     }
@@ -1446,6 +1491,42 @@ export async function deleteDoc(docRef: any) {
   }
   const { error } = await supabase.from(path).delete().eq('id', id);
   if (error) console.error("deleteDoc error:", error);
+  invalidateDocsCache(path);
+}
+
+// Shared table-level Supabase Realtime channel registry so opening Dashboard/pages
+// never spawns dozens of duplicate WebSocket channels for the same table.
+const tableRealtimeRegistry = new Map<string, { channel: any; listeners: Set<() => void> }>();
+
+function subscribeTableRealtime(tableName: string, listener: () => void): () => void {
+  let entry = tableRealtimeRegistry.get(tableName);
+  if (!entry) {
+    const listeners = new Set<() => void>();
+    const channel = supabase
+      .channel(`realtime-shared-${tableName}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => {
+        invalidateDocsCache(tableName);
+        listeners.forEach((fn) => {
+          try {
+            fn();
+          } catch (e) {}
+        });
+      })
+      .subscribe();
+    entry = { channel, listeners };
+    tableRealtimeRegistry.set(tableName, entry);
+  }
+  entry.listeners.add(listener);
+
+  return () => {
+    const current = tableRealtimeRegistry.get(tableName);
+    if (!current) return;
+    current.listeners.delete(listener);
+    if (current.listeners.size === 0) {
+      tableRealtimeRegistry.delete(tableName);
+      supabase.removeChannel(current.channel);
+    }
+  };
 }
 
 export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
@@ -1470,21 +1551,28 @@ export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
       fetchAndCallback();
-    }, 180);
+    }, 220);
+  };
+
+  const handleManualRefresh = () => {
+    const tableName = queryRef.path || (queryRef.type === 'collection' ? queryRef.path : null);
+    if (tableName && typeof tableName === 'string') {
+      invalidateDocsCache(tableName);
+    }
+    scheduleFetch();
   };
   
   fetchAndCallback();
 
   const tableName = queryRef.path || (queryRef.type === 'collection' ? queryRef.path : null);
-  let channel: any = null;
-  if (tableName && typeof tableName === 'string') {
-    channel = supabase
-      .channel(`realtime-snapshot-${tableName}-${Math.random().toString(36).substring(2, 7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, scheduleFetch)
-      .subscribe();
-  }
+  const unsubRealtime =
+    tableName && typeof tableName === 'string'
+      ? subscribeTableRealtime(tableName, scheduleFetch)
+      : null;
   
-  window.addEventListener('dashboard-refresh', scheduleFetch);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('dashboard-refresh', handleManualRefresh);
+  }
   
   return () => {
     isDisposed = true;
@@ -1492,10 +1580,12 @@ export function onSnapshot(queryRef: any, callback: (snapshot: any) => void) {
       clearTimeout(debounceTimer);
       debounceTimer = null;
     }
-    if (channel) {
-      supabase.removeChannel(channel);
+    if (unsubRealtime) {
+      unsubRealtime();
     }
-    window.removeEventListener('dashboard-refresh', scheduleFetch);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('dashboard-refresh', handleManualRefresh);
+    }
   };
 }
 
@@ -1656,6 +1746,9 @@ export async function updateMemberPositionDirectly(
       }).eq('id', targetChapterId);
     }
   }
+
+  invalidateDocsCache('users');
+  invalidateDocsCache('chapters');
 
   return { success: true, message: "Position updated successfully" };
 }

@@ -10,6 +10,7 @@ import { isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
 import { supabase } from '../lib/supabaseClient';
 import { showError, showSuccess, scrollToError } from '../services/toastService';
+import { fetchWithTimeout } from '../utils/directoryCache';
 
 const POSITIONS: { key: ChapterPosition; label: string }[] = [
   { key: 'member', label: 'Member' },
@@ -123,7 +124,7 @@ export function Positions() {
           const { data: sessionResult } = await supabase.auth.getSession();
           const token = sessionResult?.session?.access_token;
 
-          const res = await fetch('/api/admin/update-position', {
+          const res = await fetchWithTimeout('/api/admin/update-position', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -135,7 +136,7 @@ export function Positions() {
               chapterId: selectedChapterId,
               callerId: profile.id || profile.uid
             })
-          });
+          }, 8_000);
 
           const contentType = res.headers.get('content-type') || '';
           if (res.ok && contentType.includes('application/json')) {

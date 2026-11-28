@@ -33,6 +33,7 @@ import { getCleanFullName, getDisplayPosition, isChapterLeaderRole } from '../ut
 import { databaseService } from '../services/databaseService';
 import { walletService } from '../services/walletService';
 import { Meeting, UserProfile, AttendanceStatus } from '../types';
+import { fetchWithTimeout } from '../utils/directoryCache';
 import { where, orderBy, limit, normalizeMeetingRecord } from '../lib/database';
 import { startOfWeek, endOfWeek, isSameDay, addDays, addWeeks, addMonths, setDate, isAfter, startOfDay, isBefore, isValid } from 'date-fns';
 import { safeFormat as format } from '../utils/dateUtils';
@@ -2034,7 +2035,7 @@ export function Meetings() {
       // Try backend API endpoint first
       try {
         const callerId = profile?.uid || profile?.id;
-        const apiRes = await fetch('/api/meetings/update', {
+        const apiRes = await fetchWithTimeout('/api/meetings/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2055,7 +2056,7 @@ export function Meetings() {
             memberCount: finalMemberCount,
             guestCount: finalGuestCount
           })
-        });
+        }, 8_000);
 
         const text = await apiRes.text();
         let resData: any = null;
@@ -2258,14 +2259,14 @@ export function Meetings() {
 
       // 1. Try dedicated /api/meetings/cancel endpoint (uses adminSupabase)
       try {
-        const cancelRes = await fetch('/api/meetings/cancel', {
+        const cancelRes = await fetchWithTimeout('/api/meetings/cancel', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             meetingId,
             callerId
           })
-        });
+        }, 8_000);
         const cancelData = await cancelRes.json();
         if (cancelRes.ok && cancelData.success) {
           apiSuccess = true;
@@ -2280,7 +2281,7 @@ export function Meetings() {
       // 2. Fallback to /api/meetings/update if cancel endpoint didn't succeed
       if (!apiSuccess) {
         try {
-          const updateRes = await fetch('/api/meetings/update', {
+          const updateRes = await fetchWithTimeout('/api/meetings/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2290,7 +2291,7 @@ export function Meetings() {
               status: 'CANCELLED',
               isCompleted: false
             })
-          });
+          }, 8_000);
           const updateData = await updateRes.json();
           if (updateRes.ok && updateData.success) {
             apiSuccess = true;

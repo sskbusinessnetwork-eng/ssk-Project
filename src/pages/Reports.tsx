@@ -36,6 +36,7 @@ import {
   Star
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { getDirectorySnapshot, invalidateDirectoryCache, withTimeout } from '../utils/directoryCache';
 
 type MeetingDateFilterType = 'last_week' | 'this_month' | 'last_month' | 'custom';
 type PeriodDateFilterType = 'this_month' | 'last_month' | 'last_3_months' | 'custom';
@@ -316,18 +317,19 @@ export function Reports() {
   }, []);
 
   // Load real existing data from Supabase across all chapters
-  const fetchReportData = useCallback(async () => {
-    if (!profile) {
+  const userIdKey = profile?.uid || profile?.id;
+  const fetchReportData = useCallback(async (silent = false, forceRefresh = false) => {
+    if (!userIdKey) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
 
     try {
       const [
-        usersRes,
+        snapshot,
         chaptersRes,
         meetingsRes,
         referralsRes,
@@ -335,19 +337,22 @@ export function Reports() {
         guestsRes,
         oneToOnesRes,
         testimonialsRes
-      ] = await Promise.all([
-        supabase.from('users').select('*'),
-        supabase.from('chapters').select('*'),
-        supabase.from('meetings').select('*'),
-        supabase.from('referrals').select('*'),
-        supabase.from('thank_you_slips').select('*'),
-        supabase.from('guest_invitations').select('*'),
-        supabase.from('one_to_one_meetings').select('*'),
-        supabase.from('testimonials').select('*')
-      ]);
+      ] = await withTimeout(
+        Promise.all([
+          getDirectorySnapshot({ forceRefresh, timeoutMs: 14_000 }),
+          supabase.from('chapters').select('*'),
+          supabase.from('meetings').select('*'),
+          supabase.from('referrals').select('*'),
+          supabase.from('thank_you_slips').select('*'),
+          supabase.from('guest_invitations').select('*'),
+          supabase.from('one_to_one_meetings').select('*'),
+          supabase.from('testimonials').select('*')
+        ]),
+        15_000,
+        'Loading performance reports'
+      );
 
       const queryError =
-        usersRes.error ||
         chaptersRes.error ||
         meetingsRes.error ||
         referralsRes.error ||
@@ -362,8 +367,8 @@ export function Reports() {
 
       // 1. Users (unpacking any serialized profile_photo metadata)
       let loadedUsers: UserProfile[] = [];
-      if (usersRes.data && usersRes.data.length > 0) {
-        loadedUsers = usersRes.data.map((u: any) => {
+      if (snapshot.users && snapshot.users.length > 0) {
+        loadedUsers = snapshot.users.map((u: any) => {
           let photo = u.photoURL || u.photo_url || u.profile_photo || '';
           let extraData: any = {};
           if (typeof photo === 'string') {
@@ -572,24 +577,27 @@ export function Reports() {
       console.error('Error loading report data:', err);
       setError(err?.message || 'Failed to load report data from Supabase.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [profile]);
+  }, [userIdKey]);
 
   useEffect(() => {
-    fetchReportData();
+    fetchReportData(false, false);
   }, [fetchReportData]);
 
   // Real-time subscriptions so report stays synchronized with live database changes
   useEffect(() => {
-    if (!profile) return;
+    if (!userIdKey) return;
 
+    let isMounted = true;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleRefresh = () => {
+      if (!isMounted) return;
+      invalidateDirectoryCache();
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        fetchReportData();
-      }, 250);
+        if (isMounted) fetchReportData(true, true);
+      }, 300);
     };
 
     const channel = supabase
@@ -605,10 +613,11 @@ export function Reports() {
       .subscribe();
 
     return () => {
+      isMounted = false;
       if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
-  }, [profile, fetchReportData]);
+  }, [userIdKey, fetchReportData]);
 
   // Map all users by ID / UID for O(1) lookup
   const usersByIdMap = useMemo(() => {

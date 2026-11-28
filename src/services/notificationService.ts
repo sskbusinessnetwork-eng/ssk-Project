@@ -4,6 +4,7 @@ import { where, doc, updateDoc, deleteDoc, db } from '../lib/database';
 import { supabase } from '../lib/supabaseClient';
 import { parseDateToYYYYMMDD } from '../utils/memberStatus';
 import { SSK_OFFICIAL_LOGO } from '../constants/brand';
+import { fetchWithTimeout, withTimeout } from '../utils/directoryCache';
 
 export type NotificationType = 
   | 'REFERRAL' 
@@ -85,7 +86,7 @@ export const notificationService = {
         if (reg && userId) {
           // Subscribe to web-push
           try {
-            const keyRes = await fetch('/api/vapidPublicKey');
+            const keyRes = await fetchWithTimeout('/api/vapidPublicKey', {}, 6_000);
             if (keyRes.ok) {
               const { publicKey } = await keyRes.json();
               const applicationServerKey = this.urlBase64ToUint8Array(publicKey);
@@ -94,11 +95,11 @@ export const notificationService = {
                 applicationServerKey
               });
               
-              await fetch('/api/subscribe', {
+              await fetchWithTimeout('/api/subscribe', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subscription, uid: userId })
-              });
+              }, 6_000);
               console.log("Push subscription saved successfully");
             }
           } catch(e) {
@@ -209,23 +210,21 @@ export const notificationService = {
       params.link
     );
     
-    // 2. Trigger web-push API if backend exists
-    try {
-      await fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: params.userId,
-          payload: {
-            title: params.title || this.getDefaultTitleForType(params.type),
-            body: params.message,
-            link: params.link || this.getDefaultLinkForType(params.type, params.relatedUserId)
-          }
-        })
-      });
-    } catch(e) {
+    // 2. Trigger web-push API in the background (non-blocking with timeout so UI actions never hang)
+    void fetchWithTimeout('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: params.userId,
+        payload: {
+          title: params.title || this.getDefaultTitleForType(params.type),
+          body: params.message,
+          link: params.link || this.getDefaultLinkForType(params.type, params.relatedUserId)
+        }
+      })
+    }, 5_000).catch((e) => {
       console.warn("Backend push failed (non-critical):", e);
-    }
+    });
     
     return res;
   },
@@ -451,19 +450,33 @@ export const notificationService = {
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {
+      const uidStr = String(userId).trim();
       const [
         { data: rawMeetings },
         { data: rawReferrals },
         { data: rawChapters },
         { data: rawGuests }
-      ] = await Promise.all([
-        supabase.from('one_to_one_meetings').select('creator_id, sender_id, member_id, receiver_id, date, scheduled_date, status'),
-        supabase.from('referrals').select('from_user_id, sender_id, to_user_id, receiver_id, status, created_at'),
-        userProfile?.chapter_id
-          ? supabase.from('chapters').select('id, chapter_name, next_meeting_date, meeting_date, meeting_venue').eq('id', userProfile.chapter_id)
-          : Promise.resolve({ data: null }),
-        supabase.from('guest_registrations').select('admin_id, user_id, meeting_date')
-      ]);
+      ] = await withTimeout(
+        Promise.all([
+          supabase
+            .from('one_to_one_meetings')
+            .select('creator_id, sender_id, member_id, receiver_id, date, scheduled_date, status')
+            .or(`creator_id.eq.${uidStr},sender_id.eq.${uidStr},member_id.eq.${uidStr},receiver_id.eq.${uidStr}`),
+          supabase
+            .from('referrals')
+            .select('from_user_id, sender_id, to_user_id, receiver_id, status, created_at')
+            .or(`from_user_id.eq.${uidStr},sender_id.eq.${uidStr},to_user_id.eq.${uidStr},receiver_id.eq.${uidStr}`),
+          userProfile?.chapter_id
+            ? supabase.from('chapters').select('id, chapter_name, next_meeting_date, meeting_date, meeting_venue').eq('id', userProfile.chapter_id)
+            : Promise.resolve({ data: null }),
+          supabase
+            .from('guest_registrations')
+            .select('admin_id, user_id, meeting_date')
+            .or(`admin_id.eq.${uidStr},user_id.eq.${uidStr}`)
+        ]),
+        10_000,
+        'Task checklist query'
+      );
 
       // 1. One-to-One Meetings Today
       if (rawMeetings) {
@@ -622,7 +635,14 @@ export const notificationService = {
   async runAutomatedReminders(userProfile: any) {
     if (!userProfile || (!userProfile.id && !userProfile.uid)) return;
 
-    const userId = userProfile.id || userProfile.uid;
+    const userId = String(userProfile.id || userProfile.uid).trim();
+    if (!userId) return;
+    if ((this as any)._activeReminderRuns?.has(userId)) return;
+    if (!(this as any)._activeReminderRuns) {
+      (this as any)._activeReminderRuns = new Set<string>();
+    }
+    (this as any)._activeReminderRuns.add(userId);
+
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -644,9 +664,14 @@ export const notificationService = {
       }
 
       // 2. One-to-One Meeting Reminders (1 Day, 1 Hour, 15 Mins, Attendance Pending)
-      const { data: meetings } = await supabase
-        .from('one_to_one_meetings')
-        .select('id, creator_id, sender_id, member_id, receiver_id, status, date, scheduled_date, time, scheduled_time');
+      const { data: meetings } = await withTimeout<any>(
+        supabase
+          .from('one_to_one_meetings')
+          .select('id, creator_id, sender_id, member_id, receiver_id, status, date, scheduled_date, time, scheduled_time')
+          .or(`creator_id.eq.${userId},sender_id.eq.${userId},member_id.eq.${userId},receiver_id.eq.${userId}`),
+        10_000,
+        'One-to-one reminder query'
+      );
       if (meetings) {
         for (const m of meetings) {
           const isParticipant = String(m.creator_id || m.sender_id) === String(userId) || String(m.member_id || m.receiver_id) === String(userId);
@@ -773,6 +798,8 @@ export const notificationService = {
       }
     } catch (err) {
       console.warn("Error running automated reminders:", err);
+    } finally {
+      (this as any)._activeReminderRuns?.delete(userId);
     }
   }
 };

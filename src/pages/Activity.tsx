@@ -43,6 +43,7 @@ import { extractMemberExtraData, resolveMemberCategory } from '../components/Off
 import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { showError, showSuccess } from '../services/toastService';
+import { getDirectorySnapshot, withTimeout } from '../utils/directoryCache';
 
 /**
  * Line-style Referral Icon (Notepad with spiral binding & curved referral arrow)
@@ -189,6 +190,8 @@ export function Activity() {
   const [testimonials, setTestimonials] = useState<any[]>([]);
   const [usersMap, setUsersMap] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   // Modals & Action Sheet
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -242,10 +245,10 @@ export function Activity() {
     }
   }, [searchParams]);
 
-  // Fetch Users Mapping for name resolution
-  const fetchUsers = useCallback(async () => {
+  // Fetch Users Mapping for name resolution using shared TTL directory cache
+  const fetchUsers = useCallback(async (forceRefresh = false) => {
     try {
-      const { data } = await supabase.from('users').select('*');
+      const { users: data } = await getDirectorySnapshot({ forceRefresh });
       if (data && data.length > 0) {
         const map: Record<string, UserProfile> = {};
         data.forEach((u: any) => {
@@ -259,16 +262,17 @@ export function Activity() {
     }
   }, []);
 
-  // Fetch all Referrals and Thank You Slips
+  // Fetch all Referrals, Thank You Slips, and Testimonials in parallel with timeout protection
   const fetchActivities = useCallback(async (silent = false) => {
-    if (!currentUserId && profile?.role !== 'MASTER_ADMIN') {
+    const isMasterAdmin = profile?.role === 'MASTER_ADMIN';
+    if (!currentUserId && !isMasterAdmin) {
       if (!silent) setLoading(false);
       return;
     }
 
-    if (!silent) setLoading(true);
+    if (!silent && !hasLoadedOnceRef.current) setLoading(true);
+    setLoadError(null);
     try {
-      // 1. Fetch Referrals
       let refQuery = supabase
         .from('referrals')
         .select(`
@@ -278,11 +282,31 @@ export function Activity() {
         `)
         .order('created_at', { ascending: false });
 
-      const { data: refData, error: refErr } = await refQuery;
-      let loadedRefs: Referral[] = [];
+      let slipQuery = supabase
+        .from('thank_you_slips')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      if (!refErr && refData) {
-        loadedRefs = refData.map((r: any) => {
+      let testQuery = supabase
+        .from('testimonials')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!isMasterAdmin && currentUserId) {
+        refQuery = refQuery.or(`sender_id.eq.${currentUserId},from_user_id.eq.${currentUserId},receiver_id.eq.${currentUserId},to_user_id.eq.${currentUserId}`);
+        slipQuery = slipQuery.or(`from_user_id.eq.${currentUserId},sender_id.eq.${currentUserId},submitted_by.eq.${currentUserId},to_user_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+        testQuery = testQuery.or(`author_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+      }
+
+      const [refResult, slipResult, testResult] = await withTimeout(
+        Promise.all([refQuery, slipQuery, testQuery]),
+        12_000,
+        'Loading activity feed'
+      );
+
+      let loadedRefs: Referral[] = [];
+      if (!refResult.error && refResult.data) {
+        loadedRefs = refResult.data.map((r: any) => {
           const getSpecificRole = (u: any) => {
             if (!u) return '';
             const rawPos = String(u.position || u.chapter_position || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
@@ -323,10 +347,14 @@ export function Activity() {
         });
       } else {
         // Fallback simple fetch
-        const { data: fallbackRefs } = await supabase
+        let fallbackRefQuery = supabase
           .from('referrals')
           .select('*')
           .order('created_at', { ascending: false });
+        if (!isMasterAdmin && currentUserId) {
+          fallbackRefQuery = fallbackRefQuery.or(`sender_id.eq.${currentUserId},from_user_id.eq.${currentUserId},receiver_id.eq.${currentUserId},to_user_id.eq.${currentUserId}`);
+        }
+        const { data: fallbackRefs } = await withTimeout<any>(fallbackRefQuery, 10_000, 'Loading referrals fallback');
         if (fallbackRefs) {
           loadedRefs = fallbackRefs.map((r: any) => ({
             id: String(r.id),
@@ -346,14 +374,8 @@ export function Activity() {
       }
       setReferrals(loadedRefs);
 
-      // 2. Fetch Thank You Slips
-      const { data: slipData } = await supabase
-        .from('thank_you_slips')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (slipData) {
-        setThankYouSlips(slipData.map((s: any) => ({
+      if (slipResult.data) {
+        setThankYouSlips(slipResult.data.map((s: any) => ({
           id: String(s.id),
           referralId: String(s.referral_id || s.referralId || ''),
           fromUserId: String(s.from_user_id || s.fromUserId || s.submitted_by || ''),
@@ -366,14 +388,8 @@ export function Activity() {
         })));
       }
 
-      // 3. Fetch Testimonials
-      const { data: testData, error: testErr } = await supabase
-        .from('testimonials')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      let rawTestimonials: any[] = testData || [];
-      if (testErr && rawTestimonials.length === 0) {
+      let rawTestimonials: any[] = testResult.data || [];
+      if (testResult.error && rawTestimonials.length === 0) {
         try {
           rawTestimonials = await databaseService.list<any>('testimonials');
         } catch {
@@ -418,10 +434,14 @@ export function Activity() {
       })).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       setTestimonials(mappedTestimonials);
-    } catch (err) {
+      hasLoadedOnceRef.current = true;
+    } catch (err: any) {
       console.error('Error fetching activities:', err);
+      if (!hasLoadedOnceRef.current) {
+        setLoadError(err?.message || 'Unable to load activities right now. Please try again.');
+      }
     } finally {
-      if (!silent) setLoading(false);
+      setLoading(false);
     }
   }, [currentUserId, profile?.role]);
 
@@ -437,7 +457,7 @@ export function Activity() {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         fetchActivities(true);
-      }, 250);
+      }, 350);
     };
 
     const channel = supabase
@@ -924,6 +944,26 @@ export function Activity() {
             <div className="py-16 text-center text-neutral-400 flex flex-col items-center justify-center gap-3">
               <div className="w-8 h-8 rounded-full border-2 border-[#E53935] border-t-transparent animate-spin" />
               <p className="text-xs font-semibold tracking-wider uppercase">Loading activity feed...</p>
+            </div>
+          ) : loadError && filteredActivities.length === 0 ? (
+            <div className="py-16 px-6 text-center text-neutral-400 flex flex-col items-center justify-center gap-3">
+              <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+                <RotateCcw size={26} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white mb-1">Unable to load activities</p>
+                <p className="text-xs text-neutral-400 max-w-xs mx-auto">{loadError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  hasLoadedOnceRef.current = false;
+                  void fetchActivities(false);
+                }}
+                className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#E53935] text-white text-xs font-bold rounded-xl shadow-md hover:bg-[#D32F2F] active:scale-95 transition-all"
+              >
+                <RotateCcw size={15} /> Retry
+              </button>
             </div>
           ) : filteredActivities.length === 0 ? (
             <div className="py-16 px-6 text-center text-neutral-400 flex flex-col items-center justify-center gap-3">

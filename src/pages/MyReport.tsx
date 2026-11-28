@@ -12,6 +12,7 @@ import { Modal } from '../components/Modal';
 import { deduplicateSlips } from '../utils/deduplicateSlips';
 import { showError, showSuccess as triggerSuccessToast, scrollToError } from '../services/toastService';
 import { isNormalReferral } from '../types';
+import { getDirectorySnapshot, withTimeout } from '../utils/directoryCache';
 declare var jsPDF: any;
 declare var autoTable: any;
 declare var XLSX: any;
@@ -57,18 +58,22 @@ export function MyReport() {
     let isMounted = true;
     const loadData = async () => {
       try {
-        const [usersRes, refsRes, slipsRes, o2oRes, meetRes, guestsRes, testRes] = await Promise.all([
-          supabase.from('users').select('*'),
-          supabase.from('referrals').select('*'),
-          supabase.from('thank_you_slips').select('*'),
-          supabase.from('one_to_one_meetings').select('*'),
-          supabase.from('meetings').select('*'),
-          supabase.from('guest_invitations').select('*'),
-          supabase.from('testimonials').select('*')
-        ]);
+        const [snapshot, refsRes, slipsRes, o2oRes, meetRes, guestsRes, testRes] = await withTimeout(
+          Promise.all([
+            getDirectorySnapshot({ timeoutMs: 12_000 }),
+            supabase.from('referrals').select('*'),
+            supabase.from('thank_you_slips').select('*'),
+            supabase.from('one_to_one_meetings').select('*'),
+            supabase.from('meetings').select('*'),
+            supabase.from('guest_invitations').select('*'),
+            supabase.from('testimonials').select('*')
+          ]),
+          15_000,
+          'Loading chapter report'
+        );
 
         if (isMounted) {
-          setAllUsersList(usersRes.data || []);
+          setAllUsersList(snapshot.users || []);
           setAllReferrals(refsRes.data || []);
           const mappedSlips = (slipsRes.data || []).map((s: any) => {
             const from = String(s.from_user_id || s.fromUserId || s.submitted_by || '');
@@ -200,97 +205,105 @@ export function MyReport() {
   }, [testimonials, activeDateRange]);
 
 
-  const chapterReferrals = effectiveReferrals.filter(r => {
+  const chapterUserIdSet = useMemo(() => {
+    const set = new Set<string>();
+    chapterUsers.forEach((u) => {
+      if (u.id) set.add(String(u.id));
+      if (u.uid) set.add(String(u.uid));
+    });
+    return set;
+  }, [chapterUsers]);
+
+  const chapterReferralById = useMemo(() => {
+    const map = new Map<string, any>();
+    effectiveReferrals.forEach((r) => {
+      if (r.id) map.set(String(r.id), r);
+    });
+    return map;
+  }, [effectiveReferrals]);
+
+  const chapterReferrals = useMemo(() => effectiveReferrals.filter(r => {
     if (!isNormalReferral(r)) return false;
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (r.fromUserId || r.sender_id));
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (r.toUserId || r.receiver_id));
-    return (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) ||
-           (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId));
-  });
+    const fromId = String(r.fromUserId || r.sender_id || '');
+    const toId = String(r.toUserId || r.receiver_id || '');
+    return chapterUserIdSet.has(fromId) || chapterUserIdSet.has(toId);
+  }), [effectiveReferrals, chapterUserIdSet]);
 
-  const chapterSlips = effectiveSlips.filter(s => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (s.fromUserId || s.from_user_id || s.submitted_by));
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (s.toUserId || s.to_user_id));
-    return (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) ||
-           (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId));
-  });
+  const chapterSlips = useMemo(() => effectiveSlips.filter(s => {
+    const fromId = String(s.fromUserId || s.from_user_id || s.submitted_by || '');
+    const toId = String(s.toUserId || s.to_user_id || '');
+    return chapterUserIdSet.has(fromId) || chapterUserIdSet.has(toId);
+  }), [effectiveSlips, chapterUserIdSet]);
 
-  const referralsSentCount = chapterReferrals.filter(r => {
-    const sender = chapterUsers.find(u => (u.id || u.uid) === (r.fromUserId || r.from_user_id || r.sender_id));
-    return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
-  }).length;
+  const referralsSentCount = useMemo(() => chapterReferrals.filter(r =>
+    chapterUserIdSet.has(String(r.fromUserId || r.from_user_id || r.sender_id || ''))
+  ).length, [chapterReferrals, chapterUserIdSet]);
 
-  const referralsReceivedCount = chapterReferrals.filter(r => {
-    const receiver = chapterUsers.find(u => (u.id || u.uid) === (r.toUserId || r.to_user_id || r.receiver_id));
-    return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
-  }).length;
+  const referralsReceivedCount = useMemo(() => chapterReferrals.filter(r =>
+    chapterUserIdSet.has(String(r.toUserId || r.to_user_id || r.receiver_id || ''))
+  ).length, [chapterReferrals, chapterUserIdSet]);
 
-  const businessSentTotal = chapterSlips.reduce((acc, s) => {
-    const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+  const businessSentTotal = useMemo(() => chapterSlips.reduce((acc, s) => {
+    const ref = chapterReferralById.get(String(s.referralId || s.referral_id || ''));
     const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
-    const sender = chapterUsers.find(u => String(u.id || u.uid) === senderId);
-    if (sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId)) {
+    if (chapterUserIdSet.has(senderId)) {
       const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.amount || 0);
       return acc + val;
     }
     return acc;
-  }, 0);
+  }, 0), [chapterSlips, chapterReferralById, chapterUserIdSet]);
 
-  const businessReceivedTotal = chapterSlips.reduce((acc, s) => {
-    const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+  const businessReceivedTotal = useMemo(() => chapterSlips.reduce((acc, s) => {
+    const ref = chapterReferralById.get(String(s.referralId || s.referral_id || ''));
     const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
-    const receiver = chapterUsers.find(u => String(u.id || u.uid) === receiverId);
-    if (receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId)) {
+    if (chapterUserIdSet.has(receiverId)) {
       const val = ref && ref.business_amount ? Number(ref.business_amount) : Number(s.businessValue || s.business_value || s.amount || 0);
       return acc + val;
     }
     return acc;
-  }, 0);
+  }, 0), [chapterSlips, chapterReferralById, chapterUserIdSet]);
 
-  const businessSentCount = chapterSlips.filter(s => {
-    const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+  const businessSentCount = useMemo(() => chapterSlips.filter(s => {
+    const ref = chapterReferralById.get(String(s.referralId || s.referral_id || ''));
     const senderId = ref ? String(ref.fromUserId || ref.from_user_id || ref.sender_id) : String(s.toUserId || s.to_user_id);
-    const sender = chapterUsers.find(u => String(u.id || u.uid) === senderId);
-    return sender && String(sender.chapter_id || sender.chapterId) === String(userChapterId);
-  }).length;
+    return chapterUserIdSet.has(senderId);
+  }).length, [chapterSlips, chapterReferralById, chapterUserIdSet]);
 
-  const businessReceivedCount = chapterSlips.filter(s => {
-    const ref = chapterReferrals.find(r => String(r.id) === String(s.referralId || s.referral_id));
+  const businessReceivedCount = useMemo(() => chapterSlips.filter(s => {
+    const ref = chapterReferralById.get(String(s.referralId || s.referral_id || ''));
     const receiverId = ref ? String(ref.toUserId || ref.to_user_id || ref.receiver_id) : String(s.fromUserId || s.from_user_id || s.submitted_by);
-    const receiver = chapterUsers.find(u => String(u.id || u.uid) === receiverId);
-    return receiver && String(receiver.chapter_id || receiver.chapterId) === String(userChapterId);
-  }).length;
+    return chapterUserIdSet.has(receiverId);
+  }).length, [chapterSlips, chapterReferralById, chapterUserIdSet]);
 
-  const chapterO2O = effectiveOneToOnes.filter(m => {
-    const organizer = chapterUsers.find(u => (u.id || u.uid) === (m.organizer_id || m.creatorId));
-    const part = chapterUsers.find(u => (u.id || u.uid) === m.member_id);
-    return (organizer && String(organizer.chapter_id || organizer.chapterId) === String(userChapterId)) ||
-           (part && String(part.chapter_id || part.chapterId) === String(userChapterId));
-  });
+  const chapterO2O = useMemo(() => effectiveOneToOnes.filter(m =>
+    chapterUserIdSet.has(String(m.organizer_id || m.creatorId || '')) ||
+    chapterUserIdSet.has(String(m.member_id || ''))
+  ), [effectiveOneToOnes, chapterUserIdSet]);
   
   const oneToOneScheduledCount = chapterO2O.length;
-  const oneToOneMeetingsCount = chapterO2O.filter(m => m.status === 'COMPLETED').length;
+  const oneToOneMeetingsCount = useMemo(() => chapterO2O.filter(m => m.status === 'COMPLETED').length, [chapterO2O]);
 
-  const chapterMeetings = effectiveMeetings.filter(m => String(m.chapter_id || m.chapterId) === String(userChapterId));
+  const chapterMeetings = useMemo(() => effectiveMeetings.filter(m => String(m.chapter_id || m.chapterId) === String(userChapterId)), [effectiveMeetings, userChapterId]);
   const meetingsCount = chapterMeetings.length;
-  const meetingsAttendedCount = chapterMeetings.filter(m => m.status === 'COMPLETED' || m.isCompleted === true || (m.isCompleted as any) === 'true').length;
-  const upcomingSyncsCount = chapterMeetings.filter(m => {
+  const meetingsAttendedCount = useMemo(() => chapterMeetings.filter(m => m.status === 'COMPLETED' || m.isCompleted === true || (m.isCompleted as any) === 'true').length, [chapterMeetings]);
+  const upcomingSyncsCount = useMemo(() => {
     const now = new Date();
-    const mDate = new Date(m.date || m.meeting_date || m.createdAt);
-    return mDate >= now && m.status !== 'COMPLETED';
-  }).length;
+    return chapterMeetings.filter(m => {
+      const mDate = new Date(m.date || m.meeting_date || m.createdAt);
+      return mDate >= now && m.status !== 'COMPLETED';
+    }).length;
+  }, [chapterMeetings]);
 
-  const chapterGuests = effectiveGuests.filter(g => {
+  const chapterGuests = useMemo(() => effectiveGuests.filter(g => {
     const gChap = String(g.chapter_id || (g as any).invited_by_chapter || (g as any).invitedByChapter || (g as any).chapterId || '').trim();
     if (gChap && gChap === String(userChapterId)) return true;
     
     const inviterId = String(g.invited_by_user_id || (g as any).invitedByUserId || g.invited_by || (g as any).invitedBy || g.createdBy || (g as any).created_by || g.inviterId || (g as any).inviter_id || g.user_id || (g as any).memberId || '').trim();
-    const inviter = chapterUsers.find(u => String(u.id || u.uid) === inviterId);
-    return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
-  });
+    return chapterUserIdSet.has(inviterId);
+  }), [effectiveGuests, userChapterId, chapterUserIdSet]);
   const guestsInvitedCount = chapterGuests.length;
   
-  const visitorsAttendedCount = guestInvitations.filter(g => {
+  const visitorsAttendedCount = useMemo(() => guestInvitations.filter(g => {
     const st = String(g.status || g.attendance_status || '').toLowerCase();
     if (st !== 'present' && st !== 'attended') return false;
     
@@ -303,23 +316,20 @@ export function MyReport() {
     if (gChap && gChap === String(userChapterId)) return true;
     
     const inviterId = String(g.invited_by_user_id || (g as any).invitedByUserId || g.invited_by || (g as any).invitedBy || g.createdBy || (g as any).created_by || g.inviterId || (g as any).inviter_id || g.user_id || (g as any).memberId || '').trim();
-    const inviter = chapterUsers.find(u => String(u.id || u.uid) === inviterId);
-    return inviter && String(inviter.chapter_id || inviter.chapterId) === String(userChapterId);
-  }).length;
+    return chapterUserIdSet.has(inviterId);
+  }).length, [guestInvitations, activeDateRange, userChapterId, chapterUserIdSet]);
   
   const thankYouSlipsSentCount = businessReceivedCount;
   const thankYouSlipsReceivedCount = businessSentCount;
 
-  const chapterTestimonials = effectiveTestimonials.filter(t => {
-    const author = chapterUsers.find(u => (u.id || u.uid) === (t.authorMemberId || t.author_id));
-    return author && String(author.chapter_id || author.chapterId) === String(userChapterId);
-  });
+  const chapterTestimonials = useMemo(() => effectiveTestimonials.filter(t =>
+    chapterUserIdSet.has(String(t.authorMemberId || t.author_id || ''))
+  ), [effectiveTestimonials, chapterUserIdSet]);
   const testimonialsGivenCount = chapterTestimonials.length;
   
-  const testimonialsReceivedCount = effectiveTestimonials.filter(t => {
-    const rec = chapterUsers.find(u => (u.id || u.uid) === (t.receiverMemberId || t.receiver_id));
-    return rec && String(rec.chapter_id || rec.chapterId) === String(userChapterId);
-  }).length;
+  const testimonialsReceivedCount = useMemo(() => effectiveTestimonials.filter(t =>
+    chapterUserIdSet.has(String(t.receiverMemberId || t.receiver_id || ''))
+  ).length, [effectiveTestimonials, chapterUserIdSet]);
 
   const handleGenerateReportData = () => {
     if (!reportStartDate || !reportEndDate) {
@@ -609,7 +619,11 @@ export function MyReport() {
     if (!reportData) return;
     const text = `*𝐒𝐒𝐊 𝐁𝐔𝐒𝐈𝐍𝐄𝐒𝐒 𝐍𝐄𝐓𝐖𝐎𝐑𝐊 | 𝐂𝐇𝐀𝐏𝐓𝐄𝐑 𝐈𝐌𝐏𝐀𝐂𝐓 𝐑𝐄𝐏𝐎𝐑𝐓* 🌟\n\n📅 Report Period:\n${reportData.startDate} – ${reportData.endDate}\n\n*𝐌𝐄𝐄𝐓𝐈𝐍𝐆 / 𝐏𝐄𝐑𝐈𝐎𝐃 𝐇𝐈𝐆𝐇𝐋𝐈𝐆𝐇𝐓𝐒*\n\n👥 Members Attended: *${reportData.pMembersAttended}*\n🙋 Visitors Hosted: *${reportData.pVisitorsInvited}*\n🤝 Referrals Shared: *${reportData.pReferralsShared}*\n💰 Business Generated: *${reportData.pBusinessGenerated}*\n☕ One-to-One Meetings: *${reportData.pOneToOnes}*\n🌟 Testimonials Passed: *${reportData.pTestimonialsPassed}*\n📄 Thank You Slips: *${reportData.pThankYouSlips}*\n\n*𝐂𝐔𝐌𝐔𝐋𝐀𝐓𝐈𝐕𝐄 𝐀𝐂𝐇𝐈𝐄𝐕𝐄𝐌𝐄𝐍𝐓𝐒*\n\n💼 Total Business Generated: *${reportData.cBusinessGenerated}*\n🤝 Total Referrals Shared: *${reportData.cReferralsShared}*\n👥 Total Visitors Hosted: *${reportData.cVisitorsHosted}*\n☕ Total One-to-One Meetings: *${reportData.cOneToOnes}*\n🌟 Total Testimonials Passed: *${reportData.cTestimonialsPassed}*\n📄 Total Thank You Slips: *${reportData.cThankYouSlips}*\n\n📊 *Chapter Growth Score: ${reportData.pGrowthScore}%*\n\n📎 Detailed report attached/shared separately.`;
     const encoded = encodeURIComponent(text);
-    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    const waLink = document.createElement('a');
+    waLink.href = `https://wa.me/?text=${encoded}`;
+    waLink.target = '_blank';
+    waLink.rel = 'noopener noreferrer';
+    waLink.click();
   };
 
   if (loading) {

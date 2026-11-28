@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { getDisplayPosition } from '../utils/authUtils';
+import { fetchWithTimeout } from '../utils/directoryCache';
 import { databaseService } from '../services/databaseService';
 import { notificationService } from '../services/notificationService';
 import { Category, UserProfile, Referral, UserRole } from '../types';
@@ -374,7 +375,7 @@ export function Profile() {
         });
 
         try {
-          const resp = await fetch('/api/profile/upload-photo', {
+          const resp = await fetchWithTimeout('/api/profile/upload-photo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -383,7 +384,7 @@ export function Profile() {
               mimeType: contentType,
               fileName: targetFileName
             })
-          });
+          }, 12_000);
 
           const resData = await resp.json();
           if (resData.success && resData.photoURL) {

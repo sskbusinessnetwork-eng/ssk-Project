@@ -51,6 +51,7 @@ import { safeFormat as format } from '../utils/dateUtils';
 import { cn } from '../lib/utils';
 import { notificationService } from '../services/notificationService';
 import { safeFetch } from '../utils/apiUtils';
+import { fetchWithTimeout } from '../utils/directoryCache';
 import { supabase } from '../lib/supabaseClient';
 import bcrypt from 'bcryptjs';
 
@@ -683,11 +684,11 @@ export function Members() {
     try {
       // 1. Delete user from database via API
       try {
-        const resp = await fetch('/api/members/delete', {
+        const resp = await fetchWithTimeout('/api/members/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ uid: memberUid, callerId: adminUid })
-        });
+        }, 8_000);
         const resJson = await resp.json();
         if (!resp.ok) {
           throw new Error(resJson.error || resJson.message || 'Failed to delete member');
